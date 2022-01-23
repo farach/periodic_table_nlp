@@ -1,0 +1,92 @@
+---
+title: "01 - Bits to Character Encoding"
+author: "Alex Farach"
+date: "1/22/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(cache = FALSE, cache.lazy = FALSE, warning = FALSE,
+                      message = FALSE, echo = TRUE, dpi = 180, fig.width = 8,
+                      fig.height = 5)
+```
+
+
+## In the beginning...
+In natural language processing (NLP) we want to process natural language as the name implies. So what do we mean by "process"? To process language is to perform a series of operations to change or analyze language. 
+
+Technically we can process language without computers but generally this processing we want to do is done with computers because of the efficiency they provide. 
+
+Computers don't speak the same language as us humans do. That means if we want to use computers to process language we need some way to encode language so that computers understand and some way to decode computer processed language so that we humans can understand.
+
+Both the encoding and decoding process need to be identical on both ends or the human-to-computer and computer-to-human translation falls apart. Humans and computers need an agreed upon method is called a protocol.
+
+How would you describe the letter "A" to a computer? It's difficult. Instead of going that route we could use numbers to represent letters. So instead of "A" we would have 1. "B" could be 2 and so on. We can assign a number to represent each unique character we want to communicate. We can also use numbers to represent symbols and punctuation.
+
+Computers store numbers in binary. All signals inside a computer have only 2 possible values: 0 and 1 (off/on, FALSE/TRUE). Each of these single 0/1 pieces of information are called bits. A bit represents a value of 0 or 1. You can use 1 bit to represent 2 values (0 and 1). You can use 2 bits to represent 4 values, 3 bits to represent 8 values, so on and so forth.
+
+So how many bits is 256? Using the logic above it's 8 bits: 2 (1 bit), 4 (2 bits), 8 (3 bits), 16 (4 bits), 32 (5 bits), 64 (6 bits), 128 (7 bits), 256 (**8 bits**).
+
+When the first computers came on to the scene developers decided that a byte was the next standard unit above a bit. A byte is defined as 8-bits which can represent 256 different values.
+
+From here we get the megabyte which is 0.000001 bytes, the gigabyte which is 1000 megabytes and so on.
+
+## ASCII, Latin1, and Unicode
+
+In the 1960's computer developers had 1 byte to work with. They needed to develop a protocol that fit into this 1 byte (256 bits). What they came up with is called ASCII. This protocol is able to assign a unique number to all letters in the English language, plus numbers, symbols, and control characters.
+
+Everything fit in the 256 bit budget! Even better, only 7 (128 bits) of the available 8 (256 bits) bytes were needed! 
+
+Over time the need to fit more and more information on bytes grew larger. Luckily we had that extra byte to play with with. Things eventually got standardized into what is known as Latin1 or the ISO-8859-1 standard which uses the full 8 bytes available. The issue with this protocol is that it only included English language letters - ergo the name, Latin1.
+
+A new standard had to be developed, enter Unicode (or UTF-8 which stands for **8** bit **U**nicode **t**ransformation **f**ormat). Unicode uses multiple bytes to represent thousands of symbols from languages all over the world. Common characters are stored with fewer bits and less common stuff requires a little bit more.
+
+The web is standardized on the Unicode format. This format is backwards compatible with ASCII and Latin1. Each character in UTF8 is represented using a prefix U and followed by a 4 digit hexadecimal number. 4 hexadecimal numbers requires 2 bytes to store them (or 16 bits), so using just 2 bytes over 65,000 symbols can be encoded and decoded. The entire breadth of Unicode can store 1,114,112 symbols called code points - clearly enough to capture all the letters, symbols, numbers, and even emojis!
+
+There is a limit though so stuff shouldn't be added all willy nilly. This is why emojis take a while to appear on your phone's keyboard. A group of people need to debate whether or not 1 code point of whats left of the 1,114,112 total is worth it.
+
+## Character strings in R
+
+Character strings in R can be declared to be encoded in latin1, UTF-8, or as bytes. These declarations can be read or changed using the `Encoding()` function.
+
+Since 
+
+```{r}
+"\xE7"
+
+
+
+x <- "fa\xE7ile"
+
+Encoding(x)
+
+Encoding(x) <- "latin1"
+
+x
+
+xx <- iconv(x, "latin1", "UTF-8")
+
+Encoding(c(x, xx))
+
+c(x, xx)
+
+Encoding(xx) <- "bytes"
+
+xx # will be encoded in hex
+
+cat("xx = ", xx, "\n", sep = "")
+
+# }
+```
+
+
+
+
+
+
+https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/
+
+https://256stuff.com/256.html#:~:text=A%20byte%20is%20defined%20as,byte%20represents%20256%20different%20values.&text=So%20that's%20it.,different%20values%3A%200%20to%20255.
+
+https://www.linkedin.com/learning/computer-science-principles-digital-information/ascii-and-unicode?autoAdvance=true&autoSkip=false&autoplay=true&resume=false
