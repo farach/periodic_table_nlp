@@ -95,7 +95,32 @@ UTF-32. As you may have guessed from the “16” and the “32”, these
 protocols allow for more and more complicated character representations.
 
 Despite this increased power most systems go with UTF-8 since it is
-backwards compatible with ASCII.
+backwards compatible with ASCII. If you would like to see a full list of
+encoding that are supported by
+[ICU](https://en.wikipedia.org/wiki/International_Components_for_Unicode)
+run the `stri_enc_list()` function that’s part of the `stringi` package
+- there are a lot.
+
+``` r
+paste("Total number of encodings:", length(stringi::stri_enc_list()))
+```
+
+    ## [1] "Total number of encodings: 1203"
+
+Here is a sample of 15 of them.
+
+``` r
+sample(stringi::stri_enc_list(), size = 15)
+```
+
+    ##  [1] "MS950_HKSCS"        "ISCII,version=3"   
+    ##  [3] "ibm-5346"           "iso-8859_10-1998"  
+    ##  [5] "ibm-424_P100-1995"  "windows-932"       
+    ##  [7] "ibm-21681"          "ibm-1130_P100-1997"
+    ##  [9] "latin2"             "csIBM860"          
+    ## [11] "933"                "ibm-4971"          
+    ## [13] "ibm-37_P100-1995"   "csIBM863"          
+    ## [15] "x-IBM935"
 
 # Character string encoding in R
 
@@ -279,6 +304,36 @@ charToRaw(x)
 ```
 
     ## [1] 63 61 66 e9
+
+# Character encoding, Tidyverse style
+
+I enjoy working in the tidyverse so I thought it would be helpful to
+look at character encoding from a tidyverse perspective.
+
+The string manipulation workhorse in the tidyverse is the [`stringr`
+package](https://stringr.tidyverse.org). We can specify the encoding of
+a string with the [`str_conv()`
+function](https://stringr.tidyverse.org/reference/str_conv.html).
+
+``` r
+suppressMessages(suppressWarnings(library(tidyverse)))
+
+str_conv(string = "café", encoding = "latin1")
+```
+
+    ## [1] "café"
+
+``` r
+str_conv(string = "café", encoding = "UTF-8")
+```
+
+    ## [1] "caf<U+FFFD>"
+
+``` r
+str_conv(string = "café", encoding = sample(stringi::stri_enc_list(), 1))
+```
+
+    ## [1] "café"
 
 The world of character encoding goes much deeper than this and even
 farther down as you look into how R handles it. That being said, this
