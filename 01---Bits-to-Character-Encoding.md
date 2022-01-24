@@ -59,12 +59,11 @@ characters](https://en.wikipedia.org/wiki/Control_character).
 Everything fit in the 1 byte (256 bit) budget! Even better, only 7 (128
 bits) of the available 8 (256 bits) bytes were needed!
 
-Over time the need to fit more and more information on bytes grew
-larger. Luckily we had that extra byte to play with with. Things
-eventually got standardized into what is known as Latin1 or the
-ISO-8859-1 standard which uses the full 8 bytes available. The issue
-with this protocol is that it only included English language letters -
-ergo the name, Latin1.
+Over time the need to fit more and more information on bits grew larger.
+Luckily we had that extra bit to play with with. Things eventually got
+standardized into what is known as Latin1 or the ISO-8859-1 standard
+which uses the full 8 bits available. The issue with this protocol is
+that it only included English language letters - ergo the name, Latin1.
 
 A new standard had to be developed, enter Unicode (or UTF-8 which stands
 for **8** bit **U**nicode **t**ransformation **f**ormat). Unicode uses
