@@ -50,20 +50,22 @@ which is 1000 megabytes and so on.
 # ASCII, Latin1, and Unicode
 
 In the 1960’s computer developers had 1 byte to work with. They needed
-to develop a protocol that fit into this 1 byte (256 bits). The protocol
-they came up with is called ASCII. This protocol is able to assign a
-unique number to all letters in the English language, plus numbers,
-symbols, and [control
+to develop a protocol that fit into this 1 byte (8 bits, 256 possible
+values). The protocol they came up with is called ASCII. This protocol
+is able to assign a unique number to all letters in the English
+language, plus numbers, symbols, and [control
 characters](https://en.wikipedia.org/wiki/Control_character).
 
-Everything fit in the 1 byte (256 bit) budget! Even better, only 7 (128
-bits) of the available 8 (256 bits) bytes were needed!
+Everything fit in the 1 byte (256 possible values) budget! Even better,
+only 7 (128 possible values) of the available 8 (256 possible values)
+bits were needed!
 
 Over time the need to fit more and more information on bits grew larger.
 Luckily we had that extra bit to play with with. Things eventually got
 standardized into what is known as Latin1 or the ISO-8859-1 standard
-which uses the full 8 bits available. The issue with this protocol is
-that it only included English language letters - ergo the name, Latin1.
+which uses the full 8 bits available in the single byte. The issue with
+this protocol is that it only included English language letters - ergo
+the name, Latin1.
 
 A new standard had to be developed, enter Unicode (or UTF-8 which stands
 for **8** bit **U**nicode **t**ransformation **f**ormat). Unicode uses
