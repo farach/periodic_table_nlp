@@ -64,7 +64,7 @@ When the first computers came on to the scene developers decided that a byte was
 the next standard unit above a bit. A byte is defined as 8-bits which can
 represent 256 different values.
 
-From here we get the megabyte which is 0.000001 bytes, the gigabyte which is
+From here we get the megabyte which is 1000000 bytes, the gigabyte which is
 1000 megabytes and so on.
 
 # ASCII, Latin1, and Unicode
