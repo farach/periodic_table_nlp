@@ -113,8 +113,8 @@ Despite this increased power most systems go with UTF-8 since it is backwards
 compatible with ASCII. If you would like to see a full list of encoding that are
 supported by
 [ICU](https://en.wikipedia.org/wiki/International_Components_for_Unicode) run
-the `stri_enc_list()` function that's part of the `stringi` package - there are
-a lot.
+the `stri_enc_list()` function that's part of the `stringi` package (there are a
+lot).
 
 ```{r}
 paste("Total number of encodings:", length(stringi::stri_enc_list()))

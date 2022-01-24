@@ -99,7 +99,7 @@ backwards compatible with ASCII. If you would like to see a full list of
 encoding that are supported by
 [ICU](https://en.wikipedia.org/wiki/International_Components_for_Unicode)
 run the `stri_enc_list()` function that’s part of the `stringi` package
-- there are a lot.
+(there are a lot).
 
 ``` r
 paste("Total number of encodings:", length(stringi::stri_enc_list()))
@@ -113,14 +113,14 @@ Here is a sample of 15 of them.
 sample(stringi::stri_enc_list(), size = 15)
 ```
 
-    ##  [1] "MS950_HKSCS"        "ISCII,version=3"   
-    ##  [3] "ibm-5346"           "iso-8859_10-1998"  
-    ##  [5] "ibm-424_P100-1995"  "windows-932"       
-    ##  [7] "ibm-21681"          "ibm-1130_P100-1997"
-    ##  [9] "latin2"             "csIBM860"          
-    ## [11] "933"                "ibm-4971"          
-    ## [13] "ibm-37_P100-1995"   "csIBM863"          
-    ## [15] "x-IBM935"
+    ##  [1] "x-IBM737"           "ibm-1158"          
+    ##  [3] "x-utf-16be"         "ibm-1251"          
+    ##  [5] "cp1122"             "l8"                
+    ##  [7] "866"                "ibm-954_P101-2007" 
+    ##  [9] "IBM861"             "ibm-1204"          
+    ## [11] "ibm-61956"          "ebcdic-no-277+euro"
+    ## [13] "ibm-5471_P100-2006" "IBM285"            
+    ## [15] "ibm-367"
 
 # Character string encoding in R
 
@@ -333,7 +333,7 @@ str_conv(string = "café", encoding = "UTF-8")
 str_conv(string = "café", encoding = sample(stringi::stri_enc_list(), 1))
 ```
 
-    ## [1] "café"
+    ## [1] "caf\032"
 
 The world of character encoding goes much deeper than this and even
 farther down as you look into how R handles it. That being said, this
