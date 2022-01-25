@@ -1,0 +1,100 @@
+---
+title: "02 - Manual Typewriting"
+author: "Alex Farach"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: 
+  html_document:
+    toc: TRUE
+    toc_depth: 3
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: TRUE
+editor_options: 
+  markdown: 
+    wrap: 80
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(cache = FALSE, cache.lazy = FALSE, warning = FALSE,
+                      message = FALSE, echo = TRUE, dpi = 180, fig.width = 8,
+                      fig.height = 5)
+```
+
+# Background
+
+Task 2 in the [Periodic Table of NLP
+Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/) has to do with
+manual typewriting.
+
+> Typing your own text gives you more confidence when testing your code or demo.
+>
+> Why not just type your own text and process it in your NLP task. Creating your
+> own content is the best test in demo's. Hopefully it increases your confidence
+> in the NLP-task that you are testing and lets you insert all the rare cases
+> you can think of.
+
+Whenever I'm trying to figure out how to attack an NLP problem this is exactly
+this, use some manually created examples to better understand what I'm trying to
+test. In the last NLP task, "[01 - Bits to Character
+Encoding](https://github.com/farach/periodic_table_nlp/blob/main/01---Bits-to-Character-Encoding.md)"
+I selected a handful of words to test out different functions. By manually
+creating a small set of examples I was able to better understand what exactly
+was going on in each of the functions.
+
+Let's do this again to get learn about something new that is foundational in the
+natural language processing field: regular expressions (or regex).
+
+# Regular expressions history
+
+So what is "regex"? Regex is a sequence of characters that specifies a search
+pattern in text. The concept of regular expressions began in the 1940's when a
+Warren McCulloch, a neuroscience, and Stephen Kleene, a logician, were trying to
+understand how the human brain could produce complex patterns using simple cells
+bound together.
+
+In the last section of this Periodic Table of NLP Tasks in R series we went over
+character encoding and highlighted how simple binary switches could be combined
+to encode increasingly complex language symbols. The leap from ASCII to Unicode
+was a particularly large jump. By changing the way we encoded language without
+changing the fundamental binary switch mechanism we could go from encoding
+hundreds of language symbols to millions.
+
+In a 1951 paper Kleene thought through the types of patterns neural networks
+were able to detect by applying them to simple toy languages - so-called
+"regular languages". For example, given a language whose "grammar" allows only
+the letters "A" and "B", is there a neural network that can detect whether an
+arbitrary string of letters is valid within the "A/B" grammar or not?
+
+This is why Kleene developed an algebraic notation for encapsulating these
+"regular grammars". For example, a\*b\* in the case of the "A/B" language.
+
+Regex is a kind of algebraic shorthand that allows you to define text patterns
+which can be used for a variety of natural language processing (NLP) tasks. The
+most common of which is likely the searching for or extracting of words or parts
+of words from longer string patterns like a document.
+
+Quick note, regular expressions are not a programming language. Yes, it is a
+formal language that a computer understands but there are no variables, they
+don't set values, they don't contain instructions, and they can't make
+decisions.
+
+# Regular expressions in R
+
+Let's jump right in and begin understanding the various patterns this algebraic
+shorthand uses to define text patterns.
+
+In base R the [`grep()`
+function](https://stat.ethz.ch/R-manual/R-devel/library/base/html/grep.html) is
+used to do pattern matching and replacement. In order to understand this
+function we need to match to *something*. This is where manual typewriting will
+help!
+
+```{r}
+grep(pattern = "Alex", x = "Alex like to play guitar", useBytes = TRUE)
+```
+
+# References
+
+[Why is this interesting? The Regular Expression
+Edition](whyisthisinteresting.substack.com/p/the-regular-expression-edition)

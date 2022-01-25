@@ -64,8 +64,8 @@ When the first computers came on to the scene developers decided that a byte was
 the next standard unit above a bit. A byte is defined as 8-bits which can
 represent 256 different values.
 
-From here we get the megabyte which is 1000000 bytes, the gigabyte which is
-1000 megabytes and so on.
+From here we get the megabyte which is 1000000 bytes, the gigabyte which is 1000
+megabytes and so on.
 
 # ASCII, Latin1, and Unicode
 
@@ -214,7 +214,7 @@ integer components:
 -   `system.codepage`: integer: the Windows system/ANSI codepage (the codepage
     Windows is using). Added in **R** 4.1.0.
 
-If I happened to not be on the I wouldn't see the `codepage` and
+If I happened to *not be* on Windows I wouldn't see the `codepage` and
 `system.codepage` element and in there place I would see
 
 -   `codeset`: character. The encoding name as reported by the OS, possibly "".
