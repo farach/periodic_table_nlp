@@ -182,7 +182,16 @@ fixture_metadata <- read.csv(
   colClasses = "character",
   check.names = FALSE
 )
-fixture_md5 <- unname(tools::md5sum(fixture_path))
+fixture_lines <- readLines(
+  fixture_path,
+  encoding = "UTF-8",
+  warn = TRUE
+)
+fixture_md5 <- digest::digest(
+  paste(fixture_lines, collapse = "\n"),
+  algo = "md5",
+  serialize = FALSE
+)
 
 stopifnot(
   identical(nrow(fixture_metadata), 1L),
