@@ -7,8 +7,9 @@
 - [Pull request 1](https://github.com/farach/periodic_table_nlp/pull/1)
   rebuilt the site and published lessons 1-5.
 - [Pull request 2](https://github.com/farach/periodic_table_nlp/pull/2)
-  adds lessons 6-13, the workforce throughline, author-package integrations,
-  additional adversarial review, and development notes.
+  merged lessons 6-13, the workforce throughline, author-package integrations,
+  additional adversarial review, and development notes in commit
+  [`840d6a1`](https://github.com/farach/periodic_table_nlp/commit/840d6a1f1547ca8b86ac15b9abf439809e00d111).
 
 ## Reader-facing work
 
