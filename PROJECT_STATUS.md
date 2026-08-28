@@ -2,6 +2,14 @@
 
 **Last updated:** 2026-08-28
 
+## GitHub checkpoints
+
+- [Pull request 1](https://github.com/farach/periodic_table_nlp/pull/1)
+  rebuilt the site and published lessons 1-5.
+- [Pull request 2](https://github.com/farach/periodic_table_nlp/pull/2)
+  adds lessons 6-13, the workforce throughline, author-package integrations,
+  additional adversarial review, and development notes.
+
 ## Reader-facing work
 
 The Quarto site has 13 linked lessons:
