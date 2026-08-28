@@ -1,44 +1,34 @@
 ---
 title: "Natural language processing in R, one idea at a time"
-description: "A visual map of practical, evidence-based lessons about how computers work with language."
+description: "A map of natural language processing tasks, with lessons written for readers who are new to the field."
 page-layout: full
 toc: false
 sidebar: false
 body-classes: task-map-page
 ---
 
-An accent mark disappears from a name. A search misses the message it was
-supposed to find. A model gives a fluent answer that is wrong. Language feels
-effortless until a computer handles it badly.
+Computers work with human language constantly and mostly out of sight: a search
+box, a spam filter, a translation, a reply that arrives too fast to have been
+typed. The field that studies how they do it is called natural language
+processing, usually shortened to **NLP**. It covers dozens of connected tasks,
+from reading a file without corrupting it to generating a paragraph. Each tile
+below is one of them.
 
-Natural language processing, usually shortened to **NLP**, studies how
-computers work with human language. The field contains dozens of connected
-tasks. This table gives each one a place, a short name, and eventually a lesson
-that shows why it matters.
+## The tasks {#periodic-table-heading}
+
+Related tasks share a column, and the columns run roughly from getting text in,
+on the left, through cutting it into usable pieces, to models, generation,
+systems, and visual explanation. The arrangement is editorial: position tells
+you what a task is filed near and nothing else about it. Laying the field out
+at once means a lesson can be found by where it sits rather than by remembering
+its name. Thirteen of the eighty-one lessons are written. The rest are planned,
+and their tiles stay visible so you can see what is coming.
 
 ::: {.callout-tip}
-## New to R?
+## Start here
 
-Start with task 1, then continue in number order. Later lessons explain their
-main idea from the beginning, but their code can use R syntax introduced
-earlier. Each lesson begins with a human problem and shows the output produced
-by real code.
-:::
-
-## Explore the periodic table {#periodic-table-heading}
-
-The table works like a memory map. A task's color shows its broad stage, while
-its position places it beside related work. The short symbol makes the tile
-easy to recognize when you return.
-
-::: {.callout-note}
-## What this map is
-
-This is a teaching aid, not a scientific taxonomy or a complete account of the
-field. It mixes tasks, methods, objectives, resources, services, applications,
-and work done across a model's life. Each tile names its item type so those
-differences remain visible. Some inherited group names are broad or imperfect;
-the lesson attached to a tile must explain such limits.
+Read in number order. Each lesson explains its own idea from the beginning, and
+its code assumes the R you have already seen.
 :::
 
 ```{r}
@@ -47,25 +37,37 @@ the lesson attached to a tile must explain such limits.
 
 options(warn = 2)
 
-task_map <- read.csv(
+library(readr)
+library(dplyr)
+library(purrr)
+library(stringr)
+
+task_map <- read_csv(
   "data/periodic_table.csv",
-  colClasses = c(
-    task_number = "integer",
-    symbol = "character",
-    title = "character",
-    item_type = "character",
-    group_id = "integer",
-    group_name = "character",
-    stage = "character",
-    lesson_path = "character",
-    status = "character",
-    last_reviewed = "character"
+  col_types = cols(
+    task_number = col_integer(),
+    symbol = col_character(),
+    title = col_character(),
+    item_type = col_character(),
+    group_id = col_integer(),
+    group_name = col_character(),
+    stage = col_character(),
+    lesson_path = col_character(),
+    status = col_character(),
+    last_reviewed = col_character()
   ),
-  na.strings = "NA",
-  check.names = FALSE
+  na = character()
 )
 
-has_lesson <- task_map$status == "available"
+available <- task_map |>
+  filter(status == "available")
+
+planned <- task_map |>
+  filter(status == "planned")
+
+group_sizes <- task_map |>
+  count(group_id) |>
+  pull(n)
 
 expected_group_sizes <- c(
   7L, 6L, 5L, 5L, 5L,
@@ -73,26 +75,22 @@ expected_group_sizes <- c(
   5L, 5L, 6L, 6L, 7L
 )
 
-lesson_sources <- sub(
-  "[.]html$",
-  ".qmd",
-  task_map$lesson_path[has_lesson]
-)
+lesson_sources <- available |>
+  pull(lesson_path) |>
+  str_replace("[.]html$", ".qmd")
 
 stopifnot(
   identical(getOption("warn"), 2L),
+  inherits(task_map, "tbl_df"),
   identical(task_map$task_number, 1:81),
   identical(sort(unique(task_map$group_id)), 1:15),
-  identical(
-    as.integer(table(task_map$group_id)),
-    expected_group_sizes
-  ),
-  identical(which(has_lesson), 1:13),
+  identical(group_sizes, expected_group_sizes),
+  identical(which(task_map$status == "available"), 1:13),
   identical(length(unique(task_map$symbol)), 81L),
   all(task_map$status %in% c("available", "planned")),
-  all(nzchar(task_map$lesson_path[has_lesson])),
-  all(task_map$lesson_path[!has_lesson] == ""),
-  all(nzchar(task_map$last_reviewed[has_lesson])),
+  all(nzchar(available$lesson_path)),
+  all(planned$lesson_path == ""),
+  all(nzchar(available$last_reviewed)),
   all(file.exists(lesson_sources))
 )
 
@@ -119,6 +117,151 @@ stopifnot(
   all(unique(task_map$stage) %in% names(stage_labels))
 )
 
+render_tile <- function(task_number,
+                        symbol,
+                        title,
+                        item_type,
+                        lesson_path,
+                        status,
+                        ...) {
+  is_available <- identical(status, "available")
+  label_text <- if (is_available) "Read lesson" else "Planned"
+  status_class <- if (is_available) {
+    "element-status"
+  } else {
+    "element-status visually-hidden"
+  }
+
+  tile_contents <- sprintf(
+    paste0(
+      '<span class="element-number">%d</span>',
+      '<span class="element-kind">%s</span>',
+      '<span class="element-symbol" aria-hidden="true">%s</span>',
+      '<span class="element-name">%s</span>',
+      '<span class="%s">%s</span>'
+    ),
+    task_number,
+    escape_text(item_type),
+    escape_text(symbol),
+    escape_text(title),
+    status_class,
+    label_text
+  )
+
+  tile <- if (is_available) {
+    sprintf(
+      paste0(
+        '<a class="nlp-element is-available" ',
+        'data-task-number="%d" data-item-type="%s" ',
+        'data-status="available" ',
+        'href="%s" aria-label="%s">%s</a>'
+      ),
+      task_number,
+      escape_attribute(item_type),
+      escape_attribute(lesson_path),
+      escape_attribute(
+        sprintf(
+          "Task %d. %s. Item type: %s. %s.",
+          task_number,
+          title,
+          item_type,
+          label_text
+        )
+      ),
+      tile_contents
+    )
+  } else {
+    sprintf(
+      paste0(
+        '<div class="nlp-element is-planned" ',
+        'data-task-number="%d" data-item-type="%s" ',
+        'data-status="planned">%s</div>'
+      ),
+      task_number,
+      escape_attribute(item_type),
+      tile_contents
+    )
+  }
+
+  paste0('<li class="element-slot">', tile, "</li>")
+}
+
+render_group <- function(group_rows) {
+  group_id <- unique(group_rows$group_id)
+  group_name <- unique(group_rows$group_name)
+  stage <- unique(group_rows$stage)
+  stage_label <- unname(stage_labels[stage])
+  heading_id <- sprintf("task-group-%d", group_id)
+
+  stopifnot(
+    identical(length(group_id), 1L),
+    identical(length(group_name), 1L),
+    identical(length(stage), 1L),
+    identical(length(stage_label), 1L)
+  )
+
+  tiles <- group_rows |>
+    pmap_chr(render_tile) |>
+    paste(collapse = "")
+
+  paste0(
+    sprintf(
+      '<section class="element-group stage-%s" aria-labelledby="%s">',
+      escape_attribute(stage),
+      heading_id
+    ),
+    sprintf(
+      paste0(
+        '<h3 class="element-group-title" id="%s">',
+        '<span class="element-stage">%s</span>',
+        '<span class="element-group-name">%s</span>',
+        '</h3>'
+      ),
+      heading_id,
+      escape_text(stage_label),
+      escape_text(group_name)
+    ),
+    '<ol class="element-stack">',
+    tiles,
+    "</ol></section>"
+  )
+}
+
+stage_key <- stage_labels |>
+  imap_chr(function(label, stage) {
+    sprintf(
+      paste0(
+        '<span class="task-map-stage-key-item stage-%s">',
+        '<span class="task-map-stage-swatch" aria-hidden="true"></span>',
+        '%s</span>'
+      ),
+      escape_attribute(stage),
+      escape_text(label)
+    )
+  }) |>
+  paste(collapse = "")
+
+groups <- task_map |>
+  arrange(group_id, task_number) |>
+  group_by(group_id) |>
+  group_split()
+
+table_html <- groups |>
+  map_chr(render_group) |>
+  paste(collapse = "")
+
+stopifnot(
+  identical(length(groups), 15L),
+  identical(
+    str_count(table_html, fixed('class="element-slot"')),
+    81L
+  ),
+  identical(
+    str_count(table_html, fixed('class="nlp-element is-available"')),
+    13L
+  )
+)
+
 cat(
   '<div class="task-map-key">',
   '<span class="task-map-key-item">',
@@ -130,210 +273,119 @@ cat(
   'Lesson planned',
   '</span>',
   '</div>',
+  '<div class="task-map-stage-key" aria-label="Task stages">',
+  stage_key,
+  '</div>',
+  '<p class="task-map-instructions" id="task-map-instructions">',
+  'Select a solid-bordered tile to open its lesson. ',
+  'Dashed tiles are planned. If the map is wider than the window, ',
+  'use the buttons, arrow keys, or horizontal scrolling.',
+  '</p>',
+  '<div class="task-map-scroll-controls" ',
+  'aria-label="Move through task groups">',
+  '<button type="button" data-map-direction="-1" ',
+  'aria-controls="nlp-task-map">Earlier groups</button>',
+  '<button type="button" data-map-direction="1" ',
+  'aria-controls="nlp-task-map">Later groups</button>',
+  '</div>',
+  '<div class="periodic-scroll" id="nlp-task-map" ',
+  'tabindex="0" role="region" ',
+  'aria-label="Periodic table of NLP tasks" ',
+  'aria-describedby="task-map-instructions">',
+  '<div class="periodic-table">',
+  table_html,
+  '</div></div>',
   sep = ""
 )
-
-cat('<div class="task-map-stage-key" aria-label="Task stages">')
-for (stage in names(stage_labels)) {
-  cat(
-    sprintf(
-      paste0(
-        '<span class="task-map-stage-key-item stage-%s">',
-        '<span class="task-map-stage-swatch" aria-hidden="true"></span>',
-        '%s</span>'
-      ),
-      escape_attribute(stage),
-      escape_text(stage_labels[[stage]])
-    )
-  )
-}
-cat('</div>')
-
-cat(
-  paste0(
-    '<p class="task-map-instructions" id="task-map-instructions">',
-    'Select a solid-bordered tile to open its lesson. ',
-    'Dashed tiles are planned. If the map is wider than the window, ',
-    'use the buttons, arrow keys, or horizontal scrolling.',
-    '</p>'
-  )
-)
-
-cat(
-  paste0(
-    '<div class="task-map-scroll-controls" ',
-    'aria-label="Move through task groups">',
-    '<button type="button" data-map-direction="-1" ',
-    'aria-controls="nlp-task-map">Earlier groups</button>',
-    '<button type="button" data-map-direction="1" ',
-    'aria-controls="nlp-task-map">Later groups</button>',
-    '</div>'
-  )
-)
-
-cat(
-  paste0(
-    '<div class="periodic-scroll" id="nlp-task-map" ',
-    'tabindex="0" role="region" ',
-    'aria-label="Periodic table of NLP tasks" ',
-    'aria-describedby="task-map-instructions">',
-    '<div class="periodic-table">'
-  )
-)
-
-for (group_id in sort(unique(task_map$group_id))) {
-  group_rows <- task_map[task_map$group_id == group_id, ]
-  group_name <- unique(group_rows$group_name)
-  stage <- unique(group_rows$stage)
-  stage_label <- unname(stage_labels[stage])
-  heading_id <- sprintf("task-group-%d", group_id)
-
-  stopifnot(
-    identical(length(group_name), 1L),
-    identical(length(stage), 1L),
-    identical(length(stage_label), 1L)
-  )
-
-  cat(
-    sprintf(
-      paste0(
-        '<section class="element-group stage-%s" ',
-        'aria-labelledby="%s">'
-      ),
-      escape_attribute(stage),
-      heading_id
-    )
-  )
-  cat(
-    sprintf(
-      paste0(
-        '<h3 class="element-group-title" id="%s">',
-        '<span class="element-stage">%s</span>',
-        '<span class="element-group-name">%s</span>',
-        '</h3>'
-      ),
-      heading_id,
-      escape_text(stage_label),
-      escape_text(group_name)
-    )
-  )
-  cat('<ol class="element-stack">')
-
-  for (row_number in seq_len(nrow(group_rows))) {
-    task <- group_rows[row_number, ]
-    available <- identical(task$status, "available")
-    status <- if (available) "Read lesson" else "Planned"
-    status_class <- if (available) {
-      "element-status"
-    } else {
-      "element-status visually-hidden"
-    }
-    label <- sprintf(
-      "Task %d. %s. Item type: %s. %s.",
-      task$task_number,
-      task$title,
-      task$item_type,
-      status
-    )
-    tile_contents <- sprintf(
-      paste0(
-        '<span class="element-number">%d</span>',
-        '<span class="element-kind">%s</span>',
-        '<span class="element-symbol" aria-hidden="true">%s</span>',
-        '<span class="element-name">%s</span>',
-        '<span class="%s">%s</span>'
-      ),
-      task$task_number,
-      escape_text(task$item_type),
-      escape_text(task$symbol),
-      escape_text(task$title),
-      status_class,
-      status
-    )
-
-    cat('<li class="element-slot">')
-
-    if (available) {
-      cat(
-        sprintf(
-          paste0(
-            '<a class="nlp-element is-available" ',
-            'data-task-number="%d" data-item-type="%s" ',
-            'data-status="available" ',
-            'href="%s" aria-label="%s">%s</a>'
-          ),
-          task$task_number,
-          escape_attribute(task$item_type),
-          escape_attribute(task$lesson_path),
-          escape_attribute(label),
-          tile_contents
-        )
-      )
-    } else {
-      cat(
-        sprintf(
-          paste0(
-            '<div class="nlp-element is-planned" ',
-            'data-task-number="%d" data-item-type="%s" ',
-            'data-status="planned" ',
-            '>%s</div>'
-          ),
-          task$task_number,
-          escape_attribute(task$item_type),
-          tile_contents
-        )
-      )
-    }
-
-    cat('</li>')
-  }
-
-  cat('</ol></section>')
-}
-
-cat('</div></div>')
 ```
 
-The first 13 tiles open lessons. Planned tiles stay visible so the shape of
-the field is never hidden behind a short menu. **Available** means that a lesson
-exists and its automated checks passed. It does not certify scientific
-consensus or replace human approval.
+::: {.callout-note}
+## What this map is
 
-## Why keep the whole map visible?
+This is a teaching aid, not a scientific taxonomy or a complete account of the
+field. It mixes tasks, methods, objectives, resources, services, applications,
+and work done across a model's life. Each tile names its item type so those
+differences stay visible. Some inherited group names are broad or imperfect,
+and where that happens the lesson says so.
+:::
 
-Learning isolated definitions is difficult. Position and color give each task
-an address, much like rooms in a memory palace. Source data begins at the left.
-Language is broken into useful pieces through the middle. Models, generation,
-systems, and visual explanation follow.
+## Why these lessons exist
 
-The route is not a claim that NLP always happens in one straight line. Modern
-systems often combine several tasks inside one pretrained model. The map is a
-way to remember the questions being solved, even when the tools change.
+Your director asks how many of last quarter's 40,000 customer comments are
+complaints, because next quarter's support budget depends on the answer. You
+hand the comments to an AI assistant. It answers in seconds: 22 percent.
 
-## How lessons are reviewed
+The number might be right. The question is how anyone would know.
 
-Every finished lesson must:
+Start with the word. Before anything can be counted, someone has to say what a
+complaint is. Is a blunt question a complaint? A compliment with one sharp
+clause? A report of a broken link? Some answer gets applied to all 40,000
+comments, quietly and consistently, whether or not a person chose it. A more
+capable model does not settle this, because the difficulty is not what the
+model can do. It is what you meant.
 
-- begin with a concrete human situation and end with a useful resolution;
-- explain technical terms in plain language;
-- cite primary research or official documentation;
-- separate established knowledge from current practice and emerging work;
-- state important limits, risks, and missing evidence;
-- run every published code chunk without cached output;
-- check expected results in code; and
-- pass multiple editorial reviews for common signs of machine-written prose.
+Then the margin around it. "About 22 percent" needs the "about" to come from
+somewhere. To find out how often an automatic answer is wrong, you compare it
+against something you trust more, usually a sample of the same material worked
+out by hand and drawn at random so that what you find in it carries over to the
+rest. Assumptions can stand in for part of that comparison. Several established
+methods estimate error from how far several automatic labellers agree with each
+other, and they work. What they buy the estimate with is an assumption about
+the shape of the errors, which is itself hard to check without doing some of
+the work by hand. A better model shrinks how much you have to check, without
+taking the number of checks to zero.
 
-Automated writing checks can find repeated phrases, residue, and stylistic
-habits. They cannot prove who wrote a passage. Human review remains necessary
-for judgment, accuracy, voice, and care.
+Underneath both is the text itself. Every number about a body of writing is
+really a number about the version of that writing which arrived. Characters get
+mangled between systems. Rows split at a stray comma. A scanned page reads a
+digit as a letter. Sometimes that raises an error. Often it does not, and the
+answer changes while continuing to look reasonable. Lessons 1, 3 and 7 each
+produce one of these failures on purpose, so you can see what one looks like
+from the inside.
 
-## A map that can change
+Whatever a tool absorbs, something is left over. Here what is left over is
+deciding what to measure, on which material, and when to disbelieve the result.
+That part has not moved, because it is where the tool gets its instructions and
+where its output is accepted or rejected.
 
-Transformers, large language models, retrieval, tool use, and new inference
-methods have changed many parts of NLP. Future lessons will explain both the
-foundational task and the methods used now. Claims about fast-moving practice
-will be dated and sourced rather than presented as permanent facts.
+You can still buy the work. Labelled data is for sale, annotation vendors are
+easy to hire, and a model will label almost anything you give it, while quietly
+refusing a few things. Each of those arrives with a number describing how much
+its labels agree. Reading that number and knowing what it conceals are
+different skills, and in my experience the second comes from having produced
+such a number yourself, on your own untidy text, and having watched it flatter
+you.
+
+None of this says you must do the work by hand. For drafting, summarising, or
+getting a rough sense of an unfamiliar pile of text, these tools already save
+real time, and individual failures described in these lessons may well be fixed
+in the systems that come next. That case will keep getting stronger. What the
+parts named here describe is not a capability gap but the shape of a
+measurement: the definition, the comparison, and the text that actually
+arrived. How much each one costs is a separate question that depends on your
+text and on how much the answer matters, and this page cannot tell you either.
+
+These lessons cover the near end of that work: getting text out of files, web
+pages and scans without damaging it, and building a set of hand-checked labels
+you can defend. Several also cover the shortcuts, including buying labels,
+generating examples, and writing rules, and where each one stops being
+trustworthy.
+
+## About this site
+
+**Available** means a lesson exists and its automated checks passed. No lesson
+has had final human sign-off yet, and the review record for each one is kept in
+`data/lesson_reviews.csv`. Practice in this field moves quickly, so where a
+lesson describes current methods rather than settled ground, it says so and
+gives a date. The rules a lesson has to meet before it appears here are written
+down in
+[CONTRIBUTING.md](https://github.com/farach/periodic_table_nlp/blob/main/CONTRIBUTING.md)
+and
+[RESEARCH_STANDARDS.md](https://github.com/farach/periodic_table_nlp/blob/main/RESEARCH_STANDARDS.md).
 
 The task names and groupings are adapted from Rob van Zoest's
 [Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).
-The interface and lessons are built independently for this teaching project.
+That page states no licence and invites reuse. The task names themselves are
+standard terms in the field; the grouping, wording, interface, and lessons here
+are separate work, and any error in them belongs to this project. If the
+original author prefers different terms, this site will follow them.

@@ -29,7 +29,7 @@ performance estimate.
 By the end of this lesson, you will be able to:
 
 - express labeling rules as text patterns;
-- keep each rule's vote instead of hiding conflicts;
+- keep each rule's vote and avoid hiding conflicts;
 - calculate coverage, conflict, and abstention;
 - compare usable weak labels with reference labels; and
 - stress-test rules on cases they were not designed to fit.
@@ -45,24 +45,48 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Write rules that can abstain
 
 Each rule searches for words tied to one codebook category. A rule returns
-`TRUE` when it votes for its category and `FALSE` otherwise.
+`TRUE` when it votes for its category and `FALSE` otherwise. The next chunk
+loads package helpers for files, tables, reshaping, repeated rule checks,
+strings, and agreement, then reads the file with declared column types. Inside
+the chunk, `map()` makes one TRUE/FALSE list per rule and `as_tibble()` turns
+that list into columns.
 
 ```{r}
-workforce_sentences <- read.csv(
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(foundryR)
+
+workforce_sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
 )
 
 rule_patterns <- c(
-  training = paste(
+  training = str_c(
     "training",
     "certificat",
     "apprenticeship",
     "mentor",
     sep = "|"
   ),
-  requirement = paste(
+  requirement = str_c(
     "required",
     "preferred",
     "license",
@@ -74,35 +98,34 @@ rule_patterns <- c(
   schedule = "schedule|shift|classes",
   skill = "skill|spreadsheet|communication"
 )
+rule_labels <- names(rule_patterns)
+sentence_text_lower <- str_to_lower(workforce_sentences$text)
 
-rule_votes <- vapply(
-  rule_patterns,
-  function(pattern) {
-    grepl(
-      pattern,
-      tolower(workforce_sentences$text),
-      perl = TRUE
-    )
-  },
-  logical(nrow(workforce_sentences))
+rule_votes <- bind_cols(
+  tibble(sentence_id = workforce_sentences$sentence_id),
+  as_tibble(
+    map(rule_patterns, \(pattern) {
+      str_detect(sentence_text_lower, pattern)
+    })
+  )
 )
 
 stopifnot(
   identical(
-    dim(rule_votes),
+    dim(rule_votes[rule_labels]),
     c(28L, 4L)
   ),
   identical(
-    colnames(rule_votes),
-    names(rule_patterns)
+    names(rule_votes[rule_labels]),
+    rule_labels
   )
 )
 
 head(rule_votes, 8)
 ```
 
-The matrix preserves one column per rule. Combining the votes too early would
-hide why a label was proposed.
+The rule-vote tibble preserves one column per rule. Combining the votes too
+early would hide why a label was proposed.
 
 ## Mark abstentions and conflicts
 
@@ -113,57 +136,62 @@ A row can receive:
 - several votes, which produces a conflict.
 
 ```{r}
-rule_count <- rowSums(rule_votes)
-first_vote <- colnames(rule_votes)[
-  max.col(rule_votes, ties.method = "first")
-]
-weak_label <- ifelse(
-  rule_count == 0L,
-  "abstain",
-  ifelse(
-    rule_count > 1L,
-    "conflict",
-    first_vote
+rule_counts <- rule_votes |>
+  mutate(
+    rule_count = as.integer(rowSums(rule_votes[rule_labels]))
+  ) |>
+  select(sentence_id, rule_count)
+voted_labels <- rule_votes |>
+  pivot_longer(
+    cols = all_of(rule_labels),
+    names_to = "weak_label",
+    values_to = "rule_vote"
+  ) |>
+  filter(rule_vote) |>
+  summarise(
+    voted_label = first(weak_label),
+    .by = sentence_id
   )
-)
 
-weak_results <- data.frame(
-  sentence_id = workforce_sentences$sentence_id,
-  text = workforce_sentences$text,
-  reference_label =
-    workforce_sentences$reference_label,
-  rule_count = rule_count,
-  weak_label = weak_label,
-  stringsAsFactors = FALSE
-)
+weak_results <- workforce_sentences |>
+  select(sentence_id, text, reference_label) |>
+  left_join(rule_counts, by = join_by(sentence_id)) |>
+  left_join(voted_labels, by = join_by(sentence_id)) |>
+  mutate(
+    weak_label = case_when(
+      rule_count == 0L ~ "abstain",
+      rule_count > 1L ~ "conflict",
+      TRUE ~ voted_label
+    )
+  ) |>
+  select(-voted_label)
 
-result_counts <- table(weak_results$weak_label)
+result_order <- c(
+  "abstain",
+  "conflict",
+  "requirement",
+  "schedule",
+  "skill",
+  "training"
+)
+result_counts <- tibble(weak_label = result_order) |>
+  left_join(
+    weak_results |>
+      count(weak_label, name = "rows"),
+    by = join_by(weak_label)
+  ) |>
+  mutate(rows = coalesce(rows, 0L))
 
 stopifnot(
   identical(
-    unname(
-      as.integer(
-        result_counts[
-          c(
-            "abstain",
-            "conflict",
-            "requirement",
-            "schedule",
-            "skill",
-            "training"
-          )
-        ]
-      )
-    ),
+    result_counts$rows,
     c(3L, 2L, 8L, 4L, 3L, 8L)
   )
 )
 
 knitr::kable(
-  weak_results[
-    weak_results$weak_label %in%
-      c("abstain", "conflict"),
-  ],
+  weak_results |>
+    filter(weak_label %in% c("abstain", "conflict")),
   col.names = c(
     "Sentence ID",
     "Text",
@@ -187,16 +215,16 @@ rate** is the share receiving more than one. **Usable coverage** counts rows
 with exactly one vote.
 
 ```{r}
-rule_summary <- data.frame(
+rule_summary <- tibble(
   measure = c(
     "coverage",
     "conflict rate",
     "usable coverage"
   ),
   value = c(
-    mean(rule_count > 0L),
-    mean(rule_count > 1L),
-    mean(rule_count == 1L)
+    mean(weak_results$rule_count > 0L),
+    mean(weak_results$rule_count > 1L),
+    mean(weak_results$rule_count == 1L)
   )
 )
 
@@ -210,10 +238,10 @@ stopifnot(
 )
 
 knitr::kable(
-  transform(
-    rule_summary,
-    value = round(value, 3)
-  ),
+  rule_summary |>
+    mutate(
+      value = round(value, 3)
+    ),
   col.names = c("Measure", "Share of 28 text units"),
   caption = "Coverage and conflict in the teaching dataset",
   row.names = FALSE
@@ -229,11 +257,15 @@ The 23 rows with one rule vote include two errors. We can summarize that
 comparison with foundryR.
 
 ```{r}
-usable_rows <- weak_results$rule_count == 1L
-agreement_data <- weak_results[
-  usable_rows,
-  c("weak_label", "reference_label")
-]
+agreement_data <- weak_results |>
+  filter(rule_count == 1L) |>
+  select(weak_label, reference_label)
+error_sentences <- weak_results |>
+  filter(
+    rule_count == 1L,
+    weak_label != reference_label
+  )
+error_sentence_ids <- error_sentences$sentence_id
 rule_agreement <- foundryR::foundry_agreement(
   agreement_data,
   estimate = "weak_label",
@@ -244,12 +276,11 @@ stopifnot(
   identical(nrow(agreement_data), 23L),
   isTRUE(
     all.equal(
-      rule_agreement$value[
-        rule_agreement$metric == "accuracy"
-      ],
+      filter(rule_agreement, metric == "accuracy")$value,
       21 / 23
     )
-  )
+  ),
+  identical(error_sentence_ids, c("s023", "s024"))
 )
 
 knitr::kable(
@@ -268,24 +299,28 @@ the headings alone do not make either claim.
 The full accounting keeps that error beside unresolved rows.
 
 ```{r}
-all_row_accounting <- data.frame(
+all_row_accounting <- tibble(
   outcome = c(
     "usable and matches reference",
     "usable and differs from reference",
     "unresolved: abstain or conflict"
   ),
   rows = c(
-    sum(
-      usable_rows &
-        weak_results$weak_label ==
-          weak_results$reference_label
-    ),
-    sum(
-      usable_rows &
-        weak_results$weak_label !=
-          weak_results$reference_label
-    ),
-    sum(!usable_rows)
+    weak_results |>
+      filter(
+        rule_count == 1L,
+        weak_label == reference_label
+      ) |>
+      nrow(),
+    weak_results |>
+      filter(
+        rule_count == 1L,
+        weak_label != reference_label
+      ) |>
+      nrow(),
+    weak_results |>
+      filter(rule_count != 1L) |>
+      nrow()
   )
 )
 
@@ -319,7 +354,7 @@ shortcuts after the rules were written. They are not an independent evaluation
 sample.
 
 ```{r}
-stress_cases <- data.frame(
+stress_cases <- tibble(
   case_id = sprintf("challenge-%d", 1:4),
   text = c(
     "The training department is hiring an accountant.",
@@ -333,39 +368,46 @@ stress_cases <- data.frame(
     "requirement",
     "schedule"
   ),
-  reference_status = "designed challenge expectation",
-  stringsAsFactors = FALSE
+  reference_status = "designed challenge expectation"
 )
 
-stress_votes <- vapply(
-  rule_patterns,
-  function(pattern) {
-    grepl(
-      pattern,
-      tolower(stress_cases$text),
-      perl = TRUE
-    )
-  },
-  logical(nrow(stress_cases))
-)
-stress_count <- rowSums(stress_votes)
-stress_first_vote <- colnames(stress_votes)[
-  max.col(stress_votes, ties.method = "first")
-]
-stress_label <- ifelse(
-  stress_count == 0L,
-  "abstain",
-  ifelse(
-    stress_count > 1L,
-    "conflict",
-    stress_first_vote
+stress_text_lower <- str_to_lower(stress_cases$text)
+stress_votes <- bind_cols(
+  tibble(case_id = stress_cases$case_id),
+  as_tibble(
+    map(rule_patterns, \(pattern) {
+      str_detect(stress_text_lower, pattern)
+    })
   )
 )
+stress_counts <- stress_votes |>
+  mutate(
+    rule_count = as.integer(rowSums(stress_votes[rule_labels]))
+  ) |>
+  select(case_id, rule_count)
+stress_voted_labels <- stress_votes |>
+  pivot_longer(
+    cols = all_of(rule_labels),
+    names_to = "weak_label",
+    values_to = "rule_vote"
+  ) |>
+  filter(rule_vote) |>
+  summarise(
+    voted_label = first(weak_label),
+    .by = case_id
+  )
 
-stress_results <- data.frame(
-  stress_cases,
-  weak_label = stress_label
-)
+stress_results <- stress_cases |>
+  left_join(stress_counts, by = join_by(case_id)) |>
+  left_join(stress_voted_labels, by = join_by(case_id)) |>
+  mutate(
+    weak_label = case_when(
+      rule_count == 0L ~ "abstain",
+      rule_count > 1L ~ "conflict",
+      TRUE ~ voted_label
+    )
+  ) |>
+  select(-rule_count, -voted_label)
 
 stopifnot(
   identical(
@@ -373,8 +415,7 @@ stopifnot(
     c("training", "abstain", "conflict", "abstain")
   ),
   !any(
-    stress_results$weak_label ==
-      stress_results$reference_label
+    stress_results$weak_label == stress_results$reference_label
   )
 )
 

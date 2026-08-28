@@ -2,6 +2,7 @@
 if (FALSE) {
   library(cmapr)
   library(digest)
+  library(dplyr)
   library(foundryR)
   library(htmltools)
   library(httr2)
@@ -11,10 +12,13 @@ if (FALSE) {
   library(knitr)
   library(onet2r)
   library(png)
+  library(purrr)
   library(readr)
   library(rmarkdown)
   library(rvest)
   library(stringi)
   library(stringr)
   library(tesseract)
+  library(tibble)
+  library(tidyr)
 }

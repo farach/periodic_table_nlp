@@ -41,6 +41,8 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
+The first code chunk loads the packages used for reading, checking, and displaying the feedback file.
+
 ## What makes a file structured?
 
 The first uncertainty is basic: what does each part of the file represent? A
@@ -57,16 +59,19 @@ break, so one physical line does not always equal one record. A quotation mark
 inside a quoted field is usually written twice.
 
 Before asking R to make a table, the coordinator reads the file as plain lines.
-This exposes what is actually stored and keeps the example small enough to
-count by eye.
+`read_lines()` from readr returns one text value for each physical line. This
+exposes what is actually stored and keeps the example small enough to count by
+eye.
 
 ```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+
 file_path <- "data/customer_feedback.csv"
-file_lines <- readLines(
-  file_path,
-  encoding = "UTF-8",
-  warn = TRUE
-)
+file_lines <- read_lines(file_path)
 
 stopifnot(
   identical(length(file_lines), 6L),
@@ -74,11 +79,7 @@ stopifnot(
     file_lines[1],
     "feedback_id,submitted_at,channel,rating,comment"
   ),
-  grepl(
-    '"Delivery was quick, thank you!"',
-    file_lines[2],
-    fixed = TRUE
-  )
+  str_detect(file_lines[2], fixed('"Delivery was quick, thank you!"'))
 )
 
 head(file_lines, 3)
@@ -94,26 +95,26 @@ the teaching file has no quoted line breaks.
 ## Load the CSV into R
 
 The line count and header are as expected, so the next step is to organize the
-records. `read.csv()` turns the file into a **data frame**, R's table-like
-structure. We specify UTF-8, a common way to store characters from many
-languages, so R reads the accented text using the file's encoding.
+records. `read_csv()` from readr turns the file into a **tibble**, a table that
+prints its size and each column's type. readr treats text as UTF-8 by default,
+a common way to store characters from many languages, so the accented text is
+read using that expected encoding.
 
 ```{r}
-feedback <- read.csv(
+feedback <- read_csv(
   file = file_path,
-  fileEncoding = "UTF-8",
-  na.strings = "",
-  colClasses = c(
-    feedback_id = "character",
-    submitted_at = "character",
-    channel = "character",
-    rating = "integer",
-    comment = "character"
-  ),
-  check.names = FALSE
+  na = "",
+  col_types = cols(
+    feedback_id = col_character(),
+    submitted_at = col_character(),
+    channel = col_character(),
+    rating = col_integer(),
+    comment = col_character()
+  )
 )
 
 stopifnot(
+  inherits(feedback, "tbl_df"),
   identical(nrow(feedback), 5L),
   identical(ncol(feedback), 5L),
   identical(
@@ -141,19 +142,18 @@ final comment, `"Muy útil y fácil de usar"`, is Spanish for "Very useful and
 easy to use."
 
 The teaching file's data dictionary defines a blank rating as missing.
-`na.strings = ""` applies that rule while loading. A real project should use
-the missing-value rules supplied by its data provider. The literal text
-`"NA"`, zero, and a blank field must not be treated as equivalent without such
-evidence.
+`na = ""` applies that rule while loading. A real project should use the
+missing-value rules supplied by its data provider. The literal text `"NA"`,
+zero, and a blank field must not be treated as equivalent without such evidence.
 
 Those checks show that the visible layout survived the trip into R. We still
 need to check how R interpreted each column.
 
 ### Why choose the column types?
 
-The `colClasses` setting tells R which **data type** to use for each column. A
-data type records whether values should behave as text, whole numbers, dates,
-or another kind of information.
+The `col_types = cols(...)` setting tells readr which **data type** to use for
+each column. A data type records whether values should behave as text, whole
+numbers, dates, or another kind of information.
 
 - identification numbers are text because they label records;
 - dates begin as text so we can convert them deliberately;
@@ -163,13 +163,14 @@ or another kind of information.
 Treating an ID as text protects leading zeros. For example, the label `"0012"`
 should remain different from `"12"` when that difference exists in the source.
 
-We can ask R to report the type it used for every column.
+We can ask R to report the type it used for every column. `map_chr()` from
+purrr applies the same check to each column and returns a character vector.
+The shorthand `\(column)` means "for each column, run the small calculation that follows."
 
 ```{r}
-column_types <- vapply(
+column_types <- map_chr(
   feedback,
-  function(column) class(column)[1],
-  character(1)
+  \(column) class(column)[1]
 )
 
 stopifnot(
@@ -180,7 +181,7 @@ stopifnot(
 )
 
 knitr::kable(
-  data.frame(
+  tibble(
     column = names(column_types),
     type = unname(column_types)
   ),
@@ -197,14 +198,19 @@ quantities.
 
 ## Convert the date column
 
-The submission dates have arrived as text. `as.Date()` converts them to R's
-date type so the coordinator can sort and compare them as calendar dates.
+The submission dates have arrived as text. `mutate()` from dplyr changes a
+column while keeping the rest of the table. Here `as.Date()` converts the text
+to R's date type so the coordinator can sort and compare the values as calendar
+dates.
 
 ```{r}
-feedback$submitted_at <- as.Date(
-  feedback$submitted_at,
-  format = "%Y-%m-%d"
-)
+feedback <- feedback |>
+  mutate(
+    submitted_at = as.Date(
+      submitted_at,
+      format = "%Y-%m-%d"
+    )
+  )
 
 stopifnot(
   inherits(feedback$submitted_at, "Date"),
@@ -215,7 +221,8 @@ stopifnot(
 )
 
 knitr::kable(
-  feedback[c("feedback_id", "submitted_at", "channel")],
+  feedback |>
+    select(feedback_id, submitted_at, channel),
   col.names = c("Feedback ID", "Submitted", "Channel"),
   caption = "Submission dates after conversion",
   row.names = FALSE
@@ -223,30 +230,31 @@ knitr::kable(
 ```
 
 The format `%Y-%m-%d` means four-digit year, two-digit month, and two-digit day.
-Writing it explicitly records the order expected in this file instead of
+Writing it explicitly records the order expected in this file rather than
 leaving that order to a guess.
 
 ## Find missing information
 
 With the rows, columns, and types accounted for, the coordinator can ask which
 values are absent. R uses `NA` to represent a **missing value**. The CSV
-contains one blank rating, which `read.csv()` changed to `NA`.
+contains one blank rating, which `read_csv()` changed to `NA`. `map_int()`
+returns one whole-number count for each column.
 
 ```{r}
-missing_by_column <- colSums(is.na(feedback))
+missing_counts <- map_int(
+  feedback,
+  \(column) sum(is.na(column))
+)
 
 stopifnot(
-  identical(
-    unname(as.integer(missing_by_column)),
-    c(0L, 0L, 0L, 1L, 0L)
-  ),
+  identical(unname(missing_counts), c(0L, 0L, 0L, 1L, 0L)),
   is.na(feedback$rating[3])
 )
 
 knitr::kable(
-  data.frame(
-    column = names(missing_by_column),
-    missing_values = as.integer(missing_by_column)
+  tibble(
+    column = names(missing_counts),
+    missing_values = unname(missing_counts)
   ),
   col.names = c("Column", "Missing values"),
   caption = "Missing values in each column",
@@ -261,14 +269,14 @@ be replaced without evidence about what the blank means.
 ## Select a record that needs attention
 
 Only now does the coordinator select feedback with a rating of two or lower.
-The expression `!is.na(feedback$rating)` keeps the unknown rating out of the
-comparison rather than treating it as high or low.
+`filter()` from dplyr keeps rows that meet a condition, and `select()` keeps the
+columns needed for the meeting. The expression `!is.na(rating)` keeps the
+unknown rating out of the comparison rather than treating it as high or low.
 
 ```{r}
-low_ratings <- feedback[
-  !is.na(feedback$rating) & feedback$rating <= 2,
-  c("feedback_id", "rating", "comment")
-]
+low_ratings <- feedback |>
+  filter(!is.na(rating), rating <= 2) |>
+  select(feedback_id, rating, comment)
 
 stopifnot(
   identical(nrow(low_ratings), 1L),
@@ -309,7 +317,7 @@ limits belong alongside the technical checks.
 
 - A structured file uses a consistent arrangement of rows and columns.
 - Quotation marks protect text that contains a separator such as a comma.
-- Choose important column types instead of relying on guesses.
+- Choose important column types rather than relying on guesses.
 - Check missing values before filtering or summarizing.
 - Opening a file successfully is only the beginning of checking it.
 
@@ -320,6 +328,7 @@ say exactly what is recorded, what is blank, and what the file cannot settle.
 
 ## Sources
 
-- [R documentation for `read.csv()` and `read.table()`](https://stat.ethz.ch/R-manual/R-devel/library/utils/html/read.table.html)
+- [readr documentation for `read_csv()`](https://readr.tidyverse.org/reference/read_delim.html)
+- [Tibble documentation](https://tibble.tidyverse.org/)
 - [R Data Import/Export manual](https://cran.r-project.org/doc/manuals/r-release/R-data.html)
 - [RFC 4180: Common format and MIME type for CSV files](https://www.rfc-editor.org/rfc/rfc4180)

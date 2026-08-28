@@ -19,7 +19,7 @@ comes before any attempt to classify what the flyer says.
 
 ::: {.callout-note}
 The flyer and program are fictional. The image was generated for this lesson,
-and the transcript was written from the source text used to create it.
+and the transcript was written from the source text that created it.
 :::
 
 ::: {.callout-tip}
@@ -41,6 +41,8 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
+The first code chunk loads the packages needed to read metadata, keep tibbles, handle text, and run OCR. A tibble is a table that prints its size and each column's type.
+
 ## Inspect the source image
 
 ![Fictional training flyer used for the OCR example](../data/workforce/training-flyer.png){#fig-training-flyer width=720 height=480 fig-alt="A fictional Riverton workforce training flyer. A complete text transcript follows."}
@@ -59,41 +61,54 @@ reader's browser. The image remains the source; OCR is one reading of it.
 The checked transcript contains six lines.
 
 ```{r}
-transcript_path <- paste0(
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(digest)
+library(png)
+library(tesseract)
+
+transcript_path <- str_c(
   "data/workforce/",
   "training-flyer-ground-truth.txt"
 )
-reference_lines <- readLines(
-  transcript_path,
-  encoding = "UTF-8",
-  warn = TRUE
-)
+reference_lines <- read_lines(transcript_path)
 transcript_md5 <- digest::digest(
   paste(reference_lines, collapse = "\n"),
   algo = "md5",
   serialize = FALSE
 )
-flyer_metadata <- read.csv(
+flyer_metadata <- read_csv(
   "data/workforce/training-flyer-metadata.csv",
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    artifact = col_character(),
+    width_pixels = col_integer(),
+    height_pixels = col_integer(),
+    md5 = col_character(),
+    source = col_character(),
+    rendering_note = col_character()
+  )
 )
-image_metadata <- flyer_metadata[
-  flyer_metadata$artifact == "training-flyer.png",
-]
-transcript_metadata <- flyer_metadata[
-  flyer_metadata$artifact ==
-    "training-flyer-ground-truth.txt",
-]
+image_metadata <- flyer_metadata |>
+  filter(artifact == "training-flyer.png")
+transcript_metadata <- flyer_metadata |>
+  filter(artifact == "training-flyer-ground-truth.txt")
 image_path <- "data/workforce/training-flyer.png"
 image_array <- png::readPNG(
   image_path,
   info = TRUE
 )
 image_dimensions <- dim(image_array)[1:2]
-image_md5 <- unname(tools::md5sum(image_path))
+image_md5 <- digest::digest(
+  image_path,
+  algo = "md5",
+  serialize = FALSE,
+  file = TRUE
+)
 
 stopifnot(
+  inherits(flyer_metadata, "tbl_df"),
   identical(length(reference_lines), 6L),
   identical(
     reference_lines[1],
@@ -138,13 +153,13 @@ ocr_text <- tesseract::ocr(
   "data/workforce/training-flyer.png",
   engine = ocr_engine
 )
-ocr_lines <- trimws(
-  strsplit(ocr_text, "\n", fixed = TRUE)[[1]]
-)
-ocr_lines <- ocr_lines[nzchar(ocr_lines)]
+ocr_lines <- ocr_text |>
+  str_split_1(fixed("\n")) |>
+  str_trim()
+ocr_lines <- ocr_lines[str_length(ocr_lines) > 0]
 
 stopifnot(
-  nzchar(ocr_information$version),
+  str_length(ocr_information$version) > 0,
   "eng" %in% ocr_information$available,
   identical(ocr_lines, reference_lines),
   identical(
@@ -161,7 +176,7 @@ result belongs to this image and software version; it is not a general OCR
 accuracy claim.
 
 ```{r}
-ocr_provenance <- data.frame(
+ocr_provenance <- tibble(
   component = c(
     "R tesseract package",
     "Native Tesseract engine",
@@ -179,8 +194,9 @@ ocr_provenance <- data.frame(
 )
 
 stopifnot(
+  inherits(ocr_provenance, "tbl_df"),
   identical(nrow(ocr_provenance), 4L),
-  all(nzchar(ocr_provenance$value))
+  all(str_length(ocr_provenance$value) > 0)
 )
 
 knitr::kable(
@@ -206,14 +222,10 @@ the words, not the flyer styling.
 ```{r}
 normalize_for_comparison <- function(text) {
   text |>
-    paste(collapse = " ") |>
-    tolower() |>
-    gsub(
-      pattern = "[^a-z0-9]+",
-      replacement = " ",
-      x = _
-    ) |>
-    trimws()
+    str_c(collapse = " ") |>
+    str_to_lower() |>
+    str_replace_all("[^a-z0-9]+", " ") |>
+    str_squish()
 }
 
 reference_text <- normalize_for_comparison(
@@ -227,7 +239,7 @@ normalized_edit_distance <- as.integer(
 )
 normalized_distance_share <-
   normalized_edit_distance /
-  nchar(reference_text)
+  str_length(reference_text)
 
 stopifnot(
   identical(normalized_edit_distance, 0L),
@@ -237,10 +249,10 @@ stopifnot(
   )
 )
 
-data.frame(
+tibble(
   normalized_edit_distance =
     normalized_edit_distance,
-  reference_characters = nchar(reference_text),
+  reference_characters = str_length(reference_text),
   normalized_distance_share =
     normalized_distance_share
 )
@@ -272,7 +284,7 @@ important fields directly, not rely on one summary score.
 
 Keep:
 
-1. the original image;
+1. the source image;
 2. the OCR engine and language settings;
 3. the unedited OCR output;
 4. the reviewed and corrected transcript;

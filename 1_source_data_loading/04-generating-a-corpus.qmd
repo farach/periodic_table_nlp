@@ -41,6 +41,8 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
+The first code chunk loads the packages needed to read files, build tibbles, repeat work, and handle text. A tibble is a table that prints its size and each column's type.
+
 ## Decide what one document means
 
 Before collecting anything, the editor must choose the **document unit**, the
@@ -68,6 +70,13 @@ without page layout or styling. `list.files()` asks R to find file names ending
 in `.txt`.
 
 ```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(digest)
+
 article_paths <- sort(
   list.files(
     path = "data/help_articles",
@@ -96,61 +105,63 @@ so each result can still be traced to the file that supplied its text.
 
 ## Read every document
 
-Finding the file names does not yet load their contents. `readLines()` reads
+Finding the file names does not yet load their contents. `read_lines()` reads
 the text inside one file. These files use UTF-8, a common way to store
 characters from many languages. A **function** is a named set of steps. The
 small function below preserves line breaks in the source copy.
 
 ```{r}
-read_document <- function(path) {
-  lines <- readLines(
-    path,
-    encoding = "UTF-8",
-    warn = TRUE
-  )
+expected_line_counts <- c(
+  "account-access.txt" = 1L,
+  "delivery.txt" = 1L,
+  "returns.txt" = 1L
+)
 
-  paste(lines, collapse = "\n")
+read_document <- function(path) {
+  lines <- read_lines(path)
+  file_name <- basename(path)
+  stopifnot(identical(length(lines), unname(expected_line_counts[file_name])))
+
+  str_c(lines, collapse = "\n")
 }
 
-source_documents <- vapply(
-  article_paths,
-  read_document,
-  character(1)
-)
-names(source_documents) <- basename(article_paths)
+source_documents <- article_paths |>
+  set_names(basename(article_paths)) |>
+  map_chr(read_document)
 
-analysis_documents <- gsub(
+analysis_documents <- str_replace_all(
+  source_documents,
   "[\r\n]+",
-  " ",
-  source_documents
+  " "
 )
 
 stopifnot(
   identical(length(source_documents), 3L),
   identical(names(source_documents), expected_files),
-  all(nzchar(source_documents)),
+  identical(unname(expected_line_counts), c(1L, 1L, 1L)),
+  all(str_length(source_documents) > 0),
   identical(
     names(analysis_documents),
     expected_files
   ),
-  grepl(
-    "password reset link",
+  str_detect(
     analysis_documents[1],
-    fixed = TRUE
+    fixed("password reset link")
   )
 )
 
 source_documents
 ```
 
-`vapply()` runs `read_document()` once for each path. The result contains three
-source copies, and the original file names remain attached. A separate
-`analysis_documents` object replaces line breaks with spaces. The source copy
+`map_chr()` runs `read_document()` once for each path and returns a character
+vector. The result contains three source copies, and the file names remain
+attached. A separate `analysis_documents` object replaces line breaks with
+spaces. The source copy
 is left untouched so paragraph boundaries can be recovered later.
 
-The check `all(nzchar(source_documents))` confirms that none of the documents
-is empty. An empty file might mean that loading failed or that the source
-itself was blank. Either case should be investigated before analysis.
+The check using `str_length()` confirms that none of the documents is
+empty. An empty file might mean that loading failed or that the source itself
+was blank. Either case should be investigated before analysis.
 
 ## Put text and labels together
 
@@ -159,23 +170,38 @@ document also needs **metadata**, information about the document rather than
 its main text. A source file, topic, publication date, or author can be
 metadata.
 
-We will place the text and its labels in a **data frame**, R's table-like
-structure, with one row per document.
+We will place the text and its labels in a tibble, with one row per document.
 
 ```{r}
-corpus <- data.frame(
-  document_id = tools::file_path_sans_ext(
-    basename(article_paths)
+hash_document <- function(path) {
+  lines <- read_lines(path)
+  file_name <- basename(path)
+  stopifnot(identical(length(lines), unname(expected_line_counts[file_name])))
+
+  digest::digest(
+    paste(lines, collapse = "\n"),
+    algo = "md5",
+    serialize = FALSE
+  )
+}
+
+corpus <- tibble(
+  document_id = str_remove(
+    basename(article_paths),
+    "[.]txt$"
   ),
   topic = c("account access", "delivery", "returns"),
   source_file = basename(article_paths),
-  source_hash = unname(tools::md5sum(article_paths)),
+  source_hash = map_chr(
+    article_paths,
+    hash_document
+  ),
   source_text = unname(source_documents),
-  analysis_text = unname(analysis_documents),
-  stringsAsFactors = FALSE
+  analysis_text = unname(analysis_documents)
 )
 
 stopifnot(
+  inherits(corpus, "tbl_df"),
   identical(nrow(corpus), 3L),
   identical(
     corpus$document_id,
@@ -185,11 +211,12 @@ stopifnot(
     corpus$source_file,
     expected_files
   ),
-  all(grepl("^[0-9a-f]{32}$", corpus$source_hash))
+  all(str_detect(corpus$source_hash, "^[0-9a-f]{32}$"))
 )
 
 knitr::kable(
-  corpus[c("document_id", "topic", "source_file")],
+  corpus |>
+    select(document_id, topic, source_file),
   col.names = c("Document ID", "Topic", "Source file"),
   caption = "The documents and their metadata",
   row.names = FALSE
@@ -207,25 +234,28 @@ corpus equivalent of keeping a label attached to its folder.
 
 A quick count can reveal a document that loaded as empty or unexpectedly long.
 The function below separates text wherever it finds whitespace, then counts the
-resulting pieces.
+resulting pieces. Here, whitespace means spaces, tabs, line breaks, and
+non-breaking spaces matched by `[[:space:]]+`.
 
 ```{r}
 count_whitespace_tokens <- function(text) {
-  tokens <- strsplit(
-    trimws(text),
-    split = "[[:space:]]+"
-  )[[1]]
+  tokens <- str_split_1(str_trim(text), "[[:space:]]+")
 
-  length(tokens)
+  sum(str_length(tokens) > 0)
 }
 
-corpus$whitespace_token_count <- vapply(
-  corpus$analysis_text,
-  count_whitespace_tokens,
-  integer(1)
-)
+corpus <- corpus |>
+  mutate(
+    whitespace_token_count = map_int(
+      analysis_text,
+      count_whitespace_tokens
+    )
+  )
 
 stopifnot(
+  identical(count_whitespace_tokens(""), 0L),
+  identical(count_whitespace_tokens("   "), 0L),
+  identical(count_whitespace_tokens("one\u00A0two three"), 3L),
   identical(
     corpus$whitespace_token_count,
     c(18L, 16L, 21L)
@@ -233,9 +263,8 @@ stopifnot(
 )
 
 knitr::kable(
-  corpus[
-    c("document_id", "topic", "whitespace_token_count")
-  ],
+  corpus |>
+    select(document_id, topic, whitespace_token_count),
   col.names = c("Document ID", "Topic", "Whitespace-token count"),
   caption = "Whitespace-token counts for the three documents",
   row.names = FALSE
@@ -259,27 +288,41 @@ confirm that:
 - the topic and source file are present.
 
 ```{r}
-quality_checks <- c(
-  source_files_exist = all(file.exists(article_paths)),
-  no_empty_text = all(nzchar(trimws(corpus$source_text))),
-  unique_document_ids = !anyDuplicated(corpus$document_id),
-  no_exact_duplicate_text = !anyDuplicated(corpus$source_text),
-  metadata_is_complete = all(
-    complete.cases(
-      corpus[c("topic", "source_file", "source_hash")]
+quality_checks <- tibble(
+  check = c(
+    "source_files_exist",
+    "no_empty_text",
+    "unique_document_ids",
+    "no_exact_duplicate_text",
+    "metadata_is_complete"
+  ),
+  passed = c(
+    all(file.exists(article_paths)),
+    all(str_length(str_trim(corpus$source_text)) > 0),
+    n_distinct(corpus$document_id) == nrow(corpus),
+    n_distinct(corpus$source_text) == nrow(corpus),
+    !any(
+      is.na(
+        corpus |>
+          select(topic, source_file, source_hash)
+      )
     )
   )
 )
 
-stopifnot(all(quality_checks))
+stopifnot(
+  inherits(quality_checks, "tbl_df"),
+  identical(nrow(quality_checks), 5L),
+  all(quality_checks$passed)
+)
 
 quality_checks
 ```
 
-Every result is `TRUE`, so the corpus passes these structural checks. They do
-not establish that the articles are accurate, useful, or representative. They
-show only that the three expected files produced three labeled, nonempty,
-distinct records.
+Every `passed` value is `TRUE`, so the corpus passes these structural checks.
+They do not establish that the articles are accurate, useful, or
+representative. They show only that the three expected files produced three
+labeled, nonempty, distinct records.
 
 ## Use the corpus as a collection
 
@@ -288,18 +331,18 @@ document shares one structure, the same search can be applied to all three.
 This one looks for the exact phrase `"password reset"`.
 
 ```{r}
-mentions_password_reset <- grepl(
-  "password reset",
-  corpus$analysis_text,
-  fixed = TRUE
-)
-
-matching_documents <- corpus[
-  mentions_password_reset,
-  c("document_id", "topic", "analysis_text")
-]
+matching_documents <- corpus |>
+  filter(
+    str_detect(
+      analysis_text,
+      fixed("password reset")
+    )
+  ) |>
+  select(document_id, topic, analysis_text)
 
 stopifnot(
+  inherits(matching_documents, "tbl_df"),
+  identical(nrow(matching_documents), 1L),
   identical(
     matching_documents$document_id,
     "account-access"
@@ -325,9 +368,9 @@ An R **class** tells R what kind of object it is handling and which operations
 belong with it.
 
 Packages such as quanteda and tm provide dedicated corpus objects with tools
-for metadata and text processing. A data frame is enough for this lesson
-because its rows and columns are visible and easy to inspect. The same records
-can be converted to a package-specific corpus later.
+for metadata and text processing. A tibble is enough for this lesson because
+its rows and columns are visible and easy to inspect. The same records can be
+converted to a package-specific corpus later.
 :::
 
 ## A corpus is a set of choices
@@ -363,7 +406,8 @@ this text is, where it came from, and why it belongs in the collection.
 
 ## Sources
 
-- [R documentation for reading text lines](https://stat.ethz.ch/R-manual/R-devel/library/base/html/readLines.html)
+- [readr documentation for reading text lines](https://readr.tidyverse.org/reference/read_lines.html)
+- [purrr documentation for mapping over vectors](https://purrr.tidyverse.org/reference/map.html)
 - [quanteda documentation for creating a corpus](https://quanteda.io/reference/corpus.html)
 - [Introduction to the tm text mining package](https://cran.r-project.org/web/packages/tm/vignettes/tm.pdf)
 - [Unicode Text Segmentation, UAX #29](https://www.unicode.org/reports/tr29/)

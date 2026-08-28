@@ -48,37 +48,47 @@ stopifnot(identical(getOption("warn"), 2L))
 
 The R packages are tools written by the same author as this teaching site. The
 underlying data comes from separate providers with separate documentation and
-licenses.
+licenses. The next chunk loads table, file, JSON, repetition, and text helpers,
+then records package versions; provider calls stay qualified by package name.
 
 ```{r}
-package_versions <- vapply(
-  c(
-    "onet2r",
-    "cmapr",
-    "huggingfaceR",
-    "foundryR"
-  ),
-  function(package) {
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(jsonlite)
+
+package_names <- c(
+  "onet2r",
+  "cmapr",
+  "huggingfaceR",
+  "foundryR"
+)
+package_versions <- package_names |>
+  set_names(package_names) |>
+  map_chr(\(package) {
     as.character(
       utils::packageVersion(package)
     )
-  },
-  character(1)
-)
-locked_packages <- jsonlite::fromJSON(
+  })
+locked_packages <- fromJSON(
   "renv.lock",
   simplifyVector = FALSE
 )$Packages
-package_commits <- vapply(
-  names(package_versions),
-  function(package) {
+package_commits <- package_names |>
+  set_names(package_names) |>
+  map_chr(\(package) {
     locked_packages[[package]]$RemoteSha
-  },
-  character(1)
+  })
+version_table <- tibble(
+  package = names(package_versions),
+  version = unname(package_versions),
+  commit = unname(package_commits)
 )
 
 stopifnot(
-  all(nzchar(package_versions)),
+  all(str_length(package_versions) > 0),
   package_versions[["onet2r"]] == "0.5.0.9000",
   package_versions[["cmapr"]] == "0.0.0.9000",
   package_versions[["huggingfaceR"]] == "2.1.0",
@@ -95,15 +105,8 @@ stopifnot(
 )
 
 knitr::kable(
-  data.frame(
-    package = names(package_versions),
-    version = unname(package_versions),
-    commit = substr(
-      unname(package_commits),
-      1,
-      12
-    )
-  ),
+  version_table |>
+    mutate(commit = str_sub(commit, 1, 12)),
   col.names = c(
     "Package",
     "Version",
@@ -139,16 +142,15 @@ onet_tasks <- onet2r::onet_archive_read(
   release_date = "2026-05-01"
 )
 
-onet_display <- onet_tasks[
-  c(
-    "task_id",
-    "onet_soc_code",
-    "title",
-    "task",
-    "release_version",
-    "source_date"
+onet_display <- onet_tasks |>
+  select(
+    task_id,
+    onet_soc_code,
+    title,
+    task,
+    release_version,
+    source_date
   )
-]
 
 stopifnot(
   identical(nrow(onet_display), 3L),
@@ -157,7 +159,7 @@ stopifnot(
     onet_display$task_id,
     c("1001", "1002", "2001")
   ),
-  all(nzchar(onet_display$task))
+  all(str_length(onet_display$task) > 0)
 )
 
 knitr::kable(
@@ -192,9 +194,17 @@ allow this lesson to authenticate it as an exact CMap subset.
 
 ```{r}
 cmap_path <- cmapr::cmap_example_data()
-cmap_transitions <- readr::read_csv(
+cmap_transitions <- read_csv(
   cmap_path,
-  show_col_types = FALSE
+  col_types = cols(
+    sector = col_character(),
+    region = col_character(),
+    job_title_from = col_character(),
+    job_title_to = col_character(),
+    transition_weighted_count = col_double(),
+    si_from = col_double(),
+    si_to = col_double()
+  )
 )
 
 stopifnot(
@@ -208,25 +218,18 @@ stopifnot(
       "region"
     ) %in% names(cmap_transitions)
   ),
-  identical(
-    cmap_transitions$job_title_from[3],
-    "Data Analyst"
-  ),
-  identical(
-    cmap_transitions$job_title_to[3],
-    "Data Scientist"
-  )
+  identical(cmap_transitions$job_title_from[[3]], "Data Analyst"),
+  identical(cmap_transitions$job_title_to[[3]], "Data Scientist")
 )
 
 knitr::kable(
-  cmap_transitions[
-    c(
-      "sector",
-      "region",
-      "job_title_from",
-      "job_title_to"
-    )
-  ],
+  cmap_transitions |>
+    select(
+      sector,
+      region,
+      job_title_from,
+      job_title_to
+    ),
   col.names = c(
     "Sector",
     "Region",
@@ -247,7 +250,7 @@ does not support population estimates.
 ## Inspect the Hugging Face task vocabulary
 
 Hugging Face hosts many independently contributed datasets. huggingfaceR
-contains a local list of task names used to search the Hub. Filtering that list
+contains a local list of task names for Hub searches. Filtering that list
 does not download a dataset or verify any dataset card.
 
 ```{r}
@@ -277,12 +280,53 @@ inspect each candidate dataset's card, license, languages, collection method,
 labels, and known limits. Being searchable on a platform is not evidence that a
 dataset is suitable.
 
+huggingfaceR can also build a zero-shot classification payload. This prepares a
+request body for inspection only. It does not choose a model or contact a
+provider.
+
+```{r}
+zero_shot_payload <- huggingfaceR::hf_zero_shot_classification_payload(
+  "Paid training is provided.",
+  candidate_labels = c(
+    "training",
+    "requirement",
+    "schedule",
+    "skill",
+    "other"
+  ),
+  multi_label = FALSE
+)
+
+stopifnot(
+  identical(
+    zero_shot_payload$inputs,
+    "Paid training is provided."
+  ),
+  identical(
+    zero_shot_payload$parameters$candidate_labels,
+    c(
+      "training",
+      "requirement",
+      "schedule",
+      "skill",
+      "other"
+    )
+  ),
+  identical(
+    zero_shot_payload$parameters$multi_label,
+    FALSE
+  )
+)
+
+str(zero_shot_payload)
+```
+
 ## Do not join unlike rows
 
 The three resources use different units:
 
 ```{r}
-provider_units <- data.frame(
+provider_units <- tibble(
   resource = c(
     "O*NET teaching archive",
     "CMap teaching fixture",
@@ -305,10 +349,7 @@ stopifnot(
     provider_units$records_seen,
     c(3L, 10L, 5L)
   ),
-  identical(
-    length(unique(provider_units$row_or_item)),
-    3L
-  )
+  identical(n_distinct(provider_units$row_or_item), 3L)
 )
 
 knitr::kable(

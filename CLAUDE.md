@@ -45,6 +45,26 @@ to an error. Lesson chunks intentionally set `options(warn = 2)`.
   six-line transcript. The image and transcript hashes live in
   `training-flyer-metadata.csv`.
 
+## Code style
+
+- Lesson code is tidyverse-first: `readr` to read, `tibble` to construct,
+  `dplyr` to reshape, `tidyr` to pivot, `purrr` to iterate, `stringr` for
+  strings. Use the native pipe `|>`; never `%>%`.
+- Each lesson loads its packages in a visible chunk near the top and asserts
+  `all(c(...) %in% loadedNamespaces())`. Do not use `library(tidyverse)`; the
+  meta-package is not a dependency, and naming each package teaches which one
+  does which job.
+- `readr::read_csv()` always takes an explicit `col_types = cols(...)` and a
+  deliberate `na =`. Type guessing is never acceptable in a published lesson.
+- Keep base R where it is the subject or has no tidyverse equivalent:
+  `charToRaw()`, `utf8ToInt()`, `Encoding()`, `iconv()`, `nchar(type =)`,
+  `adist()`, and matrix math feeding `irr`.
+- `stringr` uses the ICU regex engine, base R with `perl = TRUE` uses PCRE2,
+  and base R without it uses TRE. Where a lesson teaches a pattern's
+  behaviour, name the engine and verify the claim by running it.
+- `scripts/run-lesson.R <path.qmd>` runs one lesson's chunks in order and
+  fails on any warning. Use it while editing; `quarto render` is still the gate.
+
 ## Editorial patterns
 
 - Lessons start with one human problem, investigate it, expose a limit, and
@@ -56,6 +76,14 @@ to an error. Lesson chunks intentionally set `options(warn = 2)`.
   establish authorship.
 - Narrative, adversarial, automated accessibility, manual accessibility, and
   human approval are separate manifest fields. Never convert one into another.
+- The home page is reader-facing only. Contributor process belongs in
+  `CONTRIBUTING.md`, `EDITORIAL_GUIDE.md`, and `RESEARCH_STANDARDS.md`.
+- The task map is the first substantial thing on the home page. Framing and
+  argument sit below it.
+- The home page argues from reasoning that stays true, not from dated
+  empirical findings. Capability studies age out of relevance quickly, so the
+  page makes no claim that would need a citation. Lessons still cite sources;
+  the home page does not need to because it asserts nothing measurable.
 
 ## Things to avoid
 

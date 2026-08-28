@@ -53,6 +53,27 @@ Every published code chunk must have output produced by a real execution.
    blockers.
 6. Run command-line snippets exactly as written before publishing them.
 
+## Write code in the tidyverse style
+
+Lesson code uses the tidyverse: `readr` to read files, `tibble` to build
+tables, `dplyr` to reshape them, `tidyr` to pivot, `purrr` to iterate, and
+`stringr` for strings. Use the native pipe `|>`.
+
+- Load packages by name in a visible chunk near the top of the lesson and
+  assert that they attached. Do not use `library(tidyverse)`; naming each
+  package shows the reader which one does which job.
+- Give `readr::read_csv()` an explicit `col_types = cols(...)` and a deliberate
+  `na =`. Column types are a teaching point, so never rely on type guessing.
+- Keep base R where it is the subject of the lesson or has no tidyverse
+  equivalent, such as `charToRaw()`, `Encoding()`, `iconv()`, and matrix work
+  handed to another package.
+- `stringr` uses the ICU regular expression engine. Base R uses TRE, or PCRE2
+  with `perl = TRUE`. When a lesson explains how a pattern behaves, say which
+  engine produced that behaviour and confirm it by running the code.
+- While editing, run one lesson at a time with
+  `Rscript scripts/run-lesson.R <path>`. It executes every chunk in order and
+  fails on any warning. The full render remains the gate before publishing.
+
 The project-level Quarto settings execute every R chunk and stop on errors. The
 GitHub Actions workflow restores the locked R environment and renders every
 page on each pull request.
