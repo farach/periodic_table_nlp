@@ -1,0 +1,410 @@
+---
+title: "Creating additional training examples"
+subtitle: "Augment text without assuming the label survived"
+author: "Alex Farach"
+description: "Learn how to create workforce text variants and test whether they still support the intended label."
+categories: [training data, augmentation, workforce research]
+---
+
+The reviewer comparison left two boundary cases visible instead of treating a
+majority as truth. A different risk appears when the Riverton Workforce Lab
+creates synthetic examples: the row count can grow without adding observed
+evidence. The team can write additional sentences that follow known patterns.
+More rows may help a model learn, but a changed sentence can lose the meaning
+that justified its label. For this exercise, the team writes five fictional
+variants about training and schedules. They cannot tell a worker that a real
+course meets at a given time or provides paid training.
+
+**Textual data augmentation** creates new training examples by transforming or
+generating text from existing examples. Augmentation changes a dataset; it does
+not collect new evidence about the labor market.
+
+::: {.callout-note}
+All sentences and organizations in this lesson are fictional. Augmented rows
+are synthetic and remain marked as such.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- distinguish a new text variant from a new observation;
+- create controlled template variants;
+- use cmapr job titles without importing unsupported claims;
+- prepare a classification-check payload with huggingfaceR; and
+- test duplication, label balance, and meaning-changing edits.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Start with a narrow purpose
+
+The team wants more examples of explicit training offers. It will not claim
+that the examples describe real employers or estimate how often training is
+offered.
+
+```{r}
+workforce_sentences <- read.csv(
+  "data/workforce/workforce_sentences.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+training_examples <- workforce_sentences[
+  workforce_sentences$reference_label == "training",
+]
+
+stopifnot(
+  identical(nrow(training_examples), 7L),
+  all(
+    training_examples$reference_label ==
+      "training"
+  )
+)
+
+knitr::kable(
+  training_examples[
+    c("sentence_id", "text")
+  ],
+  col.names = c("Sentence ID", "Reviewed training example"),
+  caption = "The seven training examples before augmentation",
+  row.names = FALSE
+)
+```
+
+The source labels were assigned under the manual annotation codebook. The
+augmentation step must preserve that label definition.
+
+## Use job titles as template values
+
+cmapr includes a ten-row teaching fixture with job-title transitions. We use
+three titles as vocabulary only. We do not carry over transition weights or
+interpret a title change as a promotion.
+
+```{r}
+cmap_titles <- readr::read_csv(
+  cmapr::cmap_example_data(),
+  show_col_types = FALSE
+)
+selected_titles <- c(
+  cmap_titles$job_title_from[3],
+  cmap_titles$job_title_from[5],
+  cmap_titles$job_title_from[8]
+)
+
+stopifnot(
+  identical(
+    selected_titles,
+    c(
+      "Data Analyst",
+      "Medical Assistant",
+      "Junior Developer"
+    )
+  )
+)
+
+selected_titles
+```
+
+The titles come from the cmapr package's teaching fixture. That file does not
+contain upstream record identifiers, so this lesson does not claim that the
+three strings are authenticated extracts from the full CMap dataset. The
+sentences created next are fictional.
+
+## Create controlled variants
+
+The template states the same kind of claim for each title.
+
+```{r}
+source("R/workforce-codebook.R")
+augmentation_codebook <- workforce_codebook()
+
+template_variants <- data.frame(
+  source_sentence_id = "s001",
+  source_family_id = "training-offer-s001",
+  template_id = "training-pathway-v1",
+  vocabulary_source = "cmapr example_transitions.csv",
+  vocabulary_row = c(3L, 5L, 8L),
+  vocabulary_commit =
+    "eb2d0b3810e07782aab4a81fba1f539133f2ba6a",
+  text = sprintf(
+    "The %s pathway includes paid training.",
+    tolower(selected_titles)
+  ),
+  label = "training",
+  synthetic = TRUE,
+  method = "controlled template",
+  codebook_version = augmentation_codebook$version,
+  codebook_hash = augmentation_codebook$hash,
+  review_status = "requires_human_review",
+  split = "training_candidate",
+  stringsAsFactors = FALSE
+)
+
+schedule_variants <- data.frame(
+  source_sentence_id = "s026",
+  source_family_id = "schedule-s026",
+  template_id = "class-schedule-v1",
+  vocabulary_source = "author-created template",
+  vocabulary_row = NA_integer_,
+  vocabulary_commit = NA_character_,
+  text = sprintf(
+    "%s classes meet twice a week.",
+    c("Morning", "Weekend")
+  ),
+  label = "schedule",
+  synthetic = TRUE,
+  method = "controlled template",
+  codebook_version = augmentation_codebook$version,
+  codebook_hash = augmentation_codebook$hash,
+  review_status = "requires_human_review",
+  split = "training_candidate",
+  stringsAsFactors = FALSE
+)
+
+augmented_rows <- rbind(
+  template_variants,
+  schedule_variants
+)
+augmentation_counts <- table(
+  augmented_rows$label
+)
+
+stopifnot(
+  identical(nrow(augmented_rows), 5L),
+  !anyDuplicated(augmented_rows$text),
+  !any(
+    augmented_rows$text %in%
+      workforce_sentences$text
+  ),
+  all(augmented_rows$synthetic),
+  all(
+    augmented_rows$review_status ==
+      "requires_human_review"
+  ),
+  all(
+    augmented_rows$split ==
+      "training_candidate"
+  ),
+  all(
+    augmented_rows$codebook_hash ==
+      augmentation_codebook$hash
+  ),
+  identical(
+    template_variants$vocabulary_row,
+    c(3L, 5L, 8L)
+  ),
+  all(
+    template_variants$vocabulary_commit ==
+      "eb2d0b3810e07782aab4a81fba1f539133f2ba6a"
+  ),
+  identical(
+    unique(augmented_rows$source_family_id),
+    c("training-offer-s001", "schedule-s026")
+  ),
+  identical(
+    unname(
+      as.integer(
+        augmentation_counts[
+          c("schedule", "training")
+        ]
+      )
+    ),
+    c(2L, 3L)
+  )
+)
+
+knitr::kable(
+  augmented_rows,
+  col.names = c(
+    "Source sentence",
+    "Source family",
+    "Template",
+    "Vocabulary source",
+    "Vocabulary row",
+    "Vocabulary commit",
+    "Synthetic text",
+    "Proposed label",
+    "Synthetic",
+    "Method",
+    "Codebook version",
+    "Codebook hash",
+    "Review status",
+    "Intended split"
+  ),
+  caption = "Five controlled augmentation candidates",
+  row.names = FALSE
+)
+```
+
+The rows carry their source family, template, second vocabulary source,
+package commit when applicable, codebook, synthetic status, intended split,
+and pending review status. Any evaluation example derived from `s001` or `s026`
+must stay outside the evaluation set with its whole family. The five rows
+remain candidates until a person checks that each is natural, useful, and
+consistent with the codebook.
+
+## Prepare a model check without claiming a result
+
+huggingfaceR can prepare the payload for a zero-shot classification request.
+This code records the candidate labels and texts, but it does not call a model
+or return predictions.
+
+```{r}
+label_check_payload <-
+  huggingfaceR::hf_zero_shot_classification_payload(
+    augmented_rows$text,
+    candidate_labels = c(
+      "training",
+      "requirement",
+      "schedule",
+      "skill",
+      "other"
+    ),
+    multi_label = FALSE
+  )
+
+stopifnot(
+  identical(
+    label_check_payload$inputs,
+    augmented_rows$text
+  ),
+  identical(
+    label_check_payload$parameters$
+      candidate_labels,
+    c(
+      "training",
+      "requirement",
+      "schedule",
+      "skill",
+      "other"
+    )
+  ),
+  identical(
+    label_check_payload$parameters$
+      multi_label,
+    FALSE
+  )
+)
+
+str(label_check_payload)
+```
+
+A future model call could flag surprising candidates for review. A model label
+would not prove that the augmentation is valid. The same codebook and human
+review still apply. An actual request would also require a named model and
+provider and would transmit the text under that provider's terms. No model or
+provider is selected and no network request occurs here.
+
+## A small edit can reverse the claim
+
+Word replacement is risky when it changes negation or obligation.
+
+```{r}
+meaning_check <- data.frame(
+  version = c("source", "unsafe edit"),
+  text = c(
+    "Paid training is provided.",
+    "Paid training is not provided."
+  )
+)
+keyword_only_match <- grepl(
+  "paid",
+  tolower(meaning_check$text),
+  fixed = TRUE
+) &
+  grepl(
+    "training",
+    tolower(meaning_check$text),
+    fixed = TRUE
+  ) &
+  grepl(
+    "provided",
+    tolower(meaning_check$text),
+    fixed = TRUE
+  )
+negation_aware_offer <- keyword_only_match &
+  !grepl(
+    "\\bnot\\b",
+    tolower(meaning_check$text),
+    perl = TRUE
+  )
+meaning_check$keyword_only_match <-
+  keyword_only_match
+meaning_check$negation_aware_offer <-
+  negation_aware_offer
+
+stopifnot(
+  !identical(
+    meaning_check$text[1],
+    meaning_check$text[2]
+  ),
+  identical(
+    meaning_check$keyword_only_match,
+    c(TRUE, TRUE)
+  ),
+  identical(
+    meaning_check$negation_aware_offer,
+    c(TRUE, FALSE)
+  )
+)
+
+knitr::kable(
+  meaning_check,
+  col.names = c(
+    "Version",
+    "Text",
+    "Keyword-only match",
+    "Negation-aware offer rule"
+  ),
+  caption = "One added word reverses the training offer",
+  row.names = FALSE
+)
+```
+
+Both sentences satisfy the keyword-only check. The narrow negation rule
+separates this pair, but it is not a general language-understanding method.
+Label preservation still requires review at the meaning level.
+
+## Augmentation can amplify a mistake
+
+Check:
+
+1. whether the label and important details remain true;
+2. whether the wording is grammatical in the intended language;
+3. whether duplicates cross into the evaluation set;
+4. whether templates make one class unnaturally easy to recognize;
+5. whether generated text adds stereotypes or private information;
+6. whether one language or job family receives most synthetic rows; and
+7. how conclusions change when synthetic examples are removed.
+
+Large language models can generate many variants, but scale does not settle
+these questions. Repeated training on generated text can also narrow a model's
+representation of the underlying distribution.
+
+## What to remember
+
+- Augmented text is synthetic data, not a newly observed case.
+- Record the source, method, label, and synthetic status.
+- A familiar word does not guarantee that meaning stayed the same.
+- Keep augmented rows out of evaluation data derived from their source.
+- Compare results with and without synthetic examples.
+
+The Lab ends this stage with five reviewable candidates and one rejected edit.
+Their synthetic status and method remain attached. Keyword rules are the final
+shortcut. They face both the designed data and cases with negation or misleading
+word matches.
+
+## Sources
+
+- [EDA: Easy Data Augmentation Techniques](https://aclanthology.org/D19-1670/)
+- [Improving Neural Machine Translation Models with Monolingual Data](https://aclanthology.org/P16-1009/)
+- [Self-Instruct: Aligning Language Models with Self-Generated Instructions](https://aclanthology.org/2023.acl-long.754/)
+- [AI models collapse when trained on recursively generated data](https://doi.org/10.1038/s41586-024-07566-y)
+- [huggingfaceR documentation](https://farach.github.io/huggingfaceR/)
+- [CMap dataset](https://doi.org/10.5281/zenodo.15260189)

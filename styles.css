@@ -67,6 +67,40 @@ table > caption {
   color: #5f6b76;
 }
 
+.quarto-float-caption,
+blockquote,
+blockquote p {
+  color: #53606c;
+}
+
+.quarto-figure,
+.quarto-figure img,
+figure,
+figure img {
+  max-width: 100%;
+  height: auto;
+}
+
+.cell-output-display {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.cell-output-display[tabindex="0"]:focus-visible {
+  outline: 4px solid #005fcc;
+  outline-offset: 3px;
+}
+
+.table-scroll[tabindex="0"]:focus-visible {
+  outline: 4px solid #005fcc;
+  outline-offset: 3px;
+}
+
 .callout {
   margin-bottom: 1.5rem;
 }

@@ -4,14 +4,14 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 3,Str,Loading a structured data file,practice,1,Source data loading,source,1_source_data_loading/03-loading-structured-datafile.html,available,2026-08-28
 4,Cor,Generating a corpus,practice,1,Source data loading,source,1_source_data_loading/04-generating-a-corpus.html,available,2026-08-28
 5,Api,Loading from an API,practice,1,Source data loading,source,1_source_data_loading/05-loading-from-api.html,available,2026-08-28
-6,Scr,Text and file scraping,practice,1,Source data loading,source,,planned,
-7,Ext,Text extraction and OCR,task,1,Source data loading,source,,planned,
-8,Man,Manual annotation,practice,2,Training data generation,source,,planned,
-9,Act,Annotation with active learning,practice,2,Training data generation,source,,planned,
-10,Pro,Training data provider,service,2,Training data generation,source,,planned,
-11,Cro,Crowdsourcing marketplace,service,2,Training data generation,source,,planned,
-12,Aug,Textual data augmentation,practice,2,Training data generation,source,,planned,
-13,Rul,Rule-based training data,practice,2,Training data generation,source,,planned,
+6,Scr,Collecting text from a web page,practice,1,Source data loading,source,1_source_data_loading/06-text-and-file-scraping.html,available,2026-08-28
+7,Ext,Extracting text from an image,task,1,Source data loading,source,1_source_data_loading/07-text-extraction-and-ocr.html,available,2026-08-28
+8,Man,Turning decisions into labels,practice,2,Training data generation,source,2_training_data_generation/08-manual-annotation.html,available,2026-08-28
+9,Act,Choosing what to label next,practice,2,Training data generation,source,2_training_data_generation/09-annotation-with-active-learning.html,available,2026-08-28
+10,Pro,Choosing an outside data provider,service,2,Training data generation,source,2_training_data_generation/10-training-data-providers.html,available,2026-08-28
+11,Cro,Working with several annotators,service,2,Training data generation,source,2_training_data_generation/11-crowdsourcing-annotation.html,available,2026-08-28
+12,Aug,Creating additional training examples,practice,2,Training data generation,source,2_training_data_generation/12-textual-data-augmentation.html,available,2026-08-28
+13,Rul,Labeling text with written rules,practice,2,Training data generation,source,2_training_data_generation/13-rule-based-training-data.html,available,2026-08-28
 14,Tok,Tokenization,method,3,Word parsing,language,,planned,
 15,Voc,Vocabulary building,practice,3,Word parsing,language,,planned,
 16,Mor,Morphological tagging,method,3,Word parsing,language,,planned,

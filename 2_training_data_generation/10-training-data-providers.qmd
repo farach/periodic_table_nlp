@@ -1,0 +1,389 @@
+---
+title: "Choosing an outside data provider"
+subtitle: "Compare workforce sources before combining their records"
+author: "Alex Farach"
+description: "Use onet2r, cmapr, and huggingfaceR to inspect what different data providers can supply."
+categories: [training data, data providers, workforce research]
+---
+
+Choosing two uncertain sentences for review did not broaden the Riverton
+Workforce Lab's source material. It still has 28 fictional local text units.
+That is enough to practice, not enough to describe a labor market. The
+sentences cannot tell workers what options exist beyond those notices. The team
+therefore inspects three outside resources: occupation tasks from the O*NET
+database, career transitions from CMap, and a catalog of machine-learning
+dataset tasks from the Hugging Face Hub.
+
+A **training data provider** supplies data or access to data. Provider does not
+mean neutral authority. Before combining records, the team must understand who
+created them, why, from whom, under which license, and what one row represents.
+
+::: {.callout-note}
+Riverton Workforce Lab is fictional. The package fixtures are executable
+examples, but this lesson does not assume that every row is an authenticated
+extract from the provider named by its schema. Each fixture's status is stated
+below.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- distinguish a package from the data source it helps access;
+- inspect versioned O*NET task records with onet2r;
+- load CMap example transitions with cmapr;
+- inspect Hugging Face task names with huggingfaceR; and
+- decide whether sources can answer the same research question.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Record the software versions
+
+The R packages are tools written by the same author as this teaching site. The
+underlying data comes from separate providers with separate documentation and
+licenses.
+
+```{r}
+package_versions <- vapply(
+  c(
+    "onet2r",
+    "cmapr",
+    "huggingfaceR",
+    "foundryR"
+  ),
+  function(package) {
+    as.character(
+      utils::packageVersion(package)
+    )
+  },
+  character(1)
+)
+locked_packages <- jsonlite::fromJSON(
+  "renv.lock",
+  simplifyVector = FALSE
+)$Packages
+package_commits <- vapply(
+  names(package_versions),
+  function(package) {
+    locked_packages[[package]]$RemoteSha
+  },
+  character(1)
+)
+
+stopifnot(
+  all(nzchar(package_versions)),
+  package_versions[["onet2r"]] == "0.5.0.9000",
+  package_versions[["cmapr"]] == "0.0.0.9000",
+  package_versions[["huggingfaceR"]] == "2.1.0",
+  package_versions[["foundryR"]] == "0.1.0",
+  identical(
+    unname(package_commits),
+    c(
+      "b21c1d7430e60b37a30bc8d156d27ef311669821",
+      "eb2d0b3810e07782aab4a81fba1f539133f2ba6a",
+      "56b2c416ff81b445821877d5028aa690b90fbc14",
+      "bdeccd40b211a20a09c9cb849545a3a5f2b535d7"
+    )
+  )
+)
+
+knitr::kable(
+  data.frame(
+    package = names(package_versions),
+    version = unname(package_versions),
+    commit = substr(
+      unname(package_commits),
+      1,
+      12
+    )
+  ),
+  col.names = c(
+    "Package",
+    "Version",
+    "Git commit"
+  ),
+  caption = "Author package versions used in the lessons",
+  row.names = FALSE
+)
+```
+
+The project lockfile also records the Git commit for packages installed from
+GitHub. A version number alone is not enough when development code can change.
+
+## Inspect O*NET task statements
+
+The onet2r package includes a miniature archive for examples. We ask the parser
+to treat it as release 30.3 and supply a release date. Those arguments describe
+the fixture to the function; they do not independently authenticate its bytes
+as an official O*NET database extract.
+
+```{r}
+onet_archive <- system.file(
+  "extdata",
+  "onet-mini",
+  "db_30_3_text",
+  package = "onet2r"
+)
+
+onet_tasks <- onet2r::onet_archive_read(
+  version = "30.3",
+  table = "Task Statements",
+  path = onet_archive,
+  release_date = "2026-05-01"
+)
+
+onet_display <- onet_tasks[
+  c(
+    "task_id",
+    "onet_soc_code",
+    "title",
+    "task",
+    "release_version",
+    "source_date"
+  )
+]
+
+stopifnot(
+  identical(nrow(onet_display), 3L),
+  all(onet_display$release_version == "30.3"),
+  identical(
+    onet_display$task_id,
+    c("1001", "1002", "2001")
+  ),
+  all(nzchar(onet_display$task))
+)
+
+knitr::kable(
+  onet_display,
+  col.names = c(
+    "Task ID",
+    "O*NET-SOC code",
+    "Occupation",
+    "Task statement",
+    "Release",
+    "Source date"
+  ),
+  caption = "Three task statements from the onet2r teaching archive",
+  row.names = FALSE
+)
+```
+
+One row describes one occupation task. The occupation code, supplied release
+label, and source date travel with the text. The release date supplied to the
+function is not the same as the source dates displayed in individual rows.
+The three-row fixture demonstrates the onet2r schema; this lesson does not use
+it for claims about occupations or the full O*NET database.
+Task statements could inform a study of work or skills. They do not establish
+whether a particular Riverton notice offers training or evening classes.
+
+## Inspect CMap career transitions
+
+The cmapr package includes ten example transitions. Each row links one job
+title to a later title within a sector and region. The file is a package
+teaching fixture; it does not contain upstream record identifiers that would
+allow this lesson to authenticate it as an exact CMap subset.
+
+```{r}
+cmap_path <- cmapr::cmap_example_data()
+cmap_transitions <- readr::read_csv(
+  cmap_path,
+  show_col_types = FALSE
+)
+
+stopifnot(
+  file.exists(cmap_path),
+  identical(nrow(cmap_transitions), 10L),
+  all(
+    c(
+      "job_title_from",
+      "job_title_to",
+      "sector",
+      "region"
+    ) %in% names(cmap_transitions)
+  ),
+  identical(
+    cmap_transitions$job_title_from[3],
+    "Data Analyst"
+  ),
+  identical(
+    cmap_transitions$job_title_to[3],
+    "Data Scientist"
+  )
+)
+
+knitr::kable(
+  cmap_transitions[
+    c(
+      "sector",
+      "region",
+      "job_title_from",
+      "job_title_to"
+    )
+  ],
+  col.names = c(
+    "Sector",
+    "Region",
+    "Earlier title",
+    "Later title"
+  ),
+  caption = "Ten career transitions in the cmapr teaching fixture",
+  row.names = FALSE
+)
+```
+
+These rows demonstrate title-transition columns, not occupation task
+statements. A title change does not prove a promotion, wage gain, or
+improvement in job quality. The full CMap documentation distinguishes
+validated and model-inferred transitions; the fixture lacks that status and
+does not support population estimates.
+
+## Inspect the Hugging Face task vocabulary
+
+Hugging Face hosts many independently contributed datasets. huggingfaceR
+contains a local list of task names used to search the Hub. Filtering that list
+does not download a dataset or verify any dataset card.
+
+```{r}
+classification_tasks <- huggingfaceR::hf_list_tasks(
+  pattern = "classification"
+)
+
+stopifnot(
+  identical(
+    classification_tasks,
+    c(
+      "text-classification",
+      "token-classification",
+      "zero-shot-classification",
+      "image-classification",
+      "audio-classification"
+    )
+  )
+)
+
+classification_tasks
+```
+
+The list shows the vocabulary bundled with this version of huggingfaceR, not a
+live statement about the Hub. A researcher still needs to
+inspect each candidate dataset's card, license, languages, collection method,
+labels, and known limits. Being searchable on a platform is not evidence that a
+dataset is suitable.
+
+## Do not join unlike rows
+
+The three resources use different units:
+
+```{r}
+provider_units <- data.frame(
+  resource = c(
+    "O*NET teaching archive",
+    "CMap teaching fixture",
+    "Hugging Face task vocabulary"
+  ),
+  row_or_item = c(
+    "occupation task statement",
+    "job-title transition",
+    "platform task name"
+  ),
+  records_seen = c(
+    nrow(onet_display),
+    nrow(cmap_transitions),
+    length(classification_tasks)
+  )
+)
+
+stopifnot(
+  identical(
+    provider_units$records_seen,
+    c(3L, 10L, 5L)
+  ),
+  identical(
+    length(unique(provider_units$row_or_item)),
+    3L
+  )
+)
+
+knitr::kable(
+  provider_units,
+  col.names = c(
+    "Resource",
+    "What one item means",
+    "Items inspected"
+  ),
+  caption = "The three resources do not share one unit of analysis",
+  row.names = FALSE
+)
+```
+
+A shared topic is not a shared unit of analysis. A title-transition row cannot
+answer whether a posting offers evening classes, and a task statement cannot be
+merged with a local sentence without a documented relationship. The team first
+needs a research question and a documented crosswalk between occupation codes,
+titles, or tasks.
+
+## Questions for any provider
+
+The team records what it can establish and leaves unsupported fields as
+unknown.
+
+| Resource inspected | What supplied it | Unit shown | Coverage represented here | License and rights note | Status of teaching fixture |
+|---|---|---|---|---|---|
+| onet2r miniature archive | Installed onet2r package | Occupation task statement | 3 rows with U.S. occupation codes | O*NET database material requires CC BY 4.0 attribution; this lesson does not verify the fixture against an official archive | Schema demonstration; exact upstream extraction is not authenticated here |
+| cmapr example transitions | Installed cmapr package | Job-title transition | 10 stylized rows across sectors and regions | Full CMap record is CC BY 4.0; license alone does not answer consent questions about underlying source records | Package example; exact relationship to the full dataset is unknown here |
+| huggingfaceR task vocabulary | Installed huggingfaceR package | Platform task name | 5 locally bundled classification names | Package code is MIT; each Hub dataset has its own contributor-declared terms and underlying rights still need review | Local software vocabulary; no dataset was downloaded |
+
+: What this lesson can establish about the three inspected resources
+
+1. Who collected or generated the data?
+2. What population, language, place, and time does it cover?
+3. What does one row represent?
+4. Which records were excluded or suppressed?
+5. Which labels were human-reviewed or model-inferred?
+6. Which version and taxonomy were used?
+7. What license, attribution, and use restrictions apply?
+8. Can the provider change or remove records later?
+9. Does the dataset contain personal or sensitive information?
+
+An open license does not establish that the people represented in source data
+consented to every later use. A contributor-declared license also does not by
+itself prove that the contributor held every necessary right.
+
+This page includes information from the
+[O*NET Resource Center](https://www.onetcenter.org/) by the U.S. Department of
+Labor, Employment and Training Administration (USDOL/ETA). Used under the
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. O*NET® is a
+trademark of USDOL/ETA. The onet2r teaching fixture and this lesson may modify
+or add information; USDOL/ETA has not approved, endorsed, or tested those
+modifications.
+
+## What to remember
+
+- A package is a tool; it is not the authority that created the data.
+- Preserve provider, version, date, license, and row meaning.
+- Small teaching fixtures demonstrate structure, not population results.
+- Platform availability does not establish quality or permission.
+- Combine sources only after their units and taxonomies are reconciled.
+
+The outside resources stay separate because their rows answer different
+questions. Back in the local label table, another comparability problem remains.
+Three reviewers may read the same requirement differently, so their answers
+stay separate for the agreement analysis that follows.
+
+## Sources
+
+- [O*NET database license and attribution](https://www.onetcenter.org/license_db.html)
+- [O*NET Resource Center](https://www.onetcenter.org/)
+- [CMap dataset record and CC BY 4.0 metadata](https://zenodo.org/records/15260189)
+- [CMap paper in Scientific Data](https://doi.org/10.1038/s41597-025-05526-3)
+- [Hugging Face dataset cards](https://huggingface.co/docs/hub/datasets-cards)
+- [onet2r documentation](https://farach.github.io/onet2r/)
+- [cmapr documentation](https://farach.github.io/cmapr/)
+- [huggingfaceR documentation](https://farach.github.io/huggingfaceR/)

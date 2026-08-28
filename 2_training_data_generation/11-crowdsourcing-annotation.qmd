@@ -1,0 +1,463 @@
+---
+title: "Working with several annotators"
+subtitle: "Measure disagreement before combining labels"
+author: "Alex Farach"
+description: "Learn how to compare workforce labels from several reviewers without treating majority vote as truth."
+categories: [training data, crowdsourcing, agreement]
+---
+
+The outside provider review kept unlike records separate. The Riverton
+Workforce Lab now checks whether the people assigning labels make comparable
+decisions. Three fictional paid reviewers apply the same codebook independently
+to 11 local sentences. Nine rows match; two do not.
+
+**Crowdsourcing** distributes tasks to a group of people, often through an
+online marketplace. Access to more reviewers can increase coverage, but a
+marketplace does not create expertise, fair working conditions, or valid
+labels. The team must design those conditions.
+
+::: {.callout-note}
+The reviewers, annotations, and research team are fictional. The disagreements
+were designed for this lesson and do not evaluate real workers.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- keep reviewer labels separate;
+- calculate pairwise agreement with foundryR;
+- distinguish observed agreement from chance-corrected measures;
+- find items that need adjudication; and
+- explain why majority vote is not automatic truth.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Preserve each person's answer
+
+The annotation file stores one column per reviewer. No vote has been combined
+or overwritten.
+
+```{r}
+crowd_labels <- read.csv(
+  "data/workforce/crowd_annotations.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+sentence_text <- read.csv(
+  "data/workforce/workforce_sentences.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+
+reviewer_columns <- c(
+  "reviewer_a",
+  "reviewer_b",
+  "reviewer_c"
+)
+uncertainty_columns <- paste0(
+  reviewer_columns,
+  "_uncertainty"
+)
+rationale_columns <- paste0(
+  reviewer_columns,
+  "_rationale"
+)
+allowed_labels <- c(
+  "training",
+  "requirement",
+  "schedule",
+  "skill",
+  "other"
+)
+source("R/workforce-codebook.R")
+crowd_codebook <- workforce_codebook()
+
+stopifnot(
+  identical(nrow(crowd_labels), 11L),
+  all(reviewer_columns %in% names(crowd_labels)),
+  all(
+    unlist(
+      crowd_labels[reviewer_columns],
+      use.names = FALSE
+    ) %in% allowed_labels
+  ),
+  all(
+    unlist(
+      crowd_labels[uncertainty_columns],
+      use.names = FALSE
+    ) %in% c("certain", "needs_review")
+  ),
+  all(
+    nzchar(
+      unlist(
+        crowd_labels[rationale_columns],
+        use.names = FALSE
+      )
+    )
+  ),
+  !anyDuplicated(crowd_labels$sentence_id),
+  all(
+    crowd_labels$codebook_version ==
+      crowd_codebook$version
+  ),
+  all(
+    crowd_labels$codebook_hash ==
+      crowd_codebook$hash
+  )
+)
+
+knitr::kable(
+  crowd_labels[
+    c("sentence_id", reviewer_columns)
+  ],
+  col.names = c(
+    "Sentence ID",
+    "Reviewer A",
+    "Reviewer B",
+    "Reviewer C"
+  ),
+  caption = "Independent labels from three fictional reviewers",
+  row.names = FALSE
+)
+```
+
+Nine rows have complete agreement. Sentence `s010` has one different answer.
+Sentence `s013` has three different answers. Keeping the columns separate
+makes those disagreements visible, and the sample includes all five labels.
+
+## Measure all reviewer comparisons
+
+Simple agreement is the share of answers that match. **Cohen's kappa** adjusts
+for the agreement expected from the reviewers' label frequencies.
+**Krippendorff's alpha** is another chance-corrected measure that can support
+more coders and missing labels under suitable settings.
+
+foundryR calculates several measures together. Here we retain observed
+agreement and Cohen's kappa for every reviewer pair. Directional classification
+measures such as precision and recall are not shown because no reviewer is
+treated as the truth.
+
+```{r}
+reviewer_pairs <- data.frame(
+  pair = c("A and B", "A and C", "B and C"),
+  first = c(
+    "reviewer_a",
+    "reviewer_a",
+    "reviewer_b"
+  ),
+  second = c(
+    "reviewer_b",
+    "reviewer_c",
+    "reviewer_c"
+  ),
+  stringsAsFactors = FALSE
+)
+
+pairwise_agreement <- do.call(
+  rbind,
+  lapply(
+    seq_len(nrow(reviewer_pairs)),
+    function(pair_number) {
+      measures <- foundryR::foundry_agreement(
+        crowd_labels,
+        estimate = reviewer_pairs$second[
+          pair_number
+        ],
+        truth = reviewer_pairs$first[
+          pair_number
+        ]
+      )
+
+      data.frame(
+        pair = reviewer_pairs$pair[
+          pair_number
+        ],
+        observed_agreement = measures$value[
+          measures$metric == "accuracy"
+        ],
+        cohen_kappa = measures$value[
+          measures$metric == "cohen_kappa"
+        ]
+      )
+    }
+  )
+)
+
+stopifnot(
+  identical(
+    round(pairwise_agreement$observed_agreement, 3),
+    c(0.818, 0.909, 0.818)
+  ),
+  identical(
+    round(pairwise_agreement$cohen_kappa, 3),
+    c(0.756, 0.875, 0.758)
+  )
+)
+
+knitr::kable(
+  transform(
+    pairwise_agreement,
+    observed_agreement = round(
+      observed_agreement,
+      3
+    ),
+    cohen_kappa = round(cohen_kappa, 3)
+  ),
+  col.names = c(
+    "Reviewer pair",
+    "Observed agreement",
+    "Cohen's kappa"
+  ),
+  caption = "Pairwise agreement across all three reviewers",
+  row.names = FALSE
+)
+```
+
+The B-and-C comparison is weaker than A and C. Reporting only one pair would
+hide that difference.
+
+Krippendorff's alpha summarizes all three reviewers at once. The calculation
+converts label names to category numbers; the numbers carry no order.
+
+```{r}
+numeric_ratings <- vapply(
+  crowd_labels[reviewer_columns],
+  function(labels) {
+    match(labels, allowed_labels)
+  },
+  integer(nrow(crowd_labels))
+)
+all_rater_alpha <- irr::kripp.alpha(
+  t(numeric_ratings),
+  method = "nominal"
+)$value
+unanimity_share <- mean(
+  apply(
+    crowd_labels[reviewer_columns],
+    1,
+    function(labels) {
+      length(unique(labels)) == 1L
+    }
+  )
+)
+
+stopifnot(
+  isTRUE(
+    all.equal(
+      round(all_rater_alpha, 3),
+      0.797
+    )
+  ),
+  isTRUE(
+    all.equal(
+      unanimity_share,
+      9 / 11
+    )
+  )
+)
+
+data.frame(
+  measure = c(
+    "Krippendorff's alpha",
+    "Unanimous share"
+  ),
+  value = round(
+    c(all_rater_alpha, unanimity_share),
+    3
+  )
+)
+```
+
+The 11-item example is too small for a precise population estimate. These
+statistics describe this annotation exercise and help locate problems; they do
+not certify the codebook or any reviewer.
+
+## Find the disagreements
+
+An item needs review when the three labels are not identical.
+
+```{r}
+all_agree <- apply(
+  crowd_labels[reviewer_columns],
+  1,
+  function(labels) {
+    length(unique(labels)) == 1L
+  }
+)
+
+disagreements <- crowd_labels[!all_agree, ]
+disagreements <- merge(
+  disagreements,
+  sentence_text[c("sentence_id", "text")],
+  by = "sentence_id",
+  sort = FALSE
+)
+
+stopifnot(
+  identical(
+    disagreements$sentence_id,
+    c("s010", "s013")
+  ),
+  identical(nrow(disagreements), 2L)
+)
+
+knitr::kable(
+  disagreements[
+    c(
+      "sentence_id",
+      "text",
+      "reviewer_a",
+      "reviewer_a_uncertainty",
+      "reviewer_b",
+      "reviewer_b_uncertainty",
+      "reviewer_c",
+      "reviewer_c_uncertainty"
+    )
+  ],
+  col.names = c(
+    "Sentence ID",
+    "Text",
+    "Reviewer A",
+    "A uncertainty",
+    "Reviewer B",
+    "B uncertainty",
+    "Reviewer C",
+    "C uncertainty"
+  ),
+  caption = "Sentences sent to adjudication",
+  row.names = FALSE
+)
+```
+
+The first sentence says experience is preferred; one reviewer chose `other`.
+The second mentions a certificate and receives three different labels. Those
+choices place the same notices under different questions for a person comparing
+options. The codebook needs to explain the boundary rather than hide it in a
+vote.
+
+## Calculate a majority label carefully
+
+A majority label can organize the next review step. It should not erase the
+individual answers or replace adjudication.
+
+```{r}
+majority_label <- apply(
+  crowd_labels[reviewer_columns],
+  1,
+  function(labels) {
+    counts <- table(
+      factor(
+        labels,
+        levels = allowed_labels
+      )
+    )
+    if (max(counts) > length(labels) / 2) {
+      names(counts)[which.max(counts)]
+    } else {
+      "adjudicate"
+    }
+  }
+)
+
+combined_labels <- data.frame(
+  sentence_id = crowd_labels$sentence_id,
+  majority_label = majority_label,
+  unanimous = all_agree,
+  stringsAsFactors = FALSE
+)
+
+stopifnot(
+  identical(
+    combined_labels$majority_label,
+    c(
+      "training",
+      "requirement",
+      "schedule",
+      "skill",
+      "requirement",
+      "training",
+      "requirement",
+      "other",
+      "adjudicate",
+      "training",
+      "requirement"
+    )
+  ),
+  identical(sum(combined_labels$unanimous), 9L)
+)
+
+knitr::kable(
+  combined_labels,
+  col.names = c(
+    "Sentence ID",
+    "Majority label",
+    "Unanimous"
+  ),
+  caption = "Majority labels with unanimity retained",
+  row.names = FALSE
+)
+```
+
+The `unanimous` column prevents an easy majority from looking like complete
+agreement. Sentence `s013` returns `adjudicate` because three different answers
+do not form a majority. The team can review the sentence, codebook, and original
+labels before choosing a reference label.
+
+## Agreement does not prove validity
+
+Reviewers can agree because:
+
+- the codebook is clear;
+- the item is easy;
+- they share the same misunderstanding;
+- the task excludes a relevant perspective; or
+- the platform trained everyone toward the same shortcut.
+
+Validity requires evidence that the labels measure the intended idea. Compare
+annotations with the research question, consult people with relevant knowledge,
+and test how conclusions change under reasonable label choices.
+
+## Treat crowd work as work
+
+A responsible plan states:
+
+1. payment for training, annotation, and adjudication time;
+2. expected task length and rejection rules;
+3. privacy and data-handling requirements;
+4. access to support and the ability to skip harmful material;
+5. the expertise and language knowledge required; and
+6. an appeal path for disputed quality decisions.
+
+Hidden attention checks and automatic rejection can shift measurement errors
+onto workers. Quality control should diagnose the task and instructions as well
+as individual answers.
+
+## What to remember
+
+- Keep individual reviewer labels before combining them.
+- Agreement measures summarize consistency, not truth.
+- Inspect disagreement items and revise the codebook when needed.
+- Preserve whether a majority label was unanimous.
+- Fair pay, privacy, expertise, and appeal processes are part of data quality.
+
+The comparison leaves two boundary cases for adjudication instead of folding
+them into a majority vote. The following augmentation exercise keeps that
+annotation record intact and creates five separate fictional variants. Each is
+marked as synthetic and checked against the same codebook before it can join
+training data.
+
+## Sources
+
+- [Inter-Coder Agreement for Computational Linguistics](https://aclanthology.org/J08-4004/)
+- [Krippendorff's alpha](https://repository.upenn.edu/asc_papers/43/)
+- [Cheap and Fast, but Is It Good?](https://aclanthology.org/D08-1027/)
+- [Data Statements for Natural Language Processing](https://aclanthology.org/Q18-1041/)
+- [foundryR agreement documentation](https://farach.github.io/foundryR/reference/foundry_agreement.html)

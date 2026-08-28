@@ -1,0 +1,436 @@
+---
+title: "Labeling text with written rules"
+subtitle: "Measure rule coverage, conflicts, and mistakes"
+author: "Alex Farach"
+description: "Learn how rule-based weak labels can expand workforce training data without becoming ground truth."
+categories: [training data, weak supervision, workforce research]
+---
+
+Five fictional sentence variants remain marked as synthetic. For the rule
+test, the Riverton Workforce Lab returns to its 28 reviewed fictional text
+units. Several phrases appear repeatedly: `training`, `required`, `shift`,
+and `skill`. The team turns those patterns into rules, then checks whether
+familiar words preserve distinctions a worker may use when comparing notices.
+
+**Rule-based training data** uses written conditions to assign labels.
+These proposed labels are often called **weak labels** because a rule is an
+imperfect source of supervision. The team will measure where its rules label,
+abstain, conflict, and disagree with human review.
+
+::: {.callout-note}
+The sentences and team are fictional. The rules were designed after inspecting
+this teaching dataset, so results on these rows are not an independent
+performance estimate.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- express labeling rules as text patterns;
+- keep each rule's vote instead of hiding conflicts;
+- calculate coverage, conflict, and abstention;
+- compare usable weak labels with reference labels; and
+- stress-test rules on cases they were not designed to fit.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Write rules that can abstain
+
+Each rule searches for words tied to one codebook category. A rule returns
+`TRUE` when it votes for its category and `FALSE` otherwise.
+
+```{r}
+workforce_sentences <- read.csv(
+  "data/workforce/workforce_sentences.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+
+rule_patterns <- c(
+  training = paste(
+    "training",
+    "certificat",
+    "apprenticeship",
+    "mentor",
+    sep = "|"
+  ),
+  requirement = paste(
+    "required",
+    "preferred",
+    "license",
+    "diploma",
+    "portfolio",
+    "must be able",
+    sep = "|"
+  ),
+  schedule = "schedule|shift|classes",
+  skill = "skill|spreadsheet|communication"
+)
+
+rule_votes <- vapply(
+  rule_patterns,
+  function(pattern) {
+    grepl(
+      pattern,
+      tolower(workforce_sentences$text),
+      perl = TRUE
+    )
+  },
+  logical(nrow(workforce_sentences))
+)
+
+stopifnot(
+  identical(
+    dim(rule_votes),
+    c(28L, 4L)
+  ),
+  identical(
+    colnames(rule_votes),
+    names(rule_patterns)
+  )
+)
+
+head(rule_votes, 8)
+```
+
+The matrix preserves one column per rule. Combining the votes too early would
+hide why a label was proposed.
+
+## Mark abstentions and conflicts
+
+A row can receive:
+
+- one vote, which produces a usable weak label;
+- no votes, which produces an abstention; or
+- several votes, which produces a conflict.
+
+```{r}
+rule_count <- rowSums(rule_votes)
+first_vote <- colnames(rule_votes)[
+  max.col(rule_votes, ties.method = "first")
+]
+weak_label <- ifelse(
+  rule_count == 0L,
+  "abstain",
+  ifelse(
+    rule_count > 1L,
+    "conflict",
+    first_vote
+  )
+)
+
+weak_results <- data.frame(
+  sentence_id = workforce_sentences$sentence_id,
+  text = workforce_sentences$text,
+  reference_label =
+    workforce_sentences$reference_label,
+  rule_count = rule_count,
+  weak_label = weak_label,
+  stringsAsFactors = FALSE
+)
+
+result_counts <- table(weak_results$weak_label)
+
+stopifnot(
+  identical(
+    unname(
+      as.integer(
+        result_counts[
+          c(
+            "abstain",
+            "conflict",
+            "requirement",
+            "schedule",
+            "skill",
+            "training"
+          )
+        ]
+      )
+    ),
+    c(3L, 2L, 8L, 4L, 3L, 8L)
+  )
+)
+
+knitr::kable(
+  weak_results[
+    weak_results$weak_label %in%
+      c("abstain", "conflict"),
+  ],
+  col.names = c(
+    "Sentence ID",
+    "Text",
+    "Reference label",
+    "Rule votes",
+    "Weak-label result"
+  ),
+  caption = "The five sentences that abstain or conflict",
+  row.names = FALSE
+)
+```
+
+Three sentences receive no vote. Two receive conflicting votes. Sentence
+`s013`, for example, contains both `certificate` and `preferred`, so the
+training and requirement rules disagree.
+
+## Report coverage before accuracy
+
+**Coverage** is the share of rows receiving at least one vote. **Conflict
+rate** is the share receiving more than one. **Usable coverage** counts rows
+with exactly one vote.
+
+```{r}
+rule_summary <- data.frame(
+  measure = c(
+    "coverage",
+    "conflict rate",
+    "usable coverage"
+  ),
+  value = c(
+    mean(rule_count > 0L),
+    mean(rule_count > 1L),
+    mean(rule_count == 1L)
+  )
+)
+
+stopifnot(
+  isTRUE(
+    all.equal(
+      rule_summary$value,
+      c(25 / 28, 2 / 28, 23 / 28)
+    )
+  )
+)
+
+knitr::kable(
+  transform(
+    rule_summary,
+    value = round(value, 3)
+  ),
+  col.names = c("Measure", "Share of 28 text units"),
+  caption = "Coverage and conflict in the teaching dataset",
+  row.names = FALSE
+)
+```
+
+Coverage alone does not measure correctness. A rule can label every row and be
+wrong every time.
+
+## Compare usable labels with human review
+
+The 23 rows with one rule vote include two errors. We can summarize that
+comparison with foundryR.
+
+```{r}
+usable_rows <- weak_results$rule_count == 1L
+agreement_data <- weak_results[
+  usable_rows,
+  c("weak_label", "reference_label")
+]
+rule_agreement <- foundryR::foundry_agreement(
+  agreement_data,
+  estimate = "weak_label",
+  truth = "reference_label"
+)
+
+stopifnot(
+  identical(nrow(agreement_data), 23L),
+  isTRUE(
+    all.equal(
+      rule_agreement$value[
+        rule_agreement$metric == "accuracy"
+      ],
+      21 / 23
+    )
+  )
+)
+
+knitr::kable(
+  rule_agreement,
+  col.names = c("Measure", "Value", "Compared sentences"),
+  caption = "In-sample agreement for usable weak labels",
+  row.names = FALSE
+)
+```
+
+The rule labels 21 of the 23 usable rows the same way as the reference
+annotation. It incorrectly labels `RIVERTON SKILLS OPEN HOUSE` as `skill` and
+`DATA SUPPORT CERTIFICATE` as `training`. The trigger words are present, but
+the headings alone do not make either claim.
+
+The full accounting keeps that error beside unresolved rows.
+
+```{r}
+all_row_accounting <- data.frame(
+  outcome = c(
+    "usable and matches reference",
+    "usable and differs from reference",
+    "unresolved: abstain or conflict"
+  ),
+  rows = c(
+    sum(
+      usable_rows &
+        weak_results$weak_label ==
+          weak_results$reference_label
+    ),
+    sum(
+      usable_rows &
+        weak_results$weak_label !=
+          weak_results$reference_label
+    ),
+    sum(!usable_rows)
+  )
+)
+
+stopifnot(
+  identical(
+    all_row_accounting$rows,
+    c(21L, 2L, 5L)
+  ),
+  identical(
+    sum(all_row_accounting$rows),
+    28L
+  )
+)
+
+knitr::kable(
+  all_row_accounting,
+  col.names = c("Outcome", "Text units"),
+  caption = "Accounting for all 28 rule results",
+  row.names = FALSE
+)
+```
+
+These are in-sample results. The rules were written after reading the
+sentences, so they may encode the examples rather than the broader concept.
+
+## Try cases the rules did not shape
+
+Before applying the rules to another batch, the team writes four fictional
+adversarial unit tests. Their expected labels were chosen to expose known
+shortcuts after the rules were written. They are not an independent evaluation
+sample.
+
+```{r}
+stress_cases <- data.frame(
+  case_id = sprintf("challenge-%d", 1:4),
+  text = c(
+    "The training department is hiring an accountant.",
+    "Employees learn from experienced coworkers.",
+    "Certification is not required.",
+    "Flexible hours are available."
+  ),
+  reference_label = c(
+    "other",
+    "training",
+    "requirement",
+    "schedule"
+  ),
+  reference_status = "designed challenge expectation",
+  stringsAsFactors = FALSE
+)
+
+stress_votes <- vapply(
+  rule_patterns,
+  function(pattern) {
+    grepl(
+      pattern,
+      tolower(stress_cases$text),
+      perl = TRUE
+    )
+  },
+  logical(nrow(stress_cases))
+)
+stress_count <- rowSums(stress_votes)
+stress_first_vote <- colnames(stress_votes)[
+  max.col(stress_votes, ties.method = "first")
+]
+stress_label <- ifelse(
+  stress_count == 0L,
+  "abstain",
+  ifelse(
+    stress_count > 1L,
+    "conflict",
+    stress_first_vote
+  )
+)
+
+stress_results <- data.frame(
+  stress_cases,
+  weak_label = stress_label
+)
+
+stopifnot(
+  identical(
+    stress_results$weak_label,
+    c("training", "abstain", "conflict", "abstain")
+  ),
+  !any(
+    stress_results$weak_label ==
+      stress_results$reference_label
+  )
+)
+
+knitr::kable(
+  stress_results,
+  col.names = c(
+    "Challenge ID",
+    "Challenge text",
+    "Reference label",
+    "Reference status",
+    "Rule result"
+  ),
+  caption = "Four designed adversarial failures",
+  row.names = FALSE
+)
+```
+
+`training department` triggers a false positive. `Employees learn` and
+`Flexible hours` use words the rules do not cover. `Certification is not
+required` creates a conflict. These failures reveal missing context, synonyms,
+and negation.
+
+## Keep weak labels weak
+
+When rules scale:
+
+1. version every pattern and codebook;
+2. preserve each rule vote and abstention;
+3. measure coverage and conflict by source, language, and group;
+4. reserve independently reviewed data for evaluation;
+5. sample apparent successes for human audit;
+6. test negation, polysemy, and unseen wording; and
+7. compare conclusions with and without weak labels.
+
+Rules can provide useful training signals. They do not create facts, repair a
+biased source, or remove the need for people who understand the domain.
+
+## What to remember
+
+- A weak label is a rule's proposal, not ground truth.
+- Rules should be allowed to abstain and expose conflicts.
+- Coverage, conflict, and agreement answer different questions.
+- In-sample success can reflect rules written around the examples.
+- Designed challenge cases expose known shortcuts; independent evaluation asks
+  whether they generalize.
+
+The investigation ends with the questions that opened it: what does each
+fictional notice explicitly say about training, schedules, requirements, and
+skills? The Lab can trace an answer through source capture, OCR review, a
+codebook version, individual labels, synthetic status, and rule votes. None of
+that makes the notices representative or the rules ready for new data. It
+makes the limits and unresolved cases inspectable.
+
+## Sources
+
+- [Snorkel: Rapid Training Data Creation with Weak Supervision](https://www.vldb.org/pvldb/vol11/p269-ratner.pdf)
+- [Data Programming: Creating Large Training Sets, Quickly](https://proceedings.neurips.cc/paper/2016/hash/6709e8d64a5f47269ed5cea9f625f7ab-Abstract.html)
+- [A Survey on Programmatic Weak Supervision](https://arxiv.org/abs/2202.05433)
+- [foundryR agreement documentation](https://farach.github.io/foundryR/reference/foundry_agreement.html)

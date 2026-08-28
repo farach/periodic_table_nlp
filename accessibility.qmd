@@ -25,8 +25,10 @@ check:
 - visible tile status when colors are forced; and
 - reduced motion when that preference is active.
 
-The build also checks headings, table captions, link destinations, page
-language, and the difference between available and planned lessons.
+The build also checks headings, table captions, local link destinations, page
+language, and the difference between available and planned lessons. External
+sources are reviewed separately because a successful response does not prove
+that a source supports the surrounding claim.
 
 ## Using the periodic table
 

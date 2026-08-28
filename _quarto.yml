@@ -6,6 +6,7 @@ project:
     - index.qmd
     - accessibility.qmd
     - 1_source_data_loading/*.qmd
+    - 2_training_data_generation/*.qmd
 
 website:
   title: "Periodic Table of NLP Tasks in R"
@@ -16,9 +17,8 @@ website:
   page-navigation: true
   navbar:
     right:
-      - icon: github
+      - text: "GitHub"
         href: "https://github.com/farach/periodic_table_nlp"
-        aria-label: "GitHub repository"
   sidebar:
     style: docked
     contents:
@@ -34,6 +34,22 @@ website:
         text: Building a text corpus
       - href: 1_source_data_loading/05-loading-from-api.qmd
         text: Loading data from an API
+      - href: 1_source_data_loading/06-text-and-file-scraping.qmd
+        text: Collecting text from a web page
+      - href: 1_source_data_loading/07-text-extraction-and-ocr.qmd
+        text: Extracting text from an image
+      - href: 2_training_data_generation/08-manual-annotation.qmd
+        text: Turning decisions into labels
+      - href: 2_training_data_generation/09-annotation-with-active-learning.qmd
+        text: Choosing what to label next
+      - href: 2_training_data_generation/10-training-data-providers.qmd
+        text: Choosing an outside data provider
+      - href: 2_training_data_generation/11-crowdsourcing-annotation.qmd
+        text: Working with several annotators
+      - href: 2_training_data_generation/12-textual-data-augmentation.qmd
+        text: Creating more training examples
+      - href: 2_training_data_generation/13-rule-based-training-data.qmd
+        text: Labeling text with rules
       - href: accessibility.qmd
         text: Accessibility
   page-footer:
