@@ -1,0 +1,59 @@
+{
+  "numFound": 1972,
+  "start": 0,
+  "numFoundExact": true,
+  "num_found": 1972,
+  "documentation_url": "https://openlibrary.org/dev/docs/api/search",
+  "q": "natural language processing",
+  "offset": null,
+  "docs": [
+    {
+      "author_name": [
+        "Tanveer Siddiqui",
+        "U. S. Tiwary"
+      ],
+      "first_publish_year": 2008,
+      "key": "/works/OL13650817W",
+      "title": "Natural language processing and information retrieval"
+    },
+    {
+      "author_name": [
+        "Edward Loper",
+        "Steven Bird",
+        "Ewan Klein"
+      ],
+      "first_publish_year": 2009,
+      "key": "/works/OL14940051W",
+      "title": "Natural Language Processing With Python"
+    },
+    {
+      "author_name": [
+        "Sowmya Vajjala",
+        "Bodhisattwa Majumder",
+        "Anuj Gupta",
+        "Harshit Surana"
+      ],
+      "first_publish_year": 2020,
+      "key": "/works/OL20732916W",
+      "title": "Practical Natural Language Processing"
+    },
+    {
+      "author_name": [
+        "Lewis Tunstall",
+        "Leandro von Werra",
+        "Thomas Wolf"
+      ],
+      "first_publish_year": 2022,
+      "key": "/works/OL25810304W",
+      "title": "Natural Language Processing with Transformers"
+    },
+    {
+      "author_name": [
+        "Randall Rustin"
+      ],
+      "first_publish_year": 1973,
+      "key": "/works/OL7953692W",
+      "title": "Natural language processing"
+    }
+  ]
+}

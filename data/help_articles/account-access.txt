@@ -1,0 +1,1 @@
+Use the password reset link on the sign-in page. The link expires after 30 minutes for your security.

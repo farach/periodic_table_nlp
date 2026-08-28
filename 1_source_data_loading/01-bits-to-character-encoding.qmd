@@ -1,0 +1,357 @@
+---
+title: "How computers store text"
+subtitle: "A friendly guide to bits, bytes, Unicode, and UTF-8 in R"
+author: "Alex Farach"
+description: "Learn why text sometimes becomes garbled and how to protect it when working in R."
+categories: [source data loading, encoding, Unicode]
+---
+
+Imagine opening the attendance file for a community class and finding `AnaÃ¯s`
+where `Anaïs` should be. A person can infer the name, but a search, badge
+printer, or duplicate check may treat it as something else. The error is easy
+to miss until the damaged name reaches a badge or a lookup fails.
+
+One possible cause is a wrong **character encoding**, the rules that connect
+stored byte values with written text. We will recreate that failure from known
+bytes, decode the bytes correctly, and then handle text that looks identical
+but still fails an exact comparison.
+
+::: {.callout-note}
+The attendance file and incident are constructed for this lesson. The encoding
+failure is real, but the story does not describe an actual person or class.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- distinguish a visible text unit, a code point, and a byte;
+- explain the different jobs of Unicode and UTF-8;
+- convert text to UTF-8 in R; and
+- check text that looks the same but behaves differently.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## What happens when a computer saves a word
+
+Checking Anaïs's name begins with a precise account of what the computer saved.
+People see letters, punctuation, and emoji. A computer stores numbers, so
+saving text takes a few steps:
+
+1. Unicode assigns numbers called **code points** to abstract text elements.
+2. UTF-8 turns Unicode scalar values into one or more **bytes**.
+3. Those bytes are saved in a file or sent across a network.
+4. Software uses the same encoding to turn the bytes back into text.
+
+What a reader sees as one character is often called a **grapheme cluster**. A
+grapheme cluster can contain one code point or several. The difference becomes
+visible later when we compare two ways to store `é`.
+
+Consider two characters:
+
+| Character | Unicode code point | Bytes used by UTF-8 |
+|---|---|---|
+| `A` | `U+0041` | `41` |
+| `é` | `U+00E9` | `C3 A9` |
+
+: Unicode code points and UTF-8 bytes for two characters
+
+The values are written in hexadecimal, a compact way to write numbers. There is
+no need to memorize them. For now, notice that `A` needs one UTF-8 byte while
+`é` needs two.
+
+## Bits and bytes
+
+A **bit** records one binary choice, 0 or 1. Eight bits make one **byte**, which
+has 256 possible combinations numbered from 0 through 255.
+
+We will start with `A` and `é`, two characters small enough to inspect by eye.
+R's `charToRaw()` function shows their bytes. The word "raw" means that R
+should display the stored values without interpreting them as letters.
+
+```{r}
+text <- c(
+  letter_A = "A",
+  e_with_accent = "\u00E9"
+)
+
+bytes <- lapply(enc2utf8(text), charToRaw)
+
+stopifnot(
+  identical(bytes$letter_A, as.raw(0x41)),
+  identical(bytes$e_with_accent, as.raw(c(0xC3, 0xA9)))
+)
+
+bytes
+```
+
+The `stopifnot()` lines are **assertions**, checks that make R stop if an
+expected result changes. They pass here, so the output shows `41` for `A` and
+`c3 a9` for `é`. Hexadecimal digits may appear in upper- or lowercase without
+changing the values. The bytes `c3 a9` become `é` only when software reads them
+using UTF-8.
+
+## Recreate the garbled name
+
+We know that the source intended to store `Anaïs` as UTF-8. The next example
+keeps one byte sequence and asks R to interpret it two ways.
+
+```{r}
+expected_name <- "Ana\u00EFs"
+name_bytes <- charToRaw(enc2utf8(expected_name))
+
+misread_name <- rawToChar(name_bytes)
+Encoding(misread_name) <- "latin1"
+garbled_name <- enc2utf8(misread_name)
+
+utf8_name <- rawToChar(name_bytes)
+Encoding(utf8_name) <- "UTF-8"
+decoded_name <- enc2utf8(utf8_name)
+
+stopifnot(
+  identical(
+    name_bytes,
+    as.raw(c(0x41, 0x6E, 0x61, 0xC3, 0xAF, 0x73))
+  ),
+  identical(garbled_name, "Ana\u00C3\u00AFs"),
+  identical(decoded_name, expected_name)
+)
+
+c(
+  read_as_latin1 = garbled_name,
+  read_as_utf8 = decoded_name
+)
+```
+
+Both results came from the same bytes. Reading the bytes as Latin-1 produced
+`AnaÃ¯s`; reading them as UTF-8 produced `Anaïs`. The correct choice comes from
+the source's encoding declaration or other trustworthy metadata, not from
+guessing based on appearance.
+
+## Unicode and UTF-8 do different jobs
+
+Unicode and UTF-8 answer different questions. **Unicode** is a shared catalog
+that assigns code points used to represent text from many writing systems,
+along with punctuation, symbols, and emoji.
+
+**UTF-8** describes how to store Unicode scalar values as bytes. It uses:
+
+- one byte for common ASCII characters;
+- two bytes for many accented letters;
+- three bytes for many other characters; and
+- four bytes for characters such as many emoji.
+
+UTF-16 and UTF-32 encode the same Unicode code points in other ways. The reader
+of a file still needs to know which encoding the writer used.
+
+::: {.callout-note}
+## Where ASCII and Latin-1 fit
+
+ASCII is an older set of 128 values covering English letters, digits,
+punctuation, and control characters. UTF-8 uses the same byte values for those
+characters.
+
+Latin-1 is an eight-bit encoding that includes characters used by several
+Western European languages. Its byte values above 127 do not mean the same
+thing in UTF-8. Confusing Latin-1 with UTF-8 is a common cause of garbled text.
+:::
+
+## What R knows about a string
+
+A **string** is one text value. R may attach a label to a string saying that it
+is Latin-1, UTF-8, or a sequence of bytes. `Encoding()` reports that label, so
+we can check what R believes about the text it received.
+
+```{r}
+strings <- c(
+  plain_letter = "A",
+  accented_letter = "\u00E9"
+)
+
+declared_encoding <- Encoding(strings)
+
+stopifnot(
+  identical(unname(declared_encoding[1]), "unknown"),
+  identical(utf8ToInt(strings[2]), 233L)
+)
+
+knitr::kable(
+  data.frame(
+    text = unname(strings),
+    what_R_reports = unname(declared_encoding)
+  ),
+  col.names = c("Text", "What R reports"),
+  caption = "How R labels two character strings",
+  row.names = FALSE
+)
+```
+
+R reports the plain letter as `"unknown"`. The letter is still valid. ASCII text
+uses the same byte values in the encodings R supports, so R does not need a
+special label here.
+
+An encoding label describes how R should interpret bytes; it does not convert
+them. Assigning a different label can leave every byte untouched. When the
+bytes need to change, use a conversion function.
+
+## Transcode known Latin-1 text
+
+Some files are correctly stored as Latin-1 and need to be converted for a
+UTF-8 workflow. This operation is called **transcoding**. The next example
+creates `"café"` from known Latin-1 bytes, then uses `iconv()` to convert them.
+
+```{r}
+latin1_text <- rawToChar(as.raw(c(0x63, 0x61, 0x66, 0xE9)))
+Encoding(latin1_text) <- "latin1"
+
+utf8_text <- iconv(
+  latin1_text,
+  from = "latin1",
+  to = "UTF-8",
+  sub = NA_character_
+)
+
+result <- list(
+  text = utf8_text,
+  latin1_bytes = charToRaw(latin1_text),
+  utf8_bytes = charToRaw(utf8_text)
+)
+
+stopifnot(
+  identical(utf8ToInt(utf8_text), c(99L, 97L, 102L, 233L)),
+  identical(result$latin1_bytes, as.raw(c(0x63, 0x61, 0x66, 0xE9))),
+  identical(result$utf8_bytes, as.raw(c(0x63, 0x61, 0x66, 0xC3, 0xA9)))
+)
+
+result
+```
+
+The converted text still reads `"café"`, but its final byte changes from `e9`
+to the two-byte UTF-8 sequence `c3 a9`. `sub = NA_character_` tells R to return
+a missing value rather than silently replace a byte that cannot be converted.
+That visible missing value gives us a chance to investigate the source.
+
+## A note for Windows users
+
+R 4.2 and newer use UTF-8 as the native encoding on supported versions of
+Windows. Mac and Linux systems also commonly use UTF-8. Older software may
+still produce Windows-1252, Latin-1, or another encoding, so the computer's
+usual setting cannot settle the question for every file.
+
+We can ask R about the current session:
+
+```{r}
+encoding_info <- l10n_info()
+
+stopifnot(
+  all(c("UTF-8", "Latin-1") %in% names(encoding_info))
+)
+
+encoding_info[c("UTF-8", "Latin-1")]
+```
+
+A value of `TRUE` next to `UTF-8` means that the current R session uses UTF-8
+as its native encoding. This describes the session. A file received from
+somewhere else may use different rules.
+
+## Why identical-looking text may not match
+
+Correcting the encoding fixes the obvious damage, but an exact comparison can
+still fail. Unicode can represent some visible characters in more than one
+way. The accented letter `é` can be:
+
+- one code point for the complete letter; or
+- the letter `e` followed by a separate accent mark.
+
+Both forms look the same on screen. A duplicate check may still treat them as
+different sequences.
+
+```{r}
+same_appearance <- c(
+  one_code_point = "\u00E9",
+  letter_plus_accent = "e\u0301"
+)
+
+counts <- nchar(same_appearance, type = "chars")
+exact_match_before <- identical(
+  unname(same_appearance[1]),
+  unname(same_appearance[2])
+)
+exact_match_after <- identical(
+  unname(stringi::stri_trans_nfc(same_appearance[1])),
+  unname(stringi::stri_trans_nfc(same_appearance[2]))
+)
+
+stopifnot(
+  identical(unname(counts), c(1L, 2L)),
+  identical(exact_match_before, FALSE),
+  identical(exact_match_after, TRUE)
+)
+
+knitr::kable(
+  data.frame(
+    form = c("one code point", "letter plus accent"),
+    displayed_text = unname(same_appearance),
+    code_point_count = unname(counts)
+  ),
+  col.names = c("Form", "Displayed text", "Code point count"),
+  caption = "Two ways to represent the same visible character",
+  row.names = FALSE
+)
+
+c(
+  exact_match_before_normalizing = exact_match_before,
+  exact_match_after_normalizing = exact_match_after
+)
+```
+
+**Normalization** changes equivalent Unicode sequences into a consistent form.
+The example uses Normalization Form C, usually shortened to NFC. Normalize a
+working copy when equivalent forms should compare as equal. Keep the original
+text when its exact source representation matters.
+
+## A safe routine for text files
+
+When source metadata says the attendance file is UTF-8, the same bytes can be
+decoded as UTF-8 without guessing. When text comes from a file, website, or
+another system:
+
+1. Find out which encoding the source promises to use.
+2. Read the text using that encoding.
+3. Convert the working copy to UTF-8.
+4. Check accented letters, non-Latin scripts, and emoji.
+5. Normalize only when the task requires equivalent forms to match.
+6. Keep conversion warnings visible.
+
+Avoid `useBytes = TRUE` for normal text work. It tells R to work one byte at a
+time and can split a multi-byte character.
+
+## What to remember
+
+- A visible grapheme cluster can contain one Unicode code point or several.
+- UTF-8 stores Unicode scalar values as bytes.
+- Reading bytes with the wrong encoding is one common cause of garbled text,
+  but appearance alone does not prove the cause.
+- An encoding label does not convert text.
+- UTF-8 is a practical working format for text from many languages.
+- Text that looks identical may need Unicode normalization before comparison.
+
+With these checks, `Anaïs` can survive the trip from file to screen and match
+an equivalent spelling when the task requires it. Good text handling has a
+human-sized test: the person who entered a name should get the same name back.
+
+## Sources
+
+- [The Unicode Standard](https://www.unicode.org/versions/latest/core-spec/)
+- [Unicode Text Segmentation, UAX #29](https://www.unicode.org/reports/tr29/)
+- [Unicode FAQ: UTF-8, UTF-16, UTF-32 and BOM](https://www.unicode.org/faq/utf_bom.html)
+- [RFC 3629: UTF-8](https://www.rfc-editor.org/rfc/rfc3629)
+- [R documentation for declared encodings](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Encoding.html)
+- [R 4.2 changes to Windows encoding support](https://developer.r-project.org/Blog/public/2021/12/07/upcoming-changes-in-r-4.2-on-windows/)

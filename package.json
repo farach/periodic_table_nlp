@@ -1,0 +1,11 @@
+{
+  "name": "periodic-table-nlp-site",
+  "private": true,
+  "scripts": {
+    "test:a11y": "playwright test --config=playwright.config.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1"
+  }
+}

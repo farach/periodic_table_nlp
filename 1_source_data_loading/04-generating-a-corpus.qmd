@@ -1,0 +1,371 @@
+---
+title: "Building a text corpus"
+subtitle: "Turn separate documents into an organized collection"
+author: "Alex Farach"
+description: "Learn how to collect text, attach useful labels, and check a corpus before analysis."
+categories: [source data loading, corpus, data quality]
+---
+
+A person locked out of an account needs the right help article. The
+help-center editor has three separate files about deliveries, returns, and
+account access. The password-reset instructions are somewhere in those files,
+but each search result also needs to retain its topic and source. That becomes
+harder as loose documents accumulate.
+
+The editor needs an organized collection called a **corpus**. Its plural is
+**corpora**. A corpus keeps text documents together and usually stores
+information describing each one. We will build a three-document corpus, check
+for empty or duplicate records, and use it to find the password-reset article.
+
+::: {.callout-note}
+The help articles in this lesson were written for this example. They do not
+come from a real support system.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain what a corpus is;
+- read several text files into R;
+- decide what counts as one document;
+- keep source information with each document; and
+- check a corpus for common problems.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Decide what one document means
+
+Before collecting anything, the editor must choose the **document unit**, the
+amount of text that will count as one document. Depending on the question, it
+might be:
+
+- one help article;
+- one customer message;
+- one news story;
+- one interview; or
+- one paragraph within a longer report.
+
+The right unit depends on the question. Because the editor wants to compare and
+search help articles, each complete article will be one document. Treating each
+sentence as a separate document would detach the sentence from the rest of its
+article.
+
+Before loading real documents, confirm the right to use them. Record the
+license or permission, collection method, expected audience, privacy risk, and
+whether the people represented could reasonably expect this use. The files
+below are synthetic, so they contain no personal records or third-party text.
+
+The example uses three **plain-text files**, files that store characters
+without page layout or styling. `list.files()` asks R to find file names ending
+in `.txt`.
+
+```{r}
+article_paths <- sort(
+  list.files(
+    path = "data/help_articles",
+    pattern = "[.]txt$",
+    full.names = TRUE
+  )
+)
+
+expected_files <- c(
+  "account-access.txt",
+  "delivery.txt",
+  "returns.txt"
+)
+
+stopifnot(
+  identical(basename(article_paths), expected_files)
+)
+
+basename(article_paths)
+```
+
+The `stopifnot()` line is an **assertion**, a check that makes R stop if an
+expected result changes. It confirms that R found all three file names in
+alphabetical order. We keep those names as the first labels in the collection
+so each result can still be traced to the file that supplied its text.
+
+## Read every document
+
+Finding the file names does not yet load their contents. `readLines()` reads
+the text inside one file. These files use UTF-8, a common way to store
+characters from many languages. A **function** is a named set of steps. The
+small function below preserves line breaks in the source copy.
+
+```{r}
+read_document <- function(path) {
+  lines <- readLines(
+    path,
+    encoding = "UTF-8",
+    warn = TRUE
+  )
+
+  paste(lines, collapse = "\n")
+}
+
+source_documents <- vapply(
+  article_paths,
+  read_document,
+  character(1)
+)
+names(source_documents) <- basename(article_paths)
+
+analysis_documents <- gsub(
+  "[\r\n]+",
+  " ",
+  source_documents
+)
+
+stopifnot(
+  identical(length(source_documents), 3L),
+  identical(names(source_documents), expected_files),
+  all(nzchar(source_documents)),
+  identical(
+    names(analysis_documents),
+    expected_files
+  ),
+  grepl(
+    "password reset link",
+    analysis_documents[1],
+    fixed = TRUE
+  )
+)
+
+source_documents
+```
+
+`vapply()` runs `read_document()` once for each path. The result contains three
+source copies, and the original file names remain attached. A separate
+`analysis_documents` object replaces line breaks with spaces. The source copy
+is left untouched so paragraph boundaries can be recovered later.
+
+The check `all(nzchar(source_documents))` confirms that none of the documents
+is empty. An empty file might mean that loading failed or that the source
+itself was blank. Either case should be investigated before analysis.
+
+## Put text and labels together
+
+The text is present, but the values alone have little room for context. Each
+document also needs **metadata**, information about the document rather than
+its main text. A source file, topic, publication date, or author can be
+metadata.
+
+We will place the text and its labels in a **data frame**, R's table-like
+structure, with one row per document.
+
+```{r}
+corpus <- data.frame(
+  document_id = tools::file_path_sans_ext(
+    basename(article_paths)
+  ),
+  topic = c("account access", "delivery", "returns"),
+  source_file = basename(article_paths),
+  source_hash = unname(tools::md5sum(article_paths)),
+  source_text = unname(source_documents),
+  analysis_text = unname(analysis_documents),
+  stringsAsFactors = FALSE
+)
+
+stopifnot(
+  identical(nrow(corpus), 3L),
+  identical(
+    corpus$document_id,
+    c("account-access", "delivery", "returns")
+  ),
+  identical(
+    corpus$source_file,
+    expected_files
+  ),
+  all(grepl("^[0-9a-f]{32}$", corpus$source_hash))
+)
+
+knitr::kable(
+  corpus[c("document_id", "topic", "source_file")],
+  col.names = c("Document ID", "Topic", "Source file"),
+  caption = "The documents and their metadata",
+  row.names = FALSE
+)
+```
+
+The `document_id` gives every row a stable label. The topic identifies the
+article's subject without requiring someone to open the full text. The source
+file records where that text came from. `source_hash` is a fingerprint that
+changes if a file changes; it helps detect accidental edits but is not proof of
+authorship or trustworthiness. Keeping these fields on the same row is the
+corpus equivalent of keeping a label attached to its folder.
+
+## Add a simple measurement
+
+A quick count can reveal a document that loaded as empty or unexpectedly long.
+The function below separates text wherever it finds whitespace, then counts the
+resulting pieces.
+
+```{r}
+count_whitespace_tokens <- function(text) {
+  tokens <- strsplit(
+    trimws(text),
+    split = "[[:space:]]+"
+  )[[1]]
+
+  length(tokens)
+}
+
+corpus$whitespace_token_count <- vapply(
+  corpus$analysis_text,
+  count_whitespace_tokens,
+  integer(1)
+)
+
+stopifnot(
+  identical(
+    corpus$whitespace_token_count,
+    c(18L, 16L, 21L)
+  )
+)
+
+knitr::kable(
+  corpus[
+    c("document_id", "topic", "whitespace_token_count")
+  ],
+  col.names = c("Document ID", "Topic", "Whitespace-token count"),
+  caption = "Whitespace-token counts for the three documents",
+  row.names = FALSE
+)
+```
+
+The three articles contain 18, 16, and 21 whitespace-separated pieces. These
+are often called tokens, not universal word counts. Languages without spaces
+between words, contractions, punctuation, and specialized tokenizers can
+produce different results. The counts are quick checks, not quality scores.
+
+## Check the corpus before using it
+
+The editor now has rows, labels, and text. Before trusting the collection, we
+confirm that:
+
+- every source file still exists;
+- every document has text;
+- document IDs are unique;
+- no two documents contain exactly the same text; and
+- the topic and source file are present.
+
+```{r}
+quality_checks <- c(
+  source_files_exist = all(file.exists(article_paths)),
+  no_empty_text = all(nzchar(trimws(corpus$source_text))),
+  unique_document_ids = !anyDuplicated(corpus$document_id),
+  no_exact_duplicate_text = !anyDuplicated(corpus$source_text),
+  metadata_is_complete = all(
+    complete.cases(
+      corpus[c("topic", "source_file", "source_hash")]
+    )
+  )
+)
+
+stopifnot(all(quality_checks))
+
+quality_checks
+```
+
+Every result is `TRUE`, so the corpus passes these structural checks. They do
+not establish that the articles are accurate, useful, or representative. They
+show only that the three expected files produced three labeled, nonempty,
+distinct records.
+
+## Use the corpus as a collection
+
+The collection is now ready for the editor's original question. Because every
+document shares one structure, the same search can be applied to all three.
+This one looks for the exact phrase `"password reset"`.
+
+```{r}
+mentions_password_reset <- grepl(
+  "password reset",
+  corpus$analysis_text,
+  fixed = TRUE
+)
+
+matching_documents <- corpus[
+  mentions_password_reset,
+  c("document_id", "topic", "analysis_text")
+]
+
+stopifnot(
+  identical(
+    matching_documents$document_id,
+    "account-access"
+  )
+)
+
+knitr::kable(
+  matching_documents,
+  col.names = c("Document ID", "Topic", "Text"),
+  caption = "The document that mentions a password reset",
+  row.names = FALSE
+)
+```
+
+The account-access article is the single match. Its topic, document ID, and
+text arrive together, so the editor can inspect the result and return to the
+source file. That connection becomes easier to lose as a corpus grows.
+
+::: {.callout-note}
+## Technical detail: a corpus can have a special R class
+
+An R **class** tells R what kind of object it is handling and which operations
+belong with it.
+
+Packages such as quanteda and tm provide dedicated corpus objects with tools
+for metadata and text processing. A data frame is enough for this lesson
+because its rows and columns are visible and easy to inspect. The same records
+can be converted to a package-specific corpus later.
+:::
+
+## A corpus is a set of choices
+
+The successful search does not make the collection neutral. Someone decided
+which files belong, where a document ends, which metadata to keep, and which
+text to exclude. Every later result inherits those choices.
+
+Record:
+
+1. where the documents came from;
+2. when they were collected;
+3. what one row represents;
+4. why any documents were excluded;
+5. what each metadata field means; and
+6. what license, permission, or consent supports the use;
+7. which privacy risks were checked;
+8. whether people or communities are missing from the collection; and
+9. which fingerprint identifies each untouched source file.
+
+## What to remember
+
+- A corpus is an organized collection of text documents.
+- The document unit should match the question being asked.
+- Metadata keeps each document connected to its source and context.
+- Preserve source text separately from text changed for analysis.
+- Empty files, duplicate IDs, and duplicate text should be checked early.
+- A technically clean corpus can still be incomplete or unrepresentative.
+
+The password-reset answer is now findable without losing the article around
+it. For a larger corpus, keep the same small label beside every document: what
+this text is, where it came from, and why it belongs in the collection.
+
+## Sources
+
+- [R documentation for reading text lines](https://stat.ethz.ch/R-manual/R-devel/library/base/html/readLines.html)
+- [quanteda documentation for creating a corpus](https://quanteda.io/reference/corpus.html)
+- [Introduction to the tm text mining package](https://cran.r-project.org/web/packages/tm/vignettes/tm.pdf)
+- [Unicode Text Segmentation, UAX #29](https://www.unicode.org/reports/tr29/)
+- [Data Statements for Natural Language Processing](https://aclanthology.org/Q18-1041/)
+- [Datasheets for Datasets](https://doi.org/10.1145/3458723)

@@ -1,0 +1,79 @@
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const skipLink = document.querySelector(".skip-link");
+  const mainContent = document.querySelector("#quarto-document-content");
+  if (skipLink && mainContent) {
+    document.body.prepend(skipLink);
+    mainContent.setAttribute("tabindex", "-1");
+    skipLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      mainContent.focus();
+      history.replaceState(null, "", "#quarto-document-content");
+    });
+  }
+
+  const navbarToggle = document.querySelector(".navbar-toggler");
+  if (navbarToggle) {
+    navbarToggle.removeAttribute("role");
+  }
+
+  const siteNavigation = document.querySelector("#quarto-header nav");
+  if (siteNavigation && !siteNavigation.getAttribute("aria-label")) {
+    siteNavigation.setAttribute("aria-label", "Site navigation");
+  }
+
+  const lessonNavigation = document.querySelector("#quarto-sidebar");
+  if (lessonNavigation && !lessonNavigation.getAttribute("aria-label")) {
+    lessonNavigation.setAttribute("aria-label", "Lesson navigation");
+  }
+
+  const pageContents = document.querySelector("#TOC");
+  if (pageContents && !pageContents.getAttribute("aria-label")) {
+    pageContents.setAttribute("aria-label", "On this page");
+  }
+
+  const makeScrollableOutputsFocusable = () => {
+    document
+      .querySelectorAll(".cell-output-stdout > pre")
+      .forEach((output) => {
+        if (output.scrollWidth <= output.clientWidth) {
+          return;
+        }
+
+        const section = output.closest("section[id]");
+        const heading = section?.querySelector("h2, h3, h4");
+        const sectionName = heading?.textContent.trim() || "R";
+        output.setAttribute("tabindex", "0");
+        output.setAttribute("role", "region");
+        output.setAttribute(
+          "aria-label",
+          `Scrollable ${sectionName} output`
+        );
+      });
+  };
+
+  window.requestAnimationFrame(makeScrollableOutputsFocusable);
+});
+
+let searchInvoker = null;
+
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("#quarto-search button");
+  if (trigger) {
+    searchInvoker = trigger;
+  }
+}, true);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !searchInvoker) {
+    return;
+  }
+
+  const trigger = searchInvoker;
+  searchInvoker = null;
+
+  window.setTimeout(() => {
+    trigger.focus();
+  }, 100);
+}, true);
+</script>

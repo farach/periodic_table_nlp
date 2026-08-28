@@ -1,0 +1,55 @@
+name: Render Quarto site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    env:
+      RENV_CONFIG_REPOS_OVERRIDE: https://cloud.r-project.org
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.9.38"
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.6.1"
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-renv@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install browser test dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Check writing
+        run: Rscript scripts/check-prose.R
+
+      - name: Render site
+        run: quarto render
+
+      - name: Check lessons
+        run: Rscript scripts/check-lessons.R
+
+      - name: Test periodic table
+        run: Rscript tests/test-periodic-table.R
+
+      - name: Test accessibility
+        run: npm run test:a11y
