@@ -13,9 +13,9 @@ relevant, accurate, and useful.
 
 An **application programming interface**, usually called an **API**, gives
 software a defined way to ask another service for information. This lesson
-sends one live query to the Open Library Search API and checks the service's
-reply. It then builds the displayed table from a dated copy of an earlier
-response so the published output can be reproduced.
+reconstructs a query sent to the Open Library Search API and checks the saved
+reply. The displayed table comes from a dated response so the published output
+can be reproduced even when the service is unavailable or its ranking changes.
 
 ::: {.callout-tip}
 ## What you will learn
@@ -109,58 +109,12 @@ keeps R from waiting indefinitely. The retry setting permits up to three
 attempts when a temporary connection problem interrupts the exchange; it does
 not guarantee that an unavailable service will respond.
 
-## Send the request and check the response
+## Understand what happened when the request was sent
 
-Now the request leaves R and reaches a service we do not control.
-`req_perform()` sends it. An **HTTP status code** is a number that reports the
-outcome of a web request. httr2 stops with an error when the service returns an
-unsuccessful status such as 404 or 500.
-
-```{r}
-book_response <- httr2::req_perform(book_request)
-
-response_status <- httr2::resp_status(book_response)
-response_type <- httr2::resp_header(
-  book_response,
-  "content-type"
-)
-live_response_data <- httr2::resp_body_json(
-  book_response,
-  simplifyVector = TRUE
-)
-live_records <- live_response_data$docs
-
-stopifnot(
-  identical(response_status, 200L),
-  grepl(
-    "application/json",
-    response_type,
-    fixed = TRUE
-  ),
-  is.data.frame(live_records),
-  nrow(live_records) > 0L,
-  nrow(live_records) <= 5L,
-  all(nzchar(live_records$title))
-)
-
-data.frame(
-  check = c(
-    "HTTP status",
-    "Response type",
-    "Records returned"
-  ),
-  result = c(
-    as.character(response_status),
-    response_type,
-    as.character(nrow(live_records))
-  )
-)
-```
-
-Status `200` means that the service completed the request successfully. The
-response type contains `application/json`, which tells us how to interpret the
-body. The query asks for no more than five records, so the code accepts any
-positive result up to that limit.
+The request was sent once on the retrieval date recorded below. httr2's
+`req_perform()` function performed the exchange and would have stopped on an
+unsuccessful HTTP status such as 404 or 500. The response returned status `200`,
+which means the service completed that request successfully.
 
 **JSON**, short for JavaScript Object Notation, is a text format that can hold
 named values, lists, and records. Many programming languages can read it, which
@@ -168,10 +122,10 @@ makes it common in API responses.
 
 ## Keep a dated response
 
-The live query proves that the request still works today. It cannot guarantee
-that tomorrow's ranking will contain the same records. The table on this page
-therefore uses a saved JSON response with a retrieval time, request address,
-record level, licensing reference, and fingerprint.
+One successful request cannot guarantee that the service will be available
+tomorrow or return the same ranking. The repository keeps the JSON response
+with its retrieval time, request address, HTTP status, content type, record
+level, licensing reference, and fingerprint.
 
 ```{r}
 fixture_path <- "data/openlibrary-nlp-search.json"
@@ -203,6 +157,15 @@ stopifnot(
   identical(
     fixture_metadata$record_level,
     "work-level catalog record"
+  ),
+  identical(fixture_metadata$http_status, "200"),
+  identical(
+    fixture_metadata$content_type,
+    "application/json"
+  ),
+  identical(
+    fixture_metadata$request_url,
+    book_request$url
   )
 )
 
@@ -210,11 +173,15 @@ knitr::kable(
   data.frame(
     detail = c(
       "Retrieved at",
+      "HTTP status",
+      "Content type",
       "Record level",
       "File fingerprint"
     ),
     value = c(
       fixture_metadata$retrieved_at_utc,
+      fixture_metadata$http_status,
+      fixture_metadata$content_type,
       fixture_metadata$record_level,
       fixture_md5
     )

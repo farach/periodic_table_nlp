@@ -1,0 +1,78 @@
+# Data sources and licenses
+
+This repository is licensed under the MIT License. Data and material obtained
+from another source retain their own licenses and attribution requirements.
+
+## Author-created teaching data
+
+The files below are fictional and were created for this project:
+
+- `data/customer_feedback.csv`
+- `data/help_articles/`
+- `data/workforce/job-board.html`
+- `data/workforce/workforce_sentences.csv`
+- `data/workforce/crowd_annotations.csv`
+- `data/workforce/training-flyer-ground-truth.txt`
+- `data/workforce/training-flyer.png`
+
+They contain no real workers, applicants, employers, customers, or research
+participants. Their purpose is to make code and research-design problems small
+enough to inspect. They must not be used to make claims about a population.
+
+## Open Library fixture
+
+`data/openlibrary-nlp-search.json` contains work-level catalog records returned
+by the Open Library Search API. Its metadata file records the request, retrieval
+time, and fingerprint.
+
+The Internet Archive states that it does not assert new proprietary rights over
+the Open Library database, while warning that existing rights may vary by
+contribution and jurisdiction:
+<https://openlibrary.org/developers/licensing>.
+
+## Package teaching fixtures
+
+The lessons execute fixtures bundled with these packages:
+
+- [onet2r](https://github.com/farach/onet2r), MIT
+- [cmapr](https://github.com/farach/cmapr), MIT
+- [huggingfaceR](https://github.com/farach/huggingfaceR), MIT
+- [foundryR](https://github.com/farach/foundryR), MIT
+
+A package fixture demonstrates an interface or schema. Unless a lesson provides
+upstream identifiers and an authentication check, it must not be described as
+an exact extract from the provider's full dataset.
+
+## O*NET attribution
+
+This project includes information that uses an O*NET-shaped onet2r teaching
+fixture.
+
+This project includes information from
+[O*NET Resource Center](https://www.onetcenter.org/) by the U.S. Department of
+Labor, Employment and Training Administration (USDOL/ETA). Used under the
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. O*NET® is a
+trademark of USDOL/ETA. Alex Farach has modified or added information.
+USDOL/ETA has not approved, endorsed, or tested these modifications.
+
+Official license and attribution instructions:
+<https://www.onetcenter.org/license_db.html>.
+
+## CMap
+
+The full CMap dataset is published under CC BY 4.0:
+<https://doi.org/10.5281/zenodo.15260189>.
+
+The cmapr example file used in this site does not include upstream identifiers
+or validation status. The lessons treat it as a package teaching fixture, not
+as an authenticated sample or evidence about career mobility.
+
+## Hugging Face Hub
+
+Hugging Face hosts datasets from many contributors. Dataset cards can state a
+license, language, size, and known limitations:
+<https://huggingface.co/docs/hub/datasets-cards>.
+
+There is no single license or consent determination for every Hub dataset.
+Researchers must inspect the card, repository files, source provenance, and
+applicable terms before downloading or transmitting data.

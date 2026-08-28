@@ -8,7 +8,15 @@ const pages = [
   "/1_source_data_loading/02-manual-typewriting.html",
   "/1_source_data_loading/03-loading-structured-datafile.html",
   "/1_source_data_loading/04-generating-a-corpus.html",
-  "/1_source_data_loading/05-loading-from-api.html"
+  "/1_source_data_loading/05-loading-from-api.html",
+  "/1_source_data_loading/06-text-and-file-scraping.html",
+  "/1_source_data_loading/07-text-extraction-and-ocr.html",
+  "/2_training_data_generation/08-manual-annotation.html",
+  "/2_training_data_generation/09-annotation-with-active-learning.html",
+  "/2_training_data_generation/10-training-data-providers.html",
+  "/2_training_data_generation/11-crowdsourcing-annotation.html",
+  "/2_training_data_generation/12-textual-data-augmentation.html",
+  "/2_training_data_generation/13-rule-based-training-data.html"
 ];
 
 for (const path of pages) {
@@ -26,21 +34,55 @@ for (const path of pages) {
   });
 }
 
+test("every page reflows to a 320-pixel viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+
+  for (const path of pages) {
+    await page.goto(path);
+    const widths = await page.evaluate(() => ({
+      document: document.documentElement.scrollWidth,
+      viewport: document.documentElement.clientWidth
+    }));
+
+    expect(
+      widths.document,
+      `${path} widens the document at 320 pixels`
+    ).toBeLessThanOrEqual(widths.viewport);
+  }
+});
+
+test("every rendered table has a caption", async ({ page }) => {
+  for (const path of pages) {
+    await page.goto(path);
+    const tables = page.locator("main table");
+    const tableCount = await tables.count();
+
+    for (let index = 0; index < tableCount; index += 1) {
+      const caption = tables.nth(index).locator("caption");
+      await expect(
+        caption,
+        `${path} table ${index + 1} has no caption`
+      ).toHaveCount(1);
+      await expect(caption).not.toHaveText("");
+    }
+  }
+});
+
 test("periodic table supports keyboard navigation", async ({ page }) => {
   await page.goto("/");
 
   const availableTiles = page.locator(".nlp-element.is-available");
   const plannedTiles = page.locator(".nlp-element.is-planned");
 
-  await expect(availableTiles).toHaveCount(5);
-  await expect(plannedTiles).toHaveCount(76);
+  await expect(availableTiles).toHaveCount(13);
+  await expect(plannedTiles).toHaveCount(68);
   await expect(plannedTiles.first()).not.toHaveAttribute("aria-disabled");
   await expect(plannedTiles.first()).not.toHaveAttribute("aria-label");
 
   const labels = await availableTiles.evaluateAll((tiles) =>
     tiles.map((tile) => tile.getAttribute("aria-label"))
   );
-  expect(new Set(labels).size).toBe(5);
+  expect(new Set(labels).size).toBe(13);
 
   const firstTile = availableTiles.first();
   await firstTile.focus();
@@ -68,7 +110,15 @@ test("every available tile opens its lesson", async ({ page }) => {
     [2, "02-manual-typewriting.html"],
     [3, "03-loading-structured-datafile.html"],
     [4, "04-generating-a-corpus.html"],
-    [5, "05-loading-from-api.html"]
+    [5, "05-loading-from-api.html"],
+    [6, "06-text-and-file-scraping.html"],
+    [7, "07-text-extraction-and-ocr.html"],
+    [8, "08-manual-annotation.html"],
+    [9, "09-annotation-with-active-learning.html"],
+    [10, "10-training-data-providers.html"],
+    [11, "11-crowdsourcing-annotation.html"],
+    [12, "12-textual-data-augmentation.html"],
+    [13, "13-rule-based-training-data.html"]
   ];
 
   for (const [taskNumber, fileName] of lessons) {
@@ -108,6 +158,44 @@ test("periodic table scrolls without widening the page", async ({ page }) => {
   await expect
     .poll(() => scroller.evaluate((element) => element.scrollLeft))
     .toBeGreaterThan(0);
+});
+
+test("periodic table fits a wide desktop viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/");
+
+  const dimensions = await page
+    .locator(".periodic-scroll")
+    .evaluate((element) => ({
+      content: element.scrollWidth,
+      viewport: element.clientWidth
+    }));
+
+  expect(dimensions.content).toBeLessThanOrEqual(
+    dimensions.viewport + 1
+  );
+});
+
+test("map controls scroll narrow viewports", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/");
+
+  const earlier = page.getByRole("button", {
+    name: "Earlier groups"
+  });
+  const later = page.getByRole("button", {
+    name: "Later groups"
+  });
+  const scroller = page.locator("#nlp-task-map");
+
+  await expect(earlier).toBeDisabled();
+  await expect(later).toBeEnabled();
+  await later.click();
+
+  await expect
+    .poll(() => scroller.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
+  await expect(earlier).toBeEnabled();
 });
 
 test("navigation controls keep native button semantics", async ({ page }) => {
@@ -163,7 +251,10 @@ test("tile status survives forced colors and reduced motion", async ({
   const planned = page.locator(".nlp-element.is-planned").first();
 
   await expect(available.getByText("Read lesson")).toBeVisible();
-  await expect(planned.getByText("Planned")).toBeVisible();
+  await expect(planned.locator(".element-status")).toHaveText("Planned");
+  await expect(
+    page.getByText("Lesson planned", { exact: true })
+  ).toBeVisible();
 
   const styles = await page.evaluate(() => {
     const availableTile = document.querySelector(

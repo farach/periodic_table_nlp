@@ -1,0 +1,303 @@
+---
+title: "Extracting text from an image"
+subtitle: "Run OCR and compare the result with a known transcript"
+author: "Alex Farach"
+description: "Learn what optical character recognition can recover from a training flyer and how to check its errors."
+categories: [source data loading, OCR, workforce research]
+---
+
+The saved job board supplied digital text. The Riverton Workforce Lab's next
+fictional notice is a training flyer available only as an image. Its wording
+covers a stipend, a class schedule, prior experience, and an application date.
+Losing or reversing a phrase would change what a person understood about the
+program.
+
+**Optical character recognition**, shortened to **OCR**, estimates which text
+appears in an image. The team will run OCR, compare the result with a
+known reference transcript, and keep both the image and extracted text. Recovery
+comes before any attempt to classify what the flyer says.
+
+::: {.callout-note}
+The flyer and program are fictional. The image was generated for this lesson,
+and the transcript was written from the source text used to create it.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain the difference between digital text and text inside an image;
+- run the Tesseract OCR engine from R;
+- compare OCR output with a known reference transcript;
+- interpret character-level edit distance; and
+- identify conditions that make OCR output less reliable.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Inspect the source image
+
+![Fictional training flyer used for the OCR example](../data/workforce/training-flyer.png){#fig-training-flyer width=720 height=480 fig-alt="A fictional Riverton workforce training flyer. A complete text transcript follows."}
+
+> RIVERTON SKILLS OPEN HOUSE<br>
+> DATA SUPPORT CERTIFICATE<br>
+> Paid training stipend<br>
+> Evening classes<br>
+> No prior experience required<br>
+> Apply by October 15
+
+The adjacent text is the complete flyer transcript. It is needed even when OCR
+is available because automated extraction can be wrong or may not run in a
+reader's browser. The image remains the source; OCR is one reading of it.
+
+The checked transcript contains six lines.
+
+```{r}
+transcript_path <- paste0(
+  "data/workforce/",
+  "training-flyer-ground-truth.txt"
+)
+reference_lines <- readLines(
+  transcript_path,
+  encoding = "UTF-8",
+  warn = TRUE
+)
+transcript_md5 <- digest::digest(
+  paste(reference_lines, collapse = "\n"),
+  algo = "md5",
+  serialize = FALSE
+)
+flyer_metadata <- read.csv(
+  "data/workforce/training-flyer-metadata.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+image_metadata <- flyer_metadata[
+  flyer_metadata$artifact == "training-flyer.png",
+]
+transcript_metadata <- flyer_metadata[
+  flyer_metadata$artifact ==
+    "training-flyer-ground-truth.txt",
+]
+image_path <- "data/workforce/training-flyer.png"
+image_array <- png::readPNG(
+  image_path,
+  info = TRUE
+)
+image_dimensions <- dim(image_array)[1:2]
+image_md5 <- unname(tools::md5sum(image_path))
+
+stopifnot(
+  identical(length(reference_lines), 6L),
+  identical(
+    reference_lines[1],
+    "RIVERTON SKILLS OPEN HOUSE"
+  ),
+  identical(
+    reference_lines[6],
+    "Apply by October 15"
+  ),
+  identical(nrow(image_metadata), 1L),
+  identical(nrow(transcript_metadata), 1L),
+  identical(
+    image_dimensions,
+    c(800L, 1200L)
+  ),
+  identical(
+    image_md5,
+    image_metadata$md5
+  ),
+  identical(
+    transcript_md5,
+    transcript_metadata$md5
+  )
+)
+
+reference_lines
+```
+
+The transcript is the comparison source for this controlled example. In real
+research, the reference should be checked by people who can read the document
+and understand its language and layout.
+
+## Run OCR
+
+The tesseract package connects R to the open-source Tesseract OCR engine. We
+select English because the flyer is written in English.
+
+```{r}
+ocr_information <- tesseract::tesseract_info()
+ocr_engine <- tesseract::tesseract("eng")
+ocr_text <- tesseract::ocr(
+  "data/workforce/training-flyer.png",
+  engine = ocr_engine
+)
+ocr_lines <- trimws(
+  strsplit(ocr_text, "\n", fixed = TRUE)[[1]]
+)
+ocr_lines <- ocr_lines[nzchar(ocr_lines)]
+
+stopifnot(
+  nzchar(ocr_information$version),
+  "eng" %in% ocr_information$available,
+  identical(ocr_lines, reference_lines),
+  identical(
+    ocr_lines[5],
+    "No prior experience required"
+  )
+)
+
+ocr_lines
+```
+
+Tesseract recovered all six lines in this clear, high-contrast image. That
+result belongs to this image and software version; it is not a general OCR
+accuracy claim.
+
+```{r}
+ocr_provenance <- data.frame(
+  component = c(
+    "R tesseract package",
+    "Native Tesseract engine",
+    "Language data",
+    "Image MD5"
+  ),
+  value = c(
+    as.character(
+      utils::packageVersion("tesseract")
+    ),
+    ocr_information$version,
+    "eng",
+    image_md5
+  )
+)
+
+stopifnot(
+  identical(nrow(ocr_provenance), 4L),
+  all(nzchar(ocr_provenance$value))
+)
+
+knitr::kable(
+  ocr_provenance,
+  col.names = c("Component", "Recorded value"),
+  caption = "Software and image details for this OCR run",
+  row.names = FALSE
+)
+```
+
+The lockfile pins the R package. The native engine and language data come from
+the operating system, so the lesson reports them at run time. The repository
+also preserves the raw output recorded with native Tesseract 5.3.2 in
+`data/workforce/training-flyer-ocr-5.3.2.txt`.
+
+## Measure the difference
+
+**Edit distance** counts the smallest number of character insertions,
+deletions, or substitutions needed to turn one text into another. We normalize
+case and punctuation before comparing because the research question concerns
+the words, not the flyer styling.
+
+```{r}
+normalize_for_comparison <- function(text) {
+  text |>
+    paste(collapse = " ") |>
+    tolower() |>
+    gsub(
+      pattern = "[^a-z0-9]+",
+      replacement = " ",
+      x = _
+    ) |>
+    trimws()
+}
+
+reference_text <- normalize_for_comparison(
+  reference_lines
+)
+observed_text <- normalize_for_comparison(
+  ocr_lines
+)
+normalized_edit_distance <- as.integer(
+  adist(reference_text, observed_text)
+)
+normalized_distance_share <-
+  normalized_edit_distance /
+  nchar(reference_text)
+
+stopifnot(
+  identical(normalized_edit_distance, 0L),
+  identical(
+    ocr_lines[5],
+    reference_lines[5]
+  )
+)
+
+data.frame(
+  normalized_edit_distance =
+    normalized_edit_distance,
+  reference_characters = nchar(reference_text),
+  normalized_distance_share =
+    normalized_distance_share
+)
+```
+
+An edit distance of zero means that the normalized texts match exactly. This is
+not a universal character-error rate: normalization removed case, punctuation,
+and line boundaries, and the denominator includes spaces. The code separately
+requires every raw line and the critical experience statement to match
+exactly.
+
+## OCR errors are not evenly distributed
+
+OCR becomes harder when a source has:
+
+- low resolution, blur, shadows, or skew;
+- handwriting or decorative fonts;
+- tables, columns, stamps, or text over images;
+- uncommon symbols or several languages;
+- damaged pages; or
+- a reading order that is not visually obvious.
+
+An average error rate can hide the error that matters most. Changing
+`"No prior experience required"` to `"prior experience required"` would reverse
+the meaning while affecting only a few characters. The team must inspect
+important fields directly, not rely on one summary score.
+
+## Preserve the source and the correction trail
+
+Keep:
+
+1. the original image;
+2. the OCR engine and language settings;
+3. the unedited OCR output;
+4. the reviewed and corrected transcript;
+5. the person or process that checked it; and
+6. any uncertainty about layout or unreadable text.
+
+Do not overwrite raw OCR with corrections. Separate fields make later edits
+visible and let another reviewer return to the source.
+
+## What to remember
+
+- Text inside an image must be recognized before ordinary text analysis.
+- OCR output is an estimate, not a transcription guarantee.
+- Compare important output with a human-checked reference.
+- Measure errors and inspect meaning-changing cases.
+- Preserve the image, raw output, corrected text, and review history.
+
+The archived job cards and checked flyer transcript now provide traceable text
+about training, schedules, requirements, and skills. Extraction has not decided
+what any sentence means. Human classification follows, using a versioned
+annotation codebook to record those reading decisions.
+
+## Sources
+
+- [tesseract R package documentation](https://docs.ropensci.org/tesseract/)
+- [Tesseract OCR documentation](https://tesseract-ocr.github.io/)
+- [Unicode Text Segmentation, UAX #29](https://www.unicode.org/reports/tr29/)
+- [Web Content Accessibility Guidelines: text alternatives](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html)

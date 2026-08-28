@@ -1,0 +1,292 @@
+---
+title: "Collecting text from a web page"
+subtitle: "Scrape a saved job board without losing its source"
+author: "Alex Farach"
+description: "Learn how to extract job titles and training details from structured HTML with R."
+categories: [source data loading, scraping, workforce research]
+---
+
+The fictional Riverton Workforce Lab begins with six job postings saved from a
+job board. A worker comparing the notices would need to keep each training
+offer, schedule, experience requirement, and named skill attached to the right
+job. Copying the lines into one block would make omissions and source mix-ups
+hard to audit.
+
+**Web scraping** uses code to collect information from web pages. The team will
+scrape the saved page, keep the job and sentence identifiers, and check every
+record before it becomes research data. This first stage collects what the
+notices say; it does not classify the sentences or generalize from them.
+
+::: {.callout-note}
+The employers, postings, and Riverton Workforce Lab are fictional. The HTML
+file was written for this lesson and contains no personal information.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain how HTML gives parts of a page names and structure;
+- select repeated job cards with rvest;
+- keep source identifiers beside extracted text;
+- compare scraped output with an expected fixture; and
+- identify legal, ethical, and technical checks needed before live scraping.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Begin with an archived page
+
+Live websites change. A saved source file lets another researcher inspect the
+same page later. The team records the file path, size, and fingerprint before
+extracting anything.
+
+```{r}
+job_page_path <- "data/workforce/job-board.html"
+job_page_lines <- readLines(
+  job_page_path,
+  encoding = "UTF-8",
+  warn = TRUE
+)
+job_page_fingerprint <- digest::digest(
+  paste(job_page_lines, collapse = "\n"),
+  algo = "md5",
+  serialize = FALSE
+)
+job_page_metadata <- read.csv(
+  "data/workforce/job-board-metadata.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+
+stopifnot(
+  file.exists(job_page_path),
+  file.info(job_page_path)$size > 1000,
+  identical(nrow(job_page_metadata), 1L),
+  identical(
+    job_page_fingerprint,
+    job_page_metadata$md5
+  ),
+  identical(
+    job_page_metadata$retrieval_status,
+    "synthetic archived page"
+  ),
+  grepl(
+    "^[0-9a-f]{32}$",
+    job_page_fingerprint
+  )
+)
+
+data.frame(
+  source_file = job_page_path,
+  bytes = file.info(job_page_path)$size,
+  fingerprint = job_page_fingerprint
+)
+```
+
+The fingerprint is compared with a stored value. It changes if the archived
+HTML changes and can reveal an accidental edit. It cannot prove that the
+postings are true or complete.
+
+## Read the page structure
+
+HTML uses elements such as headings, paragraphs, and lists to organize a page.
+The example page places every posting inside an element whose class is
+`job-card`. A **CSS selector** is a short pattern that names the elements to
+collect.
+
+```{r}
+job_page <- rvest::read_html(job_page_path)
+job_cards <- rvest::html_elements(
+  job_page,
+  ".job-card"
+)
+
+stopifnot(
+  identical(length(job_cards), 6L)
+)
+
+length(job_cards)
+```
+
+R found six job cards. This count is the first signal that the selector matches
+the archived page we expected.
+
+## Extract one field at a time
+
+Each card contains a job ID, posting date, title, employer, and location. The
+small helper below extracts one text field from each card.
+
+```{r}
+card_text <- function(cards, selector) {
+  vapply(
+    cards,
+    function(card) {
+      elements <- card |>
+        rvest::html_elements(selector)
+      stopifnot(identical(length(elements), 1L))
+
+      elements |>
+        rvest::html_text2()
+    },
+    character(1)
+  )
+}
+
+jobs <- data.frame(
+  job_id = rvest::html_attr(
+    job_cards,
+    "data-job-id"
+  ),
+  posted = as.Date(
+    rvest::html_attr(
+      job_cards,
+      "data-posted"
+    )
+  ),
+  title = card_text(job_cards, ".job-title"),
+  employer = card_text(job_cards, ".employer"),
+  location = card_text(job_cards, ".location"),
+  stringsAsFactors = FALSE
+)
+
+stopifnot(
+  identical(jobs$job_id, sprintf("J%03d", 1:6)),
+  !anyDuplicated(jobs$job_id),
+  all(!is.na(jobs$posted)),
+  all(nzchar(jobs$title)),
+  all(nzchar(jobs$employer)),
+  all(nzchar(jobs$location)),
+  identical(jobs$title[1], "Data analyst trainee")
+)
+
+knitr::kable(
+  jobs,
+  col.names = c(
+    "Job ID",
+    "Posted",
+    "Title",
+    "Employer",
+    "Location"
+  ),
+  caption = "Six postings extracted from the archived job board",
+  row.names = FALSE
+)
+```
+
+The job ID remains attached to every title. Later, a schedule or experience
+requirement must still point back to the posting that stated it.
+
+## Keep sentences connected to their postings
+
+The details in each card are list items with the class `job-detail`. We extract
+them in page order and add stable sentence IDs.
+
+```{r}
+details_by_job <- lapply(
+  seq_along(job_cards),
+  function(card_number) {
+    details <- job_cards[[card_number]] |>
+      rvest::html_elements(".job-detail") |>
+      rvest::html_text2()
+
+    data.frame(
+      document_id = jobs$job_id[card_number],
+      text = details,
+      stringsAsFactors = FALSE
+    )
+  }
+)
+
+scraped_sentences <- do.call(
+  rbind,
+  details_by_job
+)
+scraped_sentences$sentence_id <- sprintf(
+  "s%03d",
+  seq_len(nrow(scraped_sentences))
+)
+scraped_sentences <- scraped_sentences[
+  c("sentence_id", "document_id", "text")
+]
+
+expected_sentences <- read.csv(
+  "data/workforce/workforce_sentences.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+expected_job_sentences <- expected_sentences[
+  expected_sentences$document_id != "F001",
+  c("sentence_id", "document_id", "text")
+]
+
+stopifnot(
+  identical(nrow(scraped_sentences), 22L),
+  identical(
+    scraped_sentences,
+    expected_job_sentences
+  )
+)
+
+knitr::kable(
+  head(scraped_sentences, 8),
+  col.names = c("Sentence ID", "Job ID", "Text"),
+  caption = "The first eight extracted job-detail sentences",
+  row.names = FALSE
+)
+```
+
+The exact comparison succeeds: all 22 sentences match the fixture in
+the same order. This check would stop the build if a selector silently dropped,
+duplicated, or reordered text.
+
+Both the HTML and expected table were written for this lesson, so the
+comparison tests parser behavior rather than independent truth. A live
+collection would need a separately captured audit sample.
+
+## A saved page is still incomplete evidence
+
+The archived HTML shows what was captured, not every posting that existed.
+Before scraping a live site, the team must check:
+
+1. the site's terms and robots policy;
+2. whether collection is lawful and expected in the relevant jurisdiction;
+3. whether personal or sensitive information appears;
+4. how often requests may be sent;
+5. whether page content is loaded later by JavaScript;
+6. which dates, filters, and geographic limits shaped the results; and
+7. how the original HTML and retrieval time will be preserved.
+
+The Robots Exclusion Protocol communicates crawler preferences. It is not a
+grant of legal permission, and permission does not settle every ethical
+question. A public page can still contain information that should not be
+collected or republished.
+
+## What to remember
+
+- Scraping turns page structure into data; it does not establish that the data
+  is true or representative.
+- Archive the source and record when it was collected.
+- Keep source IDs attached to extracted text.
+- Assert expected counts and content so selectors cannot fail silently.
+- Review terms, rate limits, privacy, and research ethics before live
+  collection.
+
+The team can now inspect 22 sentences without detaching them from the six
+notices. One source remains outside that table: a fictional training flyer
+saved as an image. That image shifts the investigation from HTML structure to
+OCR. Its source must still be preserved, and the extracted wording must be
+checked rather than treated as certain.
+
+## Sources
+
+- [rvest overview](https://rvest.tidyverse.org/)
+- [rvest selector documentation](https://rvest.tidyverse.org/reference/html_element.html)
+- [RFC 9309: Robots Exclusion Protocol](https://www.rfc-editor.org/rfc/rfc9309)
+- [Data Statements for Natural Language Processing](https://aclanthology.org/Q18-1041/)

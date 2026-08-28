@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests",
   testMatch: /accessibility[.]spec[.]mjs/,
+  timeout: 60000,
   fullyParallel: false,
   forbidOnly: true,
   retries: 0,

@@ -1,0 +1,29 @@
+sentence_id,document_id,source_line,text,reference_label,uncertainty,annotator_id,rationale,codebook_version,codebook_hash,derived,transformation
+s001,J001,1,Paid 12-week training is provided.,training,certain,team_reference,States an offered training program,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s002,J001,2,No prior data experience is required.,requirement,certain,team_reference,States an entry condition about experience,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s003,J001,3,Evening schedules are available.,schedule,certain,team_reference,States when work can occur,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s004,J001,4,Applicants need basic spreadsheet skills.,skill,certain,team_reference,Names an ability used in the job,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s005,J002,1,A high school diploma is required.,requirement,certain,team_reference,States an education requirement,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s006,J002,2,The employer pays for certification training.,training,certain,team_reference,States an offered training benefit,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s007,J002,3,Rotating night shifts are part of the job.,schedule,certain,team_reference,States when work occurs,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s008,J002,4,Workers must be able to lift 50 pounds.,requirement,certain,team_reference,States a physical condition for the job,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s009,J003,1,A portfolio is required.,requirement,certain,team_reference,States an application requirement,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s010,J003,2,Six months of experience is preferred.,requirement,certain,team_reference,States a preferred experience condition,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s011,J003,3,Remote work is available two days each week.,other,certain,team_reference,Describes work location rather than the four coded categories,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s012,J003,4,Each new hire receives a mentor.,training,certain,team_reference,States an offered learning support,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s013,J004,1,A medical records certificate is preferred.,requirement,needs_review,team_reference,Preference is the main claim despite the training-related noun,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s014,J004,2,The position uses a daytime schedule.,schedule,certain,team_reference,States when work occurs,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s015,J004,3,On-the-job training is provided.,training,certain,team_reference,States an offered training program,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s016,J005,1,This is a paid apprenticeship.,training,certain,team_reference,States an offered work-based learning program,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s017,J005,2,A valid driver's license is required.,requirement,certain,team_reference,States a license requirement,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s018,J005,3,The work is outdoors and includes local travel.,other,certain,team_reference,Describes setting and travel rather than the four coded categories,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s019,J006,1,Two years of customer service experience are required.,requirement,certain,team_reference,States an experience requirement,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s020,J006,2,Weekend shifts are required.,schedule,needs_review,team_reference,Schedule is the main claim despite required wording,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s021,J006,3,Product training is included.,training,certain,team_reference,States an offered training program,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s022,J006,4,Clear written communication is an essential skill.,skill,certain,team_reference,Names an ability used in the job,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s023,F001,1,RIVERTON SKILLS OPEN HOUSE,other,certain,team_reference,Event heading does not state a coded training detail,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s024,F001,2,DATA SUPPORT CERTIFICATE,other,needs_review,team_reference,A heading alone does not state that training is offered,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s025,F001,3,Paid training stipend,training,certain,team_reference,States financial support tied to training,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s026,F001,4,Evening classes,schedule,certain,team_reference,States when classes occur,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s027,F001,5,No prior experience required,requirement,certain,team_reference,States an entry condition about experience,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim
+s028,F001,6,Apply by October 15,other,certain,team_reference,States a deadline rather than the four coded categories,1.0.0,eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2,false,verbatim

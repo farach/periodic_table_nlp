@@ -32,9 +32,27 @@ document.addEventListener("DOMContentLoaded", () => {
     pageContents.setAttribute("aria-label", "On this page");
   }
 
+  document.querySelectorAll("main table").forEach((table) => {
+    const parent = table.parentElement;
+    if (
+      parent?.matches(
+        ".cell-output-display, .table-responsive, .table-scroll"
+      )
+    ) {
+      return;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "table-scroll";
+    parent.insertBefore(wrapper, table);
+    wrapper.appendChild(table);
+  });
+
   const makeScrollableOutputsFocusable = () => {
     document
-      .querySelectorAll(".cell-output-stdout > pre")
+      .querySelectorAll(
+        ".cell-output-display, .cell-output-stdout > pre, .table-scroll"
+      )
       .forEach((output) => {
         if (output.scrollWidth <= output.clientWidth) {
           return;
@@ -53,6 +71,47 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   window.requestAnimationFrame(makeScrollableOutputsFocusable);
+
+  const taskMap = document.querySelector("#nlp-task-map");
+  const mapButtons = document.querySelectorAll(
+    "[data-map-direction]"
+  );
+
+  if (taskMap && mapButtons.length > 0) {
+    const updateMapButtons = () => {
+      const maximum =
+        taskMap.scrollWidth - taskMap.clientWidth;
+
+      mapButtons.forEach((button) => {
+        const direction = Number(
+          button.dataset.mapDirection
+        );
+        button.disabled = direction < 0
+          ? taskMap.scrollLeft <= 20
+          : taskMap.scrollLeft >= maximum - 20;
+      });
+    };
+
+    mapButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const direction = Number(
+          button.dataset.mapDirection
+        );
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)"
+        ).matches;
+
+        taskMap.scrollBy({
+          left: direction * taskMap.clientWidth * 0.8,
+          behavior: reducedMotion ? "auto" : "smooth"
+        });
+      });
+    });
+
+    taskMap.addEventListener("scroll", updateMapButtons);
+    window.addEventListener("resize", updateMapButtons);
+    updateMapButtons();
+  }
 });
 
 let searchInvoker = null;

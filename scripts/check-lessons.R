@@ -1,8 +1,15 @@
 lesson_files <- sort(
-  list.files(
-    "1_source_data_loading",
-    pattern = "[.]qmd$",
-    full.names = TRUE
+  c(
+    list.files(
+      "1_source_data_loading",
+      pattern = "[.]qmd$",
+      full.names = TRUE
+    ),
+    list.files(
+      "2_training_data_generation",
+      pattern = "[.]qmd$",
+      full.names = TRUE
+    )
   )
 )
 
@@ -29,7 +36,10 @@ if (
     as.integer(review_manifest$task_number),
     seq_along(lesson_files)
   ) ||
-  !all(review_manifest$editorial_status == "review-ready") ||
+  !all(
+    review_manifest$editorial_status ==
+      "review-ready"
+  ) ||
   !all(grepl(
     "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
     review_manifest$last_researched
@@ -39,6 +49,19 @@ if (
     review_manifest$last_code_run
   )) ||
   !all(review_manifest$prose_scan == "passed") ||
+  !all(review_manifest$narrative_review == "passed") ||
+  !all(review_manifest$adversarial_review == "passed") ||
+  !all(
+    as.integer(review_manifest$adversarial_rounds) >= 1L
+  ) ||
+  !all(
+    review_manifest$automated_accessibility ==
+      "passed"
+  ) ||
+  !all(
+    review_manifest$manual_accessibility %in%
+      c("pending", "passed")
+  ) ||
   !all(
     review_manifest$human_approval %in% c("pending", "approved")
   ) ||
@@ -202,8 +225,7 @@ for (lesson_file in lesson_files) {
 
   output_file <- file.path(
     "_site",
-    "1_source_data_loading",
-    sub("[.]qmd$", ".html", basename(lesson_file))
+    sub("[.]qmd$", ".html", lesson_file)
   )
 
   if (dir.exists("_site")) {

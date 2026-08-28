@@ -1,0 +1,360 @@
+---
+title: "Turning reading decisions into labels"
+subtitle: "Create a manual annotation codebook for workforce text"
+author: "Alex Farach"
+description: "Learn how people label workforce sentences without pretending that judgment is automatic or neutral."
+categories: [training data, annotation, workforce research]
+---
+
+The archived job page and checked flyer transcript leave the fictional
+Riverton Workforce Lab with 28 text units. To make them usable, the team must
+separate training offers, application requirements, schedules, named skills,
+and text that fits none of those categories. These distinctions affect which
+information a worker would find while comparing notices, but the notices do
+not label themselves.
+
+A computer cannot learn these categories until people define them. **Manual
+annotation** is the work of reading an item and assigning a label according to
+written instructions. The hard part is not typing the label. It is deciding
+what the label means and applying that meaning consistently. The task records
+what a sentence explicitly says; it does not decide whether a worker qualifies
+or whether a program is a good option.
+
+::: {.callout-note}
+The workforce text, labels, and research team are fictional. The examples were
+created to expose ordinary annotation choices without using worker or applicant
+records.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define an annotation unit and label set;
+- write rules for what each label includes and excludes;
+- create a versioned codebook with foundryR;
+- inspect ambiguous cases instead of hiding them; and
+- explain why a human label is a documented judgment, not automatic truth.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Decide what one label describes
+
+The annotation unit is one sentence. That keeps each decision small enough to
+check, while the `document_id` preserves the job posting or flyer that supplied
+the text.
+
+```{r}
+workforce_sentences <- read.csv(
+  "data/workforce/workforce_sentences.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+
+allowed_labels <- c(
+  "training",
+  "requirement",
+  "schedule",
+  "skill",
+  "other"
+)
+
+stopifnot(
+  identical(nrow(workforce_sentences), 28L),
+  identical(
+    workforce_sentences$sentence_id,
+    sprintf("s%03d", 1:28)
+  ),
+  all(
+    workforce_sentences$reference_label %in%
+      allowed_labels
+  ),
+  !anyDuplicated(workforce_sentences$sentence_id),
+  all(workforce_sentences$derived == "false"),
+  all(workforce_sentences$transformation == "verbatim")
+)
+
+knitr::kable(
+  head(
+    workforce_sentences[
+      c(
+        "sentence_id",
+        "document_id",
+        "text",
+        "reference_label",
+        "uncertainty"
+      )
+    ],
+    8
+  ),
+  col.names = c(
+    "Sentence ID",
+    "Document ID",
+    "Text",
+    "Reference label",
+    "Uncertainty"
+  ),
+  caption = "The first eight manually labeled sentences",
+  row.names = FALSE
+)
+```
+
+The file calls the reviewed result a **reference label**, not a ground-truth
+label. The label records how this codebook was applied. Another defensible
+codebook could divide the concepts differently.
+
+The six flyer rows match its six-line checked transcript. No wording has been
+expanded or interpreted in the annotation file.
+
+```{r}
+flyer_rows <- workforce_sentences[
+  workforce_sentences$document_id == "F001",
+]
+flyer_transcript <- readLines(
+  paste0(
+    "data/workforce/",
+    "training-flyer-ground-truth.txt"
+  ),
+  encoding = "UTF-8",
+  warn = TRUE
+)
+
+stopifnot(
+  identical(nrow(flyer_rows), 6L),
+  identical(flyer_rows$source_line, as.character(1:6)),
+  identical(flyer_rows$text, flyer_transcript)
+)
+
+knitr::kable(
+  flyer_rows[
+    c(
+      "sentence_id",
+      "source_line",
+      "text",
+      "reference_label"
+    )
+  ],
+  col.names = c(
+    "Sentence ID",
+    "Flyer line",
+    "Verbatim text",
+    "Reference label"
+  ),
+  caption = "Row-level lineage from the flyer transcript",
+  row.names = FALSE
+)
+```
+
+## Write the codebook before scaling up
+
+A **codebook** records the label definitions, instructions, examples, and
+version. The complete instrument lives in `R/workforce-codebook.R`. Its rules
+are:
+
+- `training`: the sentence offers or describes learning, mentoring,
+  certification training, or an apprenticeship;
+- `requirement`: the sentence states or prefers experience, education,
+  credentials, a license, a portfolio, or a physical condition;
+- `schedule`: the sentence describes when work or classes occur;
+- `skill`: the sentence names an ability used in the work; and
+- `other`: none of the four definitions applies; headings, deadlines,
+  location, work setting, and travel belong here unless the sentence
+  explicitly states another category.
+
+The sentence's main explicit claim receives one label. Reviewers do not infer a
+training offer from a job title or assume that a preferred credential is
+mandatory. A required shift receives `schedule` because timing is the main
+claim. Reviewers mark `needs_review` when more than one label remains
+defensible.
+
+foundryR can store the codebook as a versioned object with a strict label
+schema and a content hash.
+
+```{r}
+source("R/workforce-codebook.R")
+annotation_codebook <- workforce_codebook()
+
+stopifnot(
+  inherits(
+    annotation_codebook,
+    "foundry_codebook"
+  ),
+  identical(
+    annotation_codebook$version,
+    "1.0.0"
+  ),
+  identical(
+    nchar(annotation_codebook$hash),
+    64L
+  ),
+  identical(
+    unclass(
+      annotation_codebook$schema$
+        properties$label$enum
+    ),
+    allowed_labels
+  ),
+  identical(
+    unclass(
+      annotation_codebook$schema$
+        properties$uncertainty$enum
+    ),
+    c("certain", "needs_review")
+  ),
+  identical(
+    length(annotation_codebook$examples),
+    7L
+  ),
+  all(
+    workforce_sentences$codebook_version ==
+      annotation_codebook$version
+  ),
+  all(
+    workforce_sentences$codebook_hash ==
+      annotation_codebook$hash
+  ),
+  all(nzchar(workforce_sentences$rationale)),
+  all(
+    workforce_sentences$uncertainty %in%
+      c("certain", "needs_review")
+  )
+)
+
+annotation_codebook
+```
+
+The printed hash changes when the instructions, schema, examples, or version
+changes. This makes two annotation runs easier to compare. The code above does
+not call an AI service; foundryR is being used to define and fingerprint the
+measurement instrument.
+
+## Count labels without interpreting the count
+
+A label distribution can expose a missing category or a data-entry problem.
+It cannot establish how common these ideas are across the real labor market.
+
+```{r}
+label_counts <- as.data.frame(
+  table(
+    factor(
+      workforce_sentences$reference_label,
+      levels = allowed_labels
+    )
+  )
+)
+names(label_counts) <- c("label", "sentences")
+
+stopifnot(
+  identical(sum(label_counts$sentences), 28L),
+  identical(
+    as.integer(label_counts$sentences),
+    c(7L, 9L, 5L, 2L, 5L)
+  )
+)
+
+knitr::kable(
+  label_counts,
+  col.names = c("Reference label", "Sentences"),
+  caption = "Label counts in the teaching dataset",
+  row.names = FALSE
+)
+```
+
+The counts describe this designed example only. They were not sampled from all
+jobs in Riverton or from any real population.
+
+## Keep ambiguity visible
+
+Sentence `s013` mentions a certificate, a word that also appears in training
+offers. Its main claim is that a certificate is preferred, so version 1.0.0 of
+the codebook labels it as a requirement.
+
+```{r}
+ambiguous_case <- workforce_sentences[
+  workforce_sentences$sentence_id == "s013",
+]
+
+stopifnot(
+  identical(nrow(ambiguous_case), 1L),
+  identical(
+    ambiguous_case$reference_label,
+    "requirement"
+  ),
+  grepl(
+    "certificate",
+    ambiguous_case$text,
+    fixed = TRUE
+  )
+)
+
+knitr::kable(
+  ambiguous_case[
+    c(
+      "sentence_id",
+      "document_id",
+      "text",
+      "reference_label",
+      "uncertainty",
+      "rationale"
+    )
+  ],
+  col.names = c(
+    "Sentence ID",
+    "Document ID",
+    "Text",
+    "Reference label",
+    "Uncertainty",
+    "Rationale"
+  ),
+  caption = "A sentence that needs the codebook rule",
+  row.names = FALSE
+)
+```
+
+A reviewer who chose `training` may have followed a defensible reading rather
+than worked carelessly. The team should record the disagreement, discuss the
+rule, and issue a new codebook version if the definition changes. Overwriting
+the label would erase the evidence needed to improve the instrument.
+
+## Protect the people doing the work
+
+Manual annotation can involve sensitive, repetitive, or distressing material.
+Before assigning work:
+
+1. explain the purpose and allowed use of the data;
+2. remove personal information that reviewers do not need;
+3. pay fairly for reading, training, and disagreement review;
+4. give reviewers a way to skip harmful material;
+5. separate quality feedback from surveillance; and
+6. record which languages and lived experience the task requires.
+
+Expertise depends on the question. A worker, career counselor, employer, and
+labor researcher may interpret the same sentence differently. Those
+perspectives should be designed into the study rather than treated as noise.
+
+## What to remember
+
+- Annotation labels are measurements created from written rules.
+- One sentence per row keeps the decision small and traceable.
+- A codebook needs a version, examples, and a change record.
+- Ambiguity should lead to review, not silent correction.
+- Human labels require ethical working conditions and relevant expertise.
+
+The Lab has defined the categories and preserved its reading decisions. To test
+selection without exposing known answers, the active-learning exercise starts
+with five complete job postings and hides two other documents from a small
+model.
+
+## Sources
+
+- [Data Statements for Natural Language Processing](https://aclanthology.org/Q18-1041/)
+- [Datasheets for Datasets](https://doi.org/10.1145/3458723)
+- [Data Collection and Quality Challenges in Deep Learning](https://arxiv.org/abs/2002.11821)
+- [foundryR codebook documentation](https://farach.github.io/foundryR/reference/foundry_codebook.html)

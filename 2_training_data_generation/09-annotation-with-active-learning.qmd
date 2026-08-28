@@ -1,0 +1,472 @@
+---
+title: "Choosing which examples to label next"
+subtitle: "Use active learning without confusing uncertainty with truth"
+author: "Alex Farach"
+description: "Learn how a small model can rank unlabeled workforce sentences for human review."
+categories: [training data, active learning, workforce research]
+---
+
+The Riverton Workforce Lab has a codebook for training, requirements,
+schedules, skills, and other text. For this exercise, five complete job
+postings form the labeled starting set. A sixth posting and the flyer form an
+unlabeled pool. The team could
+read the pool in file order. Instead, it tests whether a small model can point
+to cases that its current evidence does not separate cleanly.
+
+**Active learning** is a loop in which a model helps choose the next items for
+people to label. The model does not supply the answer. It points to examples
+that meet a selection rule, and a person applies the codebook. Here, that rule
+measures uncertainty about `training`, not which sentence matters most to a
+worker.
+
+::: {.callout-note}
+The sentences and research team are fictional. The model is deliberately small
+and exists to make the selection logic visible; it is not suitable for
+workforce decisions.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- separate an initial labeled set from an annotation pool;
+- explain uncertainty sampling;
+- rank items by distance from a 50% model score;
+- reveal labels only after selection; and
+- name the biases that active learning can introduce.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Hide the answers in the annotation pool
+
+The teaching file contains reviewed labels so the lesson can check its work.
+During selection, the model receives labels from documents `J001` through
+`J005`. The complete `J006` posting and `F001` flyer form the annotation pool.
+Keeping documents intact avoids training on one part of a posting while
+selecting another part from the same source.
+
+```{r}
+all_sentences <- read.csv(
+  "data/workforce/workforce_sentences.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+
+annotation_view <- all_sentences[
+  c(
+    "sentence_id",
+    "document_id",
+    "text",
+    "reference_label"
+  )
+]
+initial_labels <- annotation_view[
+  annotation_view$document_id %in%
+    sprintf("J%03d", 1:5),
+]
+annotation_pool <- annotation_view[
+  annotation_view$document_id %in%
+    c("J006", "F001"),
+  c("sentence_id", "document_id", "text")
+]
+held_back_labels <- annotation_view[
+  annotation_view$document_id %in%
+    c("J006", "F001"),
+  c("sentence_id", "reference_label")
+]
+
+stopifnot(
+  identical(nrow(initial_labels), 18L),
+  identical(nrow(annotation_pool), 10L),
+  !("reference_label" %in% names(annotation_pool)),
+  identical(
+    annotation_pool$sentence_id,
+    sprintf("s%03d", 19:28)
+  ),
+  length(
+    intersect(
+      initial_labels$document_id,
+      annotation_pool$document_id
+    )
+  ) == 0L
+)
+
+knitr::kable(
+  annotation_pool,
+  col.names = c(
+    "Sentence ID",
+    "Document ID",
+    "Text"
+  ),
+  caption = "Ten text units waiting for annotation",
+  row.names = FALSE
+)
+```
+
+The labels are stored separately and do not enter the selection calculation.
+This prevents the lesson from using an answer that would be unavailable in a
+real annotation round.
+
+## Fit a small keyword model
+
+The example uses a **Bernoulli naive Bayes** model. It records whether selected
+terms appear, then compares how often those terms occur in training and
+non-training sentences. Half-count smoothing prevents an observed term from
+receiving a conditional probability of exactly zero or one.
+
+This model is transparent enough to inspect, but its assumptions are strong.
+It treats the selected terms as conditionally independent and ignores word
+order, context, and most of the sentence.
+
+The candidate terms come from the codebook and labeled examples, not from
+reading the held-back pool. The code removes any candidate never observed in
+the labeled set. Otherwise add-one smoothing could make an unseen term appear
+more common in the smaller class merely because its denominator is smaller.
+
+```{r}
+candidate_keywords <- c(
+  "training",
+  "certificate",
+  "apprenticeship",
+  "mentor",
+  "stipend",
+  "classes",
+  "required",
+  "preferred",
+  "license",
+  "diploma",
+  "portfolio",
+  "shift",
+  "schedule",
+  "skill",
+  "spreadsheet",
+  "communication",
+  "experience"
+)
+
+make_features <- function(text, terms) {
+  features <- vapply(
+    terms,
+    function(keyword) {
+      grepl(
+        paste0("\\b", keyword, "\\w*\\b"),
+        tolower(text),
+        perl = TRUE
+      )
+    },
+    logical(length(text))
+  )
+
+  if (is.null(dim(features))) {
+    features <- matrix(
+      features,
+      ncol = length(terms)
+    )
+  }
+
+  colnames(features) <- terms
+  features
+}
+
+candidate_features <- make_features(
+  initial_labels$text,
+  candidate_keywords
+)
+keywords <- candidate_keywords[
+  colSums(candidate_features) > 0L
+]
+training_features <- candidate_features[
+  ,
+  keywords,
+  drop = FALSE
+]
+is_training <- initial_labels$reference_label ==
+  "training"
+
+smoothing <- 0.5
+training_prior <- (
+  sum(is_training) + smoothing
+) / (
+  length(is_training) + 2 * smoothing
+)
+training_term_count <- colSums(
+  training_features[is_training, , drop = FALSE]
+)
+other_term_count <- colSums(
+  training_features[!is_training, , drop = FALSE]
+)
+empirical_rate_training <- training_term_count /
+  sum(is_training)
+empirical_rate_other <- other_term_count /
+  sum(!is_training)
+term_rate_training <- (
+  training_term_count + smoothing
+) / (
+  sum(is_training) + 2 * smoothing
+)
+term_rate_other <- (
+  other_term_count + smoothing
+) / (
+  sum(!is_training) + 2 * smoothing
+)
+direction_is_preserved <- sign(
+  term_rate_training - term_rate_other
+) == sign(
+  empirical_rate_training -
+    empirical_rate_other
+)
+
+score_training <- function(text) {
+  features <- make_features(text, keywords)
+  log_odds <- log(
+    training_prior / (1 - training_prior)
+  ) +
+    rowSums(
+      sweep(
+        features,
+        2,
+        log(term_rate_training / term_rate_other),
+        "*"
+      ) +
+        sweep(
+          !features,
+          2,
+          log(
+            (1 - term_rate_training) /
+              (1 - term_rate_other)
+          ),
+          "*"
+        )
+    )
+
+  stats::plogis(log_odds)
+}
+
+training_scores <- score_training(
+  annotation_pool$text
+)
+
+stopifnot(
+  identical(
+    keywords,
+    c(
+      "training",
+      "certificate",
+      "apprenticeship",
+      "mentor",
+      "required",
+      "preferred",
+      "license",
+      "diploma",
+      "portfolio",
+      "shift",
+      "schedule",
+      "skill",
+      "spreadsheet",
+      "experience"
+    )
+  ),
+  identical(length(training_scores), 10L),
+  all(direction_is_preserved),
+  all(training_scores > 0),
+  all(training_scores < 1)
+)
+
+knitr::kable(
+  data.frame(
+    term = keywords,
+    training_count = training_term_count,
+    other_count = other_term_count,
+    smoothed_training_rate = round(
+      term_rate_training,
+      3
+    ),
+    smoothed_other_rate = round(
+      term_rate_other,
+      3
+    )
+  ),
+  col.names = c(
+    "Term",
+    "Training rows",
+    "Other rows",
+    "Smoothed training rate",
+    "Smoothed other rate"
+  ),
+  caption = "Term evidence from the 18 labeled sentences",
+  row.names = FALSE
+)
+```
+
+The half-count smoothing keeps probabilities away from zero and one. The
+assertion also requires each smoothed difference to point in the same direction
+as the observed difference. A term never seen in a training row cannot become
+positive evidence for training merely because that class is smaller.
+
+The score used next is the model's estimate under this small dataset and model.
+It is not a validated probability that the label is correct.
+
+## Select the closest scores
+
+**Uncertainty sampling** often selects scores closest to 0.5 in a binary task.
+The model is least decisive there. We calculate each score's distance from 0.5
+and choose the two smallest distances. The model vocabulary contains only
+terms observed in the labeled documents. Words found only in the pool cannot
+acquire artificial evidence through smoothing.
+
+```{r}
+selection_table <- data.frame(
+  sentence_id = annotation_pool$sentence_id,
+  text = annotation_pool$text,
+  training_score = training_scores,
+  distance_from_half = abs(
+    training_scores - 0.5
+  )
+)
+selection_table <- selection_table[
+  order(selection_table$distance_from_half),
+]
+selected_for_review <- head(selection_table, 2)
+
+stopifnot(
+  identical(
+    selected_for_review$sentence_id,
+    c("s026", "s028")
+  ),
+  all(diff(
+    selection_table$distance_from_half
+  ) >= 0)
+)
+
+knitr::kable(
+  transform(
+    selection_table,
+    training_score = round(training_score, 3),
+    distance_from_half = round(
+      distance_from_half,
+      3
+    )
+  ),
+  col.names = c(
+    "Sentence ID",
+    "Text",
+    "Training score",
+    "Distance from 0.5"
+  ),
+  caption = "Annotation candidates ordered by model uncertainty",
+  row.names = FALSE
+)
+```
+
+The first two rows are the next annotation candidates. Neither contains a
+feature seen in the labeled set, so both receive the same score. This is a
+useful failure of uncertainty-only selection: a score can reflect missing
+vocabulary rather than a subtle boundary between labels.
+
+## People still assign the labels
+
+Only after selection do we join the held-back reference labels. This simulates
+the annotator returning completed work.
+
+```{r}
+reviewed_selection <- merge(
+  selected_for_review[
+    c("sentence_id", "text", "training_score")
+  ],
+  held_back_labels,
+  by = "sentence_id",
+  sort = FALSE
+)
+reviewed_selection <- reviewed_selection[
+  match(
+    selected_for_review$sentence_id,
+    reviewed_selection$sentence_id
+  ),
+]
+
+newly_labeled <- merge(
+  annotation_pool,
+  held_back_labels,
+  by = "sentence_id",
+  sort = FALSE
+)
+newly_labeled <- newly_labeled[
+  match(
+    selected_for_review$sentence_id,
+    newly_labeled$sentence_id
+  ),
+]
+updated_labels <- rbind(
+  initial_labels,
+  newly_labeled
+)
+
+stopifnot(
+  identical(
+    reviewed_selection$reference_label,
+    c("schedule", "other")
+  ),
+  identical(nrow(updated_labels), 20L)
+)
+
+knitr::kable(
+  reviewed_selection,
+  col.names = c(
+    "Sentence ID",
+    "Text",
+    "Training score",
+    "Human-applied label"
+  ),
+  caption = "The two selected sentences after annotation",
+  digits = 3,
+  row.names = FALSE
+)
+```
+
+The two sentences receive `schedule` and `other`. Human review adds distinctions
+that the binary training detector cannot express. The tie shows why a practical
+selection policy may combine uncertainty with diversity and explicit coverage
+goals.
+
+## Uncertainty is only one selection rule
+
+A model can be confidently wrong. Selecting only uncertain examples may also
+overlook:
+
+- communities or languages absent from the initial labels;
+- rare cases the model scores with false confidence;
+- duplicate examples that consume the annotation budget;
+- important harms that occur infrequently; and
+- examples far from the model's training distribution.
+
+A stronger plan combines uncertainty with random audit samples, diversity,
+coverage targets, and deliberate tests of known failure modes. Keep a
+document-disjoint evaluation set that active learning never uses for feature
+design, selection, or training.
+
+## What to remember
+
+- Active learning chooses what people label next; it does not replace them.
+- Hide pool labels until after selection.
+- A score near 0.5 is uncertain only under the current model.
+- Confidence is not the same as correctness or social importance.
+- Audit random, rare, and underrepresented cases alongside uncertainty.
+
+The selection trail accounts for two new reviews, but it does not broaden what
+the fictional notices cover. Selection cannot repair source coverage. The Lab
+therefore inspects three outside resources and asks whether any can answer the
+same questions before their records are combined.
+
+## Sources
+
+- [Active Learning Literature Survey](https://minds.wisconsin.edu/handle/1793/60660)
+- [A Sequential Algorithm for Training Text Classifiers](https://doi.org/10.1145/188490.188495)
+- [A Survey of Active Learning for Text Classification](https://arxiv.org/abs/2007.14003)
+- [Data Statements for Natural Language Processing](https://aclanthology.org/Q18-1041/)

@@ -1,0 +1,4 @@
+artifact,width_pixels,height_pixels,md5,source,rendering_note
+training-flyer.png,1200,800,5dcfe9b824159b34c95b1d11e861ed54,training-flyer-ground-truth.txt,Base R PNG device with HersheySans vector font
+training-flyer-ground-truth.txt,,,eef62f65018467025d495f3fc8605191,author-created,Canonical six-line fictional flyer text normalized with LF separators before hashing
+training-flyer-ocr-5.3.2.txt,,,eef62f65018467025d495f3fc8605191,training-flyer.png,Raw OCR output recorded with native Tesseract 5.3.2 and English language data

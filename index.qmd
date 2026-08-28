@@ -4,6 +4,7 @@ description: "A visual map of practical, evidence-based lessons about how comput
 page-layout: full
 toc: false
 sidebar: false
+body-classes: task-map-page
 ---
 
 An accent mark disappears from a name. A search misses the message it was
@@ -86,7 +87,7 @@ stopifnot(
     as.integer(table(task_map$group_id)),
     expected_group_sizes
   ),
-  identical(which(has_lesson), 1:5),
+  identical(which(has_lesson), 1:13),
   identical(length(unique(task_map$symbol)), 81L),
   all(task_map$status %in% c("available", "planned")),
   all(nzchar(task_map$lesson_path[has_lesson])),
@@ -132,18 +133,48 @@ cat(
   sep = ""
 )
 
+cat('<div class="task-map-stage-key" aria-label="Task stages">')
+for (stage in names(stage_labels)) {
+  cat(
+    sprintf(
+      paste0(
+        '<span class="task-map-stage-key-item stage-%s">',
+        '<span class="task-map-stage-swatch" aria-hidden="true"></span>',
+        '%s</span>'
+      ),
+      escape_attribute(stage),
+      escape_text(stage_labels[[stage]])
+    )
+  )
+}
+cat('</div>')
+
 cat(
   paste0(
     '<p class="task-map-instructions" id="task-map-instructions">',
     'Select a solid-bordered tile to open its lesson. ',
-    'Dashed tiles are planned. On a small screen, scroll the map horizontally.',
+    'Dashed tiles are planned. If the map is wider than the window, ',
+    'use the buttons, arrow keys, or horizontal scrolling.',
     '</p>'
   )
 )
 
 cat(
   paste0(
-    '<div class="periodic-scroll" tabindex="0" role="region" ',
+    '<div class="task-map-scroll-controls" ',
+    'aria-label="Move through task groups">',
+    '<button type="button" data-map-direction="-1" ',
+    'aria-controls="nlp-task-map">Earlier groups</button>',
+    '<button type="button" data-map-direction="1" ',
+    'aria-controls="nlp-task-map">Later groups</button>',
+    '</div>'
+  )
+)
+
+cat(
+  paste0(
+    '<div class="periodic-scroll" id="nlp-task-map" ',
+    'tabindex="0" role="region" ',
     'aria-label="Periodic table of NLP tasks" ',
     'aria-describedby="task-map-instructions">',
     '<div class="periodic-table">'
@@ -192,6 +223,11 @@ for (group_id in sort(unique(task_map$group_id))) {
     task <- group_rows[row_number, ]
     available <- identical(task$status, "available")
     status <- if (available) "Read lesson" else "Planned"
+    status_class <- if (available) {
+      "element-status"
+    } else {
+      "element-status visually-hidden"
+    }
     label <- sprintf(
       "Task %d. %s. Item type: %s. %s.",
       task$task_number,
@@ -205,12 +241,13 @@ for (group_id in sort(unique(task_map$group_id))) {
         '<span class="element-kind">%s</span>',
         '<span class="element-symbol" aria-hidden="true">%s</span>',
         '<span class="element-name">%s</span>',
-        '<span class="element-status">%s</span>'
+        '<span class="%s">%s</span>'
       ),
       task$task_number,
       escape_text(task$item_type),
       escape_text(task$symbol),
       escape_text(task$title),
+      status_class,
       status
     )
 
@@ -257,7 +294,7 @@ for (group_id in sort(unique(task_map$group_id))) {
 cat('</div></div>')
 ```
 
-The first five tiles open lessons. Planned tiles stay visible so the shape of
+The first 13 tiles open lessons. Planned tiles stay visible so the shape of
 the field is never hidden behind a short menu. **Available** means that a lesson
 exists and its automated checks passed. It does not certify scientific
 consensus or replace human approval.
