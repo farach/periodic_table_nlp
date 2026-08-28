@@ -10,6 +10,10 @@
   merged lessons 6-13, the workforce throughline, author-package integrations,
   additional adversarial review, and development notes in commit
   [`840d6a1`](https://github.com/farach/periodic_table_nlp/commit/840d6a1f1547ca8b86ac15b9abf439809e00d111).
+- [Pull request 3](https://github.com/farach/periodic_table_nlp/pull/3)
+  rewrote every lesson in the tidyverse and rebuilt the home page around the
+  task map in commit
+  [`c0943e3`](https://github.com/farach/periodic_table_nlp/commit/c0943e3).
 
 ## Reader-facing work
 
