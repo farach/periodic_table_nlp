@@ -43,6 +43,11 @@ lesson.
 
 - All R chunks execute during every clean render with warnings treated as
   errors and important expectations asserted.
+- Lesson code is tidyverse-first. `readr` reads with explicit column types,
+  `dplyr` and `tidyr` reshape, `purrr` iterates, and `stringr` handles strings.
+  Base R stays only where it is the subject of a lesson or has no equivalent.
+- `scripts/run-lesson.R` executes one lesson's chunks in order and fails on any
+  warning, giving a fast check between full renders.
 - The codebook hash has mutation tests for instructions, schema, examples, and
   version.
 - Source HTML, image, transcript, API, and codebook fixtures have stored
@@ -50,6 +55,13 @@ lesson.
 - Prose passes separate residue and style-pattern scans.
 - Tasks 6-13 received one narrative review and three independent adversarial
   logic reviews. High-confidence findings were corrected.
+- The tidyverse rewrite was attacked by an independent hostile code reviewer.
+  Two blocking findings were fixed: package-loading chunks whose assertions
+  could not fail, and an assertion silently disabled by readr's default
+  treatment of an empty field as `NA`.
+- The home page argument was attacked by an independent hostile reviewer across
+  three rounds. It now rests on reasoning rather than on capability studies,
+  which date quickly, and it makes no claim that would need a citation.
 - Every public page is included in axe-core, keyboard, reflow, caption, forced
   colors, and reduced-motion tests.
 

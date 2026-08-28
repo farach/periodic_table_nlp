@@ -34,7 +34,7 @@ By the end of this lesson, you will be able to:
 - define an annotation unit and label set;
 - write rules for what each label includes and excludes;
 - create a versioned codebook with foundryR;
-- inspect ambiguous cases instead of hiding them; and
+- inspect ambiguous cases rather than hiding them; and
 - explain why a human label is a documented judgment, not automatic truth.
 :::
 
@@ -49,13 +49,31 @@ stopifnot(identical(getOption("warn"), 2L))
 
 The annotation unit is one sentence. That keeps each decision small enough to
 check, while the `document_id` preserves the job posting or flyer that supplied
-the text.
+the text. The next chunk loads readr for files, dplyr and tibble for tables,
+and stringr for text checks, then reads the CSV into a tibble.
 
 ```{r}
-workforce_sentences <- read.csv(
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+
+workforce_sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
 )
 
 allowed_labels <- c(
@@ -66,34 +84,30 @@ allowed_labels <- c(
   "other"
 )
 
+first_sentences <- workforce_sentences |>
+  select(
+    sentence_id,
+    document_id,
+    text,
+    reference_label,
+    uncertainty
+  ) |>
+  slice_head(n = 8)
+
 stopifnot(
   identical(nrow(workforce_sentences), 28L),
   identical(
     workforce_sentences$sentence_id,
     sprintf("s%03d", 1:28)
   ),
-  all(
-    workforce_sentences$reference_label %in%
-      allowed_labels
-  ),
+  all(workforce_sentences$reference_label %in% allowed_labels),
   !anyDuplicated(workforce_sentences$sentence_id),
   all(workforce_sentences$derived == "false"),
   all(workforce_sentences$transformation == "verbatim")
 )
 
 knitr::kable(
-  head(
-    workforce_sentences[
-      c(
-        "sentence_id",
-        "document_id",
-        "text",
-        "reference_label",
-        "uncertainty"
-      )
-    ],
-    8
-  ),
+  first_sentences,
   col.names = c(
     "Sentence ID",
     "Document ID",
@@ -114,33 +128,27 @@ The six flyer rows match its six-line checked transcript. No wording has been
 expanded or interpreted in the annotation file.
 
 ```{r}
-flyer_rows <- workforce_sentences[
-  workforce_sentences$document_id == "F001",
-]
-flyer_transcript <- readLines(
-  paste0(
-    "data/workforce/",
-    "training-flyer-ground-truth.txt"
-  ),
-  encoding = "UTF-8",
-  warn = TRUE
+flyer_rows <- workforce_sentences |>
+  filter(document_id == "F001")
+flyer_transcript <- read_lines(
+  "data/workforce/training-flyer-ground-truth.txt"
 )
 
 stopifnot(
   identical(nrow(flyer_rows), 6L),
+  identical(length(flyer_transcript), 6L),
   identical(flyer_rows$source_line, as.character(1:6)),
   identical(flyer_rows$text, flyer_transcript)
 )
 
 knitr::kable(
-  flyer_rows[
-    c(
-      "sentence_id",
-      "source_line",
-      "text",
-      "reference_label"
-    )
-  ],
+  flyer_rows |>
+    select(
+      sentence_id,
+      source_line,
+      text,
+      reference_label
+    ),
   col.names = c(
     "Sentence ID",
     "Flyer line",
@@ -191,7 +199,7 @@ stopifnot(
     "1.0.0"
   ),
   identical(
-    nchar(annotation_codebook$hash),
+    str_length(annotation_codebook$hash),
     64L
   ),
   identical(
@@ -212,19 +220,10 @@ stopifnot(
     length(annotation_codebook$examples),
     7L
   ),
-  all(
-    workforce_sentences$codebook_version ==
-      annotation_codebook$version
-  ),
-  all(
-    workforce_sentences$codebook_hash ==
-      annotation_codebook$hash
-  ),
-  all(nzchar(workforce_sentences$rationale)),
-  all(
-    workforce_sentences$uncertainty %in%
-      c("certain", "needs_review")
-  )
+  all(workforce_sentences$codebook_version == annotation_codebook$version),
+  all(workforce_sentences$codebook_hash == annotation_codebook$hash),
+  all(str_length(workforce_sentences$rationale) > 0),
+  all(workforce_sentences$uncertainty %in% c("certain", "needs_review"))
 )
 
 annotation_codebook
@@ -232,8 +231,8 @@ annotation_codebook
 
 The printed hash changes when the instructions, schema, examples, or version
 changes. This makes two annotation runs easier to compare. The code above does
-not call an AI service; foundryR is being used to define and fingerprint the
-measurement instrument.
+not call an AI service; foundryR defines and fingerprints the measurement
+instrument.
 
 ## Count labels without interpreting the count
 
@@ -241,15 +240,18 @@ A label distribution can expose a missing category or a data-entry problem.
 It cannot establish how common these ideas are across the real labor market.
 
 ```{r}
-label_counts <- as.data.frame(
-  table(
-    factor(
-      workforce_sentences$reference_label,
+label_counts <- workforce_sentences |>
+  mutate(
+    reference_label = factor(
+      reference_label,
       levels = allowed_labels
     )
+  ) |>
+  count(reference_label, name = "sentences", .drop = FALSE) |>
+  transmute(
+    label = as.character(reference_label),
+    sentences
   )
-)
-names(label_counts) <- c("label", "sentences")
 
 stopifnot(
   identical(sum(label_counts$sentences), 28L),
@@ -277,34 +279,25 @@ offers. Its main claim is that a certificate is preferred, so version 1.0.0 of
 the codebook labels it as a requirement.
 
 ```{r}
-ambiguous_case <- workforce_sentences[
-  workforce_sentences$sentence_id == "s013",
-]
+ambiguous_case <- workforce_sentences |>
+  filter(sentence_id == "s013")
 
 stopifnot(
   identical(nrow(ambiguous_case), 1L),
-  identical(
-    ambiguous_case$reference_label,
-    "requirement"
-  ),
-  grepl(
-    "certificate",
-    ambiguous_case$text,
-    fixed = TRUE
-  )
+  identical(ambiguous_case$reference_label, "requirement"),
+  str_detect(ambiguous_case$text, fixed("certificate"))
 )
 
 knitr::kable(
-  ambiguous_case[
-    c(
-      "sentence_id",
-      "document_id",
-      "text",
-      "reference_label",
-      "uncertainty",
-      "rationale"
-    )
-  ],
+  ambiguous_case |>
+    select(
+      sentence_id,
+      document_id,
+      text,
+      reference_label,
+      uncertainty,
+      rationale
+    ),
   col.names = c(
     "Sentence ID",
     "Document ID",

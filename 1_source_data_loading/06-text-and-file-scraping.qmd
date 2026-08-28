@@ -41,6 +41,8 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
+The first code chunk loads the packages needed to read the archived page, extract HTML fields, and build tibbles. A tibble is a table that prints its size and each column's type.
+
 ## Begin with an archived page
 
 Live websites change. A saved source file lets another researcher inspect the
@@ -48,26 +50,39 @@ same page later. The team records the file path, size, and fingerprint before
 extracting anything.
 
 ```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(digest)
+library(rvest)
+
 job_page_path <- "data/workforce/job-board.html"
-job_page_lines <- readLines(
-  job_page_path,
-  encoding = "UTF-8",
-  warn = TRUE
-)
+job_page_lines <- read_lines(job_page_path)
 job_page_fingerprint <- digest::digest(
   paste(job_page_lines, collapse = "\n"),
   algo = "md5",
   serialize = FALSE
 )
-job_page_metadata <- read.csv(
+job_page_metadata <- read_csv(
   "data/workforce/job-board-metadata.csv",
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    source_file = col_character(),
+    created_for_lesson = col_character(),
+    retrieval_status = col_character(),
+    records = col_character(),
+    md5 = col_character(),
+    rights_note = col_character()
+  )
 )
+job_page_size <- file.info(job_page_path)$size
 
 stopifnot(
   file.exists(job_page_path),
-  file.info(job_page_path)$size > 1000,
+  job_page_size > 1000,
+  identical(length(job_page_lines), 82L),
+  inherits(job_page_metadata, "tbl_df"),
   identical(nrow(job_page_metadata), 1L),
   identical(
     job_page_fingerprint,
@@ -77,15 +92,15 @@ stopifnot(
     job_page_metadata$retrieval_status,
     "synthetic archived page"
   ),
-  grepl(
-    "^[0-9a-f]{32}$",
-    job_page_fingerprint
+  str_detect(
+    job_page_fingerprint,
+    "^[0-9a-f]{32}$"
   )
 )
 
-data.frame(
+tibble(
   source_file = job_page_path,
-  bytes = file.info(job_page_path)$size,
+  bytes = job_page_size,
   fingerprint = job_page_fingerprint
 )
 ```
@@ -125,21 +140,20 @@ small helper below extracts one text field from each card.
 
 ```{r}
 card_text <- function(cards, selector) {
-  vapply(
+  map_chr(
     cards,
-    function(card) {
+    \(card) {
       elements <- card |>
         rvest::html_elements(selector)
       stopifnot(identical(length(elements), 1L))
 
       elements |>
         rvest::html_text2()
-    },
-    character(1)
+    }
   )
 }
 
-jobs <- data.frame(
+jobs <- tibble(
   job_id = rvest::html_attr(
     job_cards,
     "data-job-id"
@@ -152,17 +166,17 @@ jobs <- data.frame(
   ),
   title = card_text(job_cards, ".job-title"),
   employer = card_text(job_cards, ".employer"),
-  location = card_text(job_cards, ".location"),
-  stringsAsFactors = FALSE
+  location = card_text(job_cards, ".location")
 )
 
 stopifnot(
+  inherits(jobs, "tbl_df"),
   identical(jobs$job_id, sprintf("J%03d", 1:6)),
-  !anyDuplicated(jobs$job_id),
+  n_distinct(jobs$job_id) == nrow(jobs),
   all(!is.na(jobs$posted)),
-  all(nzchar(jobs$title)),
-  all(nzchar(jobs$employer)),
-  all(nzchar(jobs$location)),
+  all(str_length(jobs$title) > 0),
+  all(str_length(jobs$employer) > 0),
+  all(str_length(jobs$location) > 0),
   identical(jobs$title[1], "Data analyst trainee")
 )
 
@@ -189,44 +203,51 @@ The details in each card are list items with the class `job-detail`. We extract
 them in page order and add stable sentence IDs.
 
 ```{r}
-details_by_job <- lapply(
-  seq_along(job_cards),
-  function(card_number) {
-    details <- job_cards[[card_number]] |>
+scraped_sentences <- map2(
+  job_cards,
+  jobs$job_id,
+  \(card, job_id) {
+    details <- card |>
       rvest::html_elements(".job-detail") |>
       rvest::html_text2()
 
-    data.frame(
-      document_id = jobs$job_id[card_number],
-      text = details,
-      stringsAsFactors = FALSE
+    tibble(
+      document_id = job_id,
+      text = details
     )
   }
-)
+) |>
+  list_rbind() |>
+  mutate(
+    sentence_id = sprintf("s%03d", row_number()),
+    .before = document_id
+  )
 
-scraped_sentences <- do.call(
-  rbind,
-  details_by_job
-)
-scraped_sentences$sentence_id <- sprintf(
-  "s%03d",
-  seq_len(nrow(scraped_sentences))
-)
-scraped_sentences <- scraped_sentences[
-  c("sentence_id", "document_id", "text")
-]
-
-expected_sentences <- read.csv(
+expected_sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
 )
-expected_job_sentences <- expected_sentences[
-  expected_sentences$document_id != "F001",
-  c("sentence_id", "document_id", "text")
-]
+expected_job_sentences <- expected_sentences |>
+  filter(document_id != "F001") |>
+  select(sentence_id, document_id, text) |>
+  as_tibble()
 
 stopifnot(
+  inherits(scraped_sentences, "tbl_df"),
+  inherits(expected_job_sentences, "tbl_df"),
   identical(nrow(scraped_sentences), 22L),
   identical(
     scraped_sentences,
@@ -235,7 +256,8 @@ stopifnot(
 )
 
 knitr::kable(
-  head(scraped_sentences, 8),
+  scraped_sentences |>
+    slice_head(n = 8),
   col.names = c("Sentence ID", "Job ID", "Text"),
   caption = "The first eight extracted job-detail sentences",
   row.names = FALSE
@@ -261,7 +283,7 @@ Before scraping a live site, the team must check:
 4. how often requests may be sent;
 5. whether page content is loaded later by JavaScript;
 6. which dates, filters, and geographic limits shaped the results; and
-7. how the original HTML and retrieval time will be preserved.
+7. how the saved HTML and retrieval time will be preserved.
 
 The Robots Exclusion Protocol communicates crawler preferences. It is not a
 grant of legal permission, and permission does not settle every ethical

@@ -227,6 +227,8 @@
 
 .element-group-name {
   display: block;
+  overflow-wrap: break-word;
+  hyphens: auto;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 0.82rem;
   line-height: 1.15;
@@ -333,6 +335,8 @@
 .element-name {
   align-self: end;
   min-height: 2.25rem;
+  overflow-wrap: break-word;
+  hyphens: auto;
   font-size: 0.68rem;
   font-weight: 600;
   line-height: 1.15;
@@ -389,8 +393,14 @@
 
 .task-map-page main.content > p,
 .task-map-page main.content > h2,
-.task-map-page main.content > .callout {
-  max-width: 72ch;
+.task-map-page main.content > .callout,
+.task-map-page main.content section > p,
+.task-map-page main.content section > h2,
+.task-map-page main.content section > ul,
+.task-map-page main.content section > ol,
+.task-map-page main.content section > blockquote,
+.task-map-page main.content section > .callout {
+  max-width: 38rem;
 }
 
 @media (min-width: 1200px) {

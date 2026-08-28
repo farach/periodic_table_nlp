@@ -42,19 +42,54 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Preserve each person's answer
 
-The annotation file stores one column per reviewer. No vote has been combined
-or overwritten.
+The annotation file stores one column per reviewer. The next chunk loads file,
+table, reshaping, repeated-work, agreement, and reliability helpers, then reads
+the CSV files with declared column types. No vote has been combined or
+overwritten.
 
 ```{r}
-crowd_labels <- read.csv(
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(foundryR)
+library(irr)
+library(stringr)
+
+crowd_labels <- read_csv(
   "data/workforce/crowd_annotations.csv",
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    sentence_id = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    reviewer_a = col_character(),
+    reviewer_a_uncertainty = col_character(),
+    reviewer_a_rationale = col_character(),
+    reviewer_b = col_character(),
+    reviewer_b_uncertainty = col_character(),
+    reviewer_b_rationale = col_character(),
+    reviewer_c = col_character(),
+    reviewer_c_uncertainty = col_character(),
+    reviewer_c_rationale = col_character()
+  )
 )
-sentence_text <- read.csv(
+sentence_text <- read_csv(
   "data/workforce/workforce_sentences.csv",
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
 )
 
 reviewer_columns <- c(
@@ -82,42 +117,34 @@ crowd_codebook <- workforce_codebook()
 
 stopifnot(
   identical(nrow(crowd_labels), 11L),
+  inherits(crowd_labels, "tbl_df"),
+  inherits(sentence_text, "tbl_df"),
   all(reviewer_columns %in% names(crowd_labels)),
   all(
-    unlist(
-      crowd_labels[reviewer_columns],
-      use.names = FALSE
-    ) %in% allowed_labels
+    crowd_labels |>
+      select(all_of(reviewer_columns)) |>
+      unlist(use.names = FALSE) %in% allowed_labels
   ),
   all(
-    unlist(
-      crowd_labels[uncertainty_columns],
-      use.names = FALSE
-    ) %in% c("certain", "needs_review")
+    crowd_labels |>
+      select(all_of(uncertainty_columns)) |>
+      unlist(use.names = FALSE) %in% c("certain", "needs_review")
   ),
   all(
-    nzchar(
-      unlist(
-        crowd_labels[rationale_columns],
-        use.names = FALSE
-      )
-    )
+    str_length(
+      crowd_labels |>
+        select(all_of(rationale_columns)) |>
+        unlist(use.names = FALSE)
+    ) > 0
   ),
   !anyDuplicated(crowd_labels$sentence_id),
-  all(
-    crowd_labels$codebook_version ==
-      crowd_codebook$version
-  ),
-  all(
-    crowd_labels$codebook_hash ==
-      crowd_codebook$hash
-  )
+  all(crowd_labels$codebook_version == crowd_codebook$version),
+  all(crowd_labels$codebook_hash == crowd_codebook$hash)
 )
 
 knitr::kable(
-  crowd_labels[
-    c("sentence_id", reviewer_columns)
-  ],
+  crowd_labels |>
+    select(sentence_id, all_of(reviewer_columns)),
   col.names = c(
     "Sentence ID",
     "Reviewer A",
@@ -146,7 +173,7 @@ measures such as precision and recall are not shown because no reviewer is
 treated as the truth.
 
 ```{r}
-reviewer_pairs <- data.frame(
+reviewer_pairs <- tibble(
   pair = c("A and B", "A and C", "B and C"),
   first = c(
     "reviewer_a",
@@ -157,39 +184,26 @@ reviewer_pairs <- data.frame(
     "reviewer_b",
     "reviewer_c",
     "reviewer_c"
-  ),
-  stringsAsFactors = FALSE
-)
-
-pairwise_agreement <- do.call(
-  rbind,
-  lapply(
-    seq_len(nrow(reviewer_pairs)),
-    function(pair_number) {
-      measures <- foundryR::foundry_agreement(
-        crowd_labels,
-        estimate = reviewer_pairs$second[
-          pair_number
-        ],
-        truth = reviewer_pairs$first[
-          pair_number
-        ]
-      )
-
-      data.frame(
-        pair = reviewer_pairs$pair[
-          pair_number
-        ],
-        observed_agreement = measures$value[
-          measures$metric == "accuracy"
-        ],
-        cohen_kappa = measures$value[
-          measures$metric == "cohen_kappa"
-        ]
-      )
-    }
   )
 )
+
+pairwise_agreement <- pmap(
+  reviewer_pairs,
+  \(pair, first, second) {
+    measures <- foundryR::foundry_agreement(
+      crowd_labels,
+      estimate = second,
+      truth = first
+    )
+
+    tibble(
+      pair = pair,
+      observed_agreement = filter(measures, metric == "accuracy")$value,
+      cohen_kappa = filter(measures, metric == "cohen_kappa")$value
+    )
+  }
+) |>
+  list_rbind()
 
 stopifnot(
   identical(
@@ -203,14 +217,14 @@ stopifnot(
 )
 
 knitr::kable(
-  transform(
-    pairwise_agreement,
-    observed_agreement = round(
-      observed_agreement,
-      3
+  pairwise_agreement |>
+    mutate(
+      observed_agreement = round(
+        observed_agreement,
+        3
+      ),
+      cohen_kappa = round(cohen_kappa, 3)
     ),
-    cohen_kappa = round(cohen_kappa, 3)
-  ),
   col.names = c(
     "Reviewer pair",
     "Observed agreement",
@@ -224,30 +238,49 @@ knitr::kable(
 The B-and-C comparison is weaker than A and C. Reporting only one pair would
 hide that difference.
 
-Krippendorff's alpha summarizes all three reviewers at once. The calculation
-converts label names to category numbers; the numbers carry no order.
+Krippendorff's alpha summarizes all three reviewers at once. `pivot_longer()`
+puts the reviewer columns into one label column, then `pivot_wider()` builds the
+matrix that `irr` needs. The calculation converts label names to category
+numbers; the numbers carry no order.
 
 ```{r}
-numeric_ratings <- vapply(
-  crowd_labels[reviewer_columns],
-  function(labels) {
-    match(labels, allowed_labels)
-  },
-  integer(nrow(crowd_labels))
-)
+numeric_ratings <- crowd_labels |>
+  select(sentence_id, all_of(reviewer_columns)) |>
+  pivot_longer(
+    cols = all_of(reviewer_columns),
+    names_to = "reviewer",
+    values_to = "label"
+  ) |>
+  mutate(category_number = match(label, allowed_labels)) |>
+  select(sentence_id, reviewer, category_number) |>
+  pivot_wider(
+    names_from = reviewer,
+    values_from = category_number
+  ) |>
+  arrange(sentence_id)
+
+rating_matrix <- numeric_ratings |>
+  select(all_of(reviewer_columns)) |>
+  as.matrix()
 all_rater_alpha <- irr::kripp.alpha(
-  t(numeric_ratings),
+  t(rating_matrix),
   method = "nominal"
 )$value
-unanimity_share <- mean(
-  apply(
-    crowd_labels[reviewer_columns],
-    1,
-    function(labels) {
-      length(unique(labels)) == 1L
-    }
-  )
-)
+unanimity_by_sentence <- crowd_labels |>
+  select(sentence_id, all_of(reviewer_columns)) |>
+  pivot_longer(
+    cols = all_of(reviewer_columns),
+    names_to = "reviewer",
+    values_to = "label"
+  ) |>
+  summarise(
+    unanimous = n_distinct(label) == 1L,
+    .by = sentence_id
+  ) |>
+  arrange(sentence_id)
+unanimity_share <- unanimity_by_sentence |>
+  summarise(value = mean(unanimous))
+unanimity_share <- unanimity_share$value
 
 stopifnot(
   isTRUE(
@@ -264,7 +297,7 @@ stopifnot(
   )
 )
 
-data.frame(
+tibble(
   measure = c(
     "Krippendorff's alpha",
     "Unanimous share"
@@ -282,24 +315,22 @@ not certify the codebook or any reviewer.
 
 ## Find the disagreements
 
-An item needs review when the three labels are not identical.
+An item needs review when the three labels are not identical. `left_join()`
+adds the sentence text by matching the shared sentence identifier.
 
 ```{r}
-all_agree <- apply(
-  crowd_labels[reviewer_columns],
-  1,
-  function(labels) {
-    length(unique(labels)) == 1L
-  }
-)
-
-disagreements <- crowd_labels[!all_agree, ]
-disagreements <- merge(
-  disagreements,
-  sentence_text[c("sentence_id", "text")],
-  by = "sentence_id",
-  sort = FALSE
-)
+disagreements <- crowd_labels |>
+  left_join(
+    unanimity_by_sentence,
+    by = join_by(sentence_id)
+  ) |>
+  filter(!unanimous) |>
+  left_join(
+    sentence_text |>
+      select(sentence_id, text),
+    by = join_by(sentence_id)
+  ) |>
+  arrange(sentence_id)
 
 stopifnot(
   identical(
@@ -310,8 +341,8 @@ stopifnot(
 )
 
 knitr::kable(
-  disagreements[
-    c(
+  disagreements |>
+    select(
       "sentence_id",
       "text",
       "reviewer_a",
@@ -320,8 +351,7 @@ knitr::kable(
       "reviewer_b_uncertainty",
       "reviewer_c",
       "reviewer_c_uncertainty"
-    )
-  ],
+    ),
   col.names = c(
     "Sentence ID",
     "Text",
@@ -349,30 +379,45 @@ A majority label can organize the next review step. It should not erase the
 individual answers or replace adjudication.
 
 ```{r}
-majority_label <- apply(
-  crowd_labels[reviewer_columns],
-  1,
-  function(labels) {
-    counts <- table(
-      factor(
-        labels,
-        levels = allowed_labels
-      )
-    )
-    if (max(counts) > length(labels) / 2) {
-      names(counts)[which.max(counts)]
-    } else {
-      "adjudicate"
-    }
-  }
-)
+label_counts <- crowd_labels |>
+  select(sentence_id, all_of(reviewer_columns)) |>
+  pivot_longer(
+    cols = all_of(reviewer_columns),
+    names_to = "reviewer",
+    values_to = "label"
+  ) |>
+  count(sentence_id, label, name = "votes")
 
-combined_labels <- data.frame(
-  sentence_id = crowd_labels$sentence_id,
-  majority_label = majority_label,
-  unanimous = all_agree,
-  stringsAsFactors = FALSE
-)
+top_vote_count <- label_counts |>
+  summarise(top_votes = max(votes), .by = sentence_id)
+top_vote_table <- label_counts |>
+  left_join(top_vote_count, by = join_by(sentence_id)) |>
+  filter(votes == top_votes) |>
+  summarise(
+    tied_top_labels = n(),
+    top_label = paste(sort(label), collapse = ", "),
+    .by = c(sentence_id, top_votes)
+  )
+majority_label <- top_vote_table |>
+  mutate(
+    majority_label = case_when(
+      top_votes > length(reviewer_columns) / 2 &
+        tied_top_labels == 1L ~ top_label,
+      TRUE ~ "adjudicate"
+    )
+  ) |>
+  select(sentence_id, majority_label)
+
+combined_labels <- crowd_labels |>
+  select(sentence_id) |>
+  left_join(
+    majority_label,
+    by = join_by(sentence_id)
+  ) |>
+  left_join(
+    unanimity_by_sentence,
+    by = join_by(sentence_id)
+  )
 
 stopifnot(
   identical(
@@ -395,6 +440,18 @@ stopifnot(
 )
 
 knitr::kable(
+  top_vote_table,
+  col.names = c(
+    "Sentence ID",
+    "Top votes",
+    "Labels tied for top",
+    "Top label or labels"
+  ),
+  caption = "Top vote count before majority assignment",
+  row.names = FALSE
+)
+
+knitr::kable(
   combined_labels,
   col.names = c(
     "Sentence ID",
@@ -407,9 +464,10 @@ knitr::kable(
 ```
 
 The `unanimous` column prevents an easy majority from looking like complete
-agreement. Sentence `s013` returns `adjudicate` because three different answers
-do not form a majority. The team can review the sentence, codebook, and original
-labels before choosing a reference label.
+agreement. The tie check stays because teams may change the reviewer count; any
+tie among top labels goes to `adjudicate`. Sentence `s013` returns `adjudicate`
+because three different answers do not form a majority. The team can review the
+sentence, codebook, and source labels before choosing a reference label.
 
 ## Agreement does not prove validity
 
@@ -448,7 +506,7 @@ as individual answers.
 - Preserve whether a majority label was unanimous.
 - Fair pay, privacy, expertise, and appeal processes are part of data quality.
 
-The comparison leaves two boundary cases for adjudication instead of folding
+The comparison leaves two boundary cases for adjudication rather than folding
 them into a majority vote. The following augmentation exercise keeps that
 annotation record intact and creates five separate fictional variants. Each is
 marked as synthetic and checked against the same codebook before it can join

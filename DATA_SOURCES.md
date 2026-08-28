@@ -67,6 +67,19 @@ The cmapr example file used in this site does not include upstream identifiers
 or validation status. The lessons treat it as a package teaching fixture, not
 as an authenticated sample or evidence about career mobility.
 
+## Task map
+
+The task names and groupings are adapted from Rob van Zoest's
+[Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).
+
+That page carries no licence statement and invites reuse. The individual task
+names are standard terminology in the field. The grouping decisions, wording,
+interface, data file, and lessons in this repository are separate work and
+carry this repository's MIT licence. If the original author asks for different
+terms, this project will follow them.
+
+Checked 28 August 2026.
+
 ## Hugging Face Hub
 
 Hugging Face hosts datasets from many contributors. Dataset cards can state a

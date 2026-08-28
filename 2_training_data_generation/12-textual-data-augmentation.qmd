@@ -6,7 +6,7 @@ description: "Learn how to create workforce text variants and test whether they 
 categories: [training data, augmentation, workforce research]
 ---
 
-The reviewer comparison left two boundary cases visible instead of treating a
+The reviewer comparison left two boundary cases visible rather than treating a
 majority as truth. A different risk appears when the Riverton Workforce Lab
 creates synthetic examples: the row count can grow without adding observed
 evidence. The team can write additional sentences that follow known patterns.
@@ -47,30 +47,47 @@ stopifnot(identical(getOption("warn"), 2L))
 
 The team wants more examples of explicit training offers. It will not claim
 that the examples describe real employers or estimate how often training is
-offered.
+offered. The next chunk loads package helpers for files, tables, strings, CMap
+examples, and model-check payloads, then reads the file with declared column
+types into a tibble.
 
 ```{r}
-workforce_sentences <- read.csv(
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(cmapr)
+library(huggingfaceR)
+
+workforce_sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
 )
-training_examples <- workforce_sentences[
-  workforce_sentences$reference_label == "training",
-]
+training_examples <- workforce_sentences |>
+  filter(reference_label == "training")
 
 stopifnot(
   identical(nrow(training_examples), 7L),
-  all(
-    training_examples$reference_label ==
-      "training"
-  )
+  inherits(workforce_sentences, "tbl_df"),
+  all(training_examples$reference_label == "training")
 )
 
 knitr::kable(
-  training_examples[
-    c("sentence_id", "text")
-  ],
+  training_examples |>
+    select(sentence_id, text),
   col.names = c("Sentence ID", "Reviewed training example"),
   caption = "The seven training examples before augmentation",
   row.names = FALSE
@@ -87,15 +104,19 @@ three titles as vocabulary only. We do not carry over transition weights or
 interpret a title change as a promotion.
 
 ```{r}
-cmap_titles <- readr::read_csv(
-  cmapr::cmap_example_data(),
-  show_col_types = FALSE
+cmap_titles <- read_csv(
+  cmap_example_data(),
+  col_types = cols(
+    sector = col_character(),
+    region = col_character(),
+    job_title_from = col_character(),
+    job_title_to = col_character(),
+    transition_weighted_count = col_double(),
+    si_from = col_double(),
+    si_to = col_double()
+  )
 )
-selected_titles <- c(
-  cmap_titles$job_title_from[3],
-  cmap_titles$job_title_from[5],
-  cmap_titles$job_title_from[8]
-)
+selected_titles <- cmap_titles$job_title_from[c(3L, 5L, 8L)]
 
 stopifnot(
   identical(
@@ -124,7 +145,7 @@ The template states the same kind of claim for each title.
 source("R/workforce-codebook.R")
 augmentation_codebook <- workforce_codebook()
 
-template_variants <- data.frame(
+template_variants <- tibble(
   source_sentence_id = "s001",
   source_family_id = "training-offer-s001",
   template_id = "training-pathway-v1",
@@ -134,7 +155,7 @@ template_variants <- data.frame(
     "eb2d0b3810e07782aab4a81fba1f539133f2ba6a",
   text = sprintf(
     "The %s pathway includes paid training.",
-    tolower(selected_titles)
+    str_to_lower(selected_titles)
   ),
   label = "training",
   synthetic = TRUE,
@@ -142,11 +163,10 @@ template_variants <- data.frame(
   codebook_version = augmentation_codebook$version,
   codebook_hash = augmentation_codebook$hash,
   review_status = "requires_human_review",
-  split = "training_candidate",
-  stringsAsFactors = FALSE
+  split = "training_candidate"
 )
 
-schedule_variants <- data.frame(
+schedule_variants <- tibble(
   source_sentence_id = "s026",
   source_family_id = "schedule-s026",
   template_id = "class-schedule-v1",
@@ -163,60 +183,49 @@ schedule_variants <- data.frame(
   codebook_version = augmentation_codebook$version,
   codebook_hash = augmentation_codebook$hash,
   review_status = "requires_human_review",
-  split = "training_candidate",
-  stringsAsFactors = FALSE
+  split = "training_candidate"
 )
 
-augmented_rows <- rbind(
+augmented_rows <- bind_rows(
   template_variants,
   schedule_variants
 )
-augmentation_counts <- table(
-  augmented_rows$label
+augmentation_label_order <- c(
+  "training",
+  "requirement",
+  "schedule",
+  "skill",
+  "other"
 )
+augmentation_counts <- tibble(label = augmentation_label_order) |>
+  left_join(
+    augmented_rows |>
+      count(label, name = "n"),
+    by = join_by(label)
+  ) |>
+  mutate(n = coalesce(n, 0L))
+source_families <- augmented_rows |>
+  distinct(source_family_id) |>
+  arrange(source_family_id)
 
 stopifnot(
   identical(nrow(augmented_rows), 5L),
   !anyDuplicated(augmented_rows$text),
-  !any(
-    augmented_rows$text %in%
-      workforce_sentences$text
-  ),
+  !any(augmented_rows$text %in% workforce_sentences$text),
   all(augmented_rows$synthetic),
-  all(
-    augmented_rows$review_status ==
-      "requires_human_review"
-  ),
-  all(
-    augmented_rows$split ==
-      "training_candidate"
-  ),
-  all(
-    augmented_rows$codebook_hash ==
-      augmentation_codebook$hash
-  ),
-  identical(
-    template_variants$vocabulary_row,
-    c(3L, 5L, 8L)
-  ),
+  all(augmented_rows$review_status == "requires_human_review"),
+  all(augmented_rows$split == "training_candidate"),
+  all(augmented_rows$codebook_hash == augmentation_codebook$hash),
+  identical(template_variants$vocabulary_row, c(3L, 5L, 8L)),
   all(
     template_variants$vocabulary_commit ==
       "eb2d0b3810e07782aab4a81fba1f539133f2ba6a"
   ),
   identical(
-    unique(augmented_rows$source_family_id),
-    c("training-offer-s001", "schedule-s026")
+    source_families$source_family_id,
+    c("schedule-s026", "training-offer-s001")
   ),
-  identical(
-    unname(
-      as.integer(
-        augmentation_counts[
-          c("schedule", "training")
-        ]
-      )
-    ),
-    c(2L, 3L)
-  )
+  identical(augmentation_counts$n, c(3L, 0L, 2L, 0L, 0L))
 )
 
 knitr::kable(
@@ -257,7 +266,7 @@ or return predictions.
 
 ```{r}
 label_check_payload <-
-  huggingfaceR::hf_zero_shot_classification_payload(
+  hf_zero_shot_classification_payload(
     augmented_rows$text,
     candidate_labels = c(
       "training",
@@ -304,45 +313,33 @@ provider is selected and no network request occurs here.
 ## A small edit can reverse the claim
 
 Word replacement is risky when it changes negation or obligation.
+`str_to_lower()` makes the keyword checks ignore case. `str_detect()` asks
+whether each pattern is present.
 
 ```{r}
-meaning_check <- data.frame(
+meaning_check <- tibble(
   version = c("source", "unsafe edit"),
   text = c(
     "Paid training is provided.",
     "Paid training is not provided."
   )
-)
-keyword_only_match <- grepl(
-  "paid",
-  tolower(meaning_check$text),
-  fixed = TRUE
-) &
-  grepl(
-    "training",
-    tolower(meaning_check$text),
-    fixed = TRUE
-  ) &
-  grepl(
-    "provided",
-    tolower(meaning_check$text),
-    fixed = TRUE
-  )
-negation_aware_offer <- keyword_only_match &
-  !grepl(
-    "\\bnot\\b",
-    tolower(meaning_check$text),
-    perl = TRUE
-  )
-meaning_check$keyword_only_match <-
-  keyword_only_match
-meaning_check$negation_aware_offer <-
-  negation_aware_offer
+) |>
+  mutate(
+    lower_text = str_to_lower(text),
+    keyword_only_match =
+      str_detect(lower_text, fixed("paid")) &
+        str_detect(lower_text, fixed("training")) &
+        str_detect(lower_text, fixed("provided")),
+    negation_aware_offer =
+      keyword_only_match &
+        !str_detect(lower_text, "\\bnot\\b")
+  ) |>
+  select(-lower_text)
 
 stopifnot(
   !identical(
-    meaning_check$text[1],
-    meaning_check$text[2]
+    meaning_check$text[[1]],
+    meaning_check$text[[2]]
   ),
   identical(
     meaning_check$keyword_only_match,

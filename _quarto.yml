@@ -53,7 +53,6 @@ website:
       - href: accessibility.qmd
         text: Accessibility
   page-footer:
-    left: "Plain-language NLP lessons with examples that run."
     right:
       - text: "Accessibility"
         href: accessibility.qmd
@@ -80,8 +79,11 @@ execute:
   echo: true
   output: true
   warning: true
-  message: false
   error: false
   cache: false
+
+knitr:
+  opts_chunk:
+    message: false
 
 lang: en

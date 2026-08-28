@@ -39,6 +39,8 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
+The first code chunk loads the lesson's helper packages before checking the bytes for two small text values.
+
 ## What happens when a computer saves a word
 
 Checking Anaïs's name begins with a precise account of what the computer saved.
@@ -73,16 +75,22 @@ A **bit** records one binary choice, 0 or 1. Eight bits make one **byte**, which
 has 256 possible combinations numbered from 0 through 255.
 
 We will start with `A` and `é`, two characters small enough to inspect by eye.
-R's `charToRaw()` function shows their bytes. The word "raw" means that R
-should display the stored values without interpreting them as letters.
+R's `charToRaw()` function shows bytes. The word "raw" means that R should
+display the stored values without interpreting them as letters. `map()` from
+purrr applies that byte check to each text value and returns a list, which can
+hold byte results of different lengths.
 
 ```{r}
+library(tibble)
+library(purrr)
+library(stringi)
+
 text <- c(
   letter_A = "A",
   e_with_accent = "\u00E9"
 )
 
-bytes <- lapply(enc2utf8(text), charToRaw)
+bytes <- map(enc2utf8(text), charToRaw)
 
 stopifnot(
   identical(bytes$letter_A, as.raw(0x41)),
@@ -138,8 +146,8 @@ guessing based on appearance.
 ## Unicode and UTF-8 do different jobs
 
 Unicode and UTF-8 answer different questions. **Unicode** is a shared catalog
-that assigns code points used to represent text from many writing systems,
-along with punctuation, symbols, and emoji.
+that assigns code points for text from many writing systems, along with
+punctuation, symbols, and emoji.
 
 **UTF-8** describes how to store Unicode scalar values as bytes. It uses:
 
@@ -167,7 +175,8 @@ thing in UTF-8. Confusing Latin-1 with UTF-8 is a common cause of garbled text.
 
 A **string** is one text value. R may attach a label to a string saying that it
 is Latin-1, UTF-8, or a sequence of bytes. `Encoding()` reports that label, so
-we can check what R believes about the text it received.
+we can check what R believes about the text it received. We will display the
+answer as a tibble, a table that prints its size and each column's type.
 
 ```{r}
 strings <- c(
@@ -183,7 +192,7 @@ stopifnot(
 )
 
 knitr::kable(
-  data.frame(
+  tibble(
     text = unname(strings),
     what_R_reports = unname(declared_encoding)
   ),
@@ -285,8 +294,8 @@ exact_match_before <- identical(
   unname(same_appearance[2])
 )
 exact_match_after <- identical(
-  unname(stringi::stri_trans_nfc(same_appearance[1])),
-  unname(stringi::stri_trans_nfc(same_appearance[2]))
+  unname(stri_trans_nfc(same_appearance[1])),
+  unname(stri_trans_nfc(same_appearance[2]))
 )
 
 stopifnot(
@@ -296,7 +305,7 @@ stopifnot(
 )
 
 knitr::kable(
-  data.frame(
+  tibble(
     form = c("one code point", "letter plus accent"),
     displayed_text = unname(same_appearance),
     code_point_count = unname(counts)
@@ -314,8 +323,8 @@ c(
 
 **Normalization** changes equivalent Unicode sequences into a consistent form.
 The example uses Normalization Form C, usually shortened to NFC. Normalize a
-working copy when equivalent forms should compare as equal. Keep the original
-text when its exact source representation matters.
+working copy when equivalent forms should compare as equal. Keep the source
+text when its exact representation matters.
 
 ## A safe routine for text files
 

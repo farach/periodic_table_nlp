@@ -36,6 +36,8 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
+The first code chunk loads the packages needed to build the request, read files, shape tibbles, and protect displayed text. A tibble is a table that prints its size and each column's type.
+
 ## Start with a request and a reply
 
 Every API exchange in this lesson has two parts:
@@ -56,19 +58,29 @@ We build the request before sending it so each choice remains visible. The
 httr2 package adds those choices one step at a time.
 
 ```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(httr2)
+library(digest)
+library(jsonlite)
+library(htmltools)
+
 book_request <- httr2::request(
   "https://openlibrary.org/search.json"
 ) |>
   httr2::req_url_query(
     q = "natural language processing",
-    fields = paste(
+    fields = str_c(
       c("key", "title", "author_name", "first_publish_year"),
       collapse = ","
     ),
     limit = 5
   ) |>
   httr2::req_user_agent(
-    paste0(
+    str_c(
       "periodic-table-nlp-r/1.0 ",
       "(https://github.com/farach/periodic_table_nlp)"
     )
@@ -78,10 +90,9 @@ book_request <- httr2::request(
 
 stopifnot(
   inherits(book_request, "httr2_request"),
-  grepl(
-    "openlibrary.org/search.json",
+  str_detect(
     book_request$url,
-    fixed = TRUE
+    fixed("openlibrary.org/search.json")
   )
 )
 
@@ -131,16 +142,20 @@ level, licensing reference, and fingerprint.
 fixture_path <- "data/openlibrary-nlp-search.json"
 metadata_path <- "data/openlibrary-nlp-search-metadata.csv"
 
-fixture_metadata <- read.csv(
+fixture_metadata <- read_csv(
   metadata_path,
-  colClasses = "character",
-  check.names = FALSE
+  col_types = cols(
+    retrieved_at_utc = col_character(),
+    request_url = col_character(),
+    http_status = col_character(),
+    content_type = col_character(),
+    record_level = col_character(),
+    api_documentation = col_character(),
+    licensing_reference = col_character(),
+    md5 = col_character()
+  )
 )
-fixture_lines <- readLines(
-  fixture_path,
-  encoding = "UTF-8",
-  warn = TRUE
-)
+fixture_lines <- read_lines(fixture_path)
 fixture_md5 <- digest::digest(
   paste(fixture_lines, collapse = "\n"),
   algo = "md5",
@@ -148,11 +163,13 @@ fixture_md5 <- digest::digest(
 )
 
 stopifnot(
+  inherits(fixture_metadata, "tbl_df"),
   identical(nrow(fixture_metadata), 1L),
+  identical(length(fixture_lines), 59L),
   identical(fixture_metadata$md5, fixture_md5),
-  grepl(
-    "^2026-08-28T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
-    fixture_metadata$retrieved_at_utc
+  str_detect(
+    fixture_metadata$retrieved_at_utc,
+    "^2026-08-28T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
   ),
   identical(
     fixture_metadata$record_level,
@@ -170,7 +187,7 @@ stopifnot(
 )
 
 knitr::kable(
-  data.frame(
+  tibble(
     detail = c(
       "Retrieved at",
       "HTTP status",
@@ -199,48 +216,41 @@ documentation remain in the metadata file for a later audit.
 ## Turn the saved response into a table
 
 Open Library places search results inside a JSON section named `docs`.
-`jsonlite::fromJSON()` translates that section into R objects. In this
-response, the `docs` array can be reshaped into rows and columns.
+`jsonlite::fromJSON()` translates that section into rows and columns because
+this response has the same fields for each catalog record.
 
 ```{r}
 fixture_data <- jsonlite::fromJSON(
   fixture_path,
   simplifyVector = TRUE
 )
-book_records <- fixture_data$docs
+book_records <- as_tibble(fixture_data$docs)
 
 format_authors <- function(author_names) {
   if (length(author_names) == 0 || all(is.na(author_names))) {
     return("Not listed")
   }
 
-  paste(author_names, collapse = ", ")
+  str_c(author_names, collapse = ", ")
 }
 
-books <- data.frame(
-  title = book_records$title,
-  authors = vapply(
-    book_records$author_name,
-    format_authors,
-    character(1)
-  ),
-  first_published = book_records$first_publish_year,
-  catalog_url = paste0(
-    "https://openlibrary.org",
-    book_records$key
-  ),
-  stringsAsFactors = FALSE
-)
+books <- book_records |>
+  transmute(
+    title = title,
+    authors = map_chr(author_name, format_authors),
+    first_published = first_publish_year,
+    catalog_url = str_c("https://openlibrary.org", key)
+  )
 
 stopifnot(
   is.data.frame(book_records),
+  inherits(books, "tbl_df"),
   identical(nrow(books), 5L),
-  all(nzchar(books$title)),
+  all(str_length(books$title) > 0),
   all(
-    grepl(
-      "https://openlibrary.org/works/",
-      books$catalog_url,
-      fixed = TRUE
+    str_detect(
+     books$catalog_url,
+     fixed("https://openlibrary.org/works/")
     )
   )
 )
@@ -249,39 +259,34 @@ escape_html <- function(value) {
   as.character(htmltools::htmlEscape(value))
 }
 
-catalog_links <- vapply(
-  seq_along(books$catalog_url),
-  function(index) {
-    url <- books$catalog_url[index]
+catalog_links <- map2_chr(
+  books$catalog_url,
+  books$title,
+  \(url, title) {
     safe_url <- as.character(
       htmltools::htmlEscape(url, attribute = TRUE)
     )
     safe_title <- as.character(
       htmltools::htmlEscape(
-        books$title[index],
+        title,
         attribute = TRUE
       )
     )
     sprintf(
-      paste0(
-        '<a href="%s" ',
-        'aria-label="View Open Library record for %s">',
-        'View record</a>'
-      ),
+      '<a href="%s" aria-label="View Open Library record for %s">View record</a>',
       safe_url,
       safe_title
     )
-  },
-  character(1)
+  }
 )
 
-display_books <- data.frame(
-  title = escape_html(books$title),
-  authors = escape_html(books$authors),
-  first_published = books$first_published,
-  catalog_link = catalog_links,
-  stringsAsFactors = FALSE
-)
+display_books <- books |>
+  transmute(
+    title = escape_html(title),
+    authors = escape_html(authors),
+    first_published = first_published,
+    catalog_link = catalog_links
+  )
 
 knitr::kable(
   display_books,
@@ -291,8 +296,9 @@ knitr::kable(
     "First published",
     "Open Library record"
   ),
-  caption = paste(
+  caption = str_c(
     "Five candidate work-level catalog records retrieved",
+    " ",
     fixture_metadata$retrieved_at_utc
   ),
   row.names = FALSE,
@@ -347,7 +353,7 @@ create a replacement.
 
 A failed request leaves the librarian without a checked list. Turning that
 failure into an empty table would hide the difference between "no books found"
-and "the service did not answer." Report the failure and keep the original
+and "the service did not answer." Report the failure and keep the reported
 error. Then ask:
 
 1. Is the device connected to the internet?
@@ -357,7 +363,7 @@ error. Then ask:
 5. Did the response format change?
 
 The code in this lesson stops when the request fails or the response lacks the
-expected structure. The interruption is visible instead of being published as
+expected structure. The interruption is visible rather than being published as
 an apparently complete result.
 
 ## What to remember
