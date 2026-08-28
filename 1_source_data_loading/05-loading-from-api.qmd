@@ -1,0 +1,409 @@
+---
+title: "Loading data from an API"
+subtitle: "Ask an online service for information and check its reply"
+author: "Alex Farach"
+description: "Learn how an API request becomes a checked data table in R."
+categories: [source data loading, API, JSON]
+---
+
+A librarian gathering possible books about natural language processing could
+copy search results from a catalog into a table. Search results are candidates,
+not recommendations. The librarian still needs to judge whether each record is
+relevant, accurate, and useful.
+
+An **application programming interface**, usually called an **API**, gives
+software a defined way to ask another service for information. This lesson
+sends one live query to the Open Library Search API and checks the service's
+reply. It then builds the displayed table from a dated copy of an earlier
+response so the published output can be reproduced.
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain the request-and-response pattern used by an API;
+- add search choices to an API request;
+- check whether the request succeeded;
+- turn a JSON response into a table in R; and
+- handle changing results, service limits, and secret API keys.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Start with a request and a reply
+
+Every API exchange in this lesson has two parts:
+
+1. R sends a **request** to a web address.
+2. The service sends a **response** back.
+
+The request records the librarian's question. The response contains a status
+code, descriptive details called headers, and a body holding the requested
+data.
+
+Our request uses this **endpoint**, the web address assigned to book searches:
+`https://openlibrary.org/search.json`.
+
+## Build the request
+
+We build the request before sending it so each choice remains visible. The
+httr2 package adds those choices one step at a time.
+
+```{r}
+book_request <- httr2::request(
+  "https://openlibrary.org/search.json"
+) |>
+  httr2::req_url_query(
+    q = "natural language processing",
+    fields = paste(
+      c("key", "title", "author_name", "first_publish_year"),
+      collapse = ","
+    ),
+    limit = 5
+  ) |>
+  httr2::req_user_agent(
+    paste0(
+      "periodic-table-nlp-r/1.0 ",
+      "(https://github.com/farach/periodic_table_nlp)"
+    )
+  ) |>
+  httr2::req_timeout(20) |>
+  httr2::req_retry(max_tries = 3)
+
+stopifnot(
+  inherits(book_request, "httr2_request"),
+  grepl(
+    "openlibrary.org/search.json",
+    book_request$url,
+    fixed = TRUE
+  )
+)
+
+book_request
+```
+
+The `stopifnot()` lines are **assertions**, checks that make R stop if an
+expected result changes. They confirm that httr2 built a request for the
+intended address. The printed request begins with `GET`, the standard method
+used here to ask a service to send information. Printing it lets us inspect the
+destination and search choices without contacting the service again.
+
+The choices added to the address are called **query parameters**:
+
+| Parameter | What it asks for |
+|---|---|
+| `q` | Books related to the words "natural language processing." |
+| `fields` | Only the four pieces of information used in this lesson. |
+| `limit` | No more than five results. |
+
+: Query parameters used in the Open Library request
+
+The user-agent identifies the project making the request. The 20-second timeout
+keeps R from waiting indefinitely. The retry setting permits up to three
+attempts when a temporary connection problem interrupts the exchange; it does
+not guarantee that an unavailable service will respond.
+
+## Send the request and check the response
+
+Now the request leaves R and reaches a service we do not control.
+`req_perform()` sends it. An **HTTP status code** is a number that reports the
+outcome of a web request. httr2 stops with an error when the service returns an
+unsuccessful status such as 404 or 500.
+
+```{r}
+book_response <- httr2::req_perform(book_request)
+
+response_status <- httr2::resp_status(book_response)
+response_type <- httr2::resp_header(
+  book_response,
+  "content-type"
+)
+live_response_data <- httr2::resp_body_json(
+  book_response,
+  simplifyVector = TRUE
+)
+live_records <- live_response_data$docs
+
+stopifnot(
+  identical(response_status, 200L),
+  grepl(
+    "application/json",
+    response_type,
+    fixed = TRUE
+  ),
+  is.data.frame(live_records),
+  nrow(live_records) > 0L,
+  nrow(live_records) <= 5L,
+  all(nzchar(live_records$title))
+)
+
+data.frame(
+  check = c(
+    "HTTP status",
+    "Response type",
+    "Records returned"
+  ),
+  result = c(
+    as.character(response_status),
+    response_type,
+    as.character(nrow(live_records))
+  )
+)
+```
+
+Status `200` means that the service completed the request successfully. The
+response type contains `application/json`, which tells us how to interpret the
+body. The query asks for no more than five records, so the code accepts any
+positive result up to that limit.
+
+**JSON**, short for JavaScript Object Notation, is a text format that can hold
+named values, lists, and records. Many programming languages can read it, which
+makes it common in API responses.
+
+## Keep a dated response
+
+The live query proves that the request still works today. It cannot guarantee
+that tomorrow's ranking will contain the same records. The table on this page
+therefore uses a saved JSON response with a retrieval time, request address,
+record level, licensing reference, and fingerprint.
+
+```{r}
+fixture_path <- "data/openlibrary-nlp-search.json"
+metadata_path <- "data/openlibrary-nlp-search-metadata.csv"
+
+fixture_metadata <- read.csv(
+  metadata_path,
+  colClasses = "character",
+  check.names = FALSE
+)
+fixture_md5 <- unname(tools::md5sum(fixture_path))
+
+stopifnot(
+  identical(nrow(fixture_metadata), 1L),
+  identical(fixture_metadata$md5, fixture_md5),
+  grepl(
+    "^2026-08-28T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+    fixture_metadata$retrieved_at_utc
+  ),
+  identical(
+    fixture_metadata$record_level,
+    "work-level catalog record"
+  )
+)
+
+knitr::kable(
+  data.frame(
+    detail = c(
+      "Retrieved at",
+      "Record level",
+      "File fingerprint"
+    ),
+    value = c(
+      fixture_metadata$retrieved_at_utc,
+      fixture_metadata$record_level,
+      fixture_md5
+    )
+  ),
+  col.names = c("Fixture detail", "Recorded value"),
+  caption = "Provenance for the saved API response",
+  row.names = FALSE
+)
+```
+
+The MD5 fingerprint detects an accidental change to the saved file. It is not
+proof that the source is accurate or trustworthy. The request address and API
+documentation remain in the metadata file for a later audit.
+
+## Turn the saved response into a table
+
+Open Library places search results inside a JSON section named `docs`.
+`jsonlite::fromJSON()` translates that section into R objects. In this
+response, the `docs` array can be reshaped into rows and columns.
+
+```{r}
+fixture_data <- jsonlite::fromJSON(
+  fixture_path,
+  simplifyVector = TRUE
+)
+book_records <- fixture_data$docs
+
+format_authors <- function(author_names) {
+  if (length(author_names) == 0 || all(is.na(author_names))) {
+    return("Not listed")
+  }
+
+  paste(author_names, collapse = ", ")
+}
+
+books <- data.frame(
+  title = book_records$title,
+  authors = vapply(
+    book_records$author_name,
+    format_authors,
+    character(1)
+  ),
+  first_published = book_records$first_publish_year,
+  catalog_url = paste0(
+    "https://openlibrary.org",
+    book_records$key
+  ),
+  stringsAsFactors = FALSE
+)
+
+stopifnot(
+  is.data.frame(book_records),
+  identical(nrow(books), 5L),
+  all(nzchar(books$title)),
+  all(
+    grepl(
+      "https://openlibrary.org/works/",
+      books$catalog_url,
+      fixed = TRUE
+    )
+  )
+)
+
+escape_html <- function(value) {
+  as.character(htmltools::htmlEscape(value))
+}
+
+catalog_links <- vapply(
+  seq_along(books$catalog_url),
+  function(index) {
+    url <- books$catalog_url[index]
+    safe_url <- as.character(
+      htmltools::htmlEscape(url, attribute = TRUE)
+    )
+    safe_title <- as.character(
+      htmltools::htmlEscape(
+        books$title[index],
+        attribute = TRUE
+      )
+    )
+    sprintf(
+      paste0(
+        '<a href="%s" ',
+        'aria-label="View Open Library record for %s">',
+        'View record</a>'
+      ),
+      safe_url,
+      safe_title
+    )
+  },
+  character(1)
+)
+
+display_books <- data.frame(
+  title = escape_html(books$title),
+  authors = escape_html(books$authors),
+  first_published = books$first_published,
+  catalog_link = catalog_links,
+  stringsAsFactors = FALSE
+)
+
+knitr::kable(
+  display_books,
+  col.names = c(
+    "Title",
+    "Author or authors",
+    "First published",
+    "Open Library record"
+  ),
+  caption = paste(
+    "Five candidate work-level catalog records retrieved",
+    fixture_metadata$retrieved_at_utc
+  ),
+  row.names = FALSE,
+  escape = FALSE
+)
+```
+
+Open Library returns work-level catalog records by default. A row can represent
+many editions of the same work. The table contains candidate search results,
+not a checked reading list or a judgment about a book's quality.
+
+The authors and titles are escaped before display so API text cannot become
+page markup. Only the validated Open Library addresses are rendered as links.
+
+## Live data can change
+
+Open Library may add records, correct dates, or reorder results. The live check
+therefore tests a bounded structure rather than five specific titles:
+
+- the service returned a successful status;
+- the response is JSON;
+- the response contains between one and five records; and
+- every returned record has a title.
+
+The saved fixture makes the displayed table repeatable. Its metadata records
+when and how it was retrieved. Open Library states that the Internet Archive
+does not assert new proprietary rights over the database, while warning that
+existing rights may vary by contribution and jurisdiction. Reusers should read
+the current licensing statement rather than assume a blanket license.
+
+Respect the service's rate limit and stated preference for low-volume,
+human-facing requests.
+
+## Keep API keys private
+
+Open Library's search endpoint does not require a key. Many other APIs do. An
+**API key** is a secret value that identifies an account and may permit
+billable or private access.
+
+Never place a real key in:
+
+- an R or Quarto file;
+- a public repository;
+- a screenshot; or
+- printed output.
+
+Store secrets outside the project, usually in an **environment variable**, a
+named setting that R can read at run time. If a key is exposed, revoke it and
+create a replacement.
+
+## When an API request fails
+
+A failed request leaves the librarian without a checked list. Turning that
+failure into an empty table would hide the difference between "no books found"
+and "the service did not answer." Report the failure and keep the original
+error. Then ask:
+
+1. Is the device connected to the internet?
+2. Is the endpoint address correct?
+3. Does the service require a key or other permission?
+4. Did the request exceed a rate limit?
+5. Did the response format change?
+
+The code in this lesson stops when the request fails or the response lacks the
+expected structure. The interruption is visible instead of being published as
+an apparently complete result.
+
+## What to remember
+
+- An API request asks a service for structured information.
+- Query parameters describe what to return and how much.
+- Check the status and response type before using the body.
+- Some JSON structures can be reshaped into rows and columns in R.
+- Live API results may change even when the code stays the same.
+- A dated fixture can preserve the output used in a published example.
+- Keys and other secrets never belong in published code.
+
+The librarian ends with five candidate records, not five recommendations. The
+request can be tried again, while the dated fixture preserves the reply shown
+here. Human judgment still decides which books belong on the reading list.
+
+## Sources
+
+- [Open Library Search API documentation](https://openlibrary.org/dev/docs/api/search)
+- [Open Library API usage and rate limits](https://openlibrary.org/developers/api)
+- [Open Library licensing statement](https://openlibrary.org/developers/licensing)
+- [RFC 8259: The JSON Data Interchange Format](https://www.rfc-editor.org/rfc/rfc8259)
+- [httr2 request documentation](https://httr2.r-lib.org/reference/request.html)
+- [httr2 request performance and error handling](https://httr2.r-lib.org/reference/req_perform.html)
+- [httr2 JSON response documentation](https://httr2.r-lib.org/reference/resp_body_raw.html)

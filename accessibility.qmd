@@ -1,0 +1,59 @@
+---
+title: "Accessibility"
+description: "How this teaching site is tested and how to report an access problem."
+toc: true
+---
+
+This project aims to meet WCAG 2.2 Level AA and to work for readers who use
+screen readers, keyboards, zoom, forced colors, reduced motion, or other access
+tools.
+
+Automated checks help find barriers. They do not prove that every person can use
+the site. Real experiences and reports remain necessary.
+
+## What the site checks
+
+Every page is tested with axe-core in a real browser. Additional browser tests
+check:
+
+- keyboard access to available lessons;
+- visible focus on controls and links;
+- a skip link that moves to the main content;
+- search focus returning to the search button;
+- page reflow at a 320-pixel viewport;
+- horizontal keyboard scrolling inside the periodic table;
+- visible tile status when colors are forced; and
+- reduced motion when that preference is active.
+
+The build also checks headings, table captions, link destinations, page
+language, and the difference between available and planned lessons.
+
+## Using the periodic table
+
+Tiles with a solid border and the words **Read lesson** are links. Dashed tiles
+say **Planned** and are plain text, not disabled controls.
+
+The table is wider than a phone screen. Touch users can swipe sideways.
+Keyboard users can focus the table and use the left and right arrow keys.
+Each group prints its stage and group name, so color is never the only way to
+understand the organization.
+
+## Checks that still need people
+
+Before a public release, the site also needs testing with current versions of
+NVDA, JAWS, VoiceOver, or another screen reader used by the intended audience.
+Manual review should include:
+
+- heading and landmark announcements;
+- table reading order;
+- link and button names;
+- browser zoom at 200% and 400%;
+- keyboard use without a pointer;
+- high-contrast and forced-colors settings; and
+- reading effort for people with cognitive disabilities.
+
+## Report a barrier
+
+[Open an accessibility issue](https://github.com/farach/periodic_table_nlp/issues/new)
+with the page address, what you were trying to do, the browser or assistive
+technology used, and what happened. Do not include private information.

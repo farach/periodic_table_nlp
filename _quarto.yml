@@ -1,0 +1,71 @@
+project:
+  type: website
+  output-dir: _site
+  execute-dir: project
+  render:
+    - index.qmd
+    - accessibility.qmd
+    - 1_source_data_loading/*.qmd
+
+website:
+  title: "Periodic Table of NLP Tasks in R"
+  description: "Practical notes on natural language processing tasks in R."
+  repo-url: "https://github.com/farach/periodic_table_nlp"
+  repo-actions: [source, issue]
+  search: true
+  page-navigation: true
+  navbar:
+    right:
+      - icon: github
+        href: "https://github.com/farach/periodic_table_nlp"
+        aria-label: "GitHub repository"
+  sidebar:
+    style: docked
+    contents:
+      - href: index.qmd
+        text: Home
+      - href: 1_source_data_loading/01-bits-to-character-encoding.qmd
+        text: How computers store text
+      - href: 1_source_data_loading/02-manual-typewriting.qmd
+        text: Finding patterns in text
+      - href: 1_source_data_loading/03-loading-structured-datafile.qmd
+        text: Loading a structured data file
+      - href: 1_source_data_loading/04-generating-a-corpus.qmd
+        text: Building a text corpus
+      - href: 1_source_data_loading/05-loading-from-api.qmd
+        text: Loading data from an API
+      - href: accessibility.qmd
+        text: Accessibility
+  page-footer:
+    left: "Plain-language NLP lessons with examples that run."
+    right:
+      - text: "Accessibility"
+        href: accessibility.qmd
+      - text: "Source"
+        href: "https://github.com/farach/periodic_table_nlp"
+
+format:
+  html:
+    theme: cosmo
+    css:
+      - styles.css
+      - periodic-table.css
+    toc: true
+    toc-depth: 3
+    code-copy: true
+    code-overflow: wrap
+    anchor-sections: false
+    title-block-banner: true
+    include-before-body: accessibility-before-body.html
+    include-after-body: accessibility-after-body.html
+
+execute:
+  eval: true
+  echo: true
+  output: true
+  warning: true
+  message: false
+  error: false
+  cache: false
+
+lang: en

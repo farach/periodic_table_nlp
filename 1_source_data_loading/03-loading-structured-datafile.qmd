@@ -1,0 +1,325 @@
+---
+title: "Loading a structured data file"
+subtitle: "Open a CSV file and check what R received"
+author: "Alex Farach"
+description: "Learn how rows, columns, missing values, and text encodings affect a CSV file in R."
+categories: [source data loading, CSV, data quality]
+---
+
+Before a community team's weekly meeting, a coordinator receives one CSV file
+containing feedback from email, web forms, and live chat. The group plans to
+review low ratings. First, the coordinator has to find out what the five
+records contain and whether their structure survived the move into R.
+
+A file can open without an error while a column is missing, an accent mark is
+damaged, or an identification number has changed format. A blank rating can
+also be mistaken for a score if its meaning is not checked. We will follow the
+coordinator's arrival check from the file's raw lines to the one low rating the
+table can support.
+
+::: {.callout-note}
+The feedback records in this lesson are fictional and were created for
+teaching. They do not describe real people or customers.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain how a structured data file organizes information;
+- load a CSV file into R;
+- check rows, columns, and data types;
+- find missing values; and
+- select records that meet a stated condition.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## What makes a file structured?
+
+The first uncertainty is basic: what does each part of the file represent? A
+**structured data file** follows a consistent arrangement. In a CSV file:
+
+- each **row** usually represents one record;
+- each **column** represents one kind of information; and
+- commas separate one column from the next.
+
+CSV stands for **comma-separated values**. The first line often contains the
+column names. Text containing a comma is placed inside quotation marks so that
+the comma remains part of the text. A quoted field can also contain a line
+break, so one physical line does not always equal one record. A quotation mark
+inside a quoted field is usually written twice.
+
+Before asking R to make a table, the coordinator reads the file as plain lines.
+This exposes what is actually stored and keeps the example small enough to
+count by eye.
+
+```{r}
+file_path <- "data/customer_feedback.csv"
+file_lines <- readLines(
+  file_path,
+  encoding = "UTF-8",
+  warn = TRUE
+)
+
+stopifnot(
+  identical(length(file_lines), 6L),
+  identical(
+    file_lines[1],
+    "feedback_id,submitted_at,channel,rating,comment"
+  ),
+  grepl(
+    '"Delivery was quick, thank you!"',
+    file_lines[2],
+    fixed = TRUE
+  )
+)
+
+head(file_lines, 3)
+```
+
+The `stopifnot()` lines are **assertions**, checks that make R stop if an
+expected result changes. They verify the line count, header, and quoted first
+comment. There are six lines in all: one header and five records. The first
+comment contains a comma, and its quotation marks keep the full sentence in one
+field rather than splitting it across columns. This line count works because
+the teaching file has no quoted line breaks.
+
+## Load the CSV into R
+
+The line count and header are as expected, so the next step is to organize the
+records. `read.csv()` turns the file into a **data frame**, R's table-like
+structure. We specify UTF-8, a common way to store characters from many
+languages, so R reads the accented text using the file's encoding.
+
+```{r}
+feedback <- read.csv(
+  file = file_path,
+  fileEncoding = "UTF-8",
+  na.strings = "",
+  colClasses = c(
+    feedback_id = "character",
+    submitted_at = "character",
+    channel = "character",
+    rating = "integer",
+    comment = "character"
+  ),
+  check.names = FALSE
+)
+
+stopifnot(
+  identical(nrow(feedback), 5L),
+  identical(ncol(feedback), 5L),
+  identical(
+    names(feedback),
+    c("feedback_id", "submitted_at", "channel", "rating", "comment")
+  ),
+  identical(feedback$feedback_id, as.character(1001:1005)),
+  identical(
+    feedback$comment[2],
+    "The café listing was easy to find."
+  )
+)
+
+knitr::kable(
+  feedback,
+  col.names = c("Feedback ID", "Submitted", "Channel", "Rating", "Comment"),
+  caption = "Customer feedback loaded from the CSV file",
+  row.names = FALSE
+)
+```
+
+All five records appear in five columns. The comma in the first comment stayed
+inside the comment, and the accented letters in `café` display correctly. The
+final comment, `"Muy útil y fácil de usar"`, is Spanish for "Very useful and
+easy to use."
+
+The teaching file's data dictionary defines a blank rating as missing.
+`na.strings = ""` applies that rule while loading. A real project should use
+the missing-value rules supplied by its data provider. The literal text
+`"NA"`, zero, and a blank field must not be treated as equivalent without such
+evidence.
+
+Those checks show that the visible layout survived the trip into R. We still
+need to check how R interpreted each column.
+
+### Why choose the column types?
+
+The `colClasses` setting tells R which **data type** to use for each column. A
+data type records whether values should behave as text, whole numbers, dates,
+or another kind of information.
+
+- identification numbers are text because they label records;
+- dates begin as text so we can convert them deliberately;
+- ratings are whole numbers; and
+- channels and comments are text.
+
+Treating an ID as text protects leading zeros. For example, the label `"0012"`
+should remain different from `"12"` when that difference exists in the source.
+
+We can ask R to report the type it used for every column.
+
+```{r}
+column_types <- vapply(
+  feedback,
+  function(column) class(column)[1],
+  character(1)
+)
+
+stopifnot(
+  identical(
+    unname(column_types),
+    c("character", "character", "character", "integer", "character")
+  )
+)
+
+knitr::kable(
+  data.frame(
+    column = names(column_types),
+    type = unname(column_types)
+  ),
+  col.names = c("Column", "Type used by R"),
+  caption = "The type assigned to each column",
+  row.names = FALSE
+)
+```
+
+R reports `character` for text and `integer` for whole numbers. Here,
+`character` is R's name for text; a value may contain an entire comment.
+Choosing these types deliberately prevents R from turning record labels into
+quantities.
+
+## Convert the date column
+
+The submission dates have arrived as text. `as.Date()` converts them to R's
+date type so the coordinator can sort and compare them as calendar dates.
+
+```{r}
+feedback$submitted_at <- as.Date(
+  feedback$submitted_at,
+  format = "%Y-%m-%d"
+)
+
+stopifnot(
+  inherits(feedback$submitted_at, "Date"),
+  identical(
+    range(feedback$submitted_at),
+    as.Date(c("2026-08-21", "2026-08-25"))
+  )
+)
+
+knitr::kable(
+  feedback[c("feedback_id", "submitted_at", "channel")],
+  col.names = c("Feedback ID", "Submitted", "Channel"),
+  caption = "Submission dates after conversion",
+  row.names = FALSE
+)
+```
+
+The format `%Y-%m-%d` means four-digit year, two-digit month, and two-digit day.
+Writing it explicitly records the order expected in this file instead of
+leaving that order to a guess.
+
+## Find missing information
+
+With the rows, columns, and types accounted for, the coordinator can ask which
+values are absent. R uses `NA` to represent a **missing value**. The CSV
+contains one blank rating, which `read.csv()` changed to `NA`.
+
+```{r}
+missing_by_column <- colSums(is.na(feedback))
+
+stopifnot(
+  identical(
+    unname(as.integer(missing_by_column)),
+    c(0L, 0L, 0L, 1L, 0L)
+  ),
+  is.na(feedback$rating[3])
+)
+
+knitr::kable(
+  data.frame(
+    column = names(missing_by_column),
+    missing_values = as.integer(missing_by_column)
+  ),
+  col.names = c("Column", "Missing values"),
+  caption = "Missing values in each column",
+  row.names = FALSE
+)
+```
+
+The rating column has one missing value. A blank tells us only that no rating
+is recorded in this file. It is different from a rating of zero and should not
+be replaced without evidence about what the blank means.
+
+## Select a record that needs attention
+
+Only now does the coordinator select feedback with a rating of two or lower.
+The expression `!is.na(feedback$rating)` keeps the unknown rating out of the
+comparison rather than treating it as high or low.
+
+```{r}
+low_ratings <- feedback[
+  !is.na(feedback$rating) & feedback$rating <= 2,
+  c("feedback_id", "rating", "comment")
+]
+
+stopifnot(
+  identical(nrow(low_ratings), 1L),
+  identical(low_ratings$feedback_id, "1004"),
+  identical(low_ratings$rating, 2L)
+)
+
+knitr::kable(
+  low_ratings,
+  col.names = c("Feedback ID", "Rating", "Comment"),
+  caption = "Feedback with a rating of two or lower",
+  row.names = FALSE
+)
+```
+
+One record meets the condition: feedback `1004`, which says that the parcel
+arrived late. The missing rating remains separate because the file does not
+tell us how that person would have scored the experience.
+
+## Questions to ask about any structured file
+
+The five-row arrival check is complete, but technical tidiness cannot answer
+every question about the feedback. Before analyzing any structured file, ask:
+
+1. What does one row represent?
+2. What does each column mean?
+3. Which encoding does the file use?
+4. How are missing values recorded?
+5. Are dates and identification numbers stored correctly?
+6. Who created the file, and what information did they leave out?
+
+A tidy table cannot tell you whether the collection process was fair or
+complete. These rows represent only the feedback that reached the recorded
+channels and was included in this file. The file's origin, exclusions, and
+limits belong alongside the technical checks.
+
+## What to remember
+
+- A structured file uses a consistent arrangement of rows and columns.
+- Quotation marks protect text that contains a separator such as a comma.
+- Choose important column types instead of relying on guesses.
+- Check missing values before filtering or summarizing.
+- Opening a file successfully is only the beginning of checking it.
+
+At the meeting, the coordinator can report five records, one missing rating,
+and one recorded rating of two. The blank remains a blank, and the file's reach
+remains an open question. That is the useful discipline of an arrival check:
+say exactly what is recorded, what is blank, and what the file cannot settle.
+
+## Sources
+
+- [R documentation for `read.csv()` and `read.table()`](https://stat.ethz.ch/R-manual/R-devel/library/utils/html/read.table.html)
+- [R Data Import/Export manual](https://cran.r-project.org/doc/manuals/r-release/R-data.html)
+- [RFC 4180: Common format and MIME type for CSV files](https://www.rfc-editor.org/rfc/rfc4180)

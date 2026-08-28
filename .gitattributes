@@ -1,0 +1,7 @@
+*.csv text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.qmd text eol=lf
+*.R text eol=lf
+*.css text eol=lf
+renv/activate.R -whitespace

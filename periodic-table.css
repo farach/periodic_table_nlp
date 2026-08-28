@@ -1,0 +1,418 @@
+:root {
+  --map-surface: #f6f2e9;
+  --map-canvas: #fcfaf5;
+  --map-border: #817d73;
+  --map-text: #182127;
+  --map-muted: #555c61;
+  --map-focus: #005fcc;
+  --source-bg: #e9f0f2;
+  --source-border: #476979;
+  --source-text: #173341;
+  --language-bg: #f3ece0;
+  --language-border: #80643d;
+  --language-text: #432f17;
+  --model-bg: #e9efe7;
+  --model-border: #527055;
+  --model-text: #1e3b25;
+  --generation-bg: #edf0e5;
+  --generation-border: #657247;
+  --generation-text: #2e3b17;
+  --systems-bg: #f1eee2;
+  --systems-border: #746d4b;
+  --systems-text: #3e391f;
+  --visualization-bg: #eeebf1;
+  --visualization-border: #6b6178;
+  --visualization-text: #342e3f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --map-surface: #171b1d;
+    --map-canvas: #202427;
+    --map-border: #8d9699;
+    --map-text: #edf0f2;
+    --map-muted: #bac1c4;
+    --map-focus: #8cc8ff;
+    --source-bg: #17323c;
+    --source-border: #76a9bb;
+    --source-text: #eaf4f7;
+    --language-bg: #3c2f20;
+    --language-border: #c2a16f;
+    --language-text: #fbf1e3;
+    --model-bg: #213629;
+    --model-border: #85ad8a;
+    --model-text: #edf6ed;
+    --generation-bg: #2d381f;
+    --generation-border: #a5b676;
+    --generation-text: #f2f6e9;
+    --systems-bg: #393625;
+    --systems-border: #b8aa70;
+    --systems-text: #f5f2e8;
+    --visualization-bg: #332f3a;
+    --visualization-border: #aa9ab7;
+    --visualization-text: #f5f1f8;
+  }
+}
+
+.task-map-intro {
+  max-width: 72ch;
+}
+
+.task-map-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1.5rem;
+  max-width: 72ch;
+  margin: 1.25rem 0 0.65rem;
+  padding: 0.65rem 0;
+  border-block: 1px solid var(--map-border);
+  color: var(--map-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.task-map-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.task-map-key-swatch {
+  box-sizing: border-box;
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
+  border: 1px dashed var(--source-border);
+  border-radius: 0;
+  background-color: var(--source-bg);
+}
+
+.task-map-key-swatch.available {
+  border: 2px solid var(--source-border);
+}
+
+.task-map-instructions {
+  max-width: 72ch;
+  margin: 0 0 0.75rem;
+  color: var(--map-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.periodic-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 1rem 1rem 0.85rem;
+  border-block: 1px solid var(--map-border);
+  border-inline: 0;
+  border-radius: 0;
+  background-color: var(--map-surface);
+  scroll-snap-type: x proximity;
+  scrollbar-color: var(--map-border) var(--map-surface);
+  scrollbar-gutter: stable;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.periodic-scroll:focus-visible {
+  outline: 4px solid var(--map-focus);
+  outline-offset: 3px;
+}
+
+.periodic-table {
+  display: grid;
+  width: max-content;
+  grid-template-columns: repeat(15, 7.6rem);
+  align-items: end;
+  gap: 0.375rem;
+}
+
+.element-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  content-visibility: auto;
+  contain-intrinsic-inline-size: 7.6rem;
+  contain-intrinsic-block-size: 61.3rem;
+  scroll-snap-align: start;
+}
+
+.element-group-title {
+  order: 2;
+  min-height: 4.8rem;
+  margin: 0;
+  padding: 0.65rem 0.2rem 0;
+  border-top: 2px solid var(--tile-border);
+  color: var(--map-text);
+  font-size: 0.73rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
+  text-wrap: balance;
+}
+
+.element-stage {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--tile-text);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.element-group-name {
+  display: block;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.element-stack {
+  order: 1;
+  display: flex;
+  min-height: 56.5rem;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.element-slot {
+  margin: 0;
+  padding: 0;
+}
+
+.nlp-element {
+  position: relative;
+  display: grid;
+  box-sizing: border-box;
+  min-height: 7.75rem;
+  grid-template-rows: auto minmax(2.4rem, 1fr) auto auto;
+  padding: 0.55rem;
+  border: 1px solid var(--tile-border);
+  border-radius: 1px;
+  background-color: var(--tile-bg);
+  color: var(--tile-text);
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.stage-source {
+  --tile-bg: var(--source-bg);
+  --tile-border: var(--source-border);
+  --tile-text: var(--source-text);
+}
+
+.stage-language {
+  --tile-bg: var(--language-bg);
+  --tile-border: var(--language-border);
+  --tile-text: var(--language-text);
+}
+
+.stage-model {
+  --tile-bg: var(--model-bg);
+  --tile-border: var(--model-border);
+  --tile-text: var(--model-text);
+}
+
+.stage-generation {
+  --tile-bg: var(--generation-bg);
+  --tile-border: var(--generation-border);
+  --tile-text: var(--generation-text);
+}
+
+.stage-systems {
+  --tile-bg: var(--systems-bg);
+  --tile-border: var(--systems-border);
+  --tile-text: var(--systems-text);
+}
+
+.stage-visualization {
+  --tile-bg: var(--visualization-bg);
+  --tile-border: var(--visualization-border);
+  --tile-text: var(--visualization-text);
+}
+
+.element-number {
+  justify-self: start;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.element-kind {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  max-width: 68%;
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  line-height: 1.1;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.element-symbol {
+  align-self: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.element-name {
+  align-self: end;
+  min-height: 2.25rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.element-status {
+  align-self: end;
+  justify-self: stretch;
+  margin-top: 0.45rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--tile-border);
+  font-size: 0.59rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  line-height: 1.25;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.is-available {
+  border-width: 2px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 95, 204, 0.2);
+}
+
+.is-available:hover {
+  color: var(--tile-text);
+  border-color: var(--map-text);
+  background-color: var(--map-canvas);
+}
+
+.is-available:hover .element-name,
+.is-available:hover .element-status {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.14em;
+}
+
+.is-available:active {
+  background-color: var(--map-surface);
+}
+
+.is-available:focus-visible {
+  z-index: 2;
+  outline: 4px solid var(--map-focus);
+  outline-offset: 3px;
+}
+
+.is-planned {
+  border-style: dashed;
+}
+
+.task-map-note {
+  max-width: 72ch;
+  margin-top: 0.75rem;
+  color: var(--map-muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 700px) {
+  .periodic-scroll {
+    padding: 0.75rem;
+  }
+
+  .periodic-table {
+    grid-template-columns: repeat(15, 7.25rem);
+  }
+
+  .element-group {
+    contain-intrinsic-inline-size: 7.25rem;
+  }
+
+  .nlp-element {
+    min-height: 7.5rem;
+  }
+
+  .element-stack {
+    min-height: 54.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-available {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .task-map-key-swatch,
+  .periodic-scroll,
+  .nlp-element {
+    background-color: Canvas;
+    color: CanvasText;
+  }
+
+  .task-map-key-swatch {
+    border-color: GrayText;
+  }
+
+  .task-map-key-swatch.available,
+  .is-available {
+    border-color: LinkText;
+    color: LinkText;
+  }
+
+  .is-planned {
+    border-color: GrayText;
+  }
+
+  .element-group-title,
+  .element-status {
+    border-color: CanvasText;
+  }
+
+  .periodic-scroll:focus-visible,
+  .is-available:focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+@media print {
+  .periodic-scroll {
+    overflow: visible;
+    padding: 0;
+    border-block: 0;
+  }
+
+  .periodic-table {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .element-group {
+    content-visibility: visible;
+    contain-intrinsic-size: none;
+  }
+
+  .element-stack {
+    min-height: 0;
+  }
+}
