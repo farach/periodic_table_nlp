@@ -445,11 +445,12 @@ A rule that fires rarely is where in-sample results are least trustworthy. There
 is no way to distinguish a rule that is genuinely reliable from one that has not
 yet met the case that breaks it.
 
-## Rules that fire together are not independent evidence
+## Separate conflicting rules from correlated support
 
-Weak supervision usually combines votes as though each rule were a separate
-witness. That assumption fails when two rules react to the same words, and the
-failure inflates confidence rather than reducing it.
+Rules can fire on the same row because they conflict or because they repeat the
+same evidence. Those cases have different consequences. The example below
+contains opposing-label conflicts. It does not estimate correlation or show
+confidence inflation.
 
 ```{r}
 vote_matrix <- as.matrix(rule_votes[rule_labels])
@@ -506,14 +507,14 @@ seen. `s013` triggers `training` and `requirement` because a certificate is a
 credential and a credential looks like training. `s020` triggers `requirement`
 and `schedule` because a required shift is both a demand and a time.
 
-That is what dependence between rules looks like at this scale: shared trigger
-words, not a statistical abstraction. A larger rule set produces the same
-pattern in bulk, which is the problem label models such as Snorkel are built
-for. They estimate how accurate each rule is and how rules correlate, without
-reference labels, and weight the votes accordingly.
+These are conflict overlaps, not duplicate supporting votes. Correlated support
+would require two rules that tend to cast the same label because they reuse the
+same signal, such as two training rules built from nearly identical keyword
+lists. A label model can estimate rule accuracy and dependence under stronger
+data and modeling assumptions, but this table does not supply that evidence.
 
-This lesson does not fit such a model, and it should not: four rules, 28 rows,
-and two overlaps do not contain enough information to estimate accuracies and
+This lesson does not fit such a model: four rules, 28 rows, and two conflicting
+overlaps do not contain enough information to estimate accuracies and
 correlations. The scope here stops at measuring where the rules agree, where
 they collide, and where they say nothing.
 

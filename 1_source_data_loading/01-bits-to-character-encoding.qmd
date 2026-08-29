@@ -249,13 +249,15 @@ to the two-byte UTF-8 sequence `c3 a9`. `sub = NA_character_` tells R to return
 a missing value rather than silently replace a byte that cannot be converted.
 That visible missing value gives us a chance to investigate the source.
 
-## Bytes that no decoder can read
+## Bytes that are not well-formed UTF-8
 
 The attendance file arrived from a system that had already lost track of its own
 encoding, so part of it is not valid UTF-8 at all. UTF-8 has a strict shape: a
 byte such as `c3` promises that a continuation byte follows. When the promised
-byte is missing, the sequence is **malformed** and no decoder can recover the
-intended character.
+byte is missing, the sequence is **malformed**, and a UTF-8 decoder must reject
+or replace it. Another encoding, such as Latin-1, can assign characters to the
+same bytes, but the bytes alone cannot recover which interpretation the author
+intended.
 
 The example below builds `Hi ` followed by `c3 28`. The byte `28` is an opening
 parenthesis, not a continuation byte, so the pair is broken.

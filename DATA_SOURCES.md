@@ -13,6 +13,9 @@ The files below are fictional and were created for this project:
 - `data/workforce/workforce_sentences.csv`
 - `data/workforce/crowd_annotations.csv`
 - `data/workforce/training-flyer-ground-truth.txt`
+- `data/workforce/training-flyer-ocr-5.3.2.txt`
+- `data/workforce/training-flyer-degraded-ocr-5.3.2.txt`
+- `data/workforce/training-flyer-metadata.csv`
 - `data/workforce/training-flyer.png`
 
 They contain no real workers, applicants, employers, customers, or research

@@ -239,9 +239,10 @@ honest version of that sentence names the frame: the population the collection
 was drawn from, the rule used to draw it, and what the rule left out.
 
 For these three articles the frame is small and the answer is unusual. The
-collection is not a sample at all. It is every article this fictional help
-center had published as of the stated date, which makes it a census of a tiny
-frame rather than a sample of the support questions people actually ask.
+collection is not a sample within its stated frame. It is every active,
+non-archived article this fictional help center published as of the collection
+date, which makes it a census of that tiny frame rather than a sample of the
+support questions people actually ask.
 
 That distinction changes what the corpus can support later. A count over a
 census of published articles describes what the help center wrote. It does not
@@ -259,8 +260,8 @@ collection_record <- tibble(
     "unit"
   ),
   value = c(
-    "articles published by one fictional help center",
-    "all published articles, no sampling",
+    "active, non-archived articles from one fictional help center",
+    "all active articles on the collection date, no sampling",
     "2026-08-28",
     "drafts, archived articles, and reader messages",
     "questions people asked that no article answers",
@@ -276,7 +277,7 @@ stopifnot(
     collection_record$value[
       collection_record$field == "selection rule"
     ],
-    "all published articles, no sampling"
+    "all active articles on the collection date, no sampling"
   )
 )
 
@@ -561,8 +562,11 @@ is invisible at four and prohibitive at four million.
 ### Keep families together, then report what left
 
 A near duplicate creates a second problem. If one copy trains a model and the
-other tests it, the test measures memorization. The fix is to group related
-documents into a **family** and let a split move the whole family at once.
+other tests it, the overlap may inflate the evaluation by letting the model
+reuse wording or memorize examples. This lesson does not train a model, so it
+cannot determine which mechanism would cause the inflation. The preventive
+step is to group related documents into a **family** and let a split move the
+whole family at once.
 
 ```{r}
 families <- incoming |>

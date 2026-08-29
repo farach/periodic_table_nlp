@@ -312,28 +312,39 @@ new_selector_hits <- length(
 
 collect_cards <- function(page, selector, expected) {
   cards <- rvest::html_elements(page, selector)
+  if (!identical(length(cards), expected)) {
+    stop(
+      str_c(
+        "selector ",
+        selector,
+        " found ",
+        length(cards),
+        " cards; expected ",
+        expected
+      ),
+      call. = FALSE
+    )
+  }
 
   list(
     selector = selector,
     found = length(cards),
     expected = expected,
-    status = if (identical(length(cards), expected)) {
-      "counts agree"
-    } else {
-      "stop: selector no longer matches the page"
-    }
+    status = "counts agree"
   )
 }
 
-drift_check <- collect_cards(redesigned_page, ".job-card", 1L)
+drift_error <- tryCatch(
+  collect_cards(redesigned_page, ".job-card", 1L),
+  error = conditionMessage
+)
 
 stopifnot(
   identical(old_selector_hits, 0L),
   identical(new_selector_hits, 1L),
-  identical(drift_check$found, 0L),
   identical(
-    drift_check$status,
-    "stop: selector no longer matches the page"
+    drift_error,
+    "selector .job-card found 0 cards; expected 1"
   ),
   identical(
     collect_cards(job_page, ".job-card", 6L)$status,
@@ -362,9 +373,10 @@ empty page produces. Without the expected count, the scraper would write an
 empty table and the day's collection would look like a day with no postings.
 An expected count turns a silent redesign into a stop.
 
-The second page is harder. Its job text is not in the markup at all. The
-browser would fetch it and place it on the screen afterwards, so what a saved
-file contains is a container and a payload.
+The second page is harder. Its visible container has no job text. The same file
+stores a JSON payload in a script element that application code could read and
+render later. This fixture does not execute that JavaScript; it separates
+visible markup from embedded data.
 
 ```{r}
 dynamic_html <- str_c(
@@ -411,13 +423,14 @@ tibble(
 )
 ```
 
-The container holds no characters. The job title exists on the page, inside a
-script element that the browser reads and rvest treats as text.
+The container holds no characters. The job title exists only in the embedded
+script payload, which rvest can read as text but does not render into the
+container.
 
-This example is deliberately gentle: the payload is sitting in the file. Many
-sites fetch it separately after the page loads, in which case a saved copy of
-the HTML contains nothing to extract, and neither rvest nor any other HTML
-parser can recover it.
+This example is deliberately gentle because the payload is already in the
+file. Many sites fetch data separately after the page loads. A saved copy of
+their initial HTML may contain nothing to extract, and an HTML parser cannot
+recover a response that was never saved.
 
 Three routes exist from there, and they differ in cost and in what they promise.
 A documented API returns the same data with stated terms, and is the first thing

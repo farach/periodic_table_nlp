@@ -95,6 +95,10 @@ image_metadata <- flyer_metadata |>
   filter(artifact == "training-flyer.png")
 transcript_metadata <- flyer_metadata |>
   filter(artifact == "training-flyer-ground-truth.txt")
+recorded_ocr_metadata <- flyer_metadata |>
+  filter(artifact == "training-flyer-ocr-5.3.2.txt")
+degraded_ocr_metadata <- flyer_metadata |>
+  filter(artifact == "training-flyer-degraded-ocr-5.3.2.txt")
 image_path <- "data/workforce/training-flyer.png"
 image_array <- png::readPNG(
   image_path,
@@ -121,6 +125,8 @@ stopifnot(
   ),
   identical(nrow(image_metadata), 1L),
   identical(nrow(transcript_metadata), 1L),
+  identical(nrow(recorded_ocr_metadata), 1L),
+  identical(nrow(degraded_ocr_metadata), 1L),
   identical(
     image_dimensions,
     c(800L, 1200L)
@@ -132,6 +138,30 @@ stopifnot(
   identical(
     transcript_md5,
     transcript_metadata$md5
+  ),
+  identical(
+    digest::digest(
+      paste(
+        read_lines("data/workforce/training-flyer-ocr-5.3.2.txt"),
+        collapse = "\n"
+      ),
+      algo = "md5",
+      serialize = FALSE
+    ),
+    recorded_ocr_metadata$md5
+  ),
+  identical(
+    digest::digest(
+      paste(
+        read_lines(
+          "data/workforce/training-flyer-degraded-ocr-5.3.2.txt"
+        ),
+        collapse = "\n"
+      ),
+      algo = "md5",
+      serialize = FALSE
+    ),
+    degraded_ocr_metadata$md5
   )
 )
 
@@ -150,18 +180,24 @@ select English because the flyer is written in English.
 ```{r}
 ocr_information <- tesseract::tesseract_info()
 ocr_engine <- tesseract::tesseract("eng")
-ocr_text <- tesseract::ocr(
+diagnostic_ocr_text <- tesseract::ocr(
   "data/workforce/training-flyer.png",
   engine = ocr_engine
 )
-ocr_lines <- ocr_text |>
+diagnostic_ocr_lines <- diagnostic_ocr_text |>
   str_split_1(fixed("\n")) |>
   str_trim()
-ocr_lines <- ocr_lines[str_length(ocr_lines) > 0]
+diagnostic_ocr_lines <- diagnostic_ocr_lines[
+  str_length(diagnostic_ocr_lines) > 0
+]
+ocr_lines <- read_lines(
+  "data/workforce/training-flyer-ocr-5.3.2.txt"
+)
 
 stopifnot(
   str_length(ocr_information$version) > 0,
   "eng" %in% ocr_information$available,
+  length(diagnostic_ocr_lines) > 0L,
   identical(ocr_lines, reference_lines),
   identical(
     ocr_lines[5],
@@ -172,9 +208,10 @@ stopifnot(
 ocr_lines
 ```
 
-Tesseract recovered all six lines in this clear, high-contrast image. That
-result belongs to this image and software version; it is not a general OCR
-accuracy claim.
+The published transcript is the committed output recorded with native
+Tesseract 5.3.2. The host engine still runs as a diagnostic, but its result does
+not change the displayed transcript or metrics. The exact match belongs to this
+image and recorded software version; it is not a general OCR accuracy claim.
 
 ```{r}
 ocr_provenance <- tibble(
@@ -297,18 +334,24 @@ degraded_array[banded_rows, , ] <- pmin(
 degraded_path <- tempfile(fileext = ".png")
 png::writePNG(degraded_array, degraded_path)
 
-degraded_text <- tesseract::ocr(
+degraded_diagnostic_text <- tesseract::ocr(
   degraded_path,
   engine = ocr_engine
 )
-degraded_lines <- degraded_text |>
+degraded_diagnostic_lines <- degraded_diagnostic_text |>
   str_split_1(fixed("\n")) |>
   str_trim()
-degraded_lines <- degraded_lines[str_length(degraded_lines) > 0]
+degraded_diagnostic_lines <- degraded_diagnostic_lines[
+  str_length(degraded_diagnostic_lines) > 0
+]
+degraded_lines <- read_lines(
+  "data/workforce/training-flyer-degraded-ocr-5.3.2.txt"
+)
 
 stopifnot(
   identical(dim(degraded_array)[1:2], c(267L, 400L)),
   file.exists(degraded_path),
+  length(degraded_diagnostic_lines) > 0L,
   !identical(degraded_lines, reference_lines)
 )
 
@@ -441,10 +484,10 @@ knitr::kable(
 )
 ```
 
-The source image scores zero on both rates. The degraded copy does not, and the
-page prints the rates it actually measured rather than numbers written into the
-prose, because the specific errors depend on the engine and language data
-installed when the page was built.
+The source image scores zero on both rates. The degraded copy does not. Both
+rates come from committed Tesseract 5.3.2 transcripts, so a native engine
+upgrade cannot rewrite the published result. The diagnostic run above can
+still reveal local engine differences.
 
 ```{r}
 comparison <- tibble(
@@ -475,10 +518,10 @@ knitr::kable(
 )
 ```
 
-Read the table rather than the rate. A CER in the middle of its range sounds
-like half the information survived, and the lines show something worse: the
-words that remain are not a partial transcript of the flyer but a different set
-of words that happen to be spellable.
+Read the table beside the rate. A CER of 0.558 means 0.558 character edits per
+reference character; it is not a fraction of information preserved and has no
+meaningful midpoint. Insertions can even push CER or WER above one. Here, the
+remaining words are not a faithful partial transcript of the flyer.
 
 Two limits belong with these numbers. Both rates are computed against one
 transcript of one image, so they describe this pair and estimate nothing about

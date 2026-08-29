@@ -10,7 +10,7 @@ A planning meeting begins with the Lab's labeled sentences on the table. The
 team has 28 reviewed text units from a job board page and a training flyer.
 Six came from the flyer, and 22 came from job-detail lines.
 
-The labels answer one question: what does each sentence say? The next question
+The labels answer one question: what does each text unit say? The next question
 is smaller and more mechanical. Before the Lab can count words, it has to decide
 what a word is.
 
@@ -376,9 +376,9 @@ knitr::kable(
 
 The first sentence takes nine subword pieces. The phrase `unpredictability
 biotechnology`, which does not appear in the Riverton rows, takes 21 pieces in
-this toy model. A tokenizer used with a real language model learns tens of
-thousands of pieces from far more text and would split that phrase into a
-handful of pieces.
+this toy model. Larger released tokenizers use different training data,
+vocabularies, normalizers, and unknown policies, so their piece counts must be
+measured rather than inferred from this result.
 
 It is tempting to end there with a rule: unfamiliar material costs more pieces.
 The next section shows that the rule is false as stated.
@@ -408,6 +408,7 @@ texts_to_encode <- c(
 )
 
 piece_report <- tibble(
+  example = names(texts_to_encode),
   text = unname(texts_to_encode),
   ids = map(
     unname(texts_to_encode),
@@ -428,6 +429,13 @@ piece_report <- tibble(
     shown_as_subwords = map_chr(
       subwords,
       \(piece_vector) str_c(piece_vector, collapse = " | ")
+    ),
+    display_text = case_when(
+      example == "unseen_chinese" ~
+        "<span lang=\"zh\">培训课程</span>",
+      example == "unseen_greek" ~
+        "<span lang=\"el\">Γλωσσα</span>",
+      TRUE ~ text
     )
   )
 
@@ -439,12 +447,14 @@ stopifnot(
   identical(
     piece_report$shown_as_subwords[3],
     str_c("\u2581 | ", texts_to_encode[["unseen_chinese"]])
-  )
+  ),
+  str_detect(piece_report$display_text[3], fixed("lang=\"zh\"")),
+  str_detect(piece_report$display_text[4], fixed("lang=\"el\""))
 )
 
 knitr::kable(
   piece_report |>
-    select(text, characters, pieces, unknown_pieces, shown_as_subwords),
+    select(display_text, characters, pieces, unknown_pieces, shown_as_subwords),
   col.names = c(
     "Text",
     "Characters",
@@ -453,7 +463,8 @@ knitr::kable(
     "What the subword view shows"
   ),
   caption = "Piece counts and unknown pieces for four texts",
-  row.names = FALSE
+  row.names = FALSE,
+  escape = FALSE
 )
 ```
 
@@ -524,10 +535,10 @@ punctuation and the digits. Both unseen-script texts come back as `<UNK>`, and
 the check confirms the pattern exactly: the texts that fail to round-trip are
 precisely the texts that contained an unknown piece.
 
-This is the property to test whenever a tokenizer feeds a task that must point
-back at the source, such as marking a span, highlighting a match, or aligning a
-label with the characters it came from. A model that cannot reproduce its input
-cannot tell you where in the input anything was.
+Round-trip recovery tests reversible text identity. It does not test source
+alignment: some tokenizers can return offsets into the original input even when
+an unknown id cannot decode to its text. A task that marks spans or highlights
+matches must test those offset mappings separately.
 
 The result gives the team a rule for the meeting: a word count must name the
 rule that made the words, and a piece count must name the vocabulary, the
@@ -538,7 +549,8 @@ script it covers, and what it does with everything else.
 - Tokenization turns text into pieces according to a chosen rule.
 - The first Riverton sentence becomes 5, 6, or 8 word tokens under three rules.
 - Sentence tokenization preserves the 28 rows in this file.
-- BPE represents material it has learned with larger pieces.
+- This toy BPE used larger pieces for some material present in its training
+  text; that pattern is not universal.
 - Piece counts depend on the vocabulary, the script, the normalization the
   model applies, and its policy for unknown characters.
 - Under an unknown-piece policy, unfamiliar text can cost fewer pieces and lose

@@ -347,10 +347,14 @@ reconstructed below from the status codes and body shapes the service documents,
 built inside the lesson with `httr2::response()`. No request leaves the machine.
 
 ```{r}
-saved_response <- function(status, body, extra_headers = list()) {
+saved_response <- function(
+    status,
+    body,
+    url = book_request$url,
+    extra_headers = list()) {
   httr2::response(
     status_code = status,
-    url = book_request$url,
+    url = url,
     method = "GET",
     headers = c(
       list("content-type" = "application/json"),
@@ -371,10 +375,24 @@ make_docs <- function(keys, titles) {
   )
 }
 
+page_one_request <- book_request |>
+  httr2::req_url_query(offset = 0)
+page_two_request <- book_request |>
+  httr2::req_url_query(offset = 5)
+
 rate_limited <- saved_response(
   429L,
   '{"error": "too many requests"}',
-  list("retry-after" = "30")
+  url = page_one_request$url,
+  extra_headers = list("retry-after" = "30")
+)
+date_limited <- saved_response(
+  429L,
+  '{"error": "too many requests"}',
+  url = page_one_request$url,
+  extra_headers = list(
+    "retry-after" = "Wed, 21 Oct 2037 07:28:00 GMT"
+  )
 )
 
 page_one <- saved_response(
@@ -386,7 +404,8 @@ page_one <- saved_response(
       sprintf("Candidate title %d", 1:5)
     ),
     ']}'
-  )
+  ),
+  url = page_one_request$url
 )
 
 page_two <- saved_response(
@@ -398,7 +417,8 @@ page_two <- saved_response(
       c("Candidate title 5", "Candidate title 6")
     ),
     ']}'
-  )
+  ),
+  url = page_two_request$url
 )
 
 field_renamed <- saved_response(
@@ -407,7 +427,14 @@ field_renamed <- saved_response(
     '{"numFound": 1, "start": 0, "docs": [',
     '{"key": "/works/OL7", "name": "Title moved to a new field"}',
     ']}'
-  )
+  ),
+  url = page_one_request$url
+)
+
+docs_missing <- saved_response(
+  200L,
+  '{"numFound": 1, "start": 0}',
+  url = page_one_request$url
 )
 
 stopifnot(
@@ -420,7 +447,10 @@ stopifnot(
   identical(
     httr2::resp_content_type(page_one),
     "application/json"
-  )
+  ),
+  !identical(page_one$url, page_two$url),
+  str_detect(page_one$url, fixed("offset=0")),
+  str_detect(page_two$url, fixed("offset=5"))
 )
 
 httr2::resp_status(rate_limited)
@@ -431,17 +461,46 @@ of them.
 
 ```{r}
 required_fields <- c("key", "title")
+required_top_fields <- c("numFound", "start", "docs")
+retry_reference_time <- as.POSIXct(
+  "2037-10-21 07:27:30",
+  tz = "GMT"
+)
 
-read_saved_page <- function(response, page_size) {
+parse_retry_after <- function(value, now) {
+  if (str_detect(value, "^[0-9]+$")) {
+    return(as.integer(value))
+  }
+
+  parsed <- as.POSIXct(
+    value,
+    format = "%a, %d %b %Y %H:%M:%S GMT",
+    tz = "GMT"
+  )
+  if (is.na(parsed)) {
+    stop("Retry-After is neither delay-seconds nor an HTTP-date")
+  }
+
+  max(
+    0L,
+    as.integer(ceiling(as.numeric(difftime(parsed, now, units = "secs"))))
+  )
+}
+
+read_saved_page <- function(
+    response,
+    page_size,
+    retry_now = retry_reference_time) {
   status <- httr2::resp_status(response)
 
   if (identical(status, 429L)) {
+    retry_after <- httr2::resp_header(response, "retry-after")
     return(list(
       outcome = "rate limited",
-      wait_seconds = as.integer(
-        httr2::resp_header(response, "retry-after")
-      ),
+      request_url = response$url,
+      wait_seconds = parse_retry_after(retry_after, retry_now),
       reported_total = NA_integer_,
+      next_start = NA_integer_,
       records = tibble(
         key = character(),
         title = character()
@@ -452,8 +511,10 @@ read_saved_page <- function(response, page_size) {
   if (!identical(status, 200L)) {
     return(list(
       outcome = "http error",
+      request_url = response$url,
       wait_seconds = NA_integer_,
       reported_total = NA_integer_,
+      next_start = NA_integer_,
       records = tibble(
         key = character(),
         title = character()
@@ -462,6 +523,44 @@ read_saved_page <- function(response, page_size) {
   }
 
   body <- httr2::resp_body_json(response)
+  missing_top_fields <- setdiff(required_top_fields, names(body))
+  if (length(missing_top_fields) > 0L) {
+    return(list(
+      outcome = str_c(
+        "schema failure: missing top-level ",
+        str_c(missing_top_fields, collapse = ", ")
+      ),
+      request_url = response$url,
+      wait_seconds = NA_integer_,
+      reported_total = NA_integer_,
+      next_start = NA_integer_,
+      records = tibble(
+        key = character(),
+        title = character()
+      )
+    ))
+  }
+
+  top_level_types_valid <-
+    is.numeric(body$numFound) &&
+    length(body$numFound) == 1L &&
+    is.numeric(body$start) &&
+    length(body$start) == 1L &&
+    is.list(body$docs)
+  if (!top_level_types_valid) {
+    return(list(
+      outcome = "schema failure: invalid top-level types",
+      request_url = response$url,
+      wait_seconds = NA_integer_,
+      reported_total = NA_integer_,
+      next_start = NA_integer_,
+      records = tibble(
+        key = character(),
+        title = character()
+      )
+    ))
+  }
+
   documents <- body$docs
   absent <- required_fields[
     !map_lgl(
@@ -476,8 +575,28 @@ read_saved_page <- function(response, page_size) {
         "schema failure: missing ",
         str_c(absent, collapse = ", ")
       ),
+      request_url = response$url,
       wait_seconds = NA_integer_,
       reported_total = as.integer(body$numFound),
+      next_start = NA_integer_,
+      records = tibble(
+        key = character(),
+        title = character()
+      )
+    ))
+  }
+
+  start <- as.integer(body$start)
+  reported_total <- as.integer(body$numFound)
+  records_read <- length(documents)
+  more_pages <- start + records_read < reported_total
+  if (records_read == 0L && more_pages) {
+    return(list(
+      outcome = "schema failure: empty page before reported total",
+      request_url = response$url,
+      wait_seconds = NA_integer_,
+      reported_total = reported_total,
+      next_start = NA_integer_,
       records = tibble(
         key = character(),
         title = character()
@@ -486,13 +605,11 @@ read_saved_page <- function(response, page_size) {
   }
 
   list(
-    outcome = if (length(documents) < page_size) {
-      "last page"
-    } else {
-      "full page"
-    },
+    outcome = if (more_pages) "more pages" else "last page",
+    request_url = response$url,
     wait_seconds = NA_integer_,
-    reported_total = as.integer(body$numFound),
+    reported_total = reported_total,
+    next_start = if (more_pages) start + records_read else NA_integer_,
     records = tibble(
       key = map_chr(documents, "key"),
       title = map_chr(documents, "title")
@@ -502,9 +619,11 @@ read_saved_page <- function(response, page_size) {
 
 page_size <- 5L
 refused <- read_saved_page(rate_limited, page_size)
+date_refused <- read_saved_page(date_limited, page_size)
 first_page <- read_saved_page(page_one, page_size)
 second_page <- read_saved_page(page_two, page_size)
 drifted <- read_saved_page(field_renamed, page_size)
+missing_docs <- read_saved_page(docs_missing, page_size)
 
 collected <- bind_rows(
   first_page$records,
@@ -517,10 +636,17 @@ shortfall <- first_page$reported_total - nrow(distinct_records)
 stopifnot(
   identical(refused$outcome, "rate limited"),
   identical(refused$wait_seconds, 30L),
+  identical(date_refused$wait_seconds, 30L),
   identical(nrow(refused$records), 0L),
-  identical(first_page$outcome, "full page"),
+  identical(first_page$outcome, "more pages"),
+  identical(first_page$next_start, 5L),
+  !identical(first_page$request_url, second_page$request_url),
   identical(second_page$outcome, "last page"),
   identical(drifted$outcome, "schema failure: missing title"),
+  identical(
+    missing_docs$outcome,
+    "schema failure: missing top-level docs"
+  ),
   identical(nrow(drifted$records), 0L),
   identical(nrow(collected), 7L),
   identical(nrow(distinct_records), 6L),
@@ -531,22 +657,28 @@ stopifnot(
 knitr::kable(
   tibble(
     saved_reply = c(
-      "429 with Retry-After",
+      "429 with delay-seconds",
+      "429 with HTTP-date",
       "page 1 of results",
       "page 2 of results",
-      "title field renamed"
+      "title field renamed",
+      "docs field missing"
     ),
     outcome = c(
       refused$outcome,
+      date_refused$outcome,
       first_page$outcome,
       second_page$outcome,
-      drifted$outcome
+      drifted$outcome,
+      missing_docs$outcome
     ),
     records_returned = c(
       nrow(refused$records),
+      nrow(date_refused$records),
       nrow(first_page$records),
       nrow(second_page$records),
-      nrow(drifted$records)
+      nrow(drifted$records),
+      nrow(missing_docs$records)
     )
   ),
   col.names = c("Saved reply", "Outcome", "Records used"),
@@ -555,16 +687,18 @@ knitr::kable(
 )
 ```
 
-Four things happened, and none of them was a crash or a quietly empty table.
+Six saved replies exercised two retry formats, two result pages, and two schema
+failures. None became a quietly empty result table.
 
 The refusal returned no records and a waiting time taken from the
 `Retry-After` header, which is the service telling the client how long to pause.
 Guessing that number, or retrying immediately, is how a temporary limit becomes
 a ban.
 
-The first page filled its five slots, which is the signal that more results
-exist. The second page returned two, fewer than the page size, which is the
-signal to stop asking.
+The first page reports `start = 0`, returns five records, and says seven exist,
+so `start + records returned < numFound` supplies the next offset. The second
+page reports `start = 5`; adding its two records reaches the reported total, so
+the client stops. A full page alone would not prove that another page exists.
 
 The renamed field is the quiet one. The record still parsed as JSON and still
 had a key. Only the explicit list of required fields turned it into a reported
@@ -671,6 +805,7 @@ here. Human judgment still decides which books belong on the reading list.
 - [Open Library API usage and rate limits](https://openlibrary.org/developers/api)
 - [Open Library licensing statement](https://openlibrary.org/developers/licensing)
 - [RFC 8259: The JSON Data Interchange Format](https://www.rfc-editor.org/rfc/rfc8259)
+- [RFC 9110: Retry-After](https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after)
 - [httr2 request documentation](https://httr2.r-lib.org/reference/request.html)
 - [httr2 request performance and error handling](https://httr2.r-lib.org/reference/req_perform.html)
 - [httr2 JSON response documentation](https://httr2.r-lib.org/reference/resp_body_raw.html)

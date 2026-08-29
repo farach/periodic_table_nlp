@@ -125,12 +125,26 @@ recorded_ocr <- readLines(
   encoding = "UTF-8",
   warn = TRUE
 )
+recorded_degraded_ocr <- readLines(
+  paste0(
+    "data/workforce/",
+    "training-flyer-degraded-ocr-5.3.2.txt"
+  ),
+  encoding = "UTF-8",
+  warn = TRUE
+)
+degraded_ocr_md5 <- digest::digest(
+  paste(recorded_degraded_ocr, collapse = "\n"),
+  algo = "md5",
+  serialize = FALSE
+)
 
 stopifnot(
   identical(nrow(job_sentences), 22L),
   identical(nrow(flyer_sentences), 6L),
   identical(flyer_sentences$text, flyer_transcript),
-  identical(recorded_ocr, flyer_transcript)
+  identical(recorded_ocr, flyer_transcript),
+  !identical(recorded_degraded_ocr, flyer_transcript)
 )
 
 job_metadata <- read.csv(
@@ -176,6 +190,13 @@ stopifnot(
     flyer_metadata$md5[
       flyer_metadata$artifact ==
         "training-flyer-ground-truth.txt"
+    ]
+  ),
+  identical(
+    degraded_ocr_md5,
+    flyer_metadata$md5[
+      flyer_metadata$artifact ==
+        "training-flyer-degraded-ocr-5.3.2.txt"
     ]
   )
 )

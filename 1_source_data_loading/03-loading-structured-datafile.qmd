@@ -337,10 +337,24 @@ messy_feedback <- suppressWarnings(
     )
   )
 )
+messy_raw <- suppressWarnings(
+  read_csv(
+    I(messy_text),
+    na = character(),
+    col_types = cols(
+      feedback_id = col_character(),
+      submitted_at = col_character(),
+      channel = col_character(),
+      rating = col_character(),
+      comment = col_character()
+    )
+  )
+)
 
 stopifnot(
   identical(length(messy_lines), 8L),
   identical(nrow(messy_feedback), 6L),
+  identical(nrow(messy_raw), 6L),
   identical(
     names(messy_feedback),
     names(feedback)
@@ -365,7 +379,14 @@ report of everything it could not parse.
 
 ```{r}
 parse_problems <- problems(messy_feedback) |>
-  select(row, col, expected, actual)
+  transmute(
+    row,
+    record_number = row - 1L,
+    feedback_id = messy_raw$feedback_id[record_number],
+    col,
+    expected,
+    actual
+  )
 
 stopifnot(
   inherits(parse_problems, "tbl_df"),
@@ -377,12 +398,20 @@ stopifnot(
   identical(
     parse_problems$actual,
     c("five", "6 columns")
-  )
+  ),
+  identical(parse_problems$feedback_id, c("1007", "1008"))
 )
 
 knitr::kable(
   parse_problems,
-  col.names = c("Row", "Column", "Expected", "Found"),
+  col.names = c(
+    "File row",
+    "Record",
+    "Feedback ID",
+    "Column",
+    "Expected",
+    "Found"
+  ),
   caption = "What readr could not parse",
   row.names = FALSE
 )
@@ -409,21 +438,30 @@ loudly.
 
 ```{r}
 documented_rating_range <- 1:5
+parse_failure_ids <- parse_problems |>
+  filter(expected == "an integer") |>
+  pull(feedback_id)
+extra_field_ids <- parse_problems |>
+  filter(expected == "5 columns") |>
+  pull(feedback_id)
 
 row_report <- messy_feedback |>
   mutate(
     record_number = row_number(),
+    raw_rating = messy_raw$rating,
     duplicate_id = feedback_id %in%
       feedback_id[duplicated(feedback_id)],
-    rating_missing = is.na(rating),
-    rating_out_of_range = !rating_missing &
+    parse_failed = feedback_id %in% parse_failure_ids,
+    declared_missing = raw_rating == "",
+    rating_out_of_range = !is.na(rating) &
       !(rating %in% documented_rating_range),
-    extra_field_text = str_detect(comment, fixed("unexpected")),
+    extra_field = feedback_id %in% extra_field_ids,
     status = case_when(
       duplicate_id ~ "quarantine: repeated feedback_id",
+      parse_failed ~ "quarantine: rating failed integer parsing",
       rating_out_of_range ~ "quarantine: rating outside 1 to 5",
-      extra_field_text ~ "quarantine: extra field folded into comment",
-      rating_missing ~ "keep: rating recorded as missing",
+      extra_field ~ "quarantine: unexpected sixth field",
+      declared_missing ~ "keep: rating recorded as missing",
       TRUE ~ "keep"
     )
   )
@@ -436,14 +474,18 @@ quarantined <- row_report |>
 
 stopifnot(
   identical(sum(status_counts$records), 6L),
-  identical(nrow(quarantined), 4L),
+  identical(nrow(quarantined), 5L),
   identical(
     quarantined$feedback_id,
-    c("1006", "1006", "1008", "1009")
+    c("1006", "1006", "1007", "1008", "1009")
   ),
   identical(
-    sum(row_report$rating_missing),
-    2L
+    sum(row_report$parse_failed),
+    1L
+  ),
+  identical(
+    sum(row_report$declared_missing),
+    1L
   ),
   identical(
     n_distinct(messy_feedback$feedback_id),
@@ -453,24 +495,31 @@ stopifnot(
 
 knitr::kable(
   row_report |>
-    select(record_number, feedback_id, rating, status),
-  col.names = c("Record", "Feedback ID", "Rating", "Decision"),
+    select(record_number, feedback_id, raw_rating, rating, status),
+  col.names = c(
+    "Record",
+    "Feedback ID",
+    "Raw rating",
+    "Parsed rating",
+    "Decision"
+  ),
   caption = "Every record accounted for, including the ones held back",
   row.names = FALSE
 )
 ```
 
-Four of six records are held back and the reasons differ. Two share an ID, so
+Five of six records are held back and the reasons differ. Two share an ID, so
 neither can be trusted as the record for `1006` until the source explains the
-repeat. One folded an extra field into its comment. One carries a rating of
-nine, which the dictionary does not allow.
+repeat. The raw value `five` failed integer parsing and is not treated as an
+ordinary missing rating. One row has an unexpected sixth field. One carries a
+rating of nine, which the dictionary does not allow.
 
-The two remaining records are kept, and one of them has no rating at all. A
-blank that the dictionary defines as missing is not an error.
+The remaining record has a blank rating. A blank that the dictionary defines as
+missing is not a parse error.
 
 The important discipline is the accounting: six records in, six records
 classified, nothing dropped in silence. A pipeline that filtered to the clean
-rows and moved on would have reported two tidy records and lost the fact that a
+rows and moved on would have reported one tidy record and lost the fact that a
 duplicate ID exists in the source.
 
 ## Questions to ask about any structured file

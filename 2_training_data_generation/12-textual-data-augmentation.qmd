@@ -169,8 +169,8 @@ template_variants <- tibble(
 )
 
 schedule_variants <- tibble(
-  source_sentence_id = "s026",
-  source_family_id = "schedule-s026",
+  source_sentence_id = "s003",
+  source_family_id = "schedule-s003",
   template_id = "class-schedule-v1",
   vocabulary_source = "author-created template",
   vocabulary_row = NA_integer_,
@@ -225,7 +225,7 @@ stopifnot(
   ),
   identical(
     source_families$source_family_id,
-    c("schedule-s026", "training-offer-s001")
+    c("schedule-s003", "training-offer-s001")
   ),
   identical(augmentation_counts$n, c(3L, 0L, 2L, 0L, 0L))
 )
@@ -255,7 +255,7 @@ knitr::kable(
 
 The rows carry their source family, template, second vocabulary source,
 package commit when applicable, codebook, synthetic status, intended split,
-and pending review status. Any evaluation example derived from `s001` or `s026`
+and pending review status. Any evaluation example derived from `s001` or `s003`
 must stay outside the evaluation set with its whole family. The five rows
 remain candidates until a person checks that each is natural, useful, and
 consistent with the codebook.
@@ -321,7 +321,12 @@ reviewed_candidates <- candidate_rows |>
   mutate(
     duplicates_reviewed_text = text %in%
       workforce_sentences$text,
-    hedged = str_detect(text, "\\b(may|might|could)\\b")
+    hedged = str_detect(text, "\\b(may|might|could)\\b"),
+    review_status = case_when(
+      decision == "accept" ~ "accepted",
+      decision == "reject" ~ "rejected",
+      TRUE ~ review_status
+    )
   )
 
 accepted_rows <- reviewed_candidates |>
@@ -339,6 +344,8 @@ stopifnot(
   ),
   all(!accepted_rows$duplicates_reviewed_text),
   all(!accepted_rows$hedged),
+  all(accepted_rows$review_status == "accepted"),
+  all(rejected_rows$review_status == "rejected"),
   identical(sum(rejected_rows$hedged), 1L),
   identical(
     sum(rejected_rows$duplicates_reviewed_text),
@@ -394,6 +401,7 @@ labeled_pool <- workforce_sentences |>
 held_out <- workforce_sentences |>
   filter(document_id %in% c("J006", "F001")) |>
   select(sentence_id, text, label = reference_label)
+accepted_source_ids <- unique(accepted_rows$source_sentence_id)
 
 to_words <- function(text) {
   text |>
@@ -451,6 +459,10 @@ new_terms <- setdiff(with_augmentation, without_augmentation)
 
 stopifnot(
   identical(nrow(held_out), 10L),
+  identical(
+    intersect(accepted_source_ids, held_out$sentence_id),
+    character()
+  ),
   identical(sum(is_training), 2L),
   identical(ablation$distinctive_terms, c(13L, 18L)),
   identical(ablation$correct, c(10L, 10L)),

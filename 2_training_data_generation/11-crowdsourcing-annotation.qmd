@@ -383,9 +383,12 @@ item cannot support a claim that one codebook, task, or reviewer pool is more
 reliable than another. Reporting the range beside the estimate is honest;
 reporting 0.797 alone is not.
 
-Larger samples do not remove the problem, they shrink it. The same jackknife on
-500 items would move alpha in the third decimal, at which point an interval from
-a bootstrap is the right tool.
+A larger sample can reduce single-item sensitivity, but sample size alone does
+not determine how much alpha moves. Label prevalence, clustered documents,
+which item is removed, and the pattern of disagreement all matter. For a larger
+study, resample whole source documents rather than individual rows and report
+the resulting bootstrap distribution; this lesson's 11 items cannot predict
+what its width would be for 500.
 
 ## Find the disagreements
 
