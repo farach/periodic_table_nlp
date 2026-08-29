@@ -9,7 +9,7 @@ Finished tiles open lessons; planned tiles show where the project is going.
 
 ## Lessons
 
-The canonical map and publishing manifest currently identify 42 available
+The canonical map and publishing manifest currently identify 62 available
 lessons. This list is checked against `data/periodic_table.csv`.
 
 - **Source data loading (1-7):**
@@ -62,6 +62,30 @@ lessons. This list is checked against `data/periodic_table.csv`.
   [raw-text cleaning](8_documents/40-raw-text-cleaning.qmd),
   [metadata](8_documents/41-metadata-extraction.qmd), and
   [language identification](8_documents/42-language-identification.qmd).
+- **Model development (43-47):**
+  [training](9_model_development/43-training-models.qmd),
+  [evaluation](9_model_development/44-evaluating-models.qmd),
+  [explanation](9_model_development/45-explaining-models.qmd),
+  [deployment](9_model_development/46-deploying-models.qmd), and
+  [monitoring](9_model_development/47-monitoring-models.qmd).
+- **Classification (48-52):**
+  [scam messages](10_classification/48-spam-detection.qmd),
+  [sentiment](10_classification/49-sentiment-and-emotion-analysis.qmd),
+  [intent](10_classification/50-intent-classification.qmd),
+  [text classification](10_classification/51-text-classification.qmd), and
+  [multi-label and multi-class](10_classification/52-multi-label-and-multi-class-classification.qmd).
+- **Signals and discovery (53-57):**
+  [keywords](11_signals_and_discovery/53-keyword-extraction.qmd),
+  [extractive summaries](11_signals_and_discovery/54-extractive-summarization.qmd),
+  [topic models](11_signals_and_discovery/55-topic-modeling.qmd),
+  [trends](11_signals_and_discovery/56-trend-detection.qmd), and
+  [outliers](11_signals_and_discovery/57-outlier-detection.qmd).
+- **Similarity (58-62):**
+  [WordNet synsets](12_similarity/58-wordnet-synsets.qmd),
+  [distance measures](12_similarity/59-distance-measures.qmd),
+  [document similarity](12_similarity/60-document-similarity.qmd),
+  [word vectors](12_similarity/61-distributed-word-representations.qmd), and
+  [words in context](12_similarity/62-contextualized-word-representations.qmd).
 
 The topic map comes from Rob van Zoest's
 [Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).

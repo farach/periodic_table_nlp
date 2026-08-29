@@ -71,7 +71,7 @@ readme <- paste(
 readme_lesson_links <- regmatches(
   readme,
   gregexpr(
-    "[1-8]_[a-z_]+/[0-9]{2}-[a-z0-9-]+[.]qmd",
+    "[0-9]+_[a-z_]+/[0-9]{2}-[a-z0-9-]+[.]qmd",
     readme,
     perl = TRUE
   )
@@ -165,7 +165,7 @@ stopifnot(
       '(?s)<div class="nlp-element is-planned"[^>]*>.*?<span class="element-status">Planned</span>',
       html
     ),
-    39L
+    19L
   ),
   identical(
     rendered_hrefs,

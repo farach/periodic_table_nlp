@@ -267,7 +267,7 @@ route_html <- paste(
 
 stopifnot(
   identical(length(groups), 15L),
-  identical(length(route_links), 8L),
+  identical(length(route_links), 12L),
   identical(
     str_count(table_html, fixed('class="element-slot"')),
     81L
