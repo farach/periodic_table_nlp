@@ -242,6 +242,10 @@ An **out-of-vocabulary** token is a token that the vocabulary does not contain.
 Here the vocabulary comes from the 22 job-detail rows. The test asks which
 flyer tokens fall outside that job-built list.
 
+A retrieval system can keep a different kind of vocabulary. A search index
+stores whole terms and counts for retrieval, while a tokenizer or subword model
+stores the pieces it will use to encode new text.
+
 ```{r}
 job_vocabulary <- job_word_counts$token
 unknown_flyer_tokens <- flyer_tokens[
@@ -476,8 +480,12 @@ input, not the model's own ids, so they hide unknown pieces. Checking
 `bpe_encode(type = "ids")` shows the model result. The unknown pieces appear
 because the flyer is printed in capitals and the job-detail rows contain only
 the capital letters A, C, E, N, O, P, R, S, T, and W. The flyer also uses D, F,
-H, I, K, L, U, and V. Tokenizers used in real language models often work on raw
-bytes so that nothing is unknown, which is a different design choice.
+H, I, K, L, U, and V. Here, the `7/91` count belongs to this 200-piece
+character-based BPE model with `coverage = 1` and an `<UNK>` id for unseen
+characters. Other tokenizers use different out-of-vocabulary policies. A
+byte-level tokenizer can avoid this particular unknown-piece problem, while
+another subword vocabulary may still leave unknown material in a different
+place.
 
 ## What to remember
 
@@ -496,4 +504,5 @@ patterns occur in workforce text more generally.
 
 - [tokenizers documentation for word tokenizers](https://docs.ropensci.org/tokenizers/reference/basic-tokenizers.html)
 - [tokenizers.bpe package documentation](https://cran.r-project.org/package=tokenizers.bpe)
+- [Transformers tokenization algorithms](https://huggingface.co/docs/transformers/tokenizer_summary)
 - [Neural Machine Translation of Rare Words with Subword Units](https://aclanthology.org/P16-1162/)

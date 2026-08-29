@@ -48,8 +48,9 @@ stopifnot(identical(getOption("warn"), 2L))
 Two local lemmatizers need the same sentence file and a shared set of table
 tools. The code loads the CSV reader, tokenizers, the UDPipe teaching model, the
 spaCy bridge, SnowballC stems, and hunspell dictionary checks. UDPipe receives
-one token per line; spaCy receives the raw sentences through the project helper
-`use_project_spacy()`.
+one token per line and returns lemmas from its trained tagger, which combines a
+model with dictionary and guesser components. spaCy receives the raw sentences
+through the project helper `use_project_spacy()`.
 
 ```{r}
 library(readr)
@@ -279,10 +280,11 @@ knitr::kable(
 
 This is not an equal contest. The UDPipe model was trained in this project on a
 500-sentence excerpt for teaching. The spaCy pipeline is a released English
-pipeline packaged for general use. The methods differ too: UDPipe learned suffix
-rules from its training sentences, while spaCy's English lemmatizer uses lookup
-tables and part-of-speech rules. This lesson cannot isolate a training-size
-effect.
+pipeline packaged for general use. The methods differ too: UDPipe lemmatizes
+through its trained tagger together with dictionary and guesser machinery, while
+spaCy's English lemmatizer uses lookup tables and part-of-speech rules. The
+tools, tokenization, and training setup differ, so this lesson cannot turn this
+contrast into a causal story about training size alone.
 
 ## Count dictionary failures
 
@@ -438,7 +440,7 @@ invisible(suppressMessages(spacy_finalize()))
   for UDPipe and 0 for spaCy.
 
 Use lemmas for reader-facing grouping only after checking the rows that look
-broken or surprising. The important comparison here is six small-model suffix
+broken or surprising. The important comparison here is six small-model lemma
 guesses to inspect, not a causal story about training size.
 
 ## Sources
@@ -447,4 +449,5 @@ guesses to inspect, not a causal story about training size.
 - [spaCy lemmatizer documentation](https://spacy.io/api/lemmatizer)
 - [spacyr package reference](https://spacyr.quanteda.io/)
 - [UDPipe R package reference](https://bnosac.github.io/udpipe/docs/doc0.html)
+- [UDPipe User's Manual](https://ufal.mff.cuni.cz/udpipe/1/users-manual)
 - [hunspell package reference](https://docs.ropensci.org/hunspell/reference/hunspell.html)
