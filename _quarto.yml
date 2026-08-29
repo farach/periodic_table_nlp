@@ -7,6 +7,7 @@ project:
     - accessibility.qmd
     - 1_source_data_loading/*.qmd
     - 2_training_data_generation/*.qmd
+    - 3_word_parsing/*.qmd
 
 website:
   title: "Periodic Table of NLP Tasks in R"
@@ -50,6 +51,14 @@ website:
         text: Creating more training examples
       - href: 2_training_data_generation/13-rule-based-training-data.qmd
         text: Labeling text with rules
+      - href: 3_word_parsing/14-tokenization.qmd
+        text: Deciding what counts as a word
+      - href: 3_word_parsing/15-vocabulary-building.qmd
+        text: Building a vocabulary from tokens
+      - href: 3_word_parsing/16-morphological-tagging.qmd
+        text: Looking inside words
+      - href: 3_word_parsing/17-part-of-speech-tagging.qmd
+        text: Tagging words by their job
       - href: accessibility.qmd
         text: Accessibility
   page-footer:

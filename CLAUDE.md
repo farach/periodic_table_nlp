@@ -44,6 +44,16 @@ to an error. Lesson chunks intentionally set `options(warn = 2)`.
 - `data-raw/create-training-flyer.R` generates the image from the canonical
   six-line transcript. The image and transcript hashes live in
   `training-flyer-metadata.csv`.
+- `data/treebank/` holds a 500-sentence Universal Dependencies excerpt, a
+  200-sentence held-out excerpt, and a tagger trained on the first of those.
+  `data-raw/build-treebank-tagger.R` rebuilds them and takes several minutes,
+  so the results are committed. All of it is CC BY-SA 4.0 and keeps that
+  licence. The pre-trained UDPipe models are CC BY-SA-NC and must not be used.
+- `.gitattributes` marks `*.udpipe` as binary. A model file whose bytes change
+  would break the fingerprint recorded in `treebank-metadata.csv`.
+- `scripts/check-lessons.R` and `tests/accessibility.spec.mjs` discover lessons
+  from any `N_*` directory rather than a hard-coded list. Adding a stage does
+  not require editing them.
 
 ## Code style
 
@@ -89,6 +99,10 @@ to an error. Lesson chunks intentionally set `options(warn = 2)`.
 
 - No live API or model call in the render path. Use dated fixtures or
   credential-free package helpers.
+- `tokenizers.bpe::bpe()` writes its model to the working directory unless you
+  pass `model_path`. Always pass an explicit `tempfile()`.
+- `bpe_encode(type = "subwords")` rebuilds the surface text and therefore hides
+  unknown pieces. Count unknowns from `type = "ids"` against the `<UNK>` id.
 - Do not call package teaching fixtures authenticated extracts unless upstream
   IDs or a source digest prove it.
 - Do not call reference labels ground truth.

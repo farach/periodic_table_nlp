@@ -1,0 +1,403 @@
+---
+title: "Deciding what counts as a word"
+subtitle: "Compare word, sentence, and subword tokenization"
+author: "Alex Farach"
+description: "Learn why tokenization is a rule-based decision before any word count can begin."
+categories: [word parsing, tokenization, workforce research]
+---
+
+The Riverton Workforce Lab brings its labeled sentences to a planning meeting.
+The team has 28 reviewed text units from a job board page and a training flyer.
+Six came from the flyer, and 22 came from job-detail lines.
+
+The labels answer one question: what does each sentence say? The next question
+is smaller and more mechanical. Before the Lab can count words, it has to decide
+what a word is.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain why a token is created by a rule;
+- compare whitespace and package word tokenizers;
+- check whether sentence tokenization changes row counts;
+- train a subword model without writing files into the project folder; and
+- describe why unfamiliar text can require more subword pieces.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Start with the sentence on the page
+
+The first visible chunk loads readr for files, dplyr and tibble for tables,
+purrr for repeated checks, stringr for strings, tokenizers for word and
+sentence splitting, and tokenizers.bpe for subword splitting. A **tibble** is a
+table that prints its size and column types.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tokenizers)
+library(tokenizers.bpe)
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+document_counts <- sentences |>
+  mutate(
+    source_group = if_else(
+      document_id == "F001",
+      "training flyer",
+      "job-detail rows"
+    )
+  ) |>
+  count(source_group, name = "rows")
+
+first_sentence <- sentences$text[1]
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(
+    document_counts$rows[document_counts$source_group == "training flyer"],
+    6L
+  ),
+  identical(
+    document_counts$rows[document_counts$source_group == "job-detail rows"],
+    22L
+  ),
+  identical(
+    first_sentence,
+    "Paid 12-week training is provided."
+  )
+)
+
+knitr::kable(
+  document_counts,
+  col.names = c("Source group", "Rows"),
+  caption = "The 28 labeled text units by source",
+  row.names = FALSE
+)
+```
+
+The first sentence fits on one line: `Paid 12-week training is provided.` A
+**token** is one piece of text produced by a splitting rule. The same visible
+sentence can produce different tokens because the rule makes different choices.
+
+## Split on spaces
+
+One simple rule is to split wherever there is whitespace. Here stringr uses the
+ICU text library to find spaces, tabs, and similar separators. That rule gives
+five pieces. The period stays attached to `provided.`, and `12-week` stays in
+one piece.
+
+```{r}
+whitespace_tokens <- str_split(
+  first_sentence,
+  "\\s+",
+  simplify = FALSE
+)[[1]]
+
+stopifnot(
+  identical(length(whitespace_tokens), 5L),
+  identical(
+    whitespace_tokens,
+    c("Paid", "12-week", "training", "is", "provided.")
+  )
+)
+
+knitr::kable(
+  tibble(
+    token_number = seq_along(whitespace_tokens),
+    token = whitespace_tokens
+  ),
+  col.names = c("Token number", "Whitespace token"),
+  caption = "Tokens made by splitting on whitespace",
+  row.names = FALSE
+)
+```
+
+This rule is easy to explain, but it keeps punctuation and hyphenated material
+attached to nearby letters. That may or may not fit the count the Lab wants.
+
+## Use a word tokenizer
+
+`tokenizers::tokenize_words()` applies a different rule. It lowercases text,
+drops punctuation, and splits the hyphenated phrase. The same sentence becomes
+six tokens: `paid`, `12`, `week`, `training`, `is`, and `provided`.
+
+```{r}
+default_word_tokens <- tokenize_words(first_sentence)[[1]]
+
+stopifnot(
+  identical(length(default_word_tokens), 6L),
+  identical(
+    default_word_tokens,
+    c("paid", "12", "week", "training", "is", "provided")
+  )
+)
+
+knitr::kable(
+  tibble(
+    token_number = seq_along(default_word_tokens),
+    token = default_word_tokens
+  ),
+  col.names = c("Token number", "Default word token"),
+  caption = "Tokens from tokenizers::tokenize_words()",
+  row.names = FALSE
+)
+```
+
+That rule is useful when `Paid` and `paid` should count together. It is a poor
+fit if the Lab needs to keep punctuation as its own evidence.
+
+## Keep case and punctuation visible
+
+The same function can be asked not to lowercase and not to remove punctuation.
+With those settings, `Paid` stays capitalized, the hyphen becomes its own
+token, and the full stop becomes its own token. The sentence becomes eight
+tokens.
+
+```{r}
+case_punctuation_tokens <- tokenize_words(
+  first_sentence,
+  lowercase = FALSE,
+  strip_punct = FALSE
+)[[1]]
+
+token_count_summary <- tibble(
+  rule = c(
+    "split on whitespace",
+    "default word tokenizer",
+    "keep case and punctuation"
+  ),
+  tokens = c(
+    length(whitespace_tokens),
+    length(default_word_tokens),
+    length(case_punctuation_tokens)
+  )
+)
+
+stopifnot(
+  identical(length(case_punctuation_tokens), 8L),
+  identical(
+    case_punctuation_tokens,
+    c("Paid", "12", "-", "week", "training", "is", "provided", ".")
+  )
+)
+
+knitr::kable(
+  token_count_summary,
+  col.names = c("Rule", "Tokens from the first sentence"),
+  caption = "One sentence under three tokenization rules",
+  row.names = FALSE
+)
+```
+
+Five, six, and eight are all correct counts under the rule that produced them.
+The count alone does not tell the reader which rule was used.
+
+## Check sentence splitting before word counts
+
+The file already stores one sentence per row. The Lab still checks that a
+sentence tokenizer sees the same 28 pieces before moving on. This guard matters
+because some files store several sentences in one row, while others break a
+sentence across rows.
+
+```{r}
+sentence_pieces <- tokenize_sentences(sentences$text)
+sentence_piece_counts <- map_int(sentence_pieces, length)
+source_sentence_counts <- sentences |>
+  mutate(sentence_pieces = sentence_piece_counts) |>
+  summarise(
+    rows = n(),
+    pieces = sum(sentence_pieces),
+    .by = document_id
+  )
+
+stopifnot(
+  identical(sentence_piece_counts, rep(1L, 28L)),
+  identical(sum(source_sentence_counts$pieces), 28L)
+)
+
+knitr::kable(
+  source_sentence_counts,
+  col.names = c("Document ID", "Rows", "Sentence pieces"),
+  caption = "Sentence tokenizer results by document",
+  row.names = FALSE
+)
+```
+
+For these rows, `tokenizers::tokenize_sentences()` returns one piece per row.
+That means the file's sentence boundary choice and the tokenizer's boundary
+choice agree on this teaching dataset.
+
+## Train a subword tokenizer
+
+Modern language models often split text into **subwords**, pieces smaller than
+some words and larger than single letters when the model has learned a common
+pattern. **Byte pair encoding (BPE)** starts from single characters and
+repeatedly glues together the pair that occurs most often. The model below
+trains only on the 28 Riverton sentences.
+
+The `vocab_size = 250L` argument is a modeling choice that controls how many
+pieces the trainer can keep. The `coverage = 1` argument tells the trainer to
+keep every character it sees in the training text; characters outside that set
+have no piece. The special marker `<UNK>` is the model's way of saying it has no
+piece for this, short for "unknown". The code also sets `threads = 1L` so the
+result does not depend on how work is split across processors.
+
+::: {.callout-note}
+The explicit `model_path` sends the model to a temporary file during rendering.
+:::
+
+```{r}
+corpus_file <- tempfile(fileext = ".txt")
+write_lines(sentences$text, corpus_file)
+
+bpe_model <- bpe(
+  corpus_file,
+  model_path = tempfile(fileext = ".bpe"),
+  vocab_size = 250L,
+  coverage = 1,
+  threads = 1L
+)
+
+first_vocabulary_rows <- bpe_model$vocabulary |>
+  slice_head(n = 10)
+
+stopifnot(
+  identical(nrow(bpe_model$vocabulary), 250L),
+  identical(
+    bpe_model$vocabulary$subword[1:6],
+    c("<PAD>", "<UNK>", "<BOS>", "<EOS>", "▁", "e")
+  )
+)
+
+knitr::kable(
+  first_vocabulary_rows,
+  col.names = c("ID", "Subword"),
+  caption = "The first rows of the BPE vocabulary",
+  row.names = FALSE
+)
+```
+
+The vocabulary has 250 entries. The first four rows are special markers, then
+the boundary marker `▁` and single characters. The marker `▁` means that a
+subword begins at a word boundary.
+
+## Compare familiar and unfamiliar text
+
+When the BPE model sees the first sentence, common pieces such as `training`,
+`is`, and `provided.` stay together. The rarer `12-week` material fragments.
+
+```{r}
+first_sentence_subwords <- bpe_encode(
+  bpe_model,
+  x = "Paid 12-week training is provided.",
+  type = "subwords"
+)[[1]]
+
+unseen_phrase_subwords <- bpe_encode(
+  bpe_model,
+  x = "unpredictability biotechnology",
+  type = "subwords"
+)[[1]]
+
+subword_summary <- tibble(
+  text = c(
+    "Paid 12-week training is provided.",
+    "unpredictability biotechnology"
+  ),
+  pieces = c(
+    length(first_sentence_subwords),
+    length(unseen_phrase_subwords)
+  ),
+  subwords = c(
+    str_c(first_sentence_subwords, collapse = " | "),
+    str_c(unseen_phrase_subwords, collapse = " | ")
+  )
+)
+
+stopifnot(
+  identical(
+    first_sentence_subwords,
+    c(
+      "▁Paid",
+      "▁1",
+      "2",
+      "-",
+      "w",
+      "eek",
+      "▁training",
+      "▁is",
+      "▁provided."
+    )
+  ),
+  identical(length(first_sentence_subwords), 9L),
+  identical(length(unseen_phrase_subwords), 21L)
+)
+
+knitr::kable(
+  subword_summary,
+  col.names = c("Text", "Subword pieces", "Subwords"),
+  caption = "BPE pieces for familiar and unfamiliar text",
+  row.names = FALSE
+)
+```
+
+The first sentence takes nine subword pieces. The phrase `unpredictability
+biotechnology`, which does not appear in the Riverton rows, takes 21 pieces in
+this toy model. A tokenizer used with a real language model learns tens of
+thousands of pieces from far more text and would likely split that phrase into a
+handful of pieces. What carries over is the direction: unfamiliar material costs
+more pieces than familiar material, not the size of the effect.
+
+The result gives the team a rule for the meeting: a word count must name the
+rule that made the words.
+
+## What to remember
+
+- Tokenization turns text into pieces according to a chosen rule.
+- The first Riverton sentence becomes 5, 6, or 8 word tokens under three rules.
+- Sentence tokenization preserves the 28 rows in this file.
+- BPE represents familiar material with larger pieces and unfamiliar material
+  with smaller pieces.
+- Text that looks unfamiliar to the model can take more pieces to represent.
+
+The Lab can start counting only after it writes down the token rule. For these
+sentences, that rule changes the unit being counted before any summary appears.
+
+## Sources
+
+- [tokenizers documentation for word and sentence tokenizers](https://docs.ropensci.org/tokenizers/reference/basic-tokenizers.html)
+- [tokenizers.bpe package documentation](https://cran.r-project.org/package=tokenizers.bpe)
+- [Neural Machine Translation of Rare Words with Subword Units](https://aclanthology.org/P16-1162/)

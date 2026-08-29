@@ -1,0 +1,499 @@
+---
+title: "Building a vocabulary from tokens"
+subtitle: "Choose which words to keep and measure what falls outside"
+author: "Alex Farach"
+description: "Learn how frequency cutoffs and out-of-vocabulary checks shape a small workforce text vocabulary."
+categories: [word parsing, vocabulary, workforce research]
+---
+
+After the tokenization check, the coordinator prints the Riverton Workforce
+Lab's word tokens on a single sheet. The list looks manageable until the
+repeated words and one-time words sit side by side. A vocabulary cannot keep
+everything in a large project without a rule.
+
+The team decides to test the rule on its small teaching data. It will build a
+word list from the job-detail rows, then ask how much of the training flyer
+falls outside that list.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- distinguish tokens from types;
+- count a word vocabulary and its one-time terms;
+- apply minimum-frequency cutoffs;
+- measure out-of-vocabulary words on held-out text; and
+- compare a word vocabulary with a subword vocabulary.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Count tokens and types
+
+The first visible chunk loads readr for files, dplyr and tibble for tables,
+purrr for repeated work, tokenizers for word tokens, and tokenizers.bpe for
+subword tokens. A **tibble** is a table that prints its size and column types.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(tokenizers)
+library(tokenizers.bpe)
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+word_tokens <- unlist(
+  tokenize_words(sentences$text),
+  use.names = FALSE
+)
+word_counts <- tibble(token = word_tokens) |>
+  count(token, name = "frequency", sort = TRUE)
+top_word_counts <- word_counts |>
+  slice_head(n = 8)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(length(word_tokens), 153L),
+  identical(nrow(word_counts), 96L),
+  identical(sum(word_counts$frequency == 1L), 72L),
+  identical(
+    top_word_counts$token,
+    c(
+      "is",
+      "a",
+      "required",
+      "the",
+      "training",
+      "are",
+      "experience",
+      "of"
+    )
+  ),
+  identical(
+    top_word_counts$frequency,
+    c(13L, 7L, 7L, 5L, 5L, 4L, 4L, 3L)
+  )
+)
+
+knitr::kable(
+  top_word_counts,
+  col.names = c("Token type", "Frequency"),
+  caption = "The eight most frequent word types in all 28 rows",
+  row.names = FALSE
+)
+```
+
+A **token** is one occurrence. A **type** is one distinct token value. These
+counts use the default `tokenizers::tokenize_words()` rule: lowercase text, drop
+punctuation, and split hyphenated material. Across the 28 rows, that rule
+creates 153 tokens and 96 types. Of those types, 72 appear exactly once.
+
+The most frequent word types are ordinary function words and repeated terms
+from the notices: `is` appears 13 times, `a` and `required` appear 7 times each,
+`the` and `training` appear 5 times each, `are` and `experience` appear 4 times
+each, and `of` appears 3 times.
+
+## Split the data before testing a vocabulary
+
+An honest check cannot build a vocabulary and test it on the same rows. The Lab
+uses the 22 job-detail rows to build the word list and the 6 flyer rows to test
+what the list has not seen.
+
+```{r}
+job_rows <- sentences |>
+  filter(document_id != "F001")
+flyer_rows <- sentences |>
+  filter(document_id == "F001")
+
+job_tokens <- unlist(
+  tokenize_words(job_rows$text),
+  use.names = FALSE
+)
+flyer_tokens <- unlist(
+  tokenize_words(flyer_rows$text),
+  use.names = FALSE
+)
+job_word_counts <- tibble(token = job_tokens) |>
+  count(token, name = "frequency", sort = TRUE)
+
+split_summary <- tibble(
+  split = c("job-detail rows", "training flyer"),
+  rows = c(nrow(job_rows), nrow(flyer_rows)),
+  tokens = c(length(job_tokens), length(flyer_tokens)),
+  types = c(nrow(job_word_counts), n_distinct(flyer_tokens))
+)
+
+stopifnot(
+  identical(nrow(job_rows), 22L),
+  identical(nrow(flyer_rows), 6L),
+  identical(length(job_tokens), 133L),
+  identical(nrow(job_word_counts), 86L),
+  identical(length(flyer_tokens), 20L)
+)
+
+knitr::kable(
+  split_summary,
+  col.names = c("Split", "Rows", "Tokens", "Types"),
+  caption = "Word-token counts after splitting by document source",
+  row.names = FALSE
+)
+```
+
+The job-detail rows contain 133 tokens and 86 types. The flyer rows contain 20
+tokens. The split is small, but it keeps the test from grading a vocabulary on
+the same text that created it.
+
+## Keep words by minimum frequency
+
+A **minimum-frequency cutoff** keeps only types that appear at least a stated
+number of times. The code below asks how many job-detail types remain and how
+many job-detail tokens those remaining types cover.
+
+The shorthand `\(cutoff)` means "make a small function whose input is
+`cutoff`."
+
+```{r}
+frequency_cutoffs <- tibble(minimum_frequency = 1:3) |>
+  mutate(
+    kept_types = map_int(
+      minimum_frequency,
+      \(cutoff) sum(job_word_counts$frequency >= cutoff)
+    ),
+    covered_tokens = map_int(
+      minimum_frequency,
+      \(cutoff) {
+        kept <- job_word_counts |>
+          filter(frequency >= cutoff) |>
+          pull(token)
+        sum(job_tokens %in% kept)
+      }
+    ),
+    coverage = covered_tokens / length(job_tokens),
+    coverage_label = sprintf(
+      "%s/%s (%s%%)",
+      covered_tokens,
+      length(job_tokens),
+      round(100 * coverage)
+    )
+  )
+
+stopifnot(
+  identical(frequency_cutoffs$kept_types, c(86L, 18L, 8L)),
+  identical(frequency_cutoffs$covered_tokens, c(133L, 65L, 45L)),
+  identical(
+    frequency_cutoffs$coverage_label,
+    c("133/133 (100%)", "65/133 (49%)", "45/133 (34%)")
+  )
+)
+
+knitr::kable(
+  frequency_cutoffs |>
+    select(
+      minimum_frequency,
+      kept_types,
+      coverage_label
+    ),
+  col.names = c(
+    "Minimum frequency",
+    "Types kept",
+    "Share of job tokens covered"
+  ),
+  caption = "Vocabulary size and coverage under three cutoffs",
+  row.names = FALSE
+)
+```
+
+The minimum-frequency-1 row is a reference point: it keeps every job-detail
+type, so full coverage is true by construction. The stricter rows show how many
+job-detail tokens lose their own word type under each cutoff.
+
+## Measure out-of-vocabulary words
+
+An **out-of-vocabulary** token is a token that the vocabulary does not contain.
+Here the vocabulary comes from the 22 job-detail rows. The test asks which
+flyer tokens fall outside that job-built list.
+
+```{r}
+job_vocabulary <- job_word_counts$token
+unknown_flyer_tokens <- flyer_tokens[
+  !flyer_tokens %in% job_vocabulary
+]
+unknown_flyer_types <- sort(unique(unknown_flyer_tokens))
+unknown_summary <- tibble(
+  measure = c(
+    "flyer tokens",
+    "unknown flyer tokens",
+    "unknown share"
+  ),
+  value = c(
+    as.character(length(flyer_tokens)),
+    as.character(length(unknown_flyer_tokens)),
+    sprintf(
+      "%s/%s (about half)",
+      length(unknown_flyer_tokens),
+      length(flyer_tokens)
+    )
+  )
+)
+
+stopifnot(
+  identical(length(unknown_flyer_tokens), 10L),
+  identical(length(flyer_tokens), 20L),
+  identical(
+    unknown_summary$value[unknown_summary$measure == "unknown share"],
+    "10/20 (about half)"
+  ),
+  identical(
+    unknown_flyer_types,
+    c(
+      "15",
+      "apply",
+      "by",
+      "classes",
+      "house",
+      "october",
+      "open",
+      "riverton",
+      "stipend",
+      "support"
+    )
+  )
+)
+
+knitr::kable(
+  unknown_summary,
+  col.names = c("Measure", "Value"),
+  caption = "Out-of-vocabulary rate on the held-out flyer rows",
+  row.names = FALSE
+)
+```
+
+The unknown flyer types are `15`, `apply`, `by`, `classes`, `house`, `october`,
+`open`, `riverton`, `stipend`, and `support`.
+
+For those 10 token occurrences, the job-built word list has no entry.
+
+## Try the same split with subwords
+
+**Byte pair encoding (BPE)** starts from single characters and repeatedly glues
+together the pair that occurs most often. The Lab trains a BPE model on the
+job-detail rows only, then encodes the flyer rows. This gives the subword
+vocabulary the same held-out test as the word vocabulary.
+
+The `vocab_size = 200L` argument is a modeling choice that controls how many
+pieces the trainer can keep. The `coverage = 1` argument tells the trainer to
+keep every character it sees in the job-detail text. Characters outside that set
+have no piece. The special marker `<UNK>` is the model's way of saying it has no
+piece for this, short for "unknown".
+
+::: {.callout-note}
+The explicit `model_path` sends the model to a temporary file during rendering.
+:::
+
+```{r}
+job_corpus_file <- tempfile(fileext = ".txt")
+write_lines(job_rows$text, job_corpus_file)
+
+job_bpe_model <- bpe(
+  job_corpus_file,
+  model_path = tempfile(fileext = ".bpe"),
+  vocab_size = 200L,
+  coverage = 1,
+  threads = 1L
+)
+
+flyer_subwords <- bpe_encode(
+  job_bpe_model,
+  x = flyer_rows$text,
+  type = "subwords"
+)
+flyer_ids <- bpe_encode(
+  job_bpe_model,
+  x = flyer_rows$text,
+  type = "ids"
+)
+flat_flyer_subwords <- unlist(flyer_subwords, use.names = FALSE)
+flat_flyer_ids <- unlist(flyer_ids, use.names = FALSE)
+first_flyer_subwords <- flyer_subwords[[1]]
+first_flyer_ids <- flyer_ids[[1]]
+unknown_id <- job_bpe_model$vocabulary$id[
+  job_bpe_model$vocabulary$subword == "<UNK>"
+]
+unknown_flyer_piece_count <- as.integer(sum(flat_flyer_ids == unknown_id))
+unknown_flyer_piece_label <- sprintf(
+  "%s/%s (%.1f%%)",
+  unknown_flyer_piece_count,
+  length(flat_flyer_ids),
+  100 * unknown_flyer_piece_count / length(flat_flyer_ids)
+)
+flyer_unknown_by_line <- tibble(
+  text = flyer_rows$text,
+  pieces = map_int(flyer_ids, length),
+  unknown_pieces = map_int(
+    flyer_ids,
+    \(ids) as.integer(sum(ids == unknown_id))
+  )
+)
+first_flyer_piece_table <- tibble(
+  piece_number = seq_along(first_flyer_subwords),
+  displayed_subword = first_flyer_subwords,
+  model_id = first_flyer_ids,
+  is_unknown_id = first_flyer_ids == unknown_id
+)
+capital_letters <- function(text) {
+  characters <- strsplit(paste(text, collapse = ""), "")[[1]]
+  sort(unique(characters[grepl("[A-Z]", characters)]))
+}
+job_capital_letters <- capital_letters(job_rows$text)
+flyer_capital_letters <- capital_letters(flyer_rows$text)
+missing_flyer_capitals <- setdiff(flyer_capital_letters, job_capital_letters)
+subword_test_summary <- tibble(
+  measure = c(
+    "BPE vocabulary rows",
+    "flyer subword pieces",
+    "unknown ids",
+    "first flyer line pieces",
+    "missing flyer capital letters"
+  ),
+  value = c(
+    as.character(nrow(job_bpe_model$vocabulary)),
+    as.character(length(flat_flyer_ids)),
+    unknown_flyer_piece_label,
+    as.character(length(first_flyer_subwords)),
+    paste(missing_flyer_capitals, collapse = " ")
+  )
+)
+
+stopifnot(
+  identical(nrow(job_bpe_model$vocabulary), 200L),
+  identical(length(flat_flyer_subwords), 91L),
+  identical(length(flat_flyer_ids), 91L),
+  identical(as.integer(unknown_id), 1L),
+  identical(unknown_flyer_piece_count, 7L),
+  identical(
+    unknown_flyer_piece_label,
+    "7/91 (7.7%)"
+  ),
+  identical(
+    flyer_unknown_by_line$unknown_pieces,
+    c(4L, 3L, 0L, 0L, 0L, 0L)
+  ),
+  identical(
+    job_capital_letters,
+    c("A", "C", "E", "N", "O", "P", "R", "S", "T", "W")
+  ),
+  identical(
+    missing_flyer_capitals,
+    c("D", "F", "H", "I", "K", "L", "U", "V")
+  ),
+  identical(length(first_flyer_subwords), 22L),
+  identical(
+    first_flyer_subwords,
+    c(
+      "▁R",
+      "IV",
+      "E",
+      "R",
+      "T",
+      "O",
+      "N",
+      "▁",
+      "S",
+      "KILL",
+      "S",
+      "▁",
+      "O",
+      "P",
+      "E",
+      "N",
+      "▁",
+      "H",
+      "O",
+      "U",
+      "S",
+      "E"
+    )
+  )
+)
+
+knitr::kable(
+  subword_test_summary,
+  col.names = c("Measure", "Value"),
+  caption = "BPE results on the held-out flyer rows",
+  row.names = FALSE
+)
+
+knitr::kable(
+  flyer_unknown_by_line,
+  col.names = c("Flyer line", "Subword pieces", "Unknown ids"),
+  caption = "Unknown subword ids by flyer line",
+  row.names = FALSE
+)
+
+knitr::kable(
+  first_flyer_piece_table,
+  col.names = c("Piece", "Displayed subword", "Model ID", "Unknown ID"),
+  caption = "Displayed pieces and model ids for the first flyer line",
+  row.names = FALSE
+)
+```
+
+The honest comparison is 10 of 20 flyer word tokens with no entry, versus 7 of
+91 subword pieces with the unknown id. Subwords reduce the problem sharply; they
+do not remove it.
+
+The display strings from `bpe_encode(type = "subwords")` show text from the
+input, not the model's own ids, so they hide unknown pieces. Checking
+`bpe_encode(type = "ids")` shows the model result. The unknown pieces appear
+because the flyer is printed in capitals and the job-detail rows contain only
+the capital letters A, C, E, N, O, P, R, S, T, and W. The flyer also uses D, F,
+H, I, K, L, U, and V. Tokenizers used in real language models often work on raw
+bytes so that nothing is unknown, which is a different design choice.
+
+## What to remember
+
+- Tokens are occurrences; types are distinct token values.
+- The 28 Riverton rows produce 153 word tokens and 96 word types.
+- Most word types in this small file appear exactly once.
+- Frequency cutoffs shrink a vocabulary and reduce token coverage.
+- Held-out text exposes out-of-vocabulary words.
+- Subwords reduce unknown material here, but they do not remove it.
+
+These percentages belong only to this 28-sentence teaching corpus. They show
+how vocabulary choices behave on the Riverton example, not how often these
+patterns occur in workforce text more generally.
+
+## Sources
+
+- [tokenizers documentation for word tokenizers](https://docs.ropensci.org/tokenizers/reference/basic-tokenizers.html)
+- [tokenizers.bpe package documentation](https://cran.r-project.org/package=tokenizers.bpe)
+- [Neural Machine Translation of Rare Words with Subword Units](https://aclanthology.org/P16-1162/)

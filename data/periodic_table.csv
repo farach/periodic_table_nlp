@@ -12,10 +12,10 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 11,Cro,Working with several annotators,service,2,Training data generation,source,2_training_data_generation/11-crowdsourcing-annotation.html,available,2026-08-28
 12,Aug,Creating additional training examples,practice,2,Training data generation,source,2_training_data_generation/12-textual-data-augmentation.html,available,2026-08-28
 13,Rul,Labeling text with written rules,practice,2,Training data generation,source,2_training_data_generation/13-rule-based-training-data.html,available,2026-08-28
-14,Tok,Tokenization,method,3,Word parsing,language,,planned,
-15,Voc,Vocabulary building,practice,3,Word parsing,language,,planned,
-16,Mor,Morphological tagging,method,3,Word parsing,language,,planned,
-17,Pos,Part-of-speech tagging,method,3,Word parsing,language,,planned,
+14,Tok,Tokenization,method,3,Word parsing,language,3_word_parsing/14-tokenization.html,available,2026-08-28
+15,Voc,Vocabulary building,practice,3,Word parsing,language,3_word_parsing/15-vocabulary-building.html,available,2026-08-28
+16,Mor,Morphological tagging,method,3,Word parsing,language,3_word_parsing/16-morphological-tagging.html,available,2026-08-28
+17,Pos,Part-of-speech tagging,method,3,Word parsing,language,3_word_parsing/17-part-of-speech-tagging.html,available,2026-08-28
 18,Dep,Dependency parsing,method,3,Word parsing,language,,planned,
 19,Ste,Stemming,method,4,Word processing,language,,planned,
 20,Lem,Lemmatization,method,4,Word processing,language,,planned,

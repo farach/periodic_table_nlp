@@ -1,0 +1,588 @@
+---
+title: "Tagging words by their job"
+subtitle: "Read part-of-speech tags from a small trained model"
+author: "Alex Farach"
+description: "Learn how a part-of-speech tagger labels workforce text and why held-out accuracy has limits."
+categories: [word parsing, part-of-speech tagging, workforce research]
+---
+
+The Riverton Workforce Lab has finished its sentence labels. The team points to
+a job posting and asks a smaller question: which words are the actions?
+
+That question changes the level of analysis. The team is no longer asking
+whether a whole sentence is about training or schedules. It wants to know what
+each word is doing inside the sentence.
+
+A **part-of-speech tagger** assigns a grammatical tag to each token. The tag can
+say that a word is a thing, an action, a description, a helper verb, a number,
+or punctuation. This lesson uses a UDPipe tagger trained on 500 hand-labeled
+sentences from the Universal Dependencies English Web Treebank. A **treebank**
+is a collection of sentences that people have labelled by hand, word by word.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. The UDPipe model and treebank artifacts are local
+files bundled with this project, so the lesson does not download anything while
+it runs.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- describe common Universal POS tags in plain language;
+- run a local UDPipe part-of-speech tagger on fixed tokens;
+- inspect a tagging mistake in a job-posting sentence;
+- read a held-out accuracy score; and
+- explain why accuracy on weblog posts does not promise the same result on job
+  postings.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the local files
+
+The next chunk loads readr for files, dplyr and tibble for tables, purrr for
+repeated token work, tokenizers for word splitting, udpipe for tagging, and
+digest for file fingerprints. The model has already been trained, so the code
+only reads artifacts from disk.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(tokenizers)
+library(stringr)
+library(udpipe)
+library(digest)
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+learning_curve <- read_csv(
+  "data/treebank/tagger-learning-curve.csv",
+  na = character(),
+  col_types = cols(
+    training_sentences = col_integer(),
+    training_tokens = col_integer(),
+    held_out_tokens = col_integer(),
+    correct_tokens = col_integer(),
+    accuracy = col_double()
+  )
+)
+
+metadata <- read_csv(
+  "data/treebank/treebank-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    source_url = col_character(),
+    retrieved_on = col_character(),
+    license = col_character(),
+    fingerprint = col_character()
+  )
+)
+
+learning_curve_path <- "data/treebank/tagger-learning-curve.csv"
+learning_curve_fingerprint <- digest(
+  paste(read_lines(learning_curve_path), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+expected_curve_fingerprint <- metadata |>
+  filter(artifact == "tagger-learning-curve.csv") |>
+  pull(fingerprint)
+
+metadata_display <- metadata |>
+  mutate(fingerprint_start = str_sub(fingerprint, 1, 12)) |>
+  select(artifact, source, license, fingerprint_start)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(nrow(learning_curve), 5L),
+  identical(nrow(metadata), 4L),
+  all(str_length(metadata$fingerprint) == 64L),
+  all(str_length(metadata_display$fingerprint_start) == 12L),
+  identical(
+    learning_curve$training_sentences,
+    c(100L, 250L, 500L, 1000L, 2000L)
+  ),
+  identical(
+    learning_curve$correct_tokens,
+    c(3301L, 3496L, 3641L, 3720L, 3778L)
+  ),
+  identical(
+    learning_curve_fingerprint,
+    "b1c614e3cdd17ae13b1959992cb440e43c7bf4533e936cd6cb58dae42f255911"
+  ),
+  identical(learning_curve_fingerprint, expected_curve_fingerprint)
+)
+
+knitr::kable(
+  metadata_display,
+  col.names = c("Artifact", "Source", "License", "SHA-256 start"),
+  caption = "Local treebank artifacts used by the tagger lesson",
+  row.names = FALSE
+)
+```
+
+The table prints the first 12 characters of each SHA-256 fingerprint so it stays
+readable at high zoom. The full values are in
+`data/treebank/treebank-metadata.csv`. A hash shows that a file has not changed
+since it was made. It says nothing about whether the numbers in the file are
+right. Only the 500-sentence tagger is included in this repository, so the other
+four rows of the learning curve cannot be rebuilt from the committed files.
+
+## Tag fixed tokens
+
+The model was trained to tag tokens it receives. It was not trained to split raw
+sentences. The code therefore tokenizes each Riverton sentence first, writes one
+token per line, and tells UDPipe that the input is already vertical text.
+
+The output includes a **lemma**, the dictionary form of a word, the form you
+would look up. `is` has the lemma `be`. In the code, `\(tokens)` is R shorthand
+for a small function that handles one sentence's tokens at a time.
+
+```{r}
+tagger <- udpipe_load_model(
+  "data/treebank/en_ewt-500-tagger.udpipe"
+)
+
+vertical <- sentences$text |>
+  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  map_chr(\(tokens) paste(tokens, collapse = "\n"))
+
+tagged <- udpipe_annotate(
+  tagger,
+  x = vertical,
+  doc_id = sentences$sentence_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "none"
+) |>
+  as.data.frame() |>
+  as_tibble()
+
+paid_sentence_tags <- tagged |>
+  filter(doc_id == "s001") |>
+  select(token, upos, lemma)
+
+stopifnot(
+  identical(nrow(tagged), 178L),
+  identical(
+    paid_sentence_tags$token,
+    c("Paid", "12", "-", "week", "training", "is", "provided", ".")
+  ),
+  identical(
+    paid_sentence_tags$upos,
+    c("PROPN", "NUM", "PUNCT", "NOUN", "NOUN", "AUX", "VERB", "PUNCT")
+  ),
+  identical(
+    paid_sentence_tags$lemma,
+    c("Paid", "12", "-", "week", "training", "be", "provid", ".")
+  )
+)
+
+knitr::kable(
+  paid_sentence_tags,
+  col.names = c("Token", "POS tag", "Lemma"),
+  caption = "Tags for 'Paid 12-week training is provided.'",
+  row.names = FALSE
+)
+```
+
+The sentence has eight tokens after keeping punctuation. Two outputs are wrong
+in a way a reader can judge. `Paid` is not a proper noun. It describes the
+training, and the tagger likely followed the capital letter at the start of the
+sentence. The lemma `provid` for `provided` is not a word. The model guessed a
+stem from a suffix rule.
+
+## Count the tags
+
+The tagger uses **Universal POS tags**. The **tagset** is the fixed list of
+labels a tagger is allowed to choose from. `NOUN` marks things, `VERB` marks
+actions, `ADJ` marks descriptions, `ADP` marks words such as `of` and `in`,
+`AUX` marks helper verbs such as `is`, `DET` marks words such as `the` and `a`,
+`PART` marks particles such as `to` in `to apply`, `PROPN` marks names, `PRON`
+marks pronouns, `ADV` marks adverbs, `CCONJ` marks coordinating conjunctions
+such as `and`, and `INTJ` marks interjections.
+
+```{r}
+tag_counts <- tagged |>
+  count(upos, sort = TRUE)
+
+punctuation_tokens <- sum(tagged$upos == "PUNCT")
+tokens_without_punctuation <- nrow(tagged) - punctuation_tokens
+
+intj_tokens <- tagged |>
+  filter(upos == "INTJ") |>
+  select(doc_id, token)
+
+propn_tokens <- tagged |>
+  filter(upos == "PROPN") |>
+  select(doc_id, token)
+
+expected_tag_counts <- tibble(
+  upos = c(
+    "NOUN",
+    "PUNCT",
+    "VERB",
+    "AUX",
+    "ADJ",
+    "DET",
+    "PROPN",
+    "ADP",
+    "NUM",
+    "PART",
+    "PRON",
+    "ADV",
+    "CCONJ",
+    "INTJ"
+  ),
+  n = c(45L, 25L, 24L, 20L, 17L, 16L, 11L, 7L, 6L, 2L, 2L, 1L, 1L, 1L)
+)
+
+stopifnot(
+  identical(tag_counts, expected_tag_counts),
+  identical(punctuation_tokens, 25L),
+  identical(tokens_without_punctuation, 153L),
+  identical(intj_tokens$doc_id, "s002"),
+  identical(intj_tokens$token, "No"),
+  identical(
+    propn_tokens$token,
+    c(
+      "Paid",
+      "Clear",
+      "RIVERTON",
+      "SKILLS",
+      "OPEN",
+      "HOUSE",
+      "DATA",
+      "SUPPORT",
+      "CERTIFICATE",
+      "Paid",
+      "October"
+    )
+  )
+)
+
+knitr::kable(
+  tag_counts,
+  col.names = c("POS tag", "Tagged tokens"),
+  caption = "Universal POS tag counts across the 28 Riverton sentences",
+  row.names = FALSE
+)
+```
+
+Nouns are the largest group, followed by punctuation, verbs, and helper verbs.
+That matches the practical question well enough to start a review, but the
+mistakes in the first sentence warn against treating the table as a perfect
+grammar of the job postings.
+
+This lesson keeps punctuation as tokens, so it tags 178 tokens. Twenty-five are
+`PUNCT`; dropping them leaves the 153 word tokens counted in Lesson 15.
+
+One row deserves a closer look. The only `INTJ` is `No` in sentence `s002`,
+which is wrong in context. Of the 11 `PROPN` tokens, seven are all-capital flyer
+words (`RIVERTON`, `SKILLS`, `OPEN`, `HOUSE`, `DATA`, `SUPPORT`, `CERTIFICATE`),
+two are `Paid` at the start of sentences `s001` and `s025`, one is `Clear` in
+`s022`, and one is `October` in `s028`, which is right. The tagger reads capital
+letters as a signal for names, a systematic failure on this kind of text that is
+invisible in an accuracy score.
+
+## Read the accuracy number
+
+This score is for 13 held-out political weblog posts from the same treebank, not
+for job postings. **Held-out** means text kept back from training so it can be
+reserved for scoring. The posts in both treebank excerpts are weblog
+documents from 2003 to 2006, which strengthens the domain-transfer warning.
+
+```{r}
+train_path <- "data/treebank/en_ewt-train-excerpt.conllu"
+held_out_path <- "data/treebank/en_ewt-held-out.conllu"
+
+read_gold_tokens <- function(path) {
+  udpipe_read_conllu(path) |>
+    as_tibble() |>
+    filter(!str_detect(token_id, "[^0-9]"), !is.na(upos))
+}
+
+train_newdoc_ids <- read_lines(train_path) |>
+  str_subset(fixed("# newdoc id = ")) |>
+  str_remove(fixed("# newdoc id = "))
+
+held_newdoc_ids <- read_lines(held_out_path) |>
+  str_subset(fixed("# newdoc id = ")) |>
+  str_remove(fixed("# newdoc id = "))
+
+treebank_years <- str_match(
+  c(train_newdoc_ids, held_newdoc_ids),
+  "_ENG_(\\d{4})"
+)[, 2] |>
+  as.integer()
+
+train_gold <- read_gold_tokens(train_path) |>
+  transmute(token, gold_upos = upos)
+
+held <- read_gold_tokens(held_out_path) |>
+  transmute(sentence_id, token, gold_upos = upos)
+
+lookup <- train_gold |>
+  count(token, gold_upos, name = "n") |>
+  arrange(token, desc(n), gold_upos) |>
+  group_by(token) |>
+  slice(1) |>
+  ungroup() |>
+  select(token, baseline_upos = gold_upos)
+
+held_vertical <- held |>
+  group_by(sentence_id) |>
+  summarise(text = paste(token, collapse = "\n"), .groups = "drop")
+
+held_predictions <- udpipe_annotate(
+  tagger,
+  x = held_vertical$text,
+  doc_id = held_vertical$sentence_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "none"
+) |>
+  as.data.frame() |>
+  as_tibble() |>
+  group_by(doc_id) |>
+  mutate(token_row = row_number()) |>
+  ungroup() |>
+  transmute(
+    sentence_id = doc_id,
+    token_row,
+    tagger_upos = upos
+  )
+
+scored <- held |>
+  left_join(lookup, by = "token") |>
+  mutate(
+    baseline_upos = coalesce(baseline_upos, "NOUN"),
+    seen_in_training = token %in% train_gold$token
+  ) |>
+  group_by(sentence_id) |>
+  mutate(token_row = row_number()) |>
+  ungroup() |>
+  left_join(held_predictions, by = c("sentence_id", "token_row")) |>
+  mutate(
+    baseline_correct = baseline_upos == gold_upos,
+    tagger_correct = tagger_upos == gold_upos,
+    easy_gold_tag = gold_upos %in% c("PUNCT", "DET")
+  )
+
+scored_500 <- learning_curve |>
+  filter(training_sentences == 500L) |>
+  mutate(
+    calculated_accuracy = correct_tokens / held_out_tokens,
+    accuracy_percent = round(calculated_accuracy * 100, 2)
+  )
+
+learning_curve_display <- learning_curve |>
+  mutate(
+    accuracy_percent = round(accuracy * 100, 2)
+  )
+
+gain_100_to_500 <- learning_curve |>
+  filter(training_sentences %in% c(100L, 500L)) |>
+  summarise(
+    points = diff(accuracy) * 100,
+    .groups = "drop"
+  ) |>
+  pull(points)
+
+gain_500_to_2000 <- learning_curve |>
+  filter(training_sentences %in% c(500L, 2000L)) |>
+  summarise(
+    points = diff(accuracy) * 100,
+    .groups = "drop"
+  ) |>
+  pull(points)
+
+training_ratio_100_to_500 <- 500L / 100L
+training_ratio_500_to_2000 <- 2000L / 500L
+
+accuracy_summary <- scored |>
+  summarise(
+    held_out_tokens = n(),
+    lookup_correct = sum(baseline_correct),
+    lookup_accuracy = lookup_correct / held_out_tokens,
+    tagger_correct = sum(tagger_correct),
+    tagger_accuracy = tagger_correct / held_out_tokens,
+    gain_points = (tagger_accuracy - lookup_accuracy) * 100,
+    seen_tokens = sum(seen_in_training),
+    seen_percent = seen_tokens / held_out_tokens * 100,
+    easy_tokens = sum(easy_gold_tag),
+    easy_percent = easy_tokens / held_out_tokens * 100,
+    .groups = "drop"
+  )
+
+content_summary <- scored |>
+  filter(!easy_gold_tag) |>
+  summarise(
+    held_out_tokens = n(),
+    lookup_correct = sum(baseline_correct),
+    lookup_accuracy = lookup_correct / held_out_tokens,
+    tagger_correct = sum(tagger_correct),
+    tagger_accuracy = tagger_correct / held_out_tokens,
+    .groups = "drop"
+  )
+
+accuracy_comparison <- tibble(
+  scope = c(
+    "All held-out tokens",
+    "All held-out tokens",
+    "Excluding PUNCT and DET",
+    "Excluding PUNCT and DET"
+  ),
+  system = c(
+    "Lookup baseline",
+    "500-sentence tagger",
+    "Lookup baseline",
+    "500-sentence tagger"
+  ),
+  correct = c(
+    accuracy_summary$lookup_correct,
+    accuracy_summary$tagger_correct,
+    content_summary$lookup_correct,
+    content_summary$tagger_correct
+  ),
+  tokens = c(
+    accuracy_summary$held_out_tokens,
+    accuracy_summary$held_out_tokens,
+    content_summary$held_out_tokens,
+    content_summary$held_out_tokens
+  ),
+  accuracy = round(correct / tokens, 4)
+)
+
+stopifnot(
+  identical(length(train_newdoc_ids), 11L),
+  identical(length(held_newdoc_ids), 13L),
+  all(str_starts(train_newdoc_ids, "weblog-")),
+  all(str_starts(held_newdoc_ids, "weblog-")),
+  identical(range(treebank_years), c(2003L, 2006L)),
+  identical(scored_500$correct_tokens, 3641L),
+  identical(scored_500$held_out_tokens, 4007L),
+  identical(round(scored_500$calculated_accuracy, 4), 0.9087),
+  identical(round(accuracy_summary$lookup_accuracy, 4), 0.7931),
+  identical(accuracy_summary$lookup_correct, 3178L),
+  identical(accuracy_summary$tagger_correct, 3641L),
+  identical(accuracy_summary$seen_tokens, 3140L),
+  identical(round(accuracy_summary$seen_percent, 1), 78.4),
+  identical(accuracy_summary$easy_tokens, 884L),
+  identical(round(accuracy_summary$easy_percent, 1), 22.1),
+  identical(content_summary$held_out_tokens, 3123L),
+  identical(content_summary$tagger_correct, 2766L),
+  identical(round(content_summary$tagger_accuracy, 4), 0.8857),
+  identical(content_summary$lookup_correct, 2307L),
+  identical(round(content_summary$lookup_accuracy, 4), 0.7387),
+  identical(round(accuracy_summary$gain_points, 1), 11.6),
+  identical(round(gain_100_to_500, 1), 8.5),
+  identical(round(gain_500_to_2000, 1), 3.4),
+  identical(training_ratio_100_to_500, 5),
+  identical(training_ratio_500_to_2000, 4)
+)
+
+knitr::kable(
+  learning_curve_display,
+  col.names = c(
+    "Training sentences",
+    "Training tokens",
+    "Held-out tokens",
+    "Correct tokens",
+    "Accuracy",
+    "Accuracy percent"
+  ),
+  caption = "Held-out tagger accuracy as training data increases",
+  row.names = FALSE
+)
+
+knitr::kable(
+  accuracy_comparison,
+  col.names = c("Scope", "System", "Correct", "Tokens", "Accuracy"),
+  caption = "The 500-sentence tagger compared with a lookup baseline",
+  row.names = FALSE
+)
+```
+
+The lookup baseline gives each word its most frequent tag in the 500 training
+sentences and guesses `NOUN` for words it has not seen. It gets 3,178 of 4,007
+tokens right, or 0.7931. The trained tagger gets 3,641 of 4,007 right, or about
+91 percent, which buys about 11.6 points over the lookup table. In the held-out
+posts, 3,140 of 4,007 tokens, or 78.4 percent, are words that also appear in the
+training sentences.
+
+The easy tags matter. `PUNCT` and `DET` are 884 of the 4,007 held-out tokens, or
+22.1 percent. Excluding them, the trained tagger scores 2,766 of 3,123, or
+0.8857, and the lookup baseline scores 2,307 of 3,123, or 0.7387. The easy tokens
+flatter both systems.
+
+On this one learning curve, accuracy rises quickly at first and then more slowly.
+Moving from 100 to 500 training sentences buys about 8.5 points. Moving from 500
+to 2,000 buys about 3.4 more. The curve cannot separate more labeled sentences
+from broader topic coverage, because each step adds new blog posts as well as
+new sentences. The intervals are not the same scale: 100 to 500 is a five-fold
+increase, while 500 to 2,000 is a four-fold increase.
+
+## Keep the limits attached
+
+The score is one number from one run over thirteen blog posts. Tokens inside a
+post are not independent, because vocabulary, topic, and author repeat within
+the post. The real spread is wider than the token count suggests. The script
+that made the model sets no seed, so this page reports the run that is bundled
+with the repository and does not add a confidence interval.
+
+The Riverton sentences are job postings and flyer lines, a different kind of
+writing. This lesson does not claim the same rate there. On the Riverton text,
+we can point to individual mistakes a reader can judge.
+
+Universal POS tags are a useful set of bins for this task. Other projects can
+choose a different tagset.
+
+## What to remember
+
+- A part-of-speech tagger assigns a grammatical tag to each token.
+- Universal POS tags are compact labels such as `NOUN`, `VERB`, and `ADJ`.
+- The local tagger labeled 178 Riverton tokens.
+- Its held-out weblog-post accuracy is 3,641 of 4,007 tokens, or about 91
+  percent.
+- Job-posting errors must be checked directly; the weblog-post score does not
+  transfer by promise.
+
+The team can use the tagger to make a first action-word list, then inspect the
+mistakes before treating the labels as evidence.
+
+## Sources
+
+- [UDPipe R package reference](https://bnosac.github.io/udpipe/docs/doc0.html)
+- [Universal POS tags](https://universaldependencies.org/u/pos/)
+- [Universal Dependencies English Web Treebank](https://universaldependencies.org/treebanks/en_ewt/index.html)
