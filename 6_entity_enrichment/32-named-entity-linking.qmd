@@ -190,24 +190,31 @@ knitr::kable(
 A mention candidate is a span of text the team wants to link. This lesson starts
 with hand-selected mentions so the linking step remains visible.
 
-## Join aliases to identifiers
+## Join normalized aliases to identifiers
 
-The alias join returns candidate identifiers. A clean link has one candidate, an
-ambiguous link has more than one, and a miss has none.
+In real datasets, exact casing rarely matches perfectly. Before joining, both the mentions and the aliases should be normalized (e.g., lowercased) so that differently capitalized names match. The alias join returns candidate identifiers. A clean link has one candidate, an ambiguous link has more than one, and a miss has none.
 
 ```{r}
-linked_rows <- mention_candidates |>
+library(stringr)
+normalized_mentions <- mention_candidates |>
+  mutate(normalized_mention = str_to_lower(mention))
+
+normalized_aliases <- aliases |>
+  mutate(normalized_alias = str_to_lower(alias)) |>
+  distinct(entity_id, normalized_alias)
+
+linked_rows <- normalized_mentions |>
   left_join(
-    aliases,
-    by = join_by(mention == alias),
+    normalized_aliases,
+    by = join_by(normalized_mention == normalized_alias),
     relationship = "many-to-many"
   ) |>
   left_join(entities, by = join_by(entity_id))
 
 link_status <- linked_rows |>
   summarise(
-    candidate_ids = paste(na.omit(entity_id), collapse = ", "),
-    candidates = sum(!is.na(entity_id)),
+    candidate_ids = paste(unique(na.omit(entity_id)), collapse = ", "),
+    candidates = n_distinct(na.omit(entity_id)),
     .by = c(mention_id, source, text, mention)
   ) |>
   mutate(
@@ -284,6 +291,16 @@ knitr::kable(
 The two forklift aliases count under `CRD-0001`. Without that identifier, the
 team would have to decide later whether the two spellings named the same
 credential.
+
+## Real-world linking pipelines
+
+The exact (but normalized) join here shows the mechanism of an alias table. Production entity linking systems, however, are far more complex:
+
+- **Unicode and case normalization policy**: A pipeline must define how it handles accents (e.g., NFC/NFD normalization) and casing before joining, ensuring mentions and aliases are normalized consistently. Never report linking rates over an unnormalized exact string join.
+- **Candidate generation and ranking**: When an alias is ambiguous (like `Riverton`), a modern pipeline generates candidate entities and ranks them using the surrounding sentence context.
+- **NIL handling**: A robust system detects when a mention matches an alias string but refers to a *different* entity not in the knowledge base (a NIL entity), rather than blindly linking it.
+- **KB versioning**: An entity's canonical name or status may change. Linking results must record the specific version of the knowledge base (KB) used.
+- **Alias and candidate-recall checks**: Pipelines need ongoing evaluation to ensure the alias table contains common misspellings (alias recall) and the ranking system surfaces the correct entity (candidate recall).
 
 ## What to remember
 

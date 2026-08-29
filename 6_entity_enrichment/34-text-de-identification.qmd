@@ -266,6 +266,15 @@ knitr::kable(
 spaCy finds the two full names and misses the standalone surname. This second
 detector changes the route to the same warning: the note still leaks a name.
 
+## Production de-identification
+
+The simple toy rules above miss the complexity of handling real personal data. In production (often using specialized toolkits like Microsoft Presidio), teams must track several critical concepts:
+
+- **Pseudonymization vs. Anonymization**: Replacing a name with `[PERSON]` is pseudonymization (the data might still be linked back to the person if other clues remain). True anonymization makes re-identification impossible.
+- **Quasi-identifiers**: Details like a unique medical symptom, an exact timeline, or a specific geographic area might not be direct identifiers on their own, but when combined, they uniquely identify a person.
+- **Category-wise recall**: An honest evaluation measures recall (the percentage of true identifiers successfully masked) *per category*. A system might have 99% recall on phone numbers but only 60% on names, and an overall score hides that danger.
+- **Legal basis and residual risk**: Processing and masking text requires documenting a legal basis (such as GDPR or HIPAA compliance) and maintaining residual-risk documentation that details the likelihood of re-identification from the leaked text that inevitably slips through.
+
 ## What to remember
 
 - De-identification starts by marking what must not escape.

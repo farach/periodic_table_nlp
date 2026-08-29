@@ -384,6 +384,14 @@ mark a number feature on the verb and English verbs rarely carry one. On the
 other 24 sentences the check could not fire. A zero mostly measures coverage, not
 correctness.
 
+## Grammar checking in production
+
+The three custom checks above demonstrate the concept, but real offline grammar checking requires a mature system. In the NLP ecosystem, open-source tools like LanguageTool are standard. Production grammar systems distinguish between:
+
+- **Detection vs. correction**: Highlighting a possible error (detection) is much safer than automatically rewriting the text (correction), especially when the engine's coverage is low.
+- **Normative context and auditability**: What counts as "correct" grammar depends on the intended style (e.g., formal business English vs. informal messaging). Rule-based systems provide an auditable explanation for why text was flagged, whereas deep learning models can suggest fluent corrections but often struggle to explain their normative reasoning.
+- **Rule/model/error-type comparison**: Rule-based engines are highly precise for local stylistic and typographical errors (like doubled words or wrong articles), but neural models excel at catching semantic confusion where the grammar technically parses but the meaning is broken.
+
 ## What to remember
 
 - Spelling checks words; grammar checks how words fit together.

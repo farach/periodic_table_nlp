@@ -326,6 +326,26 @@ The line tells a reader that some stipend exists. It does not say how much. A
 number without a unit is not a price, and a unit without a number is not an
 amount the coordinator can compare.
 
+## The limits of custom rules
+
+A custom regular expression is a quick way to find highly constrained formats, but it breaks quickly on varied real-world data.
+
+```{r}
+failure_examples <- tibble(
+  text = c("thirty-eight thousand a year", "1.250,50 / hr", "$40/hr (CAD)")
+)
+
+parse_prices(failure_examples) |>
+  select(text, amount_lower, currency) |>
+  knitr::kable(caption = "Representative failures of the custom regex parser")
+```
+
+- **Value normalization**: The pattern misses `"thirty-eight thousand"` entirely because it only looks for digits.
+- **Locale formats**: It reads the European format `1.250,50` incorrectly (amount_lower is NA) because it expects commas as thousands separators.
+- **Ambiguous currencies**: It assumes `$` means USD, which is wrong for CAD.
+
+In standard NLP workflows, relying entirely on custom regex for entity parsing is an anti-pattern. Production systems use specialized entity parsing libraries (such as Duckling) or Named Entity Recognition (like `MONEY` entities in spaCy) to handle these variations and extract structured, normalized values across locales.
+
 ## What to remember
 
 - A usable price needs an amount, a currency, and a unit.

@@ -290,6 +290,16 @@ The context row shows a decision rule, not evidence from the flyer. Without the
 parent region, a prior belief, or surrounding text, the two `Riverton` rows remain
 tied.
 
+## Geocoding in production
+
+The local exact-match join in this lesson shows the mechanism of geocoding, but production systems rely on specialized geocoding APIs (such as OpenStreetMap/Nominatim) or packages (like `tidygeocoder` in R or `geopy` in Python) rather than raw string joins.
+
+When using a live service, several boundaries and limits apply:
+- **Match precision**: APIs can perform fuzzy matching, returning a confidence score. A low score requires uncertain-result inspection.
+- **Service boundaries**: Rate limits and Terms of Service often dictate how many requests you can make.
+- **Caching**: Storing results locally prevents redundant network calls and speeds up repeated processing.
+- **Privacy and re-identification**: Sending text containing personal locations to an external API can leak private data. Self-hosted geocoders (like a local Nominatim instance) keep sensitive text entirely on your own infrastructure.
+
 ## What to remember
 
 - A gazetteer is a reference list of place names with locations attached.
