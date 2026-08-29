@@ -475,22 +475,10 @@ parse_retry_after <- function(value, now) {
     return(as.integer(value))
   }
 
-  http_date_formats <- c(
-    "%a, %d %b %Y %H:%M:%S GMT",
-    "%A, %d-%b-%y %H:%M:%S GMT",
-    "%a %b %e %H:%M:%S %Y"
-  )
-  parsed_candidates <- map(
-    http_date_formats,
-    \(date_format) suppressWarnings(
-      as.POSIXct(value, format = date_format, tz = "GMT")
-    )
-  )
-  parsed_index <- which(!map_lgl(parsed_candidates, is.na))[1]
-  if (is.na(parsed_index)) {
+  parsed <- suppressWarnings(curl::parse_date(value))
+  if (length(parsed) == 0L || is.na(parsed)) {
     stop("Retry-After is neither delay-seconds nor an HTTP-date")
   }
-  parsed <- parsed_candidates[[parsed_index]]
 
   max(
     0L,

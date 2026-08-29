@@ -436,6 +436,19 @@ piece_report <- tibble(
       example == "unseen_greek" ~
         "<span lang=\"el\">Γλωσσα</span>",
       TRUE ~ text
+    ),
+    display_subwords = case_when(
+      example == "unseen_chinese" ~ str_c(
+        "<span lang=\"zh\">",
+        shown_as_subwords,
+        "</span>"
+      ),
+      example == "unseen_greek" ~ str_c(
+        "<span lang=\"el\">",
+        shown_as_subwords,
+        "</span>"
+      ),
+      TRUE ~ shown_as_subwords
     )
   )
 
@@ -449,12 +462,14 @@ stopifnot(
     str_c("\u2581 | ", texts_to_encode[["unseen_chinese"]])
   ),
   str_detect(piece_report$display_text[3], fixed("lang=\"zh\"")),
-  str_detect(piece_report$display_text[4], fixed("lang=\"el\""))
+  str_detect(piece_report$display_text[4], fixed("lang=\"el\"")),
+  str_detect(piece_report$display_subwords[3], fixed("lang=\"zh\"")),
+  str_detect(piece_report$display_subwords[4], fixed("lang=\"el\""))
 )
 
 knitr::kable(
   piece_report |>
-    select(display_text, characters, pieces, unknown_pieces, shown_as_subwords),
+    select(display_text, characters, pieces, unknown_pieces, display_subwords),
   col.names = c(
     "Text",
     "Characters",
@@ -517,7 +532,7 @@ stopifnot(
 
 knitr::kable(
   round_trip |>
-    select(text, pieces, unknown_pieces, decoded, recovers_input),
+    select(display_text, pieces, unknown_pieces, decoded, recovers_input),
   col.names = c(
     "Text",
     "Pieces",
@@ -526,7 +541,8 @@ knitr::kable(
     "Recovers the input"
   ),
   caption = "Round-trip results for the four texts",
-  row.names = FALSE
+  row.names = FALSE,
+  escape = FALSE
 )
 ```
 
