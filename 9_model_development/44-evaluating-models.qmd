@@ -138,6 +138,18 @@ baseline_display <- baselines |>
     baseline_accuracy
   )
 
+knitr::kable(
+  baseline_display |>
+    mutate(baseline_accuracy = round(baseline_accuracy, 4)),
+  col.names = c("Task", "Rows", "Speeches", "People", "Largest class", "Corpus baseline"),
+  caption = "Corpus-level baselines and task sizes",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(study), 90L),
   identical(nrow(baselines), 3L),
@@ -147,14 +159,6 @@ stopifnot(
   identical(baseline_display$people, c(40L, 31L, 31L)),
   identical(baseline_display$speeches, c(60L, 47L, 47L)),
   identical(baseline_display$largest_class, c("1900 or later", "1900 or later", "Republican"))
-)
-
-knitr::kable(
-  baseline_display |>
-    mutate(baseline_accuracy = round(baseline_accuracy, 4)),
-  col.names = c("Task", "Rows", "Speeches", "People", "Largest class", "Corpus baseline"),
-  caption = "Corpus-level baselines and task sizes",
-  row.names = FALSE
 )
 ```
 
@@ -211,6 +215,21 @@ era_speech_length_gap <- era_speech$mean_accuracy - era_speech$mean_length_rule
 
 era_party_speech_gap <- era_party_speech$mean_accuracy - era_party_speech$mean_train_majority
 
+knitr::kable(
+  score_table,
+  col.names = c(
+    "Task", "Split", "Model accuracy", "Balanced accuracy",
+    "Training-majority rule", "Test-majority rate", "Length rule",
+    "Model low", "Model high", "Missing balanced accuracy"
+  ),
+  caption = "Ten split replicates for each task and split scheme",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(score_table$missing_bal_accuracy, c(rep(0L, 5L), 1L, rep(0L, 3L))),
   identical(round(era_speech$mean_accuracy, 4), 0.8457),
@@ -234,17 +253,6 @@ stopifnot(
   identical(nrow(na_replicate), 1L),
   identical(na_replicate$replicate, 3L),
   identical(na_replicate$test_majority_rate, 1)
-)
-
-knitr::kable(
-  score_table,
-  col.names = c(
-    "Task", "Split", "Model accuracy", "Balanced accuracy",
-    "Training-majority rule", "Test-majority rate", "Length rule",
-    "Model low", "Model high", "Missing balanced accuracy"
-  ),
-  caption = "Ten split replicates for each task and split scheme",
-  row.names = FALSE
 )
 ```
 
@@ -293,18 +301,6 @@ plot_data <- study |>
     )
   )
 
-stopifnot(
-  identical(nrow(plot_data), 180L),
-  identical(
-    plot_data |>
-      count(task, split_scheme, measure) |>
-      pull(n),
-    rep(10L, 18L)
-  ),
-  all(plot_data$score >= 0 & plot_data$score <= 1),
-  identical(round(min(plot_data$score), 4), 0.2749)
-)
-
 # The y scale is left to the data. Fixing the lower bound at 0.3 would silently
 # drop the two replicates where the training-majority rule scores 0.27, and those
 # are exactly the cases worth seeing: the rule collapses when the class that was
@@ -321,6 +317,22 @@ ggplot(plot_data, aes(x = split_scheme, y = score, color = measure)) +
     color = "Measure"
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(plot_data), 180L),
+  identical(
+    plot_data |>
+      count(task, split_scheme, measure) |>
+      pull(n),
+    rep(10L, 18L)
+  ),
+  all(plot_data$score >= 0 & plot_data$score <= 1),
+  identical(round(min(plot_data$score), 4), 0.2749)
+)
 ```
 
 The party model never beats its deployable majority rule at the paragraph split:
@@ -409,12 +421,6 @@ metric_table <- metric_set(accuracy, bal_accuracy, sens, spec)(
 ) |>
   select(.metric, .estimate)
 
-stopifnot(
-  identical(nrow(era_testing), 335L),
-  identical(confusion_table$Freq, c(145, 50, 10, 130)),
-  identical(round(metric_table$.estimate, 4), c(0.8209, 0.8361, 0.7436, 0.9286))
-)
-
 knitr::kable(
   confusion_table,
   col.names = c("Prediction", "Reference label", "Paragraphs"),
@@ -428,6 +434,16 @@ knitr::kable(
   col.names = c("Measure", "Value"),
   caption = "Accuracy and class-aware measures for the same predictions",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(era_testing), 335L),
+  identical(confusion_table$Freq, c(145, 50, 10, 130)),
+  identical(round(metric_table$.estimate, 4), c(0.8209, 0.8361, 0.7436, 0.9286))
 )
 ```
 

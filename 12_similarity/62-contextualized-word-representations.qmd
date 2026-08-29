@@ -67,17 +67,21 @@ pipeline_table <- tibble(
   )
 )
 
-stopifnot(
-  pipeline$model == "en_core_web_sm",
-  as.integer(nlp$vocab$vectors$shape[[1]]) == 0L,
-  as.integer(nlp$vocab$vectors$shape[[2]]) == 0L
-)
-
 kable(
   pipeline_table,
   col.names = c("Item", "Value"),
   caption = "The pinned small spaCy pipeline has no static word-vector table",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  pipeline$model == "en_core_web_sm",
+  as.integer(nlp$vocab$vectors$shape[[1]]) == 0L,
+  as.integer(nlp$vocab$vectors$shape[[2]]) == 0L
 )
 ```
 
@@ -115,19 +119,23 @@ token_table <- tibble(
   )
 )
 
+kable(
+  token_table,
+  col.names = c("Position", "Token", "Role in this lesson"),
+  caption = "Tokens in the sentence and the positions compared below",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(tokens, c("The", "bank", "raised", "interest", "rates", ".", "He", "sat", "on", "the", "river", "bank", "and", "watched", ".")),
   identical(dim(tensor), c(15L, 96L)),
   identical(bank_positions, c(2L, 12L)),
   identical(the_positions, c(1L, 10L)),
   nrow(token_table) == 15L
-)
-
-kable(
-  token_table,
-  col.names = c("Position", "Token", "Role in this lesson"),
-  caption = "Tokens in the sentence and the positions compared below",
-  row.names = FALSE
 )
 ```
 
@@ -179,17 +187,6 @@ comparison_table <- tibble(
   percentile_of_all_pairs = c(bank_percentile, the_percentile)
 )
 
-stopifnot(
-  length(all_pair_cosines) == 105L,
-  within_tolerance(bank_cosine, 0.3466, tolerance = 1e-3),
-  within_tolerance(the_cosine, 0.5322, tolerance = 1e-3),
-  within_tolerance(mean(all_pair_cosines), 0.0476, tolerance = 1e-3),
-  within_tolerance(median(all_pair_cosines), -0.0074, tolerance = 1e-3),
-  within_tolerance(as.numeric(quantile(all_pair_cosines, 0.95)), 0.4475, tolerance = 1e-3),
-  bank_percentile > 0.9,
-  the_percentile > bank_percentile
-)
-
 kable(
   all_pair_summary |>
     mutate(cosine = round(cosine, 4)),
@@ -207,6 +204,21 @@ kable(
   col.names = c("Comparison", "First position", "Second position", "Cosine similarity", "Percentile of all token pairs"),
   caption = "Repeated word strings compared with the all-pair baseline",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  length(all_pair_cosines) == 105L,
+  within_tolerance(bank_cosine, 0.3466, tolerance = 1e-3),
+  within_tolerance(the_cosine, 0.5322, tolerance = 1e-3),
+  within_tolerance(mean(all_pair_cosines), 0.0476, tolerance = 1e-3),
+  within_tolerance(median(all_pair_cosines), -0.0074, tolerance = 1e-3),
+  within_tolerance(as.numeric(quantile(all_pair_cosines, 0.95)), 0.4475, tolerance = 1e-3),
+  bank_percentile > 0.9,
+  the_percentile > bank_percentile
 )
 ```
 
@@ -269,6 +281,18 @@ role_gap <- abs(
     bank_control_sentences$cosine_similarity[bank_control_sentences$comparison == "same financial sense, different roles"]
 )
 
+kable(
+  bank_control_sentences |>
+    mutate(cosine_similarity = round(cosine_similarity, 4)),
+  col.names = c("Comparison", "Sentences", "Cosine similarity"),
+  caption = "Same-sense controls for two occurrences of bank",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   nrow(bank_control_sentences) == 4L,
   all(within_tolerance(
@@ -279,14 +303,6 @@ stopifnot(
   role_gap < 0.01,
   bank_control_sentences$cosine_similarity[2] > 0.9,
   bank_control_sentences$cosine_similarity[2] > bank_control_sentences$cosine_similarity[1]
-)
-
-kable(
-  bank_control_sentences |>
-    mutate(cosine_similarity = round(cosine_similarity, 4)),
-  col.names = c("Comparison", "Sentences", "Cosine similarity"),
-  caption = "Same-sense controls for two occurrences of bank",
-  row.names = FALSE
 )
 ```
 
@@ -322,6 +338,17 @@ final_checks <- tibble(
   )
 )
 
+kable(
+  final_checks,
+  col.names = c("Check", "Value"),
+  caption = "Final checks for the contextual representation example",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   nrow(tensor) == 15L,
   ncol(tensor) == 96L,
@@ -330,13 +357,6 @@ stopifnot(
   as.integer(nlp$vocab$vectors$shape[[1]]) == 0L,
   identical(tokens[bank_positions], c("bank", "bank")),
   identical(tokens[the_positions], c("The", "the"))
-)
-
-kable(
-  final_checks,
-  col.names = c("Check", "Value"),
-  caption = "Final checks for the contextual representation example",
-  row.names = FALSE
 )
 ```
 

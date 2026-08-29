@@ -97,6 +97,17 @@ representation_summary <- tibble(
   features = c(nfeat(content_dfm), nfeat(content_tfidf_dfm), nfeat(all_words_dfm))
 )
 
+kable(
+  representation_summary,
+  col.names = c("Representation", "Documents", "Features"),
+  caption = "Three speech representations for outlier detection",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(paragraphs), 1377L),
   identical(ndoc(content_dfm), 60L),
@@ -105,13 +116,6 @@ stopifnot(
   identical(shortest_speech$speech_id, "1793-Washington"),
   identical(as.integer(shortest_speech$total_words), 135L),
   identical(as.integer(lengths$content_words[lengths$speech_id == "1793-Washington"]), 62L)
-)
-
-kable(
-  representation_summary,
-  col.names = c("Representation", "Documents", "Features"),
-  caption = "Three speech representations for outlier detection",
-  row.names = FALSE
 )
 ```
 
@@ -150,6 +154,17 @@ rank_table <- bind_rows(most_distant, most_typical) |>
     distance = round(distance, 3)
   )
 
+kable(
+  rank_table,
+  col.names = c("Group", "Speech", "Year", "President", "Total words", "Content words", "Shortest in corpus", "Cosine distance"),
+  caption = "Most and least distant speeches using content-word raw counts",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(content_rank$speech_id[1], "1793-Washington"),
   identical(content_rank$speech_id[2], "2021-Biden"),
@@ -157,13 +172,6 @@ stopifnot(
   identical(content_rank$speech_id[nrow(content_rank)], "1897-McKinley"),
   identical(as.numeric(round(content_rank$distance[1], 3)), 0.677),
   identical(as.numeric(round(min(content_rank$distance), 3)), 0.235)
-)
-
-kable(
-  rank_table,
-  col.names = c("Group", "Speech", "Year", "President", "Total words", "Content words", "Shortest in corpus", "Cosine distance"),
-  caption = "Most and least distant speeches using content-word raw counts",
-  row.names = FALSE
 )
 ```
 
@@ -210,15 +218,6 @@ restricted_top <- all_rankings |>
     distance = round(distance, 3)
   )
 
-stopifnot(
-  identical(length_correlations$correlation, c(-0.738, -0.908, -0.534)),
-  identical(restricted_top$speech_id[restricted_top$representation == "content words, raw counts"][1], "1813-Madison"),
-  identical(restricted_top$speech_id[restricted_top$representation == "content words, tf-idf"][1], "1813-Madison"),
-  identical(restricted_top$speech_id[restricted_top$representation == "all words, raw counts"][1], "2001-Bush"),
-  !"1793-Washington" %in% restricted_top$speech_id,
-  !"2021-Biden" %in% restricted_top$speech_id
-)
-
 kable(
   length_correlations,
   col.names = c("Representation", "Correlation between total words and distance"),
@@ -231,6 +230,19 @@ kable(
   col.names = c("Representation", "Speech", "Year", "Total words", "Cosine distance"),
   caption = "Top outliers after restricting to speeches with at least 1,000 words",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(length_correlations$correlation, c(-0.738, -0.908, -0.534)),
+  identical(restricted_top$speech_id[restricted_top$representation == "content words, raw counts"][1], "1813-Madison"),
+  identical(restricted_top$speech_id[restricted_top$representation == "content words, tf-idf"][1], "1813-Madison"),
+  identical(restricted_top$speech_id[restricted_top$representation == "all words, raw counts"][1], "2001-Bush"),
+  !"1793-Washington" %in% restricted_top$speech_id,
+  !"2021-Biden" %in% restricted_top$speech_id
 )
 ```
 
@@ -324,18 +336,6 @@ rank_agreement_null <- permutation_null(
 rank_agreement_display <- rank_agreement_null |>
   mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
 
-stopifnot(
-  identical(nrow(feature_comparison), 15L),
-  identical(all_words_rank$speech_id[1], "1793-Washington"),
-  identical(all_words_rank$speech_id[3], "2001-Bush"),
-  identical(tfidf_rank$speech_id[1:5], content_rank$speech_id[1:5]),
-  identical(shared_content_tfidf, 5L),
-  identical(shared_content_all, 4L),
-  identical(as.numeric(round(observed_rank_agreement, 3)), 0.770),
-  identical(as.numeric(rank_agreement_display$null_mean), 0.953),
-  identical(as.numeric(rank_agreement_display$p_value), 1)
-)
-
 kable(
   feature_comparison,
   col.names = c("Representation", "Speech", "Year", "President", "Total words", "Content words", "Cosine distance"),
@@ -348,6 +348,22 @@ kable(
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Permutation null for rank agreement across representations",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(feature_comparison), 15L),
+  identical(all_words_rank$speech_id[1], "1793-Washington"),
+  identical(all_words_rank$speech_id[3], "2001-Bush"),
+  identical(tfidf_rank$speech_id[1:5], content_rank$speech_id[1:5]),
+  identical(shared_content_tfidf, 5L),
+  identical(shared_content_all, 4L),
+  identical(as.numeric(round(observed_rank_agreement, 3)), 0.770),
+  identical(as.numeric(rank_agreement_display$null_mean), 0.953),
+  identical(as.numeric(rank_agreement_display$p_value), 1)
 )
 ```
 

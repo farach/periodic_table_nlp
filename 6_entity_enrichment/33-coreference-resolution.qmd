@@ -53,8 +53,6 @@ source("R/use-spacy.R")
 pipeline <- use_project_spacy()
 pipeline_version <- spacy_pipeline_version()
 
-stopifnot(all(c("readr", "dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -114,16 +112,6 @@ parsed <- parsed_raw |>
 
 phrases <- nounphrase_extract(parsed_raw)
 
-stopifnot(
-  identical(pipeline_version$version, "3.8.0"),
-  identical(pipeline_version$license, "MIT"),
-  identical(pipeline_version$spacy, "3.8.7"),
-  identical(nrow(sentences), 28L),
-  identical(nrow(riverton_pronouns), 1L),
-  identical(nrow(phrases), 22L),
-  identical(sum(parsed$pos == "PRON"), 5L)
-)
-
 knitr::kable(
   riverton_pronouns |>
     select(doc_id, token, pos),
@@ -150,6 +138,22 @@ knitr::kable(
   col.names = c("Document", "Sentence", "Noun phrase"),
   caption = "Noun phrases extracted from the constructed passage",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c("readr", "dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
+
+stopifnot(
+  identical(pipeline_version$version, "3.8.0"),
+  identical(pipeline_version$license, "MIT"),
+  identical(pipeline_version$spacy, "3.8.7"),
+  identical(nrow(sentences), 28L),
+  identical(nrow(riverton_pronouns), 1L),
+  identical(nrow(phrases), 22L),
+  identical(sum(parsed$pos == "PRON"), 5L)
 )
 ```
 
@@ -221,18 +225,22 @@ rule_links <- pronouns |>
     .by = c(pronoun_id, pronoun, sentence_id, pronoun_number)
   )
 
-stopifnot(
-  identical(nrow(pronouns), 5L),
-  identical(nrow(rule_links), 5L),
-  identical(rule_links$rule_antecedent[1], "The applicant"),
-  identical(rule_links$rule_antecedent[5], "the entrance")
-)
-
 knitr::kable(
   rule_links,
   col.names = c("Pronoun ID", "Pronoun", "Sentence", "Number", "Rule antecedent"),
   caption = "Nearest preceding noun phrase with matching number",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(pronouns), 5L),
+  identical(nrow(rule_links), 5L),
+  identical(rule_links$rule_antecedent[1], "The applicant"),
+  identical(rule_links$rule_antecedent[5], "the entrance")
 )
 ```
 
@@ -277,11 +285,6 @@ score_counts <- tibble(result = c("correct", "wrong", "ambiguous reference")) |>
 
 spacy_finalize()
 
-stopifnot(
-  identical(score_counts$pronouns, c(2L, 2L, 1L)),
-  identical(sum(score_counts$pronouns), 5L)
-)
-
 knitr::kable(
   coreference_score |>
     select(pronoun_id, pronoun, rule_antecedent, expected_antecedent, result),
@@ -295,6 +298,15 @@ knitr::kable(
   col.names = c("Result", "Pronouns"),
   caption = "Correct, wrong, and ambiguous pronoun links",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(score_counts$pronouns, c(2L, 2L, 1L)),
+  identical(sum(score_counts$pronouns), 5L)
 )
 ```
 

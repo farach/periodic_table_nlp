@@ -170,8 +170,17 @@ evidence.
 
 ## Keep project invariants intact
 
-- Every R chunk in a lesson contains `stopifnot()`. Hidden setup chunks count as
-  source chunks even when they do not produce a rendered cell.
+- Every R chunk in a lesson is covered by `stopifnot()`, either inside the chunk
+  or in an `#| include: false` verification chunk placed directly after it.
+  Prefer the second form. Assertions are a build guarantee, not reading matter,
+  and they were once 18 percent of the visible code on the site, sitting between
+  each computation and the table it produced. Moving them removed 3,613 lines
+  from the reader's view without weakening a single check: the hidden chunk runs
+  in order, sees the same objects, and still stops the render.
+  An assertion nested inside a loop or a function body stays where it is, since
+  hoisting it out of scope breaks it.
+  Hidden setup chunks count as source chunks even when they do not produce a
+  rendered cell.
 - `R/workforce-codebook.R` is the canonical annotation instrument for tasks
   8-13. Keep its foundryR hash on reference and crowd-annotation rows.
 - Preserve the 22 job-page details and six flyer transcript lines in

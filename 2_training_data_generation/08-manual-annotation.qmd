@@ -107,18 +107,6 @@ first_units <- workforce_sentences |>
   ) |>
   slice_head(n = 8)
 
-stopifnot(
-  identical(nrow(workforce_sentences), 28L),
-  identical(
-    workforce_sentences$sentence_id,
-    sprintf("s%03d", 1:28)
-  ),
-  all(workforce_sentences$reference_label %in% allowed_labels),
-  !anyDuplicated(workforce_sentences$sentence_id),
-  all(workforce_sentences$derived == "false"),
-  all(workforce_sentences$transformation == "verbatim")
-)
-
 knitr::kable(
   first_units,
   col.names = c(
@@ -130,6 +118,22 @@ knitr::kable(
   ),
   caption = "The first eight manually labeled text units",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(workforce_sentences), 28L),
+  identical(
+    workforce_sentences$sentence_id,
+    sprintf("s%03d", 1:28)
+  ),
+  all(workforce_sentences$reference_label %in% allowed_labels),
+  !anyDuplicated(workforce_sentences$sentence_id),
+  all(workforce_sentences$derived == "false"),
+  all(workforce_sentences$transformation == "verbatim")
 )
 ```
 
@@ -158,6 +162,17 @@ unit_shapes <- workforce_sentences |>
 shape_counts <- unit_shapes |>
   count(shape, name = "units")
 
+knitr::kable(
+  shape_counts,
+  col.names = c("Shape of the unit", "Units"),
+  caption = "Twenty-two sentences, two headings, three phrases, one imperative clause",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(sum(shape_counts$units), 28L),
   identical(
@@ -177,13 +192,6 @@ stopifnot(
       unit_shapes$shape != "complete sentence"
     ] == "F001"
   )
-)
-
-knitr::kable(
-  shape_counts,
-  col.names = c("Shape of the unit", "Units"),
-  caption = "Twenty-two sentences, two headings, three phrases, one imperative clause",
-  row.names = FALSE
 )
 ```
 
@@ -206,13 +214,6 @@ flyer_transcript <- read_lines(
   "data/workforce/training-flyer-ground-truth.txt"
 )
 
-stopifnot(
-  identical(nrow(flyer_rows), 6L),
-  identical(length(flyer_transcript), 6L),
-  identical(flyer_rows$source_line, as.character(1:6)),
-  identical(flyer_rows$text, flyer_transcript)
-)
-
 knitr::kable(
   flyer_rows |>
     select(
@@ -229,6 +230,17 @@ knitr::kable(
   ),
   caption = "Row-level lineage from the flyer transcript",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(flyer_rows), 6L),
+  identical(length(flyer_transcript), 6L),
+  identical(flyer_rows$source_line, as.character(1:6)),
+  identical(flyer_rows$text, flyer_transcript)
 )
 ```
 
@@ -261,6 +273,12 @@ schema and a content hash.
 source("R/workforce-codebook.R")
 annotation_codebook <- workforce_codebook()
 recorded_codebook <- workforce_codebook("1.0.0")
+
+annotation_codebook
+```
+
+```{r}
+#| include: false
 
 stopifnot(
   inherits(
@@ -300,8 +318,6 @@ stopifnot(
   all(str_length(workforce_sentences$rationale) > 0),
   all(workforce_sentences$uncertainty %in% c("certain", "needs_review"))
 )
-
-annotation_codebook
 ```
 
 The printed hash changes when the instructions, schema, examples, or version
@@ -330,19 +346,23 @@ label_counts <- workforce_sentences |>
     units
   )
 
+knitr::kable(
+  label_counts,
+  col.names = c("Reference label", "Text units"),
+  caption = "Label counts in the teaching dataset",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(sum(label_counts$units), 28L),
   identical(
     as.integer(label_counts$units),
     c(7L, 9L, 5L, 2L, 5L)
   )
-)
-
-knitr::kable(
-  label_counts,
-  col.names = c("Reference label", "Text units"),
-  caption = "Label counts in the teaching dataset",
-  row.names = FALSE
 )
 ```
 
@@ -358,12 +378,6 @@ the codebook labels it as a requirement.
 ```{r}
 ambiguous_case <- workforce_sentences |>
   filter(sentence_id == "s013")
-
-stopifnot(
-  identical(nrow(ambiguous_case), 1L),
-  identical(ambiguous_case$reference_label, "requirement"),
-  str_detect(ambiguous_case$text, fixed("certificate"))
-)
 
 knitr::kable(
   ambiguous_case |>
@@ -385,6 +399,16 @@ knitr::kable(
   ),
   caption = "A text unit that needs the codebook rule",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(ambiguous_case), 1L),
+  identical(ambiguous_case$reference_label, "requirement"),
+  str_detect(ambiguous_case$text, fixed("certificate"))
 )
 ```
 
@@ -428,17 +452,6 @@ pilot_round <- tibble(
 
 pilot_agreement <- mean(pilot_round$agreed)
 
-stopifnot(
-  identical(nrow(pilot_round), 6L),
-  identical(sum(pilot_round$agreed), 2L),
-  isTRUE(all.equal(pilot_agreement, 2 / 6)),
-  all(!is.na(pilot_round$text)),
-  identical(
-    pilot_round$sentence_id[!pilot_round$agreed],
-    c("s010", "s013", "s020", "s024")
-  )
-)
-
 knitr::kable(
   pilot_round |>
     select(sentence_id, text, reviewer_p, reviewer_q, agreed),
@@ -451,6 +464,21 @@ knitr::kable(
   ),
   caption = "The six-unit pilot, before any rule was written",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(pilot_round), 6L),
+  identical(sum(pilot_round$agreed), 2L),
+  isTRUE(all.equal(pilot_agreement, 2 / 6)),
+  all(!is.na(pilot_round$text)),
+  identical(
+    pilot_round$sentence_id[!pilot_round$agreed],
+    c("s010", "s013", "s020", "s024")
+  )
 )
 ```
 
@@ -508,13 +536,6 @@ adjudication_check <- adjudication_log |>
     )
   )
 
-stopifnot(
-  identical(nrow(adjudication_check), 4L),
-  all(adjudication_check$matches_file),
-  all(adjudication_check$clause_in_codebook),
-  identical(annotation_codebook$version, "1.1.0")
-)
-
 knitr::kable(
   adjudication_check |>
     select(sentence_id, question, rule_added, adjudicated_label, uncertainty),
@@ -527,6 +548,17 @@ knitr::kable(
   ),
   caption = "Four pilot disagreements, four rules, four recorded decisions",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(adjudication_check), 4L),
+  all(adjudication_check$matches_file),
+  all(adjudication_check$clause_in_codebook),
+  identical(annotation_codebook$version, "1.1.0")
 )
 ```
 

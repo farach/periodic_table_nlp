@@ -51,8 +51,6 @@ library(purrr)
 library(stringr)
 library(spacyr)
 
-stopifnot(all(c("readr", "dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -123,17 +121,23 @@ temporal_examples <- tibble(
   ))
 )
 
-stopifnot(
-  identical(nrow(sentences), 28L),
-  identical(nrow(temporal_examples), 11L),
-  identical(format(reference_date, "%A"), "Friday")
-)
-
 knitr::kable(
   temporal_examples,
   col.names = c("Expression ID", "Text", "Expected category", "Expected date"),
   caption = "Temporal examples with expected answers",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c("readr", "dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(nrow(temporal_examples), 11L),
+  identical(format(reference_date, "%A"), "Friday")
 )
 ```
 
@@ -207,18 +211,22 @@ temporal_results <- temporal_examples |>
     resolved_date = as.Date(map_chr(parsed_temporal, \(item) as.character(item$date)))
   )
 
-stopifnot(
-  identical(temporal_results$resolved_date[1], as.Date("2026-10-15")),
-  identical(temporal_results$resolved_date[4], as.Date("2026-08-31")),
-  is.na(temporal_results$resolved_date[2])
-)
-
 knitr::kable(
   temporal_results |>
     select(expr_id, text, category, resolved_date),
   col.names = c("Expression ID", "Text", "Parser category", "Resolved date"),
   caption = "Rule-based temporal parsing results",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(temporal_results$resolved_date[1], as.Date("2026-10-15")),
+  identical(temporal_results$resolved_date[4], as.Date("2026-08-31")),
+  is.na(temporal_results$resolved_date[2])
 )
 ```
 
@@ -258,11 +266,6 @@ score_summary <- tibble(
   )
 )
 
-stopifnot(
-  identical(category_counts$examples, c(1L, 5L, 5L)),
-  identical(score_summary$examples, c(11L, 10L))
-)
-
 knitr::kable(
   category_counts,
   col.names = c("Parser category", "Examples"),
@@ -275,6 +278,15 @@ knitr::kable(
   col.names = c("Measure", "Matching examples"),
   caption = "Agreement with this page's expected answers",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(category_counts$examples, c(1L, 5L, 5L)),
+  identical(score_summary$examples, c(11L, 10L))
 )
 ```
 
@@ -310,16 +322,6 @@ spacy_checks <- spacy_entities |>
 
 spacy_finalize()
 
-stopifnot(
-  identical(pipeline_version$version, "3.8.0"),
-  identical(pipeline_version$license, "MIT"),
-  identical(pipeline_version$spacy, "3.8.7"),
-  identical(
-    spacy_checks$entity_type,
-    c("DATE", "TIME", "DATE")
-  )
-)
-
 knitr::kable(
   tibble(
     name = pipeline_version$name,
@@ -338,6 +340,20 @@ knitr::kable(
   col.names = c("Expression ID", "Entity text", "spaCy label"),
   caption = "spaCy DATE and TIME labels on selected examples",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(pipeline_version$version, "3.8.0"),
+  identical(pipeline_version$license, "MIT"),
+  identical(pipeline_version$spacy, "3.8.7"),
+  identical(
+    spacy_checks$entity_type,
+    c("DATE", "TIME", "DATE")
+  )
 )
 ```
 

@@ -102,22 +102,6 @@ detector_versions <- tibble(
   )
 )
 
-stopifnot(
-  identical(nrow(language_samples), 8L),
-  identical(
-    names(language_samples),
-    c("sample_id", "written_in", "text")
-  ),
-  identical(language_samples$text[7], "Open house."),
-  identical(nrow(language_reference), 1L),
-  identical(sample_fingerprint, recorded_fingerprint),
-  identical(
-    sample_fingerprint,
-    "fa84ffaf608578b8dd0e4f0dbc7425049cd9d362e9d41a1773078973afeccf67"
-  ),
-  all(str_detect(detector_versions$package_version, "^\\d+\\.\\d+"))
-)
-
 display_samples <- language_samples |>
   mutate(
     display_text = str_c(
@@ -128,11 +112,6 @@ display_samples <- language_samples |>
       "</span>"
     )
   )
-
-stopifnot(
-  !any(str_detect(language_samples$text, "[<>&]")),
-  all(str_detect(display_samples$display_text, fixed("<span lang=")))
-)
 
 knitr::kable(
   detector_versions,
@@ -158,6 +137,31 @@ knitr::kable(
   caption = "Eight labelled language samples used for detection",
   row.names = FALSE,
   escape = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(language_samples), 8L),
+  identical(
+    names(language_samples),
+    c("sample_id", "written_in", "text")
+  ),
+  identical(language_samples$text[7], "Open house."),
+  identical(nrow(language_reference), 1L),
+  identical(sample_fingerprint, recorded_fingerprint),
+  identical(
+    sample_fingerprint,
+    "fa84ffaf608578b8dd0e4f0dbc7425049cd9d362e9d41a1773078973afeccf67"
+  ),
+  all(str_detect(detector_versions$package_version, "^\\d+\\.\\d+"))
+)
+
+stopifnot(
+  !any(str_detect(language_samples$text, "[<>&]")),
+  all(str_detect(display_samples$display_text, fixed("<span lang=")))
 )
 ```
 
@@ -195,22 +199,6 @@ detected_samples <- language_samples |>
 open_house <- detected_samples |>
   filter(text == "Open house.")
 
-stopifnot(
-  identical(
-    detected_samples$cld2_language,
-    c("en", "en", "es", "fr", "de", NA, NA, NA)
-  ),
-  identical(
-    detected_samples$cld3_language,
-    c("en", "en", "es", "fr", "de", NA, NA, NA)
-  ),
-  identical(open_house$written_in, "en"),
-  is.na(open_house$cld2_language),
-  is.na(open_house$cld3_language),
-  identical(open_house$characters, 11L),
-  identical(open_house$words, 2L)
-)
-
 knitr::kable(
   detected_samples |>
     select(
@@ -234,6 +222,26 @@ knitr::kable(
   caption = "Language detector output for each sample",
   row.names = FALSE,
   escape = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    detected_samples$cld2_language,
+    c("en", "en", "es", "fr", "de", NA, NA, NA)
+  ),
+  identical(
+    detected_samples$cld3_language,
+    c("en", "en", "es", "fr", "de", NA, NA, NA)
+  ),
+  identical(open_house$written_in, "en"),
+  is.na(open_house$cld2_language),
+  is.na(open_house$cld3_language),
+  identical(open_house$characters, 11L),
+  identical(open_house$words, 2L)
 )
 ```
 
@@ -264,14 +272,6 @@ detector_counts <- tibble(
       nrow(detected_samples) - matched_recorded_label - no_label
   )
 
-stopifnot(
-  identical(detector_counts$matched_recorded_label, c(5L, 5L)),
-  identical(detector_counts$no_label, c(3L, 3L)),
-  identical(detector_counts$differed_from_recorded_label, c(0L, 0L)),
-  identical(sum(detected_samples$cld2_match), 5L),
-  identical(sum(detected_samples$cld3_match), 5L)
-)
-
 knitr::kable(
   detector_counts,
   col.names = c(
@@ -282,6 +282,18 @@ knitr::kable(
   ),
   caption = "Detector outcomes across the eight labelled samples",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(detector_counts$matched_recorded_label, c(5L, 5L)),
+  identical(detector_counts$no_label, c(3L, 3L)),
+  identical(detector_counts$differed_from_recorded_label, c(0L, 0L)),
+  identical(sum(detected_samples$cld2_match), 5L),
+  identical(sum(detected_samples$cld3_match), 5L)
 )
 ```
 
@@ -309,15 +321,6 @@ length_summary <- detected_samples |>
   ) |>
   arrange(length_group)
 
-stopifnot(
-  identical(length_summary$length_group, c("long", "short")),
-  identical(length_summary$samples, c(6L, 2L)),
-  identical(length_summary$cld2_matches, c(5L, 0L)),
-  identical(length_summary$cld2_no_label, c(1L, 2L)),
-  identical(length_summary$cld3_matches, c(5L, 0L)),
-  identical(length_summary$cld3_no_label, c(1L, 2L))
-)
-
 knitr::kable(
   length_summary,
   col.names = c(
@@ -330,6 +333,19 @@ knitr::kable(
   ),
   caption = "Detector outcomes by sample length in this file",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(length_summary$length_group, c("long", "short")),
+  identical(length_summary$samples, c(6L, 2L)),
+  identical(length_summary$cld2_matches, c(5L, 0L)),
+  identical(length_summary$cld2_no_label, c(1L, 2L)),
+  identical(length_summary$cld3_matches, c(5L, 0L)),
+  identical(length_summary$cld3_no_label, c(1L, 2L))
 )
 ```
 
@@ -358,20 +374,24 @@ short_probe <- tibble(
     cld3_match = !is.na(cld3_language) & cld3_language == recorded_language
   )
 
-stopifnot(
-  identical(short_probe$characters, c(11L, 14L)),
-  all(is.na(short_probe$cld2_language)),
-  identical(short_probe$cld3_language, c(NA, "lb")),
-  identical(short_probe$cld2_match, c(FALSE, FALSE)),
-  identical(short_probe$cld3_match, c(FALSE, FALSE))
-)
-
 knitr::kable(
   short_probe |>
     select(text, recorded_language, cld2_language, cld3_language),
   col.names = c("Text", "Recorded language", "CLD2", "CLD3"),
   caption = "Two short English probes and their detected languages",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(short_probe$characters, c(11L, 14L)),
+  all(is.na(short_probe$cld2_language)),
+  identical(short_probe$cld3_language, c(NA, "lb")),
+  identical(short_probe$cld2_match, c(FALSE, FALSE)),
+  identical(short_probe$cld3_match, c(FALSE, FALSE))
 )
 ```
 

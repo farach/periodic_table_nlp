@@ -70,6 +70,17 @@ feedback <- read_csv(
     rating = if_else(rating == "", NA_integer_, as.integer(rating))
   )
 
+knitr::kable(
+  feedback,
+  col.names = c("ID", "Submitted", "Channel", "Rating", "Comment"),
+  caption = "Customer feedback used in this lesson",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   all(c(
     "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
@@ -78,13 +89,6 @@ stopifnot(
   identical(nrow(feedback), 5L),
   identical(feedback$feedback_id, 1001:1005),
   identical(feedback$rating, c(5L, 4L, NA_integer_, 2L, 5L))
-)
-
-knitr::kable(
-  feedback,
-  col.names = c("ID", "Submitted", "Channel", "Rating", "Comment"),
-  caption = "Customer feedback used in this lesson",
-  row.names = FALSE
 )
 ```
 
@@ -135,17 +139,6 @@ zero_match_feedback_ids <- lexicon_scores |>
   filter(matched_words == 0L) |>
   pull(feedback_id)
 
-stopifnot(
-  identical(nrow(bing), 6786L),
-  identical(
-    as.integer(count(bing, sentiment) |> arrange(sentiment) |> pull(n)),
-    c(4781L, 2005L)
-  ),
-  identical(lexicon_scores$matched_words, c(1L, 1L, 0L, 0L, 0L)),
-  identical(lexicon_scores$lexicon_score, c(1L, 1L, 0L, 0L, 0L)),
-  identical(zero_match_feedback_ids, c(1003L, 1004L, 1005L))
-)
-
 knitr::kable(
   lexicon_scores |>
     select(feedback_id, rating, matched_words, lexicon_score, comment),
@@ -158,6 +151,21 @@ knitr::kable(
   ),
   caption = "Bing lexicon scores for the feedback rows",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(bing), 6786L),
+  identical(
+    as.integer(count(bing, sentiment) |> arrange(sentiment) |> pull(n)),
+    c(4781L, 2005L)
+  ),
+  identical(lexicon_scores$matched_words, c(1L, 1L, 0L, 0L, 0L)),
+  identical(lexicon_scores$lexicon_score, c(1L, 1L, 0L, 0L, 0L)),
+  identical(zero_match_feedback_ids, c(1003L, 1004L, 1005L))
 )
 ```
 
@@ -220,18 +228,6 @@ coverage_by_length <- inaugural_lexicon |>
   ) |>
   arrange(length_bin)
 
-stopifnot(
-  identical(inaugural_silence$paragraphs, 1377L),
-  identical(inaugural_silence$zero_match_paragraphs, 41L),
-  identical(round(inaugural_silence$zero_match_share, 4), 0.0298),
-  isTRUE(all.equal(as.numeric(inaugural_silence$median_matched_words), 6)),
-  min(paragraphs$word_count) >= 25L,
-  identical(as.character(coverage_by_length$length_bin), c("25-49 words", "50-99 words", "100+ words")),
-  identical(coverage_by_length$paragraphs, c(441L, 497L, 439L)),
-  identical(coverage_by_length$zero_match_paragraphs, c(33L, 8L, 0L)),
-  identical(round(coverage_by_length$zero_match_share, 4), c(0.0748, 0.0161, 0))
-)
-
 knitr::kable(
   inaugural_silence |>
     mutate(zero_match_share = round(zero_match_share, 4)),
@@ -257,6 +253,22 @@ knitr::kable(
   ),
   caption = "Bing lexicon silence falls as paragraph length rises",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(inaugural_silence$paragraphs, 1377L),
+  identical(inaugural_silence$zero_match_paragraphs, 41L),
+  identical(round(inaugural_silence$zero_match_share, 4), 0.0298),
+  isTRUE(all.equal(as.numeric(inaugural_silence$median_matched_words), 6)),
+  min(paragraphs$word_count) >= 25L,
+  identical(as.character(coverage_by_length$length_bin), c("25-49 words", "50-99 words", "100+ words")),
+  identical(coverage_by_length$paragraphs, c(441L, 497L, 439L)),
+  identical(coverage_by_length$zero_match_paragraphs, c(33L, 8L, 0L)),
+  identical(round(coverage_by_length$zero_match_share, 4), c(0.0748, 0.0161, 0))
 )
 ```
 
@@ -309,15 +321,6 @@ negation_examples <- tibble(
     .by = phrase
   )
 
-stopifnot(
-  identical(failure_cases$feedback_id, c(1003L, 1004L, 1005L)),
-  identical(failure_cases$lexicon_score, c(0L, 0L, 0L)),
-  identical(thank_tokens$sentiment, "positive"),
-  identical(thank_tokens$token_score, 1L),
-  identical(negation_examples$phrase, c("helpful", "not helpful")),
-  identical(negation_examples$lexicon_score, c(1L, 1L))
-)
-
 knitr::kable(
   failure_cases,
   col.names = c("ID", "Rating", "Lexicon score", "Failure type", "Comment"),
@@ -330,6 +333,19 @@ knitr::kable(
   col.names = c("Phrase", "Matched sentiment words", "Lexicon score"),
   caption = "A bag-of-words lexicon does not flip the score for negation",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(failure_cases$feedback_id, c(1003L, 1004L, 1005L)),
+  identical(failure_cases$lexicon_score, c(0L, 0L, 0L)),
+  identical(thank_tokens$sentiment, "positive"),
+  identical(thank_tokens$token_score, 1L),
+  identical(negation_examples$phrase, c("helpful", "not helpful")),
+  identical(negation_examples$lexicon_score, c(1L, 1L))
 )
 ```
 
@@ -431,6 +447,26 @@ trained_scores <- feedback |>
   ) |>
   relocate(lexicon_score, .before = trained_score)
 
+knitr::kable(
+  trained_scores |>
+    mutate(trained_score = round(trained_score, 3)),
+  col.names = c(
+    "ID",
+    "Rating",
+    "Training role",
+    "Comment",
+    "Lexicon score",
+    "Rating-trained score",
+    "Rating-trained label"
+  ),
+  caption = "A tiny rating-trained scorer compared with the lexicon",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(labeled_feedback), 3L),
   identical(
@@ -452,22 +488,6 @@ stopifnot(
       "satisfied"
     )
   )
-)
-
-knitr::kable(
-  trained_scores |>
-    mutate(trained_score = round(trained_score, 3)),
-  col.names = c(
-    "ID",
-    "Rating",
-    "Training role",
-    "Comment",
-    "Lexicon score",
-    "Rating-trained score",
-    "Rating-trained label"
-  ),
-  caption = "A tiny rating-trained scorer compared with the lexicon",
-  row.names = FALSE
 )
 ```
 
@@ -501,13 +521,6 @@ score_range <- lexicon_scores |>
 score_plot <- lexicon_scores |>
   count(lexicon_score, name = "comments")
 
-stopifnot(
-  identical(score_range$lowest, 0L),
-  identical(score_range$highest, 1L),
-  identical(score_range$distinct_scores, 2L),
-  identical(score_plot$comments, c(3L, 2L))
-)
-
 knitr::kable(
   score_plot,
   col.names = c("Lexicon score", "Comments"),
@@ -522,6 +535,17 @@ ggplot(score_plot, aes(x = factor(lexicon_score), y = comments)) +
     y = "Comments"
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(score_range$lowest, 0L),
+  identical(score_range$highest, 1L),
+  identical(score_range$distinct_scores, 2L),
+  identical(score_plot$comments, c(3L, 2L))
+)
 ```
 
 A positive-word count is not an emotion. Self-reported emotion and observed

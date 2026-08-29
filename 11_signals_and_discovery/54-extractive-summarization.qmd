@@ -77,6 +77,17 @@ input_summary <- tibble(
   rows = c(nrow(sentence_data), nrow(terminology), n_distinct(terminology$term))
 )
 
+kable(
+  input_summary,
+  col.names = c("Input", "Rows"),
+  caption = "Sentence and term inputs for TextRank",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(paragraphs), 1377L),
   identical(nrow(speech), 1L),
@@ -84,13 +95,6 @@ stopifnot(
   identical(nrow(terminology), 700L),
   identical(n_distinct(terminology$term), 511L),
   identical(range(sentence_data$sentence_position), c(1L, 81L))
-)
-
-kable(
-  input_summary,
-  col.names = c("Input", "Rows"),
-  caption = "Sentence and term inputs for TextRank",
-  row.names = FALSE
 )
 ```
 
@@ -127,19 +131,23 @@ textrank_summary <- ranked_sentences |>
     sentence
   )
 
+kable(
+  textrank_summary,
+  col.names = c("Rank", "Sentence position", "Sentence words", "TextRank score", "Selected sentence"),
+  caption = "The three highest-ranked sentences in the 1933 speech",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(names(textrank_result), c("sentences", "sentences_dist", "pagerank")),
   identical(textrank_summary$sentence_position, c(6L, 67L, 60L)),
   identical(textrank_summary$sentence_words, c(30L, 24L, 25L)),
   identical(textrank_summary$score, c(0.0328, 0.0270, 0.0239)),
   identical(textrank_summary$rank, 1:3)
-)
-
-kable(
-  textrank_summary,
-  col.names = c("Rank", "Sentence position", "Sentence words", "TextRank score", "Selected sentence"),
-  caption = "The three highest-ranked sentences in the 1933 speech",
-  row.names = FALSE
 )
 ```
 
@@ -221,18 +229,6 @@ null_checks <- bind_rows(
   select(statistic, observed, null_mean, null_low, null_high, p_value, replicates, alternative) |>
   mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
 
-stopifnot(
-  identical(lead_baseline$sentence_position, 1:3),
-  identical(overlap_count, 0L),
-  identical(spread_observed, 61L),
-  identical(as.numeric(round(mean_length_observed, 2)), 26.33),
-  identical(
-    as.numeric(round(c(lead_overlap_null$null_mean, spread_null$null_mean, length_null$null_mean), 1)),
-    c(0.1, 41.3, 22.8)
-  ),
-  identical(as.numeric(null_checks$p_value), c(0.889, 0.189, 0.297))
-)
-
 kable(
   lead_baseline,
   col.names = c("Lead rank", "Sentence position", "Selected sentence"),
@@ -252,6 +248,22 @@ kable(
   col.names = c("Statistic", "Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Random-position checks for the TextRank selection",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(lead_baseline$sentence_position, 1:3),
+  identical(overlap_count, 0L),
+  identical(spread_observed, 61L),
+  identical(as.numeric(round(mean_length_observed, 2)), 26.33),
+  identical(
+    as.numeric(round(c(lead_overlap_null$null_mean, spread_null$null_mean, length_null$null_mean), 1)),
+    c(0.1, 41.3, 22.8)
+  ),
+  identical(as.numeric(null_checks$p_value), c(0.889, 0.189, 0.297))
 )
 ```
 

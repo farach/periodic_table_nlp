@@ -56,8 +56,6 @@ library(purrr)
 library(stringr)
 library(spacyr)
 
-stopifnot(all(c("dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
-
 applicant_note <- paste(
   "Invented applicant note: Maya Green asked the Riverton Workforce Lab to call 555-0104.",
   "Her email is maya.green@example.com and her date of birth is 2001-04-12.",
@@ -101,17 +99,23 @@ masking_rules <- tibble(
   replacement = c("[EMAIL]", "[PHONE]", "[DATE_OF_BIRTH]", "[STREET_ADDRESS]", "[PERSON]")
 )
 
-stopifnot(
-  identical(nrow(identifiers), 7L),
-  identical(sum(identifiers$category == "person"), 3L),
-  all(str_detect(applicant_note, fixed(identifiers$surface)))
-)
-
 knitr::kable(
   identifiers,
   col.names = c("Identifier ID", "Category", "Surface text"),
   caption = "Author-marked invented identifiers",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c("dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
+
+stopifnot(
+  identical(nrow(identifiers), 7L),
+  identical(sum(identifiers$category == "person"), 3L),
+  all(str_detect(applicant_note, fixed(identifiers$surface)))
 )
 ```
 
@@ -165,12 +169,6 @@ mask_accounting <- tibble(
   )
 )
 
-stopifnot(
-  identical(found_missed_accounting$identifiers, c(6L, 1L)),
-  identical(mask_accounting$identifiers, c(0L, 1L)),
-  identical(missed_identifiers$surface, "Green")
-)
-
 knitr::kable(
   found_missed_accounting,
   col.names = c("Measure", "Identifiers"),
@@ -190,6 +188,16 @@ knitr::kable(
   col.names = "Masked note",
   caption = "Invented note after rule-based masking",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(found_missed_accounting$identifiers, c(6L, 1L)),
+  identical(mask_accounting$identifiers, c(0L, 1L)),
+  identical(missed_identifiers$surface, "Green")
 )
 ```
 
@@ -240,14 +248,6 @@ spacy_accounting <- tibble(
 
 spacy_finalize()
 
-stopifnot(
-  identical(pipeline_version$version, "3.8.0"),
-  identical(pipeline_version$license, "MIT"),
-  identical(pipeline_version$spacy, "3.8.7"),
-  identical(spacy_accounting$identifiers, c(2L, 1L)),
-  identical(spacy_people$surface, c("Maya Green", "Taylor Reed"))
-)
-
 knitr::kable(
   spacy_people,
   col.names = c("Category", "spaCy surface"),
@@ -260,6 +260,18 @@ knitr::kable(
   col.names = c("Measure", "Identifiers"),
   caption = "spaCy PERSON accounting against the expected names",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(pipeline_version$version, "3.8.0"),
+  identical(pipeline_version$license, "MIT"),
+  identical(pipeline_version$spacy, "3.8.7"),
+  identical(spacy_accounting$identifiers, c(2L, 1L)),
+  identical(spacy_people$surface, c("Maya Green", "Taylor Reed"))
 )
 ```
 

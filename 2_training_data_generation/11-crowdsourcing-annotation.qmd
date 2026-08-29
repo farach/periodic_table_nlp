@@ -116,6 +116,23 @@ allowed_labels <- c(
 source("R/workforce-codebook.R")
 crowd_codebook <- workforce_codebook("1.0.0")
 
+knitr::kable(
+  crowd_labels |>
+    select(sentence_id, all_of(reviewer_columns)),
+  col.names = c(
+    "Sentence ID",
+    "Reviewer A",
+    "Reviewer B",
+    "Reviewer C"
+  ),
+  caption = "Independent labels from three fictional reviewers",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(crowd_labels), 11L),
   inherits(crowd_labels, "tbl_df"),
@@ -141,19 +158,6 @@ stopifnot(
   !anyDuplicated(crowd_labels$sentence_id),
   all(crowd_labels$codebook_version == crowd_codebook$version),
   all(crowd_labels$codebook_hash == crowd_codebook$hash)
-)
-
-knitr::kable(
-  crowd_labels |>
-    select(sentence_id, all_of(reviewer_columns)),
-  col.names = c(
-    "Sentence ID",
-    "Reviewer A",
-    "Reviewer B",
-    "Reviewer C"
-  ),
-  caption = "Independent labels from three fictional reviewers",
-  row.names = FALSE
 )
 ```
 
@@ -206,17 +210,6 @@ pairwise_agreement <- pmap(
 ) |>
   list_rbind()
 
-stopifnot(
-  identical(
-    round(pairwise_agreement$observed_agreement, 3),
-    c(0.818, 0.909, 0.818)
-  ),
-  identical(
-    round(pairwise_agreement$cohen_kappa, 3),
-    c(0.756, 0.875, 0.758)
-  )
-)
-
 knitr::kable(
   pairwise_agreement |>
     mutate(
@@ -233,6 +226,21 @@ knitr::kable(
   ),
   caption = "Pairwise agreement across all three reviewers",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    round(pairwise_agreement$observed_agreement, 3),
+    c(0.818, 0.909, 0.818)
+  ),
+  identical(
+    round(pairwise_agreement$cohen_kappa, 3),
+    c(0.756, 0.875, 0.758)
+  )
 )
 ```
 
@@ -289,6 +297,21 @@ unanimity_share <- unanimity_by_sentence |>
   summarise(value = mean(unanimous))
 unanimity_share <- unanimity_share$value
 
+tibble(
+  measure = c(
+    "Krippendorff's alpha",
+    "Unanimous share"
+  ),
+  value = round(
+    c(all_rater_alpha, unanimity_share),
+    2
+  )
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   isTRUE(
     all.equal(
@@ -301,17 +324,6 @@ stopifnot(
       unanimity_share,
       9 / 11
     )
-  )
-)
-
-tibble(
-  measure = c(
-    "Krippendorff's alpha",
-    "Unanimous share"
-  ),
-  value = round(
-    c(all_rater_alpha, unanimity_share),
-    2
   )
 )
 ```
@@ -345,6 +357,23 @@ sensitivity <- tibble(
 
 alpha_range <- range(alpha_without_item)
 
+knitr::kable(
+  sensitivity |>
+    mutate(
+      alpha_without_this_item = round(
+        alpha_without_this_item,
+        2
+      )
+    ),
+  col.names = c("Item removed", "Alpha for the other ten"),
+  caption = "Krippendorff's alpha after dropping each item in turn",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(alpha_without_item), 11L),
   identical(
@@ -357,19 +386,6 @@ stopifnot(
   ),
   max(alpha_without_item) > all_rater_alpha,
   min(alpha_without_item) < all_rater_alpha
-)
-
-knitr::kable(
-  sensitivity |>
-    mutate(
-      alpha_without_this_item = round(
-        alpha_without_this_item,
-        2
-      )
-    ),
-  col.names = c("Item removed", "Alpha for the other ten"),
-  caption = "Krippendorff's alpha after dropping each item in turn",
-  row.names = FALSE
 )
 ```
 
@@ -409,14 +425,6 @@ disagreements <- crowd_labels |>
   ) |>
   arrange(sentence_id)
 
-stopifnot(
-  identical(
-    disagreements$sentence_id,
-    c("s010", "s013")
-  ),
-  identical(nrow(disagreements), 2L)
-)
-
 knitr::kable(
   disagreements |>
     select(
@@ -441,6 +449,18 @@ knitr::kable(
   ),
   caption = "Sentences sent to adjudication",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    disagreements$sentence_id,
+    c("s010", "s013")
+  ),
+  identical(nrow(disagreements), 2L)
 )
 ```
 
@@ -496,26 +516,6 @@ combined_labels <- crowd_labels |>
     by = join_by(sentence_id)
   )
 
-stopifnot(
-  identical(
-    combined_labels$majority_label,
-    c(
-      "training",
-      "requirement",
-      "schedule",
-      "skill",
-      "requirement",
-      "training",
-      "requirement",
-      "other",
-      "adjudicate",
-      "training",
-      "requirement"
-    )
-  ),
-  identical(sum(combined_labels$unanimous), 9L)
-)
-
 knitr::kable(
   top_vote_table,
   col.names = c(
@@ -537,6 +537,30 @@ knitr::kable(
   ),
   caption = "Majority labels with unanimity retained",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    combined_labels$majority_label,
+    c(
+      "training",
+      "requirement",
+      "schedule",
+      "skill",
+      "requirement",
+      "training",
+      "requirement",
+      "other",
+      "adjudicate",
+      "training",
+      "requirement"
+    )
+  ),
+  identical(sum(combined_labels$unanimous), 9L)
 )
 ```
 
@@ -584,21 +608,6 @@ adjudication_outcome <- adjudication |>
       reviewer_b != reviewer_c
   )
 
-stopifnot(
-  identical(nrow(adjudication_outcome), 2L),
-  all(adjudication_outcome$matches_reference_file),
-  all(adjudication_outcome$reviewers_still_disagree),
-  str_detect(
-    crowd_codebook$instructions,
-    fixed("main claim states or prefers")
-  ),
-  str_detect(
-    crowd_codebook$instructions,
-    fixed("is not training")
-  ),
-  identical(nrow(crowd_labels), 11L)
-)
-
 knitr::kable(
   adjudication_outcome |>
     select(
@@ -619,6 +628,25 @@ knitr::kable(
   ),
   caption = "Both flagged items resolved, with the reviewer answers kept",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(adjudication_outcome), 2L),
+  all(adjudication_outcome$matches_reference_file),
+  all(adjudication_outcome$reviewers_still_disagree),
+  str_detect(
+    crowd_codebook$instructions,
+    fixed("main claim states or prefers")
+  ),
+  str_detect(
+    crowd_codebook$instructions,
+    fixed("is not training")
+  ),
+  identical(nrow(crowd_labels), 11L)
 )
 ```
 

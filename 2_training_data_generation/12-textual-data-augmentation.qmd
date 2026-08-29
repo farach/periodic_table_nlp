@@ -81,18 +81,22 @@ workforce_sentences <- read_csv(
 training_examples <- workforce_sentences |>
   filter(reference_label == "training")
 
-stopifnot(
-  identical(nrow(training_examples), 7L),
-  inherits(workforce_sentences, "tbl_df"),
-  all(training_examples$reference_label == "training")
-)
-
 knitr::kable(
   training_examples |>
     select(sentence_id, text),
   col.names = c("Sentence ID", "Reviewed training example"),
   caption = "The seven training examples before augmentation",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(training_examples), 7L),
+  inherits(workforce_sentences, "tbl_df"),
+  all(training_examples$reference_label == "training")
 )
 ```
 
@@ -120,6 +124,12 @@ cmap_titles <- read_csv(
 )
 selected_titles <- cmap_titles$job_title_from[c(3L, 5L, 8L)]
 
+selected_titles
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     selected_titles,
@@ -130,8 +140,6 @@ stopifnot(
     )
   )
 )
-
-selected_titles
 ```
 
 The titles come from the cmapr package's teaching fixture. That file does not
@@ -210,26 +218,6 @@ source_families <- augmented_rows |>
   distinct(source_family_id) |>
   arrange(source_family_id)
 
-stopifnot(
-  identical(nrow(augmented_rows), 5L),
-  !anyDuplicated(augmented_rows$text),
-  !any(augmented_rows$text %in% workforce_sentences$text),
-  all(augmented_rows$synthetic),
-  all(augmented_rows$review_status == "requires_human_review"),
-  all(augmented_rows$split == "training_candidate"),
-  all(augmented_rows$codebook_hash == augmentation_codebook$hash),
-  identical(template_variants$vocabulary_row, c(3L, 5L, 8L)),
-  all(
-    template_variants$vocabulary_commit ==
-      "eb2d0b3810e07782aab4a81fba1f539133f2ba6a"
-  ),
-  identical(
-    source_families$source_family_id,
-    c("schedule-s003", "training-offer-s001")
-  ),
-  identical(augmentation_counts$n, c(3L, 0L, 2L, 0L, 0L))
-)
-
 knitr::kable(
   augmented_rows,
   col.names = c(
@@ -250,6 +238,30 @@ knitr::kable(
   ),
   caption = "Five controlled augmentation candidates",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(augmented_rows), 5L),
+  !anyDuplicated(augmented_rows$text),
+  !any(augmented_rows$text %in% workforce_sentences$text),
+  all(augmented_rows$synthetic),
+  all(augmented_rows$review_status == "requires_human_review"),
+  all(augmented_rows$split == "training_candidate"),
+  all(augmented_rows$codebook_hash == augmentation_codebook$hash),
+  identical(template_variants$vocabulary_row, c(3L, 5L, 8L)),
+  all(
+    template_variants$vocabulary_commit ==
+      "eb2d0b3810e07782aab4a81fba1f539133f2ba6a"
+  ),
+  identical(
+    source_families$source_family_id,
+    c("schedule-s003", "training-offer-s001")
+  ),
+  identical(augmentation_counts$n, c(3L, 0L, 2L, 0L, 0L))
 )
 ```
 
@@ -334,6 +346,23 @@ accepted_rows <- reviewed_candidates |>
 rejected_rows <- reviewed_candidates |>
   filter(decision == "reject")
 
+knitr::kable(
+  reviewed_candidates |>
+    select(text, label, decision, reason),
+  col.names = c(
+    "Candidate text",
+    "Proposed label",
+    "Decision",
+    "Reason"
+  ),
+  caption = "Seven candidates, five accepted, two rejected",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(candidate_rows), 7L),
   identical(nrow(accepted_rows), 5L),
@@ -351,19 +380,6 @@ stopifnot(
     sum(rejected_rows$duplicates_reviewed_text),
     1L
   )
-)
-
-knitr::kable(
-  reviewed_candidates |>
-    select(text, label, decision, reason),
-  col.names = c(
-    "Candidate text",
-    "Proposed label",
-    "Decision",
-    "Reason"
-  ),
-  caption = "Seven candidates, five accepted, two rejected",
-  row.names = FALSE
 )
 ```
 
@@ -457,6 +473,24 @@ ablation <- tibble(
 
 new_terms <- setdiff(with_augmentation, without_augmentation)
 
+knitr::kable(
+  ablation,
+  col.names = c(
+    "Condition",
+    "Distinctive terms",
+    "Correct decisions",
+    "Items judged"
+  ),
+  caption = "The same held-out units judged with and without the augmented rows",
+  row.names = FALSE
+)
+
+new_terms
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(held_out), 10L),
   identical(
@@ -476,20 +510,6 @@ stopifnot(
     predict_training(with_augmentation, held_out$text)
   )
 )
-
-knitr::kable(
-  ablation,
-  col.names = c(
-    "Condition",
-    "Distinctive terms",
-    "Correct decisions",
-    "Items judged"
-  ),
-  caption = "The same held-out units judged with and without the augmented rows",
-  row.names = FALSE
-)
-
-new_terms
 ```
 
 The augmented rows added five terms to the vocabulary and changed nothing. Every
@@ -528,6 +548,12 @@ label_check_payload <-
     multi_label = FALSE
   )
 
+str(label_check_payload)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     label_check_payload$inputs,
@@ -550,8 +576,6 @@ stopifnot(
     FALSE
   )
 )
-
-str(label_check_payload)
 ```
 
 A future model call could flag surprising candidates for review. A model label
@@ -586,6 +610,22 @@ meaning_check <- tibble(
   ) |>
   select(-lower_text)
 
+knitr::kable(
+  meaning_check,
+  col.names = c(
+    "Version",
+    "Text",
+    "Keyword-only match",
+    "Negation-aware offer rule"
+  ),
+  caption = "One added word reverses the training offer",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   !identical(
     meaning_check$text[[1]],
@@ -599,18 +639,6 @@ stopifnot(
     meaning_check$negation_aware_offer,
     c(TRUE, FALSE)
   )
-)
-
-knitr::kable(
-  meaning_check,
-  col.names = c(
-    "Version",
-    "Text",
-    "Keyword-only match",
-    "Negation-aware offer rule"
-  ),
-  caption = "One added word reverses the training offer",
-  row.names = FALSE
 )
 ```
 

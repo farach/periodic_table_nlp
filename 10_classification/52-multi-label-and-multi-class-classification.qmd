@@ -72,6 +72,17 @@ periods <- paragraphs |>
 period_counts <- periods |>
   count(period, name = "paragraphs")
 
+knitr::kable(
+  period_counts,
+  col.names = c("Period label", "Paragraphs"),
+  caption = "Four mutually exclusive period labels",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   all(c(
     "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
@@ -81,13 +92,6 @@ stopifnot(
   identical(as.character(period_counts$period), levels(periods$period)),
   identical(period_counts$paragraphs, c(210L, 291L, 423L, 453L)),
   identical(sum(period_counts$paragraphs), 1377L)
-)
-
-knitr::kable(
-  period_counts,
-  col.names = c("Period label", "Paragraphs"),
-  caption = "Four mutually exclusive period labels",
-  row.names = FALSE
 )
 ```
 
@@ -154,6 +158,25 @@ period_scores <- tibble(
   value = c(period_accuracy, period_baseline)
 )
 
+knitr::kable(
+  period_scores |>
+    mutate(value = round(value, 4)),
+  col.names = c("Measure", "Value"),
+  caption = "Four-way model accuracy beside the largest-class baseline",
+  row.names = FALSE
+)
+
+knitr::kable(
+  as.data.frame(period_confusion$table),
+  col.names = c("Model prediction", "Recorded period", "Paragraphs"),
+  caption = "Confusion matrix for the four-way period classifier",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(period_train), 1025L),
   identical(nrow(period_test), 352L),
@@ -174,21 +197,6 @@ stopifnot(
       dimnames = dimnames(period_matrix)
     )
   )
-)
-
-knitr::kable(
-  period_scores |>
-    mutate(value = round(value, 4)),
-  col.names = c("Measure", "Value"),
-  caption = "Four-way model accuracy beside the largest-class baseline",
-  row.names = FALSE
-)
-
-knitr::kable(
-  as.data.frame(period_confusion$table),
-  col.names = c("Model prediction", "Recorded period", "Paragraphs"),
-  caption = "Confusion matrix for the four-way period classifier",
-  row.names = FALSE
 )
 ```
 
@@ -214,18 +222,22 @@ period_recall <- period_predictions |>
   ) |>
   arrange(period)
 
-stopifnot(
-  identical(period_recall$support, c(48L, 88L, 99L, 117L)),
-  identical(period_recall$correct, c(19L, 63L, 47L, 80L)),
-  identical(round(period_recall$recall, 3), c(0.396, 0.716, 0.475, 0.684))
-)
-
 knitr::kable(
   period_recall |>
     mutate(recall = round(recall, 3)),
   col.names = c("Recorded period", "Test paragraphs", "Correct", "Recall"),
   caption = "Recall varies by period label",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(period_recall$support, c(48L, 88L, 99L, 117L)),
+  identical(period_recall$correct, c(19L, 63L, 47L, 80L)),
+  identical(round(period_recall$recall, 3), c(0.396, 0.716, 0.475, 0.684))
 )
 ```
 
@@ -266,18 +278,22 @@ label_count_table <- theme_labels |>
   mutate(label_count = rowSums(across(-paragraph_id))) |>
   count(label_count, name = "paragraphs")
 
-stopifnot(
-  identical(as.integer(colSums(theme_counts > 0)), c(219L, 501L, 581L)),
-  identical(label_count_table$label_count, c(0, 1, 2, 3)),
-  identical(label_count_table$paragraphs, c(449L, 605L, 273L, 50L)),
-  identical(sum(label_count_table$paragraphs), 1377L)
-)
-
 knitr::kable(
   label_count_table,
   col.names = c("Theme labels on a paragraph", "Paragraphs"),
   caption = "Paragraphs can carry zero, one, or several dictionary labels",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(as.integer(colSums(theme_counts > 0)), c(219L, 501L, 581L)),
+  identical(label_count_table$label_count, c(0, 1, 2, 3)),
+  identical(label_count_table$paragraphs, c(449L, 605L, 273L, 50L)),
+  identical(sum(label_count_table$paragraphs), 1377L)
 )
 ```
 
@@ -334,17 +350,6 @@ exact_empty_accuracy <- theme_labels |>
   summarise(value = mean(predicted_empty_matches), .groups = "drop") |>
   pull(value)
 
-stopifnot(
-  identical(per_label_metrics$true_present, c(581L, 501L, 219L)),
-  identical(per_label_metrics$true_absent, c(796L, 876L, 1158L)),
-  identical(round(per_label_metrics$prevalence, 3), c(0.422, 0.364, 0.159)),
-  identical(per_label_metrics$predicted_present, c(0L, 0L, 0L)),
-  all(is.na(per_label_metrics$precision)),
-  identical(per_label_metrics$recall, c(0, 0, 0)),
-  identical(round(overall_label_accuracy, 4), 0.6851),
-  identical(round(exact_empty_accuracy, 4), 0.3261)
-)
-
 knitr::kable(
   per_label_metrics |>
     mutate(
@@ -365,6 +370,21 @@ knitr::kable(
   ),
   caption = "Per-label metrics expose the no-label baseline",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(per_label_metrics$true_present, c(581L, 501L, 219L)),
+  identical(per_label_metrics$true_absent, c(796L, 876L, 1158L)),
+  identical(round(per_label_metrics$prevalence, 3), c(0.422, 0.364, 0.159)),
+  identical(per_label_metrics$predicted_present, c(0L, 0L, 0L)),
+  all(is.na(per_label_metrics$precision)),
+  identical(per_label_metrics$recall, c(0, 0, 0)),
+  identical(round(overall_label_accuracy, 4), 0.6851),
+  identical(round(exact_empty_accuracy, 4), 0.3261)
 )
 ```
 

@@ -160,6 +160,24 @@ spacy_info_table <- tibble(
   value = unname(unlist(spacy_info))
 )
 
+knitr::kable(
+  parser_score,
+  col.names = c("Measure", "Value"),
+  caption = "Held-out parser scores bundled with the lesson",
+  row.names = FALSE
+)
+
+knitr::kable(
+  spacy_info_table,
+  col.names = c("Pipeline field", "Value"),
+  caption = "Local spaCy pipeline used for the comparison table",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(sentences$sentence_id[1], "s001"),
@@ -194,20 +212,6 @@ stopifnot(
   all(nchar(metadata$fingerprint) == 64L),
   identical(parser_score_fingerprint, expected_score_fingerprint),
   identical(parser_model_fingerprint, expected_model_fingerprint)
-)
-
-knitr::kable(
-  parser_score,
-  col.names = c("Measure", "Value"),
-  caption = "Held-out parser scores bundled with the lesson",
-  row.names = FALSE
-)
-
-knitr::kable(
-  spacy_info_table,
-  col.names = c("Pipeline field", "Value"),
-  caption = "Local spaCy pipeline used for the comparison table",
-  row.names = FALSE
 )
 ```
 
@@ -250,6 +254,17 @@ paid_parse <- parsed |>
   ) |>
   select(token, head_word, dep_rel)
 
+knitr::kable(
+  paid_parse,
+  col.names = c("Token", "Head word", "Relation"),
+  caption = "Dependency parse for 'Paid 12-week training is provided.'",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(parsed), 178L),
   identical(
@@ -264,13 +279,6 @@ stopifnot(
     paid_parse$dep_rel,
     c("compound", "flat", "punct", "compound", "nsubj:pass", "aux:pass", "root", "punct")
   )
-)
-
-knitr::kable(
-  paid_parse,
-  col.names = c("Token", "Head word", "Relation"),
-  caption = "Dependency parse for 'Paid 12-week training is provided.'",
-  row.names = FALSE
 )
 ```
 
@@ -318,6 +326,19 @@ spacy_paid_parse <- spacy_s001 |>
   ) |>
   select(token, head_word, dep_rel, lemma, pos)
 
+knitr::kable(
+  spacy_paid_parse,
+  col.names = c("Token", "Head word", "spaCy relation", "Lemma", "POS tag"),
+  caption = "spaCy parse for the same sentence",
+  row.names = FALSE
+)
+
+invisible(suppressMessages(spacy_finalize()))
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(spacy_s001), 8L),
   identical(
@@ -334,15 +355,6 @@ stopifnot(
   ),
   identical(spacy_paid_parse$lemma[7], "provide")
 )
-
-knitr::kable(
-  spacy_paid_parse,
-  col.names = c("Token", "Head word", "spaCy relation", "Lemma", "POS tag"),
-  caption = "spaCy parse for the same sentence",
-  row.names = FALSE
-)
-
-invisible(suppressMessages(spacy_finalize()))
 ```
 
 The two tools produce different structures, not a spelling difference in the
@@ -360,6 +372,17 @@ paid_features <- parsed |>
   filter(doc_id == "s001", token %in% c("is", "provided")) |>
   select(token, feats)
 
+knitr::kable(
+  paid_features,
+  col.names = c("Token", "Morphological features"),
+  caption = "In-context features for two tokens in sentence s001",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(paid_features$token, c("is", "provided")),
   identical(
@@ -369,13 +392,6 @@ stopifnot(
       "Tense=Past|VerbForm=Part|Voice=Pass"
     )
   )
-)
-
-knitr::kable(
-  paid_features,
-  col.names = c("Token", "Morphological features"),
-  caption = "In-context features for two tokens in sentence s001",
-  row.names = FALSE
 )
 ```
 
@@ -436,17 +452,6 @@ attachment_scores <- bind_rows(
   )
 )
 
-stopifnot(
-  identical(
-    tagger_curve$accuracy[tagger_curve$training_sentences == 500L],
-    0.9087
-  ),
-  identical(tagging_score$correct, 3641L),
-  identical(attachment_scores$correct, c(304L, 2899L, 2629L)),
-  identical(attachment_scores$tokens, c(4007L, 4007L, 4007L)),
-  identical(attachment_scores$attachment, c(0.0759, 0.7235, 0.6561))
-)
-
 knitr::kable(
   tagging_score,
   col.names = c("System", "Correct tokens", "Tokens scored", "Accuracy"),
@@ -459,6 +464,21 @@ knitr::kable(
   col.names = c("System", "Correct tokens", "Tokens scored", "Attachment score"),
   caption = "Parser attachment scores and a previous-token baseline",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    tagger_curve$accuracy[tagger_curve$training_sentences == 500L],
+    0.9087
+  ),
+  identical(tagging_score$correct, 3641L),
+  identical(attachment_scores$correct, c(304L, 2899L, 2629L)),
+  identical(attachment_scores$tokens, c(4007L, 4007L, 4007L)),
+  identical(attachment_scores$attachment, c(0.0759, 0.7235, 0.6561))
 )
 ```
 
@@ -528,6 +548,17 @@ root_summary <- root_audit |>
 root_mismatches <- root_audit |>
   filter(!root_matches)
 
+knitr::kable(
+  root_mismatches,
+  col.names = c("Sentence ID", "Hand root", "Parser root", "Root matches"),
+  caption = "Riverton sentences where the parser root needs review",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(root_audit), nrow(sentences)),
   all(root_audit$sentence_id %in% sentences$sentence_id),
@@ -537,13 +568,6 @@ stopifnot(
     root_mismatches$sentence_id,
     c("s004", "s017", "s021", "s023", "s024", "s026", "s028")
   )
-)
-
-knitr::kable(
-  root_mismatches,
-  col.names = c("Sentence ID", "Hand root", "Parser root", "Root matches"),
-  caption = "Riverton sentences where the parser root needs review",
-  row.names = FALSE
 )
 ```
 
@@ -563,17 +587,21 @@ included_parse <- parsed |>
   ) |>
   select(token, head_word, dep_rel)
 
-stopifnot(
-  identical(included_parse$token, c("Product", "training", "is", "included", ".")),
-  identical(included_parse$head_word, c("root", "included", "included", "Product", "Product")),
-  identical(included_parse$dep_rel, c("root", "nsubj:pass", "aux:pass", "ccomp", "punct"))
-)
-
 knitr::kable(
   included_parse,
   col.names = c("Token", "Head word", "Relation"),
   caption = "A Riverton parse that needs human review",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(included_parse$token, c("Product", "training", "is", "included", ".")),
+  identical(included_parse$head_word, c("root", "included", "included", "Product", "Product")),
+  identical(included_parse$dep_rel, c("root", "nsubj:pass", "aux:pass", "ccomp", "punct"))
 )
 ```
 

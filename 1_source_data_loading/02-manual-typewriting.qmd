@@ -58,12 +58,16 @@ messages <- c(
   "No identifiers here."
 )
 
+messages
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(messages), 5L),
   identical(messages[3], "Order IDs: R-1042 and R-1043.")
 )
-
-messages
 ```
 
 An **assertion** is a check that stops R when a result no longer matches what
@@ -88,11 +92,15 @@ ask for the exact text `"café"` before introducing any flexible pattern.
 ```{r}
 cafe_message <- str_subset(messages, fixed("café"))
 
+cafe_message
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(cafe_message, "The café opens on 2026-08-28.")
 )
-
-cafe_message
 ```
 
 `str_subset()` from stringr keeps the messages that match a pattern. `messages`
@@ -113,10 +121,6 @@ prints its size and each column's type.
 ```{r}
 has_order_prefix <- str_detect(messages, fixed("R-"))
 
-stopifnot(
-  identical(has_order_prefix, c(FALSE, FALSE, TRUE, FALSE, FALSE))
-)
-
 knitr::kable(
   tibble(
     message = messages,
@@ -125,6 +129,14 @@ knitr::kable(
   col.names = c("Message", "Contains R-"),
   caption = "Which messages contain R-?",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(has_order_prefix, c(FALSE, FALSE, TRUE, FALSE, FALSE))
 )
 ```
 
@@ -153,12 +165,16 @@ order_ids_by_message <- str_extract_all(
   order_id_pattern
 )
 
+order_ids_by_message
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(order_ids_by_message[[3]], c("R-1042", "R-1043")),
   identical(sum(lengths(order_ids_by_message)), 2L)
 )
-
-order_ids_by_message
 ```
 
 The output stays grouped by message. An empty entry means that no order number
@@ -206,13 +222,17 @@ found <- list(
   email = str_extract(all_text, email_pattern)
 )
 
+found
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(found$order_ids, c("R-1042", "R-1043")),
   identical(found$date, "2026-08-28"),
   identical(found$email, "support@example.com")
 )
-
-found
 ```
 
 `str_extract()` returns the first match, while `str_extract_all()` returns
@@ -239,11 +259,15 @@ log_lines <- c(
 
 error_lines <- str_subset(log_lines, "^ERROR:")
 
+error_lines
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(error_lines, "ERROR: file not found")
 )
-
-error_lines
 ```
 
 The pattern requires the complete label `ERROR:` at the start. It leaves out
@@ -265,14 +289,6 @@ date_parts <- str_match(
   complete_date_pattern
 )
 
-stopifnot(
-  identical(
-    unname(date_parts[1, 2:4]),
-    c("2026", "08", "28")
-  ),
-  all(is.na(date_parts[2:3, 1]))
-)
-
 knitr::kable(
   tibble(
     input = date_inputs,
@@ -284,6 +300,18 @@ knitr::kable(
   col.names = c("Input", "Complete match", "Year", "Month", "Day"),
   caption = "Checking complete dates",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    unname(date_parts[1, 2:4]),
+    c("2026", "08", "28")
+  ),
+  all(is.na(date_parts[2:3, 1]))
 )
 ```
 
@@ -310,6 +338,23 @@ removed_addresses <- str_extract_all(messages, email_pattern) |>
   list_c()
 changed_messages <- sum(redacted_messages != messages)
 
+knitr::kable(
+  tibble(
+    message_number = seq_along(messages),
+    changed = redacted_messages != messages,
+    shared_version = redacted_messages
+  ),
+  col.names = c("Message", "Changed", "Version that leaves the building"),
+  caption = "Which messages the redaction step altered",
+  row.names = FALSE
+)
+
+removed_addresses
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     redacted_messages[2],
@@ -323,19 +368,6 @@ stopifnot(
     length(removed_addresses)
   )
 )
-
-knitr::kable(
-  tibble(
-    message_number = seq_along(messages),
-    changed = redacted_messages != messages,
-    shared_version = redacted_messages
-  ),
-  col.names = c("Message", "Changed", "Version that leaves the building"),
-  caption = "Which messages the redaction step altered",
-  row.names = FALSE
-)
-
-removed_addresses
 ```
 
 One message changed and one address was removed. Both numbers are printed, and
@@ -370,15 +402,19 @@ id_cases <- tibble(
 id_cases <- id_cases |>
   mutate(actual = str_detect(input, order_id_pattern))
 
-stopifnot(
-  identical(id_cases$actual, id_cases$expected)
-)
-
 knitr::kable(
   id_cases,
   col.names = c("Input", "Expected", "Actual"),
   caption = "Expected and actual order ID results",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(id_cases$actual, id_cases$expected)
 )
 ```
 
@@ -402,11 +438,15 @@ extract_order_ids <- function(text) {
 
 extracted_ids <- extract_order_ids(messages)
 
+extracted_ids
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(extracted_ids, c("R-1042", "R-1043"))
 )
-
-extracted_ids
 ```
 
 The function returns the two expected order numbers and lists each one only
@@ -436,13 +476,6 @@ letters_and_marks <- str_detect(
   letters_and_marks_pattern
 )
 
-stopifnot(
-  identical(
-    letters_and_marks,
-    c(TRUE, TRUE, TRUE, TRUE, TRUE, FALSE)
-  )
-)
-
 knitr::kable(
   tibble(
     text = words,
@@ -451,6 +484,17 @@ knitr::kable(
   col.names = c("Text", "Accepted by this pattern"),
   caption = "Checking the stated letter-and-mark rule",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    letters_and_marks,
+    c(TRUE, TRUE, TRUE, TRUE, TRUE, FALSE)
+  )
 )
 ```
 

@@ -51,11 +51,6 @@ library(stringr)
 library(spacyr)
 source("R/use-spacy.R")
 
-stopifnot(all(
-  c("readr", "dplyr", "tibble", "stringr", "spacyr") %in%
-    loadedNamespaces()
-))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -134,20 +129,6 @@ pipeline_table <- tibble(
   value = unlist(pipeline_info, use.names = FALSE)
 )
 
-stopifnot(
-  identical(nrow(sentences), 28L),
-  identical(pipeline$model, "en_core_web_sm"),
-  identical(pipeline_info$version, "3.8.0"),
-  identical(pipeline_info$license, "MIT"),
-  identical(pipeline_info$spacy, "3.8.7"),
-  identical(nrow(parsed), 179L),
-  identical(example_entities$entity, c("Riverton Skills Centre", "evening", "October")),
-  identical(example_entities$predicted_type, c("PERSON", "TIME", "DATE")),
-  identical(example_entities$correct, c(FALSE, TRUE, TRUE)),
-  identical(title_case_entities$entity, "Riverton Skills Open House"),
-  identical(title_case_entities$entity_type, "PERSON")
-)
-
 knitr::kable(
   pipeline_table,
   col.names = c("Pipeline field", "Value"),
@@ -167,6 +148,29 @@ knitr::kable(
   col.names = c("Entity", "Entity type"),
   caption = "spaCy output for a title-case version of the flyer heading",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "stringr", "spacyr") %in%
+    loadedNamespaces()
+))
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(pipeline$model, "en_core_web_sm"),
+  identical(pipeline_info$version, "3.8.0"),
+  identical(pipeline_info$license, "MIT"),
+  identical(pipeline_info$spacy, "3.8.7"),
+  identical(nrow(parsed), 179L),
+  identical(example_entities$entity, c("Riverton Skills Centre", "evening", "October")),
+  identical(example_entities$predicted_type, c("PERSON", "TIME", "DATE")),
+  identical(example_entities$correct, c(FALSE, TRUE, TRUE)),
+  identical(title_case_entities$entity, "Riverton Skills Open House"),
+  identical(title_case_entities$entity_type, "PERSON")
 )
 ```
 
@@ -192,19 +196,23 @@ same word can be a `GPE` in `Riverton raised the training budget` and part of an
 entity_type_counts <- entities |>
   count(entity_type, name = "entities", sort = TRUE)
 
+knitr::kable(
+  entity_type_counts,
+  col.names = c("Entity type", "Entities"),
+  caption = "Entity types returned for the 28 Riverton sentences",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(entities), 10L),
   identical(entity_type_counts$entity_type, c("DATE", "TIME", "ORG", "QUANTITY")),
   identical(entity_type_counts$entities, c(6L, 2L, 1L, 1L)),
   !any(entities$entity_type %in% c("CARDINAL", "GPE")),
   identical(entities$entity[entities$sentence_id == "s023"], "HOUSE")
-)
-
-knitr::kable(
-  entity_type_counts,
-  col.names = c("Entity type", "Entities"),
-  caption = "Entity types returned for the 28 Riverton sentences",
-  row.names = FALSE
 )
 ```
 
@@ -247,16 +255,6 @@ entity_score <- entity_judgments |>
     .groups = "drop"
   )
 
-stopifnot(
-  identical(entity_score$returned_spans, 10L),
-  identical(entity_score$correct_spans, 9L),
-  identical(entity_score$wrong_spans, 1L),
-  !any(is.na(entity_judgments$expected_type)),
-  identical(entity_judgments$correct[entity_judgments$sentence_id == "s023"], FALSE),
-  identical(entity_judgments$expected_type[entity_judgments$sentence_id == "s023"], "EVENT"),
-  identical(entity_judgments$expected_type[entity_judgments$sentence_id == "s028"], "DATE")
-)
-
 knitr::kable(
   entity_judgments,
   col.names = c("Sentence ID", "Entity", "Predicted type", "Expected span", "Expected type", "Note", "Correct"),
@@ -269,6 +267,20 @@ knitr::kable(
   col.names = c("Returned spans", "Correct spans", "Wrong spans"),
   caption = "Hand-check counts for returned entity spans",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(entity_score$returned_spans, 10L),
+  identical(entity_score$correct_spans, 9L),
+  identical(entity_score$wrong_spans, 1L),
+  !any(is.na(entity_judgments$expected_type)),
+  identical(entity_judgments$correct[entity_judgments$sentence_id == "s023"], FALSE),
+  identical(entity_judgments$expected_type[entity_judgments$sentence_id == "s023"], "EVENT"),
+  identical(entity_judgments$expected_type[entity_judgments$sentence_id == "s028"], "DATE")
 )
 ```
 

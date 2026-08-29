@@ -51,8 +51,6 @@ library(dplyr)
 library(tibble)
 library(stringr)
 
-stopifnot(all(c("readr", "dplyr", "tibble", "stringr") %in% loadedNamespaces()))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -111,12 +109,6 @@ pay_examples <- tibble(
   )
 )
 
-stopifnot(
-  identical(nrow(sentences), 28L),
-  identical(sentences$text[sentences$sentence_id == "s025"], "Paid training stipend"),
-  identical(nrow(pay_examples), 13L)
-)
-
 knitr::kable(
   pay_examples,
   col.names = c(
@@ -125,6 +117,18 @@ knitr::kable(
   ),
   caption = "Author-created price examples with expected answers",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c("readr", "dplyr", "tibble", "stringr") %in% loadedNamespaces()))
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(sentences$text[sentences$sentence_id == "s025"], "Paid training stipend"),
+  identical(nrow(pay_examples), 13L)
 )
 ```
 
@@ -176,13 +180,6 @@ parse_prices <- function(data) {
 
 price_results <- parse_prices(pay_examples)
 
-stopifnot(
-  identical(price_results$amount_lower[3], 38000),
-  identical(price_results$amount_lower[13], 38000),
-  identical(price_results$amount_upper[4], 19),
-  identical(price_results$parser_result[5], "not a price")
-)
-
 knitr::kable(
   price_results |>
     select(example_id, text, amount_text, currency, unit, amount_lower, amount_upper, parser_result),
@@ -192,6 +189,17 @@ knitr::kable(
   ),
   caption = "Parsed amount, currency, and unit",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(price_results$amount_lower[3], 38000),
+  identical(price_results$amount_lower[13], 38000),
+  identical(price_results$amount_upper[4], 19),
+  identical(price_results$parser_result[5], "not a price")
 )
 ```
 
@@ -228,15 +236,19 @@ case_counts <- tibble(
   )
 )
 
-stopifnot(
-  identical(case_counts$examples, c(3L, 1L, 2L, 1L, 1L))
-)
-
 knitr::kable(
   case_counts,
   col.names = c("Case", "Examples"),
   caption = "Cases the parser keeps visible",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(case_counts$examples, c(3L, 1L, 2L, 1L, 1L))
 )
 ```
 
@@ -265,13 +277,6 @@ price_score <- price_results |>
     currency_matches = sum(values_match(currency, expected_currency))
   )
 
-stopifnot(
-  identical(
-    unname(unlist(price_score)),
-    c(13L, 13L, 13L, 13L, 13L)
-  )
-)
-
 knitr::kable(
   price_score,
   col.names = c(
@@ -280,6 +285,17 @@ knitr::kable(
   ),
   caption = "Agreement with this page's expected answers",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    unname(unlist(price_score)),
+    c(13L, 13L, 13L, 13L, 13L)
+  )
 )
 ```
 
@@ -306,19 +322,23 @@ riverton_pay_line <- sentences |>
 
 riverton_price_result <- parse_prices(riverton_pay_line)
 
-stopifnot(
-  identical(riverton_pay_line$text, "Paid training stipend"),
-  identical(riverton_price_result$unit, "stipend"),
-  is.na(riverton_price_result$amount_lower),
-  identical(riverton_price_result$parser_result, "not a price")
-)
-
 knitr::kable(
   riverton_price_result |>
     select(example_id, text, amount_lower, currency, unit, parser_result),
   col.names = c("Sentence ID", "Text", "Amount", "Currency", "Unit", "Parser result"),
   caption = "The Riverton stipend line has a unit but no amount",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(riverton_pay_line$text, "Paid training stipend"),
+  identical(riverton_price_result$unit, "stipend"),
+  is.na(riverton_price_result$amount_lower),
+  identical(riverton_price_result$parser_result, "not a price")
 )
 ```
 
@@ -337,16 +357,20 @@ failure_examples <- tibble(
 
 failure_results <- parse_prices(failure_examples)
 
+failure_results |>
+  select(text, amount_lower, currency) |>
+  knitr::kable(caption = "Representative failures of the custom regex parser")
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(failure_results), 3L),
   is.na(failure_results$amount_lower[1]),
   identical(failure_results$amount_lower[2], 1.25),
   identical(failure_results$currency[3], "USD")
 )
-
-failure_results |>
-  select(text, amount_lower, currency) |>
-  knitr::kable(caption = "Representative failures of the custom regex parser")
 ```
 
 - **Value normalization**: The pattern misses `"thirty-eight thousand"` entirely because it only looks for digits.

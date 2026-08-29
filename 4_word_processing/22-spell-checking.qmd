@@ -90,18 +90,22 @@ flagged_types <- vocabulary[!known_to_hunspell(vocabulary)] |>
 
 flagged_table <- tibble(flagged_word_type = flagged_types)
 
-stopifnot(
-  identical(nrow(sentences), 28L),
-  identical(length(vocabulary), 96L),
-  identical(length(flagged_types), 2L),
-  identical(flagged_types, c("october", "riverton"))
-)
-
 knitr::kable(
   flagged_table,
   col.names = "Flagged word type",
   caption = "Riverton word types flagged by hunspell",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(length(vocabulary), 96L),
+  identical(length(flagged_types), 2L),
+  identical(flagged_types, c("october", "riverton"))
 )
 ```
 
@@ -148,16 +152,6 @@ spell_summary <- tibble(
   false_flag_fraction = paste0(correct_words_wrongly_flagged, "/", correct_words_checked)
 )
 
-stopifnot(
-  identical(constructed_results$flagged, rep(TRUE, 8)),
-  identical(constructed_results$correct_word_wrongly_flagged, rep(FALSE, 8)),
-  all(constructed_results$suggestion_count > 0L),
-  identical(spell_summary$real_errors_caught, 8L),
-  identical(spell_summary$correct_words_wrongly_flagged, 0L),
-  identical(spell_summary$caught_fraction, "8/8"),
-  identical(spell_summary$false_flag_fraction, "0/8")
-)
-
 knitr::kable(
   constructed_results,
   col.names = c("Correct Riverton word", "Constructed misspelling", "Flagged", "Correct word flagged", "Suggestions returned", "Suggestions"),
@@ -177,6 +171,20 @@ knitr::kable(
   ),
   caption = "Counts from the constructed spelling test",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(constructed_results$flagged, rep(TRUE, 8)),
+  identical(constructed_results$correct_word_wrongly_flagged, rep(FALSE, 8)),
+  all(constructed_results$suggestion_count > 0L),
+  identical(spell_summary$real_errors_caught, 8L),
+  identical(spell_summary$correct_words_wrongly_flagged, 0L),
+  identical(spell_summary$caught_fraction, "8/8"),
+  identical(spell_summary$false_flag_fraction, "0/8")
 )
 ```
 
@@ -201,18 +209,22 @@ real_word_error <- tibble(
   typed_flagged = !known_to_hunspell(typed_word)
 )
 
-stopifnot(
-  identical(real_word_error$intended_flagged, FALSE),
-  identical(real_word_error$typed_flagged, FALSE),
-  known_to_hunspell("form"),
-  known_to_hunspell("from")
-)
-
 knitr::kable(
   real_word_error,
   col.names = c("Intended word", "Typed word", "Intended word flagged", "Typed word flagged"),
   caption = "A real-word typo that dictionary lookup cannot catch",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(real_word_error$intended_flagged, FALSE),
+  identical(real_word_error$typed_flagged, FALSE),
+  known_to_hunspell("form"),
+  known_to_hunspell("from")
 )
 ```
 

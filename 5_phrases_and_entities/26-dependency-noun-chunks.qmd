@@ -59,11 +59,6 @@ library(udpipe)
 library(spacyr)
 source("R/use-spacy.R")
 
-stopifnot(all(
-  c("readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "udpipe", "spacyr") %in%
-    loadedNamespaces()
-))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -117,6 +112,30 @@ pipeline_table <- tibble(
   value = unlist(pipeline_info, use.names = FALSE)
 )
 
+knitr::kable(
+  pipeline_table,
+  col.names = c("Pipeline field", "Value"),
+  caption = "spaCy pipeline used for noun chunks",
+  row.names = FALSE
+)
+
+knitr::kable(
+  spacy_phrases |>
+    slice_head(n = 12),
+  col.names = c("Sentence ID", "spaCy noun chunk"),
+  caption = "First spaCy noun chunks from the Riverton sentences",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "udpipe", "spacyr") %in%
+    loadedNamespaces()
+))
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(pipeline$model, "en_core_web_sm"),
@@ -131,21 +150,6 @@ stopifnot(
     example_phrases$chunk,
     c("Riverton Skills Centre", "evening classes", "October")
   )
-)
-
-knitr::kable(
-  pipeline_table,
-  col.names = c("Pipeline field", "Value"),
-  caption = "spaCy pipeline used for noun chunks",
-  row.names = FALSE
-)
-
-knitr::kable(
-  spacy_phrases |>
-    slice_head(n = 12),
-  col.names = c("Sentence ID", "spaCy noun chunk"),
-  caption = "First spaCy noun chunks from the Riverton sentences",
-  row.names = FALSE
 )
 ```
 
@@ -220,17 +224,6 @@ udpipe_chunks <- annotated |>
   ) |>
   select(doc_id, chunk)
 
-stopifnot(
-  identical(nrow(annotated), 178L),
-  identical(token_count_gap$doc_id, "s017"),
-  identical(token_count_gap$spacy_tokens, 8L),
-  identical(token_count_gap$udpipe_tokens, 7L),
-  identical(nrow(udpipe_chunks), 56L),
-  identical(udpipe_chunks$chunk[1:5], c("Paid", "Paid week", "week training", "No prior data experience", "Evening schedules")),
-  identical(annotated$upos[annotated$doc_id == "s001" & annotated$token == "Paid"], "PROPN"),
-  identical(udpipe_chunks$chunk[udpipe_chunks$doc_id == "s027"], "No prior experience")
-)
-
 knitr::kable(
   token_count_gap,
   col.names = c("Sentence ID", "spaCy tokens", "UDPipe tokens"),
@@ -244,6 +237,21 @@ knitr::kable(
   col.names = c("Sentence ID", "UDPipe-built chunk"),
   caption = "First noun chunks built from dependency links",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(annotated), 178L),
+  identical(token_count_gap$doc_id, "s017"),
+  identical(token_count_gap$spacy_tokens, 8L),
+  identical(token_count_gap$udpipe_tokens, 7L),
+  identical(nrow(udpipe_chunks), 56L),
+  identical(udpipe_chunks$chunk[1:5], c("Paid", "Paid week", "week training", "No prior data experience", "Evening schedules")),
+  identical(annotated$upos[annotated$doc_id == "s001" & annotated$token == "Paid"], "PROPN"),
+  identical(udpipe_chunks$chunk[udpipe_chunks$doc_id == "s027"], "No prior experience")
 )
 ```
 
@@ -300,19 +308,6 @@ spreadsheet_examples <- bind_rows(
 ) |>
   select(method, doc_id, chunk)
 
-stopifnot(
-  identical(nrow(spacy_phrases), 40L),
-  identical(nrow(udpipe_chunks), 56L),
-  identical(nrow(agreed_chunks), 25L),
-  identical(spacy_phrases$chunk[spacy_phrases$doc_id == "s005"], "A high school diploma"),
-  identical(udpipe_chunks$chunk[udpipe_chunks$doc_id == "s005"], "A high school"),
-  identical(agreed_chunks$chunk[1], "No prior data experience"),
-  identical(
-    spreadsheet_examples$chunk,
-    c("basic spreadsheet skills", "spreadsheet", "need basic spreadsheet skills")
-  )
-)
-
 knitr::kable(
   comparison_summary,
   col.names = c("Measure", "Count"),
@@ -332,6 +327,23 @@ knitr::kable(
   col.names = c("Method", "Sentence ID", "Chunk"),
   caption = "How each method handles the spreadsheet-skills phrase",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(spacy_phrases), 40L),
+  identical(nrow(udpipe_chunks), 56L),
+  identical(nrow(agreed_chunks), 25L),
+  identical(spacy_phrases$chunk[spacy_phrases$doc_id == "s005"], "A high school diploma"),
+  identical(udpipe_chunks$chunk[udpipe_chunks$doc_id == "s005"], "A high school"),
+  identical(agreed_chunks$chunk[1], "No prior data experience"),
+  identical(
+    spreadsheet_examples$chunk,
+    c("basic spreadsheet skills", "spreadsheet", "need basic spreadsheet skills")
+  )
 )
 ```
 

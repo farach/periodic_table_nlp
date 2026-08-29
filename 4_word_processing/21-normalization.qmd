@@ -87,6 +87,10 @@ feedback <- read_csv(
     comment = col_character()
   )
 )
+```
+
+```{r}
+#| include: false
 
 stopifnot(
   identical(nrow(sentences), 28L),
@@ -131,18 +135,22 @@ case_space_examples <- tibble(
   squished = str_squish(raw_text)
 )
 
-stopifnot(
-  identical(case_space_examples$lowercased[1], "riverton skills open house"),
-  identical(case_space_examples$squished[2], "No prior data experience is required."),
-  identical(case_space_examples$lowercased[3], case_space_examples$lowercased[4]),
-  identical(str_length(case_space_examples$raw_text[2]), 51L)
-)
-
 knitr::kable(
   case_space_examples,
   col.names = c("Example", "Raw text", "Lowercased", "Squished"),
   caption = "Case folding and spacing changes",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(case_space_examples$lowercased[1], "riverton skills open house"),
+  identical(case_space_examples$squished[2], "No prior data experience is required."),
+  identical(case_space_examples$lowercased[3], case_space_examples$lowercased[4]),
+  identical(str_length(case_space_examples$raw_text[2]), 51L)
 )
 ```
 
@@ -165,6 +173,17 @@ punctuation_examples <- tibble(
 
 unicode_punctuation_check <- str_remove_all("“paid—training”", "[[:punct:]]")
 
+knitr::kable(
+  punctuation_examples,
+  col.names = c("Sentence ID", "Raw text", "After punctuation removal"),
+  caption = "Punctuation removal can erase useful distinctions",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     punctuation_examples$without_punctuation[1],
@@ -179,13 +198,6 @@ stopifnot(
     "A valid drivers license is required"
   ),
   identical(unicode_punctuation_check, "paidtraining")
-)
-
-knitr::kable(
-  punctuation_examples,
-  col.names = c("Sentence ID", "Raw text", "After punctuation removal"),
-  caption = "Punctuation removal can erase useful distinctions",
-  row.names = FALSE
 )
 ```
 
@@ -213,6 +225,17 @@ unicode_forms <- tibble(
   code_points = map_chr(text, \(value) paste(utf8ToInt(value), collapse = ", "))
 )
 
+knitr::kable(
+  unicode_forms,
+  col.names = c("Form", "Text", "Code points", "Bytes as UTF-8", "Code point values"),
+  caption = "Two Unicode forms of the visible word 'café'",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(cafe_word, "café"),
   identical(cafe_nfc, "café"),
@@ -220,13 +243,6 @@ stopifnot(
   identical(unicode_forms$code_point_count, c(4L, 5L)),
   identical(unicode_forms$bytes_utf8, c(5L, 6L)),
   identical(unicode_forms$code_points[2], "99, 97, 102, 101, 769")
-)
-
-knitr::kable(
-  unicode_forms,
-  col.names = c("Form", "Text", "Code points", "Bytes as UTF-8", "Code point values"),
-  caption = "Two Unicode forms of the visible word 'café'",
-  row.names = FALSE
 )
 ```
 
@@ -253,18 +269,22 @@ display_and_match <- sentences |>
       str_to_lower()
   )
 
-stopifnot(
-  identical(display_and_match$display_text[1], "Paid 12-week training is provided."),
-  identical(display_and_match$comparison_text[1], "paid 12-week training is provided."),
-  identical(display_and_match$comparison_text[2], "riverton skills open house"),
-  !identical(display_and_match$display_text[2], display_and_match$comparison_text[2])
-)
-
 knitr::kable(
   display_and_match,
   col.names = c("Sentence ID", "Display text", "Comparison text"),
   caption = "Keeping display text separate from comparison text",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(display_and_match$display_text[1], "Paid 12-week training is provided."),
+  identical(display_and_match$comparison_text[1], "paid 12-week training is provided."),
+  identical(display_and_match$comparison_text[2], "riverton skills open house"),
+  !identical(display_and_match$display_text[2], display_and_match$comparison_text[2])
 )
 ```
 

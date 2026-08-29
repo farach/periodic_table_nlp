@@ -57,10 +57,6 @@ library(stringr)
 library(tokenizers)
 library(udpipe)
 
-stopifnot(all(c(
-  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "udpipe"
-) %in% loadedNamespaces()))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -117,6 +113,21 @@ marked_sentences <- tibble(
 ) |>
   mutate(has_planted_error = planted_check != "none")
 
+knitr::kable(
+  marked_sentences,
+  col.names = c("Example ID", "Sentence", "Planted check", "Has planted error"),
+  caption = "Author-marked sentences before running the checks",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c(
+  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "udpipe"
+) %in% loadedNamespaces()))
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(nrow(marked_sentences), 14L),
@@ -125,13 +136,6 @@ stopifnot(
   identical(sum(marked_sentences$planted_check == "subject-verb number"), 3L),
   identical(sum(marked_sentences$planted_check == "doubled word"), 2L),
   identical(sum(marked_sentences$planted_check == "article letters"), 2L)
-)
-
-knitr::kable(
-  marked_sentences,
-  col.names = c("Example ID", "Sentence", "Planted check", "Has planted error"),
-  caption = "Author-marked sentences before running the checks",
-  row.names = FALSE
 )
 ```
 
@@ -249,6 +253,25 @@ expected_scores <- tibble(
   true_negative = c(11L, 12L, 10L)
 )
 
+knitr::kable(
+  agreement_pairs |>
+    select(doc_id, subject_token, subject_number, verb_token, verb_number, flag),
+  col.names = c("Example ID", "Subject", "Subject number", "Verb", "Verb number", "Flagged"),
+  caption = "Subject-verb pairs found by the dependency parser",
+  row.names = FALSE
+)
+
+knitr::kable(
+  check_scores,
+  col.names = c("Check", "True positives", "False positives", "False negatives", "True negatives"),
+  caption = "Scores for the three grammar checks on marked examples",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     scored_examples$example_id[scored_examples$agreement_flag],
@@ -263,21 +286,6 @@ stopifnot(
     c("g06", "g08", "g09", "g10")
   ),
   identical(check_scores, expected_scores)
-)
-
-knitr::kable(
-  agreement_pairs |>
-    select(doc_id, subject_token, subject_number, verb_token, verb_number, flag),
-  col.names = c("Example ID", "Subject", "Subject number", "Verb", "Verb number", "Flagged"),
-  caption = "Subject-verb pairs found by the dependency parser",
-  row.names = FALSE
-)
-
-knitr::kable(
-  check_scores,
-  col.names = c("Check", "True positives", "False positives", "False negatives", "True negatives"),
-  caption = "Scores for the three grammar checks on marked examples",
-  row.names = FALSE
 )
 ```
 
@@ -355,14 +363,6 @@ riverton_coverage <- tibble(
   )
 )
 
-stopifnot(
-  identical(nrow(riverton_agreement_pairs), 4L),
-  identical(riverton_coverage$sentences, c(4L, 24L)),
-  identical(riverton_flag_summary$flagged_sentences, c(0L, 0L, 0L, 0L)),
-  identical(sum(riverton_flags$any_flag), 0L),
-  identical(nrow(riverton_flags), 28L)
-)
-
 knitr::kable(
   riverton_flag_summary,
   col.names = c("Check", "Flagged Riverton sentences"),
@@ -375,6 +375,18 @@ knitr::kable(
   col.names = c("Coverage measure", "Sentences"),
   caption = "Subject-verb coverage in the Riverton sentences",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(riverton_agreement_pairs), 4L),
+  identical(riverton_coverage$sentences, c(4L, 24L)),
+  identical(riverton_flag_summary$flagged_sentences, c(0L, 0L, 0L, 0L)),
+  identical(sum(riverton_flags$any_flag), 0L),
+  identical(nrow(riverton_flags), 28L)
 )
 ```
 

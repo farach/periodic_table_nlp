@@ -96,15 +96,6 @@ stemmed_vocabulary <- tibble(
     stem_in_dictionary = known_to_hunspell(stem)
   )
 
-stopifnot(
-  identical(nrow(sentences), 28L),
-  identical(length(vocabulary), 96L),
-  identical(stemmed_vocabulary$stem[stemmed_vocabulary$word == "shifts"], "shift"),
-  identical(stemmed_vocabulary$stem[stemmed_vocabulary$word == "required"], "requir"),
-  identical(sum(stemmed_vocabulary$changed), 43L),
-  identical(sum(!stemmed_vocabulary$changed), 53L)
-)
-
 knitr::kable(
   stemmed_vocabulary |>
     filter(word %in% c("shifts", "skills", "required", "provided", "training")) |>
@@ -112,6 +103,19 @@ knitr::kable(
   col.names = c("Word type", "Stem", "Changed", "Stem in dictionary"),
   caption = "Five Riverton word types after stemming",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(length(vocabulary), 96L),
+  identical(stemmed_vocabulary$stem[stemmed_vocabulary$word == "shifts"], "shift"),
+  identical(stemmed_vocabulary$stem[stemmed_vocabulary$word == "required"], "requir"),
+  identical(sum(stemmed_vocabulary$changed), 43L),
+  identical(sum(!stemmed_vocabulary$changed), 53L)
 )
 ```
 
@@ -131,6 +135,17 @@ example_stems <- tibble(
   stem = wordStem(word, language = "en")
 )
 
+knitr::kable(
+  example_stems,
+  col.names = c("Word", "Snowball stem"),
+  caption = "A rule can produce useful stems and non-word stems",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(example_stems$stem, c("shift", "requir", "requir")),
   !"requires" %in% vocabulary,
@@ -138,13 +153,6 @@ stopifnot(
     example_stems$stem[example_stems$word == "requires"],
     example_stems$stem[example_stems$word == "required"]
   )
-)
-
-knitr::kable(
-  example_stems,
-  col.names = c("Word", "Snowball stem"),
-  caption = "A rule can produce useful stems and non-word stems",
-  row.names = FALSE
 )
 ```
 
@@ -176,16 +184,6 @@ non_word_examples <- stemmed_vocabulary |>
   arrange(word) |>
   slice_head(n = 8)
 
-stopifnot(
-  identical(stem_quality$word_types, 96L),
-  identical(stem_quality$changed_by_stemmer, 43L),
-  identical(stem_quality$unchanged_by_stemmer, 53L),
-  identical(stem_quality$changed_to_dictionary_word, 21L),
-  identical(stem_quality$changed_to_non_word, 22L),
-  identical(non_word_examples$word[1], "able"),
-  identical(non_word_examples$stem[8], "essenti")
-)
-
 knitr::kable(
   stem_quality,
   col.names = c(
@@ -204,6 +202,20 @@ knitr::kable(
   col.names = c("Word type", "Stem", "Changed", "Stem in dictionary"),
   caption = "Examples of non-word stems in the Riverton vocabulary",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(stem_quality$word_types, 96L),
+  identical(stem_quality$changed_by_stemmer, 43L),
+  identical(stem_quality$unchanged_by_stemmer, 53L),
+  identical(stem_quality$changed_to_dictionary_word, 21L),
+  identical(stem_quality$changed_to_non_word, 22L),
+  identical(non_word_examples$word[1], "able"),
+  identical(non_word_examples$stem[8], "essenti")
 )
 ```
 
@@ -228,6 +240,17 @@ collision_groups <- stemmed_vocabulary |>
   ) |>
   arrange(stem)
 
+knitr::kable(
+  collision_groups,
+  col.names = c("Stem", "Word types that share it", "Word types"),
+  caption = "Snowball collisions in the Riverton vocabulary",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(collision_groups), 4L),
   identical(sum(collision_groups$n_words), 8L),
@@ -236,13 +259,6 @@ stopifnot(
     c("certif", "includ", "schedul", "skill")
   ),
   str_detect(collision_groups$word_types[1], fixed("certificate"))
-)
-
-knitr::kable(
-  collision_groups,
-  col.names = c("Stem", "Word types that share it", "Word types"),
-  caption = "Snowball collisions in the Riverton vocabulary",
-  row.names = FALSE
 )
 ```
 
@@ -269,18 +285,22 @@ miss_pairs <- tribble(
     same_stem = stem_a == stem_b
   )
 
-stopifnot(
-  identical(miss_pairs$stem_a, c("applic", "paid", "work")),
-  identical(miss_pairs$stem_b, c("appli", "pay", "worker")),
-  identical(sum(!miss_pairs$same_stem), 3L),
-  all(c(miss_pairs$word_a, miss_pairs$word_b) %in% vocabulary)
-)
-
 knitr::kable(
   miss_pairs,
   col.names = c("Word A", "Word B", "Why the pair was checked", "Stem A", "Stem B", "Same stem"),
   caption = "Related Riverton word pairs that Snowball keeps apart",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(miss_pairs$stem_a, c("applic", "paid", "work")),
+  identical(miss_pairs$stem_b, c("appli", "pay", "worker")),
+  identical(sum(!miss_pairs$same_stem), 3L),
+  all(c(miss_pairs$word_a, miss_pairs$word_b) %in% vocabulary)
 )
 ```
 

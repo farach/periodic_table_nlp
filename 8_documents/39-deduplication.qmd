@@ -122,20 +122,24 @@ documents <- tibble(
   )
 )
 
-stopifnot(
-  identical(nrow(workforce_sentences), 28L),
-  identical(source_text, "The employer pays for certification training."),
-  identical(unrelated_text, "Applicants need basic spreadsheet skills."),
-  identical(nrow(documents), 6L),
-  identical(sum(documents$duplicate_family == "certification-training"), 4L)
-)
-
 knitr::kable(
   documents |>
     select(doc_id, source, text),
   col.names = c("Document", "Source", "Text"),
   caption = "Six documents prepared for duplicate review",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(workforce_sentences), 28L),
+  identical(source_text, "The employer pays for certification training."),
+  identical(unrelated_text, "Applicants need basic spreadsheet skills."),
+  identical(nrow(documents), 6L),
+  identical(sum(documents$duplicate_family == "certification-training"), 4L)
 )
 ```
 
@@ -170,13 +174,6 @@ exact_groups <- documents |>
 
 exact_duplicate_pairs <- sum(choose(exact_groups$documents, 2))
 
-stopifnot(
-  identical(n_distinct(documents$exact_hash), 5L),
-  identical(nrow(exact_groups), 1L),
-  identical(exact_groups$documents, 2L),
-  identical(exact_duplicate_pairs, 1)
-)
-
 knitr::kable(
   documents |>
     transmute(
@@ -187,6 +184,17 @@ knitr::kable(
   col.names = c("Document", "Text", "SHA-256 start"),
   caption = "Exact hashes before normalization",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(n_distinct(documents$exact_hash), 5L),
+  identical(nrow(exact_groups), 1L),
+  identical(exact_groups$documents, 2L),
+  identical(exact_duplicate_pairs, 1)
 )
 ```
 
@@ -221,17 +229,6 @@ normalized_groups <- documents |>
 
 normalized_duplicate_pairs <- sum(choose(normalized_groups$documents, 2))
 
-stopifnot(
-  identical(n_distinct(documents$normalized_hash), 4L),
-  identical(nrow(normalized_groups), 1L),
-  identical(normalized_groups$documents, 3L),
-  identical(normalized_duplicate_pairs, 3),
-  identical(
-    documents$normalized_text[1:3],
-    rep("the employer pays for certification training.", 3L)
-  )
-)
-
 knitr::kable(
   documents |>
     transmute(
@@ -242,6 +239,21 @@ knitr::kable(
   col.names = c("Document", "Normalized text", "Normalized SHA-256 start"),
   caption = "Normalized hashes after lowercasing and whitespace squishing",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(n_distinct(documents$normalized_hash), 4L),
+  identical(nrow(normalized_groups), 1L),
+  identical(normalized_groups$documents, 3L),
+  identical(normalized_duplicate_pairs, 3),
+  identical(
+    documents$normalized_text[1:3],
+    rep("the employer pays for certification training.", 3L)
+  )
 )
 ```
 
@@ -315,6 +327,30 @@ calibration_pair <- tibble(
 
 calibration_distance <- calibration_pair$jaccard_distance
 
+knitr::kable(
+  comparison_pairs |>
+    transmute(
+      pair = str_c(left_doc, right_doc, sep = " / "),
+      manual_duplicate,
+      jaccard_distance = round(jaccard_distance, 4)
+    ),
+  col.names = c("Pair", "Hand-marked duplicate", "Jaccard distance"),
+  caption = "Pairwise distances across the six review documents",
+  row.names = FALSE
+)
+
+knitr::kable(
+  calibration_pair |>
+    mutate(jaccard_distance = round(jaccard_distance, 4)),
+  col.names = c("Left text", "Right text", "Jaccard distance"),
+  caption = "Calibration pair for reading the Jaccard scale",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(comparison_pairs), 15L),
   identical(nrow(calibration_pair), 1L),
@@ -334,26 +370,6 @@ stopifnot(
       round(4),
     0.2917
   )
-)
-
-knitr::kable(
-  comparison_pairs |>
-    transmute(
-      pair = str_c(left_doc, right_doc, sep = " / "),
-      manual_duplicate,
-      jaccard_distance = round(jaccard_distance, 4)
-    ),
-  col.names = c("Pair", "Hand-marked duplicate", "Jaccard distance"),
-  caption = "Pairwise distances across the six review documents",
-  row.names = FALSE
-)
-
-knitr::kable(
-  calibration_pair |>
-    mutate(jaccard_distance = round(jaccard_distance, 4)),
-  col.names = c("Left text", "Right text", "Jaccard distance"),
-  caption = "Calibration pair for reading the Jaccard scale",
-  row.names = FALSE
 )
 ```
 
@@ -399,12 +415,6 @@ threshold_sweep <- tibble(
 perfect_threshold <- threshold_sweep |>
   filter(caught_true == 6L, wrongly_joined == 0L)
 
-stopifnot(
-  identical(threshold_sweep$caught_true, c(3L, 3L, 3L, 6L, 6L, 6L)),
-  identical(threshold_sweep$wrongly_joined, c(0L, 0L, 3L, 3L, 4L, 9L)),
-  identical(nrow(perfect_threshold), 0L)
-)
-
 knitr::kable(
   threshold_sweep,
   col.names = c(
@@ -439,6 +449,16 @@ threshold_sweep |>
     color = NULL
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(threshold_sweep$caught_true, c(3L, 3L, 3L, 6L, 6L, 6L)),
+  identical(threshold_sweep$wrongly_joined, c(0L, 0L, 3L, 3L, 4L, 9L)),
+  identical(nrow(perfect_threshold), 0L)
+)
 ```
 
 For this constructed set, 0.2917 is smaller than 0.32. The distractor is closer

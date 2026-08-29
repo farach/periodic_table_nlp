@@ -96,6 +96,10 @@ parsed <- udpipe_annotate(
 ) |>
   as.data.frame() |>
   as_tibble()
+```
+
+```{r}
+#| include: false
 
 stopifnot(
   identical(nrow(sentences), 28L),
@@ -122,17 +126,21 @@ keyword_hits <- sentences |>
   filter(keyword_match) |>
   select(sentence_id, text)
 
-stopifnot(
-  identical(keyword_hits$sentence_id, c("s002", "s019", "s027")),
-  identical(nrow(keyword_hits), 3L),
-  str_detect(keyword_hits$text[1], fixed("No prior data experience"))
-)
-
 knitr::kable(
   keyword_hits,
   col.names = c("Sentence ID", "Text"),
   caption = "Keyword matches for experience before required",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(keyword_hits$sentence_id, c("s002", "s019", "s027")),
+  identical(nrow(keyword_hits), 3L),
+  str_detect(keyword_hits$text[1], fixed("No prior data experience"))
 )
 ```
 
@@ -161,6 +169,17 @@ hand_judgments <- sentences |>
     )
   )
 
+knitr::kable(
+  hand_judgments,
+  col.names = c("Sentence ID", "Text", "Hand-marked negated", "Reason"),
+  caption = "Hand judgments for negation in the 28 Riverton sentences",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(hand_judgments), 28L),
   all(hand_judgments$sentence_id %in% sentences$sentence_id),
@@ -169,13 +188,6 @@ stopifnot(
     hand_judgments$sentence_id[hand_judgments$hand_negated],
     sentences$sentence_id[str_detect(str_to_lower(sentences$text), "\\bno\\b")]
   )
-)
-
-knitr::kable(
-  hand_judgments,
-  col.names = c("Sentence ID", "Text", "Hand-marked negated", "Reason"),
-  caption = "Hand judgments for negation in the 28 Riverton sentences",
-  row.names = FALSE
 )
 ```
 
@@ -266,6 +278,17 @@ rule_predictions <- trigger_scopes |>
     scope_tokens = if_else(is.na(scope_tokens), "", scope_tokens)
   )
 
+knitr::kable(
+  trigger_scopes,
+  col.names = c("Sentence ID", "Trigger", "Scoped token", "Lemma", "POS tag", "Relation"),
+  caption = "Tokens inside the simple negation scope",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(surface_only_triggers), 0L),
   identical(trigger_inventory$token_lower, "no"),
@@ -283,13 +306,6 @@ stopifnot(
     rule_predictions$sentence_id[rule_predictions$rule_negated],
     "s002"
   )
-)
-
-knitr::kable(
-  trigger_scopes,
-  col.names = c("Sentence ID", "Trigger", "Scoped token", "Lemma", "POS tag", "Relation"),
-  caption = "Tokens inside the simple negation scope",
-  row.names = FALSE
 )
 ```
 
@@ -334,15 +350,6 @@ mistakes <- negation_scored |>
   left_join(sentences |> select(sentence_id, text), by = "sentence_id") |>
   select(sentence_id, text, hand_negated, rule_negated, result, scope_tokens)
 
-stopifnot(
-  identical(score_summary$true_positive, 1L),
-  identical(score_summary$false_positive, 0L),
-  identical(score_summary$false_negative, 1L),
-  identical(score_summary$true_negative, 26L),
-  identical(score_summary$correct_fraction, "27/28"),
-  identical(mistakes$sentence_id, "s027")
-)
-
 knitr::kable(
   score_summary,
   col.names = c(
@@ -363,6 +370,19 @@ knitr::kable(
   col.names = c("Sentence ID", "Text", "Hand negated", "Rule negated", "Result", "Scope tokens"),
   caption = "The case the simple rule gets wrong",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(score_summary$true_positive, 1L),
+  identical(score_summary$false_positive, 0L),
+  identical(score_summary$false_negative, 1L),
+  identical(score_summary$true_negative, 26L),
+  identical(score_summary$correct_fraction, "27/28"),
+  identical(mistakes$sentence_id, "s027")
 )
 ```
 

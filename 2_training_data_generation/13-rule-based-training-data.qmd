@@ -111,6 +111,12 @@ rule_votes <- bind_cols(
   )
 )
 
+head(rule_votes, 8)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     dim(rule_votes[rule_labels]),
@@ -121,8 +127,6 @@ stopifnot(
     rule_labels
   )
 )
-
-head(rule_votes, 8)
 ```
 
 The rule-vote tibble preserves one column per rule. Combining the votes too
@@ -183,13 +187,6 @@ result_counts <- tibble(weak_label = result_order) |>
   ) |>
   mutate(rows = coalesce(rows, 0L))
 
-stopifnot(
-  identical(
-    result_counts$rows,
-    c(3L, 2L, 8L, 4L, 3L, 8L)
-  )
-)
-
 knitr::kable(
   weak_results |>
     filter(weak_label %in% c("abstain", "conflict")),
@@ -202,6 +199,17 @@ knitr::kable(
   ),
   caption = "The five sentences that abstain or conflict",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    result_counts$rows,
+    c(3L, 2L, 8L, 4L, 3L, 8L)
+  )
 )
 ```
 
@@ -229,15 +237,6 @@ rule_summary <- tibble(
   )
 )
 
-stopifnot(
-  isTRUE(
-    all.equal(
-      rule_summary$value,
-      c(25 / 28, 2 / 28, 23 / 28)
-    )
-  )
-)
-
 knitr::kable(
   rule_summary |>
     mutate(
@@ -246,6 +245,19 @@ knitr::kable(
   col.names = c("Measure", "Share of 28 text units"),
   caption = "Coverage and conflict in the teaching dataset",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  isTRUE(
+    all.equal(
+      rule_summary$value,
+      c(25 / 28, 2 / 28, 23 / 28)
+    )
+  )
 )
 ```
 
@@ -273,6 +285,17 @@ rule_agreement <- foundryR::foundry_agreement(
   truth = "reference_label"
 )
 
+knitr::kable(
+  rule_agreement,
+  col.names = c("Measure", "Value", "Compared sentences"),
+  caption = "In-sample agreement for usable weak labels",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(agreement_data), 23L),
   isTRUE(
@@ -282,13 +305,6 @@ stopifnot(
     )
   ),
   identical(error_sentence_ids, c("s023", "s024"))
-)
-
-knitr::kable(
-  rule_agreement,
-  col.names = c("Measure", "Value", "Compared sentences"),
-  caption = "In-sample agreement for usable weak labels",
-  row.names = FALSE
 )
 ```
 
@@ -325,6 +341,17 @@ all_row_accounting <- tibble(
   )
 )
 
+knitr::kable(
+  all_row_accounting,
+  col.names = c("Outcome", "Text units"),
+  caption = "Accounting for all 28 rule results",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     all_row_accounting$rows,
@@ -334,13 +361,6 @@ stopifnot(
     sum(all_row_accounting$rows),
     28L
   )
-)
-
-knitr::kable(
-  all_row_accounting,
-  col.names = c("Outcome", "Text units"),
-  caption = "Accounting for all 28 rule results",
-  row.names = FALSE
 )
 ```
 
@@ -381,6 +401,36 @@ rule_diagnostics <- map(
     precision_when_alone = alone_and_correct / rows_fired_alone
   )
 
+knitr::kable(
+  rule_diagnostics |>
+    mutate(
+      precision_when_alone = round(
+        precision_when_alone,
+        2
+      )
+    ) |>
+    select(
+      rule,
+      rows_fired,
+      rows_fired_alone,
+      alone_and_correct,
+      precision_when_alone
+    ),
+  col.names = c(
+    "Rule",
+    "Rows it fired on",
+    "Fired alone",
+    "Alone and correct",
+    "Precision when alone"
+  ),
+  caption = "Each rule's coverage and error, separated",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     rule_diagnostics$rows_fired,
@@ -406,32 +456,6 @@ stopifnot(
     rule_diagnostics$precision_when_alone,
     c(7 / 8, 1, 1, 2 / 3)
   ))
-)
-
-knitr::kable(
-  rule_diagnostics |>
-    mutate(
-      precision_when_alone = round(
-        precision_when_alone,
-        2
-      )
-    ) |>
-    select(
-      rule,
-      rows_fired,
-      rows_fired_alone,
-      alone_and_correct,
-      precision_when_alone
-    ),
-  col.names = c(
-    "Rule",
-    "Rows it fired on",
-    "Fired alone",
-    "Alone and correct",
-    "Precision when alone"
-  ),
-  caption = "Each rule's coverage and error, separated",
-  row.names = FALSE
 )
 ```
 
@@ -472,6 +496,17 @@ rule_pairs <- expand.grid(
   ) |>
   arrange(desc(fired_together), first, second)
 
+knitr::kable(
+  rule_pairs,
+  col.names = c("Rule", "Other rule", "Rows where both fired"),
+  caption = "How often each pair of rules spoke about the same row",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(rule_pairs), 6L),
   identical(
@@ -492,13 +527,6 @@ stopifnot(
     ],
     1L
   )
-)
-
-knitr::kable(
-  rule_pairs,
-  col.names = c("Rule", "Other rule", "Rows where both fired"),
-  caption = "How often each pair of rules spoke about the same row",
-  row.names = FALSE
 )
 ```
 
@@ -558,21 +586,6 @@ abstain_outcomes <- tibble(
   reference_label = reference_labels[abstain_rows]
 )
 
-stopifnot(
-  identical(nrow(conflict_outcomes), 2L),
-  identical(
-    conflict_outcomes$sentence_id,
-    c("s013", "s020")
-  ),
-  identical(
-    conflict_outcomes$resolved_label,
-    c("requirement", "schedule")
-  ),
-  all(conflict_outcomes$policy_agrees),
-  identical(nrow(abstain_outcomes), 3L),
-  all(abstain_outcomes$reference_label == "other")
-)
-
 knitr::kable(
   conflict_outcomes,
   col.names = c(
@@ -590,6 +603,25 @@ knitr::kable(
   col.names = c("Sentence ID", "Reference label"),
   caption = "What the three silent rows actually were",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(conflict_outcomes), 2L),
+  identical(
+    conflict_outcomes$sentence_id,
+    c("s013", "s020")
+  ),
+  identical(
+    conflict_outcomes$resolved_label,
+    c("requirement", "schedule")
+  ),
+  all(conflict_outcomes$policy_agrees),
+  identical(nrow(abstain_outcomes), 3L),
+  all(abstain_outcomes$reference_label == "other")
 )
 ```
 
@@ -672,16 +704,6 @@ stress_results <- stress_cases |>
   ) |>
   select(-rule_count, -voted_label)
 
-stopifnot(
-  identical(
-    stress_results$weak_label,
-    c("training", "abstain", "conflict", "abstain")
-  ),
-  !any(
-    stress_results$weak_label == stress_results$reference_label
-  )
-)
-
 knitr::kable(
   stress_results,
   col.names = c(
@@ -693,6 +715,20 @@ knitr::kable(
   ),
   caption = "Four designed adversarial failures",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    stress_results$weak_label,
+    c("training", "abstain", "conflict", "abstain")
+  ),
+  !any(
+    stress_results$weak_label == stress_results$reference_label
+  )
 )
 ```
 

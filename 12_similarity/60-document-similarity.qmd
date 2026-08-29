@@ -150,18 +150,6 @@ identity_table <- tibble(
   value = c(nrow(speeches), n_distinct(speeches$president), n_distinct(speeches$surname), nrow(surname_collisions))
 )
 
-stopifnot(
-  nrow(paragraphs) == 1377L,
-  nrow(speeches) == 60L,
-  n_distinct(speeches$president) == 40L,
-  n_distinct(speeches$surname) == 36L,
-  identical(surname_collisions$surname, c("Adams", "Bush", "Harrison", "Roosevelt")),
-  identical(representation_table$documents, c(60L, 60L, 60L)),
-  identical(representation_table$features, c(9327L, 9327L, 9193L)),
-  all(within_tolerance(retention_by_era$share_retained, c(0.998, 0.914), tolerance = 0.001)),
-  identical(retention_by_era$median_kept_paragraph_words, c(112, 54))
-)
-
 kable(
   representation_table,
   col.names = c("Representation", "Documents", "Features"),
@@ -182,6 +170,22 @@ kable(
   col.names = c("Item", "Count"),
   caption = "The corpus has 60 speeches by 40 people but only 36 surnames",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(paragraphs) == 1377L,
+  nrow(speeches) == 60L,
+  n_distinct(speeches$president) == 40L,
+  n_distinct(speeches$surname) == 36L,
+  identical(surname_collisions$surname, c("Adams", "Bush", "Harrison", "Roosevelt")),
+  identical(representation_table$documents, c(60L, 60L, 60L)),
+  identical(representation_table$features, c(9327L, 9327L, 9193L)),
+  all(within_tolerance(retention_by_era$share_retained, c(0.998, 0.914), tolerance = 0.001)),
+  identical(retention_by_era$median_kept_paragraph_words, c(112, 54))
 )
 ```
 
@@ -255,6 +259,17 @@ least_with_short_washington <- least_similar_pairs |>
   filter(first == "1793-Washington" | second == "1793-Washington") |>
   nrow()
 
+kable(
+  pair_table,
+  col.names = c("Group", "First speech", "Second speech", "First president", "Second president", "First tokens", "Second tokens", "Cosine similarity"),
+  caption = "Most and least similar speech pairs under speech-level tf-idf",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   nrow(tfidf_pairs) == 1770L,
   tfidf_pairs$first[1] == "1817-Monroe",
@@ -264,13 +279,6 @@ stopifnot(
   pair_table$second[6] == "1905-Roosevelt",
   within_tolerance(pair_table$similarity[6], 0.0066, tolerance = 1e-4),
   least_with_short_washington >= 4L
-)
-
-kable(
-  pair_table,
-  col.names = c("Group", "First speech", "Second speech", "First president", "Second president", "First tokens", "Second tokens", "Cosine similarity"),
-  caption = "Most and least similar speech pairs under speech-level tf-idf",
-  row.names = FALSE
 )
 ```
 
@@ -294,17 +302,21 @@ length_similarity_table <- mean_tfidf_similarity |>
     correlation = cor(mean_similarity, speech_tokens)
   )
 
-stopifnot(
-  within_tolerance(length_similarity_table$correlation, 0.861, tolerance = 0.001),
-  length_similarity_table$correlation > 0.8
-)
-
 kable(
   length_similarity_table |>
     mutate(correlation = round(correlation, 3)),
   col.names = c("Measure", "Correlation"),
   caption = "Mean tf-idf similarity compared with speech token count",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  within_tolerance(length_similarity_table$correlation, 0.861, tolerance = 0.001),
+  length_similarity_table$correlation > 0.8
 )
 ```
 
@@ -355,18 +367,22 @@ nearest_table <- bind_rows(
     similarity = round(similarity, 4)
   )
 
-stopifnot(
-  identical(nearest_table$target, rep("1793-Washington", 3L)),
-  identical(nearest_table$neighbour, c("1841-Harrison", "1861-Lincoln", "1885-Cleveland")),
-  all(within_tolerance(nearest_table$similarity, c(0.8474, 0.0552, 0.0512), tolerance = 1e-4)),
-  n_distinct(nearest_table$neighbour) == 3L
-)
-
 kable(
   nearest_table,
   col.names = c("Target", "Representation", "Nearest neighbour", "Year", "President", "Neighbour tokens", "Cosine similarity"),
   caption = "One target speech gets three nearest neighbours under three representations",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nearest_table$target, rep("1793-Washington", 3L)),
+  identical(nearest_table$neighbour, c("1841-Harrison", "1861-Lincoln", "1885-Cleveland")),
+  all(within_tolerance(nearest_table$similarity, c(0.8474, 0.0552, 0.0512), tolerance = 1e-4)),
+  n_distinct(nearest_table$neighbour) == 3L
 )
 ```
 
@@ -412,18 +428,22 @@ harrison_hub_count <- raw_neighbours |>
   filter(neighbour == "1841-Harrison") |>
   nrow()
 
-stopifnot(
-  nrow(raw_neighbours) == 60L,
-  max(raw_hub_table$nearest_neighbour_count) == 7L,
-  harrison_hub_count == 2L,
-  raw_hub_table$neighbour[1] == "1985-Reagan"
-)
-
 kable(
   raw_hub_table,
   col.names = c("Raw-count nearest neighbour", "Number of target speeches"),
   caption = "How often each speech is the nearest neighbour under raw counts",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(raw_neighbours) == 60L,
+  max(raw_hub_table$nearest_neighbour_count) == 7L,
+  harrison_hub_count == 2L,
+  raw_hub_table$neighbour[1] == "1985-Reagan"
 )
 ```
 
@@ -477,16 +497,6 @@ same_president_null <- permutation_null(
   alternative = "greater"
 )
 
-stopifnot(
-  nrow(tfidf_neighbours) == 60L,
-  same_president_count == 19L,
-  authorship_examples$target[1] == "1817-Monroe",
-  authorship_examples$neighbour[1] == "1821-Monroe",
-  within_tolerance(authorship_examples$similarity[1], 0.2903, tolerance = 1e-4),
-  same_president_null$observed > same_president_null$null_high,
-  same_president_null$p_value < 0.01
-)
-
 kable(
   authorship_examples,
   col.names = c("Target", "Nearest neighbour", "President", "Cosine similarity"),
@@ -500,6 +510,20 @@ kable(
   col.names = c("Observed", "Null mean", "Null 5th pct", "Null 95th pct", "p-value", "Replicates", "Alternative"),
   caption = "Same-president tf-idf similarity compared with shuffled author labels",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(tfidf_neighbours) == 60L,
+  same_president_count == 19L,
+  authorship_examples$target[1] == "1817-Monroe",
+  authorship_examples$neighbour[1] == "1821-Monroe",
+  within_tolerance(authorship_examples$similarity[1], 0.2903, tolerance = 1e-4),
+  same_president_null$observed > same_president_null$null_high,
+  same_president_null$p_value < 0.01
 )
 ```
 

@@ -65,18 +65,22 @@ corpus_summary <- tibble(
   )
 )
 
-stopifnot(
-  identical(corpus_summary$value, c(1377L, 60L, 40L)),
-  identical(range(paragraphs$year), c(1789L, 2025L)),
-  identical(speeches$speech_id[1], "1789-Washington"),
-  identical(speeches$speech_id[nrow(speeches)], "2025-Trump")
-)
-
 kable(
   corpus_summary,
   col.names = c("Measure", "Value"),
   caption = "The inaugural-address corpus used in this lesson",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(corpus_summary$value, c(1377L, 60L, 40L)),
+  identical(range(paragraphs$year), c(1789L, 2025L)),
+  identical(speeches$speech_id[1], "1789-Washington"),
+  identical(speeches$speech_id[nrow(speeches)], "2025-Trump")
 )
 ```
 
@@ -108,6 +112,17 @@ tfidf_top <- tfidf_scores |>
   mutate(tf_idf = round(tf_idf, 4)) |>
   select(speech_id, word, n, tf_idf)
 
+kable(
+  tfidf_top,
+  col.names = c("Speech", "Word", "Count", "tf-idf"),
+  caption = "Top tf-idf words in three selected speeches",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(n_distinct(word_counts$speech_id), 60L),
   identical(nrow(tfidf_top), 15L),
@@ -120,13 +135,6 @@ stopifnot(
     c("offenses", "woe", "offense", "wills", "answered")
   ),
   identical(tfidf_top$tf_idf[tfidf_top$word == "offenses"], 0.0551)
-)
-
-kable(
-  tfidf_top,
-  col.names = c("Speech", "Word", "Count", "tf-idf"),
-  caption = "Top tf-idf words in three selected speeches",
-  row.names = FALSE
 )
 ```
 
@@ -195,6 +203,17 @@ tagger_error <- annotated_all |>
   filter(doc_id == "1789-Washington", str_to_lower(token) %in% c("auspiciously", "commence")) |>
   select(token, lemma, upos)
 
+kable(
+  rake_top,
+  col.names = c("Speech", "Tagged phrase", "Words", "Frequency", "RAKE score"),
+  caption = "Top RAKE phrase keywords in the same three speeches",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(annotated_all), 148525L),
   identical(sum(annotated_all$relevant), 36423L),
@@ -210,13 +229,6 @@ stopifnot(
   identical(tagger_error$upos, c("ADJ", "NOUN")),
   identical(rake_top$keyword[rake_top$speech_id == "1865-Lincoln"][1], "impending civil war"),
   identical(rake_top$rake[rake_top$keyword == "impending civil war"], 4.25)
-)
-
-kable(
-  rake_top,
-  col.names = c("Speech", "Tagged phrase", "Words", "Frequency", "RAKE score"),
-  caption = "Top RAKE phrase keywords in the same three speeches",
-  row.names = FALSE
 )
 ```
 
@@ -250,12 +262,6 @@ comparison <- tfidf_top |>
     overlap_count
   ) |>
   arrange(match(speech_id, selected_ids))
-
-stopifnot(
-  identical(comparison$overlap_count, c(0L, 0L, 0L)),
-  identical(comparison$speech_id, selected_ids),
-  str_detect(comparison$rake_phrases[comparison$speech_id == "2021-Biden"], "capitol dome")
-)
 
 kable(
   comparison,
@@ -343,16 +349,6 @@ overlap_null <- permutation_null(
 overlap_null_display <- overlap_null |>
   mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
 
-stopifnot(
-  identical(overlap_summary$mean_shared_words, c(1.80, 2.27)),
-  identical(overlap_summary$speeches_with_zero, c(14L, 9L)),
-  identical(overlap_summary$maximum_shared_words, c(9L, 10L)),
-  identical(sum(normalized_overlap_20$shared_words), 136L),
-  identical(as.numeric(overlap_null_display$observed), 2.267),
-  identical(as.numeric(round(overlap_null$null_mean, 2)), 1.62),
-  identical(as.numeric(overlap_null_display$p_value), 0.002)
-)
-
 kable(
   overlap_summary,
   col.names = c("Match basis", "Speeches", "Mean shared words", "Median shared words", "Zero-overlap speeches", "Maximum shared words"),
@@ -365,6 +361,26 @@ kable(
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Permutation null for normalized top-20 overlap",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(comparison$overlap_count, c(0L, 0L, 0L)),
+  identical(comparison$speech_id, selected_ids),
+  str_detect(comparison$rake_phrases[comparison$speech_id == "2021-Biden"], "capitol dome")
+)
+
+stopifnot(
+  identical(overlap_summary$mean_shared_words, c(1.80, 2.27)),
+  identical(overlap_summary$speeches_with_zero, c(14L, 9L)),
+  identical(overlap_summary$maximum_shared_words, c(9L, 10L)),
+  identical(sum(normalized_overlap_20$shared_words), 136L),
+  identical(as.numeric(overlap_null_display$observed), 2.267),
+  identical(as.numeric(round(overlap_null$null_mean, 2)), 1.62),
+  identical(as.numeric(overlap_null_display$p_value), 0.002)
 )
 ```
 

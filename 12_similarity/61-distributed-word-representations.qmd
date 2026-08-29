@@ -110,21 +110,6 @@ model_fingerprint <- tibble(
   value = metadata_values[c("generator", "sha256_model", "reproducibility")]
 )
 
-stopifnot(
-  nrow(paragraphs) == as.integer(metadata_values[["training_documents"]]),
-  as.integer(sum(ntoken(training_tokens))) == as.integer(metadata_values[["training_tokens"]]),
-  nrow(embedding_matrix) == as.integer(metadata_values[["vocabulary_rows"]]),
-  ncol(embedding_matrix) == as.integer(metadata_values[["dimensions"]]),
-  identical(punctuation_rows, "</s>"),
-  length(punctuation_rows) == as.integer(metadata_values[["punctuation_rows"]]),
-  as.integer(metadata_values[["unique_pairs"]]) == choose(nrow(embedding_matrix), 2),
-  hyperparameter_table$value[hyperparameter_table$setting == "threads"] == "1",
-  hyperparameter_table$value[hyperparameter_table$setting == "window"] == "5",
-  nchar(metadata_values[["sha256_model"]]) == 64L,
-  file.exists("data/word2vec/inaugural-word2vec.bin"),
-  all(c("freedom", "liberty", "duties", "union", "government", "peace", "war") %in% rownames(embedding_matrix))
-)
-
 kable(
   training_summary,
   col.names = c("Item", "Value"),
@@ -144,6 +129,25 @@ kable(
   col.names = c("Field", "Value"),
   caption = "Provenance for the committed word2vec model",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(paragraphs) == as.integer(metadata_values[["training_documents"]]),
+  as.integer(sum(ntoken(training_tokens))) == as.integer(metadata_values[["training_tokens"]]),
+  nrow(embedding_matrix) == as.integer(metadata_values[["vocabulary_rows"]]),
+  ncol(embedding_matrix) == as.integer(metadata_values[["dimensions"]]),
+  identical(punctuation_rows, "</s>"),
+  length(punctuation_rows) == as.integer(metadata_values[["punctuation_rows"]]),
+  as.integer(metadata_values[["unique_pairs"]]) == choose(nrow(embedding_matrix), 2),
+  hyperparameter_table$value[hyperparameter_table$setting == "threads"] == "1",
+  hyperparameter_table$value[hyperparameter_table$setting == "window"] == "5",
+  nchar(metadata_values[["sha256_model"]]) == 64L,
+  file.exists("data/word2vec/inaugural-word2vec.bin"),
+  all(c("freedom", "liberty", "duties", "union", "government", "peace", "war") %in% rownames(embedding_matrix))
 )
 ```
 
@@ -194,6 +198,18 @@ expected_neighbours <- c(
   "friendship", "lasting", "world", "cultivate", "amity", "prosperity"
 )
 
+kable(
+  neighbour_table |>
+    mutate(similarity = round(similarity, 3)),
+  col.names = c("Query", "Nearest word", "Cosine similarity", "Cosine similarity band", "Rank"),
+  caption = "Nearest neighbours from the pinned local word2vec model",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   nrow(neighbour_table) == 18L,
   identical(sort(unique(neighbour_table$query)), c("freedom", "peace", "union")),
@@ -201,14 +217,6 @@ stopifnot(
   identical(neighbour_table$neighbour, expected_neighbours),
   all(neighbour_table$similarity > 0.85),
   all(neighbour_table$similarity_band == "0.80 or higher")
-)
-
-kable(
-  neighbour_table |>
-    mutate(similarity = round(similarity, 3)),
-  col.names = c("Query", "Nearest word", "Cosine similarity", "Cosine similarity band", "Rank"),
-  caption = "Nearest neighbours from the pinned local word2vec model",
-  row.names = FALSE
 )
 ```
 
@@ -258,14 +266,6 @@ random_pair_summary <- tibble(
   )
 )
 
-stopifnot(
-  length(random_pair_cosines) == 1000L,
-  within_tolerance(freedom_liberty_cosine, 0.7722, tolerance = 1e-4),
-  within_tolerance(mean(random_pair_cosines), 0.7522, tolerance = 1e-4),
-  median(random_pair_cosines) > freedom_liberty_cosine,
-  as.numeric(quantile(random_pair_cosines, 0.95)) > freedom_liberty_cosine
-)
-
 kable(
   bind_rows(
     tibble(statistic = "freedom / liberty", cosine_similarity = freedom_liberty_cosine),
@@ -275,6 +275,18 @@ kable(
   col.names = c("Statistic", "Cosine similarity"),
   caption = "An expected related pair compared with 1,000 random word pairs",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  length(random_pair_cosines) == 1000L,
+  within_tolerance(freedom_liberty_cosine, 0.7722, tolerance = 1e-4),
+  within_tolerance(mean(random_pair_cosines), 0.7522, tolerance = 1e-4),
+  median(random_pair_cosines) > freedom_liberty_cosine,
+  as.numeric(quantile(random_pair_cosines, 0.95)) > freedom_liberty_cosine
 )
 ```
 
@@ -305,20 +317,24 @@ similarity_summary <- tibble(
   )
 )
 
-stopifnot(
-  length(word_similarities) == as.integer(metadata_values[["unique_pairs"]]),
-  within_tolerance(freedom_liberty_percentile, 0.4442, tolerance = 1e-4),
-  within_tolerance(median(word_similarities), 0.7938, tolerance = 1e-4),
-  within_tolerance(as.numeric(quantile(word_similarities, 0.95)), 0.9354, tolerance = 1e-4),
-  freedom_liberty_percentile < 0.5
-)
-
 kable(
   similarity_summary |>
     mutate(value = if_else(statistic == "word pairs", as.character(as.integer(value)), sprintf("%.3f", value))),
   col.names = c("Statistic", "Value"),
   caption = "Distribution of all pairwise word-vector cosine similarities",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  length(word_similarities) == as.integer(metadata_values[["unique_pairs"]]),
+  within_tolerance(freedom_liberty_percentile, 0.4442, tolerance = 1e-4),
+  within_tolerance(median(word_similarities), 0.7938, tolerance = 1e-4),
+  within_tolerance(as.numeric(quantile(word_similarities, 0.95)), 0.9354, tolerance = 1e-4),
+  freedom_liberty_percentile < 0.5
 )
 ```
 
@@ -333,12 +349,6 @@ chosen to be easy, yet it lands below the median pair.
 
 plot_similarities <- tibble(cosine_similarity = word_similarities)
 
-stopifnot(
-  nrow(plot_similarities) == as.integer(metadata_values[["unique_pairs"]]),
-  within_tolerance(median(plot_similarities$cosine_similarity), 0.7938, tolerance = 1e-4),
-  freedom_liberty_cosine < median(plot_similarities$cosine_similarity)
-)
-
 ggplot(plot_similarities, aes(x = cosine_similarity)) +
   geom_histogram(bins = 40, boundary = 0, color = "white") +
   geom_vline(xintercept = freedom_liberty_cosine, linewidth = 1, linetype = "dashed") +
@@ -348,6 +358,16 @@ ggplot(plot_similarities, aes(x = cosine_similarity)) +
     title = "Many arbitrary word pairs sit above an easy related pair"
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(plot_similarities) == as.integer(metadata_values[["unique_pairs"]]),
+  within_tolerance(median(plot_similarities$cosine_similarity), 0.7938, tolerance = 1e-4),
+  freedom_liberty_cosine < median(plot_similarities$cosine_similarity)
+)
 ```
 
 Published embeddings are trained on billions of tokens. Large training text gives

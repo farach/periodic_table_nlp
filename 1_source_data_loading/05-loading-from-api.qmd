@@ -90,6 +90,12 @@ book_request <- httr2::request(
   httr2::req_timeout(20) |>
   httr2::req_retry(max_tries = 3)
 
+book_request
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   inherits(book_request, "httr2_request"),
   str_detect(
@@ -97,8 +103,6 @@ stopifnot(
     fixed("openlibrary.org/search.json")
   )
 )
-
-book_request
 ```
 
 Those `stopifnot()` calls are **assertions**. Each one stops the page from
@@ -165,6 +169,32 @@ fixture_md5 <- digest::digest(
   serialize = FALSE
 )
 
+knitr::kable(
+  tibble(
+    detail = c(
+      "Retrieved at",
+      "HTTP status",
+      "Content type",
+      "Record level",
+      "File fingerprint"
+    ),
+    value = c(
+      fixture_metadata$retrieved_at_utc,
+      fixture_metadata$http_status,
+      fixture_metadata$content_type,
+      fixture_metadata$record_level,
+      fixture_md5
+    )
+  ),
+  col.names = c("Fixture detail", "Recorded value"),
+  caption = "Provenance for the saved API response",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   inherits(fixture_metadata, "tbl_df"),
   identical(nrow(fixture_metadata), 1L),
@@ -187,28 +217,6 @@ stopifnot(
     fixture_metadata$request_url,
     book_request$url
   )
-)
-
-knitr::kable(
-  tibble(
-    detail = c(
-      "Retrieved at",
-      "HTTP status",
-      "Content type",
-      "Record level",
-      "File fingerprint"
-    ),
-    value = c(
-      fixture_metadata$retrieved_at_utc,
-      fixture_metadata$http_status,
-      fixture_metadata$content_type,
-      fixture_metadata$record_level,
-      fixture_md5
-    )
-  ),
-  col.names = c("Fixture detail", "Recorded value"),
-  caption = "Provenance for the saved API response",
-  row.names = FALSE
 )
 ```
 
@@ -244,19 +252,6 @@ books <- book_records |>
     first_published = first_publish_year,
     catalog_url = str_c("https://openlibrary.org", key)
   )
-
-stopifnot(
-  is.data.frame(book_records),
-  inherits(books, "tbl_df"),
-  identical(nrow(books), 5L),
-  all(str_length(books$title) > 0),
-  all(
-    str_detect(
-     books$catalog_url,
-     fixed("https://openlibrary.org/works/")
-    )
-  )
-)
 
 escape_html <- function(value) {
   as.character(htmltools::htmlEscape(value))
@@ -306,6 +301,23 @@ knitr::kable(
   ),
   row.names = FALSE,
   escape = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  is.data.frame(book_records),
+  inherits(books, "tbl_df"),
+  identical(nrow(books), 5L),
+  all(str_length(books$title) > 0),
+  all(
+    str_detect(
+     books$catalog_url,
+     fixed("https://openlibrary.org/works/")
+    )
+  )
 )
 ```
 
@@ -437,6 +449,12 @@ docs_missing <- saved_response(
   url = page_one_request$url
 )
 
+httr2::resp_status(rate_limited)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(httr2::resp_status(rate_limited), 429L),
   identical(httr2::resp_status(page_one), 200L),
@@ -452,8 +470,6 @@ stopifnot(
   str_detect(page_one$url, fixed("offset=0")),
   str_detect(page_two$url, fixed("offset=5"))
 )
-
-httr2::resp_status(rate_limited)
 ```
 
 The reader now has several saved replies and one function that has to survive
@@ -638,6 +654,42 @@ distinct_records <- collected |>
   distinct(key, .keep_all = TRUE)
 shortfall <- first_page$reported_total - nrow(distinct_records)
 
+knitr::kable(
+  tibble(
+    saved_reply = c(
+      "429 with delay-seconds",
+      "429 with HTTP-date",
+      "page 1 of results",
+      "page 2 of results",
+      "title field renamed",
+      "docs field missing"
+    ),
+    outcome = c(
+      refused$outcome,
+      date_refused$outcome,
+      first_page$outcome,
+      second_page$outcome,
+      drifted$outcome,
+      missing_docs$outcome
+    ),
+    records_returned = c(
+      nrow(refused$records),
+      nrow(date_refused$records),
+      nrow(first_page$records),
+      nrow(second_page$records),
+      nrow(drifted$records),
+      nrow(missing_docs$records)
+    )
+  ),
+  col.names = c("Saved reply", "Outcome", "Records used"),
+  caption = "Four saved replies and what the reading function did with each",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(refused$outcome, "rate limited"),
   identical(refused$wait_seconds, 30L),
@@ -672,38 +724,6 @@ stopifnot(
   identical(nrow(distinct_records), 6L),
   identical(first_page$reported_total, 7L),
   identical(shortfall, 1L)
-)
-
-knitr::kable(
-  tibble(
-    saved_reply = c(
-      "429 with delay-seconds",
-      "429 with HTTP-date",
-      "page 1 of results",
-      "page 2 of results",
-      "title field renamed",
-      "docs field missing"
-    ),
-    outcome = c(
-      refused$outcome,
-      date_refused$outcome,
-      first_page$outcome,
-      second_page$outcome,
-      drifted$outcome,
-      missing_docs$outcome
-    ),
-    records_returned = c(
-      nrow(refused$records),
-      nrow(date_refused$records),
-      nrow(first_page$records),
-      nrow(second_page$records),
-      nrow(drifted$records),
-      nrow(missing_docs$records)
-    )
-  ),
-  col.names = c("Saved reply", "Outcome", "Records used"),
-  caption = "Four saved replies and what the reading function did with each",
-  row.names = FALSE
 )
 ```
 
@@ -746,19 +766,23 @@ pagination_report <- tibble(
   )
 )
 
+knitr::kable(
+  pagination_report,
+  col.names = c("Measure", "Count"),
+  caption = "Reported, received, and kept records after paging",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(pagination_report$value, c(7L, 7L, 6L, 1L)),
   identical(
     distinct_records$key,
     sprintf("/works/OL%d", 1:6)
   )
-)
-
-knitr::kable(
-  pagination_report,
-  col.names = c("Measure", "Count"),
-  caption = "Reported, received, and kept records after paging",
-  row.names = FALSE
 )
 ```
 

@@ -100,6 +100,21 @@ trend_summary <- trend_counts |>
   ) |>
   ungroup()
 
+kable(
+  trend_summary,
+  col.names = c(
+    "Word", "Total count", "Speeches with word", "Max per 1,000", "Max year",
+    "Count in max year", "Words at max", "Max-rate flag", "Rate excluding largest",
+    "Year excluding largest", "Guarded rate excluding largest", "Guarded year", "Survives guard"
+  ),
+  caption = "Summary of four tracked words across 60 speeches",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(paragraphs), 1377L),
   identical(nrow(speech_lengths), 60L),
@@ -111,17 +126,6 @@ stopifnot(
   identical(trend_summary$max_rate_flag, c("ok", "ok", "under 500 words", "ok")),
   identical(trend_summary$survives_guard, c(TRUE, TRUE, FALSE, TRUE)),
   identical(as.numeric(length_context$median_words), 1958.5)
-)
-
-kable(
-  trend_summary,
-  col.names = c(
-    "Word", "Total count", "Speeches with word", "Max per 1,000", "Max year",
-    "Count in max year", "Words at max", "Max-rate flag", "Rate excluding largest",
-    "Year excluding largest", "Guarded rate excluding largest", "Guarded year", "Survives guard"
-  ),
-  caption = "Summary of four tracked words across 60 speeches",
-  row.names = FALSE
 )
 ```
 
@@ -139,17 +143,6 @@ A line chart earns its place here because the corpus spans 236 years. Each dot i
 plot_data <- trend_counts |>
   mutate(word = factor(word, levels = target_words))
 
-stopifnot(
-  identical(nrow(plot_data), 240L),
-  identical(levels(plot_data$word), target_words),
-  identical(as.numeric(round(max(plot_data$per_thousand), 2)), 12.35),
-  identical(
-    as.integer(plot_data$year[which.max(plot_data$per_thousand)]),
-    2005L
-  ),
-  identical(sum(plot_data$below_min_words), 8L)
-)
-
 ggplot(plot_data, aes(x = year, y = per_thousand, color = word)) +
   geom_line(linewidth = 0.7) +
   geom_point(aes(shape = below_min_words), size = 1.6) +
@@ -164,6 +157,21 @@ ggplot(plot_data, aes(x = year, y = per_thousand, color = word)) +
     shape = "Denominator"
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(plot_data), 240L),
+  identical(levels(plot_data$word), target_words),
+  identical(as.numeric(round(max(plot_data$per_thousand), 2)), 12.35),
+  identical(
+    as.integer(plot_data$year[which.max(plot_data$per_thousand)]),
+    2005L
+  ),
+  identical(sum(plot_data$below_min_words), 8L)
+)
 ```
 
 The chart shows word-rate paths, not causes. A rise can reflect changing word choice, changing subject matter, transcription conventions, speech length, or some mix of those. Counts do not split those explanations by themselves.
@@ -211,15 +219,6 @@ constitution_top_rates <- constitution_counts |>
     denominator_flag = if_else(below_min_words, "under 500 words", "ok")
   )
 
-stopifnot(
-  identical(constitution_top_rates$speech_id[1], "1793-Washington"),
-  identical(as.integer(constitution_top_rates$total_words[1]), 135L),
-  identical(as.numeric(constitution_top_rates$per_thousand[1]), 7.41),
-  identical(as.numeric(constitution_peak_null_display$observed), 7.407),
-  identical(as.numeric(round(constitution_peak_null$null_mean, 2)), 5.31),
-  identical(as.numeric(round(constitution_peak_null$p_value, 3)), 0.233)
-)
-
 kable(
   constitution_top_rates,
   col.names = c("Speech", "Year", "President", "Count", "Total words", "Per 1,000", "Denominator flag"),
@@ -232,6 +231,19 @@ kable(
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Permutation null for the constitution peak rate",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(constitution_top_rates$speech_id[1], "1793-Washington"),
+  identical(as.integer(constitution_top_rates$total_words[1]), 135L),
+  identical(as.numeric(constitution_top_rates$per_thousand[1]), 7.41),
+  identical(as.numeric(constitution_peak_null_display$observed), 7.407),
+  identical(as.numeric(round(constitution_peak_null$null_mean, 2)), 5.31),
+  identical(as.numeric(round(constitution_peak_null$p_value, 3)), 0.233)
 )
 ```
 

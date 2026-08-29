@@ -80,6 +80,17 @@ word_counts <- tibble(token = word_tokens) |>
 top_word_counts <- word_counts |>
   slice_head(n = 8)
 
+knitr::kable(
+  top_word_counts,
+  col.names = c("Token type", "Frequency"),
+  caption = "The eight most frequent word types in all 28 rows",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(length(word_tokens), 153L),
@@ -102,13 +113,6 @@ stopifnot(
     top_word_counts$frequency,
     c(13L, 7L, 7L, 5L, 5L, 4L, 4L, 3L)
   )
-)
-
-knitr::kable(
-  top_word_counts,
-  col.names = c("Token type", "Frequency"),
-  caption = "The eight most frequent word types in all 28 rows",
-  row.names = FALSE
 )
 ```
 
@@ -152,19 +156,23 @@ split_summary <- tibble(
   types = c(nrow(job_word_counts), n_distinct(flyer_tokens))
 )
 
+knitr::kable(
+  split_summary,
+  col.names = c("Split", "Rows", "Tokens", "Types"),
+  caption = "Word-token counts after splitting by document source",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(job_rows), 22L),
   identical(nrow(flyer_rows), 6L),
   identical(length(job_tokens), 133L),
   identical(nrow(job_word_counts), 86L),
   identical(length(flyer_tokens), 20L)
-)
-
-knitr::kable(
-  split_summary,
-  col.names = c("Split", "Rows", "Tokens", "Types"),
-  caption = "Word-token counts after splitting by document source",
-  row.names = FALSE
 )
 ```
 
@@ -206,15 +214,6 @@ frequency_cutoffs <- tibble(minimum_frequency = 1:3) |>
     )
   )
 
-stopifnot(
-  identical(frequency_cutoffs$kept_types, c(86L, 18L, 8L)),
-  identical(frequency_cutoffs$covered_tokens, c(133L, 65L, 45L)),
-  identical(
-    frequency_cutoffs$coverage_label,
-    c("133/133 (100%)", "65/133 (49%)", "45/133 (34%)")
-  )
-)
-
 knitr::kable(
   frequency_cutoffs |>
     select(
@@ -229,6 +228,19 @@ knitr::kable(
   ),
   caption = "Vocabulary size and coverage under three cutoffs",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(frequency_cutoffs$kept_types, c(86L, 18L, 8L)),
+  identical(frequency_cutoffs$covered_tokens, c(133L, 65L, 45L)),
+  identical(
+    frequency_cutoffs$coverage_label,
+    c("133/133 (100%)", "65/133 (49%)", "45/133 (34%)")
+  )
 )
 ```
 
@@ -269,6 +281,17 @@ unknown_summary <- tibble(
   )
 )
 
+knitr::kable(
+  unknown_summary,
+  col.names = c("Measure", "Value"),
+  caption = "Out-of-vocabulary rate on the held-out flyer rows",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(unknown_flyer_tokens), 10L),
   identical(length(flyer_tokens), 20L),
@@ -291,13 +314,6 @@ stopifnot(
       "support"
     )
   )
-)
-
-knitr::kable(
-  unknown_summary,
-  col.names = c("Measure", "Value"),
-  caption = "Out-of-vocabulary rate on the held-out flyer rows",
-  row.names = FALSE
 )
 ```
 
@@ -397,6 +413,31 @@ subword_test_summary <- tibble(
   )
 )
 
+knitr::kable(
+  subword_test_summary,
+  col.names = c("Measure", "Value"),
+  caption = "BPE results on the held-out flyer rows",
+  row.names = FALSE
+)
+
+knitr::kable(
+  flyer_unknown_by_line,
+  col.names = c("Flyer line", "Subword pieces", "Unknown ids"),
+  caption = "Unknown subword ids by flyer line",
+  row.names = FALSE
+)
+
+knitr::kable(
+  first_flyer_piece_table,
+  col.names = c("Piece", "Displayed subword", "Model ID", "Unknown ID"),
+  caption = "Displayed pieces and model ids for the first flyer line",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(job_bpe_model$vocabulary), 200L),
   identical(length(flat_flyer_subwords), 91L),
@@ -447,27 +488,6 @@ stopifnot(
       "E"
     )
   )
-)
-
-knitr::kable(
-  subword_test_summary,
-  col.names = c("Measure", "Value"),
-  caption = "BPE results on the held-out flyer rows",
-  row.names = FALSE
-)
-
-knitr::kable(
-  flyer_unknown_by_line,
-  col.names = c("Flyer line", "Subword pieces", "Unknown ids"),
-  caption = "Unknown subword ids by flyer line",
-  row.names = FALSE
-)
-
-knitr::kable(
-  first_flyer_piece_table,
-  col.names = c("Piece", "Displayed subword", "Model ID", "Unknown ID"),
-  caption = "Displayed pieces and model ids for the first flyer line",
-  row.names = FALSE
 )
 ```
 
