@@ -368,7 +368,7 @@ driven by the syllable term, especially long nouns such as `certification` and
 Those values compare two teaching texts under one set of counting rules. The
 formulas were fitted decades ago for particular populations (e.g., US military personnel or schoolchildren) and specific tasks. They count
 surface features and know nothing about meaning, layout, stakes, or whether a
-reader already knows the subject. A readability formula is a surface heuristic, never a true comprehension model. In practice, calculating these formulas reliably requires heavily tested ecosystem tools like `quanteda.textstats` in R or `textstat` in Python rather than custom arithmetic. 
+reader already knows the subject. A readability formula is a surface heuristic, never a true comprehension model. In practice, calculating these formulas reliably requires heavily tested ecosystem tools like `quanteda.textstats` in R or `textstat` in Python rather than custom arithmetic.
 
 The 30-word audit found errors on nearly a
 third of tested words, and the net bias alone moves the job-detail Flesch score
