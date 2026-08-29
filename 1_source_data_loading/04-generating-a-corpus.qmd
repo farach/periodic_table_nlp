@@ -30,7 +30,9 @@ By the end of this lesson, you will be able to:
 - explain what a corpus is;
 - read several text files into R;
 - decide what counts as one document;
-- keep source information with each document; and
+- state the sampling frame and what was excluded;
+- keep source information with each document;
+- find near-duplicate documents and keep their families together; and
 - check a corpus for common problems.
 :::
 
@@ -230,6 +232,66 @@ changes if a file changes; it helps detect accidental edits but is not proof of
 authorship or trustworthiness. Keeping these fields on the same row is the
 corpus equivalent of keeping a label attached to its folder.
 
+## Say what the collection is a sample of
+
+A corpus is always a sample of something, even when nobody chose a sample. The
+honest version of that sentence names the frame: the population the collection
+was drawn from, the rule used to draw it, and what the rule left out.
+
+For these three articles the frame is small and the answer is unusual. The
+collection is not a sample within its stated frame. It is every active,
+non-archived article this fictional help center published as of the collection
+date, which makes it a census of that tiny frame rather than a sample of the
+support questions people actually ask.
+
+That distinction changes what the corpus can support later. A count over a
+census of published articles describes what the help center wrote. It does not
+describe what readers needed and did not find.
+
+```{r}
+collection_record <- tibble(
+  field = c(
+    "frame",
+    "selection rule",
+    "collected on",
+    "excluded by rule",
+    "known coverage gap",
+    "language",
+    "unit"
+  ),
+  value = c(
+    "active, non-archived articles from one fictional help center",
+    "all active articles on the collection date, no sampling",
+    "2026-08-28",
+    "drafts, archived articles, and reader messages",
+    "questions people asked that no article answers",
+    "English (en)",
+    "one complete article"
+  )
+)
+
+stopifnot(
+  identical(nrow(collection_record), 7L),
+  all(str_length(collection_record$value) > 0),
+  identical(
+    collection_record$value[
+      collection_record$field == "selection rule"
+    ],
+    "all active articles on the collection date, no sampling"
+  )
+)
+
+knitr::kable(
+  collection_record,
+  col.names = c("Field", "Recorded value"),
+  caption = "What the collection covers and what it leaves out",
+  row.names = FALSE
+)
+```
+
+Write this record before the analysis, not after it. Once results exist, the
+frame tends to be described in whatever terms make the results sound broader.
+
 ## Add a simple measurement
 
 A quick count can reveal a document that loaded as empty or unexpectedly long.
@@ -373,6 +435,206 @@ its rows and columns are visible and easy to inspect. The same records can be
 converted to a package-specific corpus later.
 :::
 
+## A near duplicate is not an exact duplicate
+
+A fourth file arrives. The support team copied the account-access article into
+a seasonal FAQ, changed the capitalization, replaced a hyphen, and added a
+courtesy line. To a reader it is the same article. To an exact comparison it is
+a new document.
+
+The candidate below is written into the lesson so its wording is visible.
+
+```{r}
+candidate_text <- paste(
+  "Use the password reset link on the sign in page.",
+  "The link expires after 30 minutes for your security.",
+  "Contact the help desk if the message does not arrive."
+)
+
+incoming <- tibble(
+  document_id = c(corpus$document_id, "seasonal-faq-account"),
+  analysis_text = c(corpus$analysis_text, candidate_text)
+)
+
+exact_duplicate_found <- n_distinct(incoming$analysis_text) < nrow(incoming)
+
+normalize_for_matching <- function(text) {
+  text |>
+    str_to_lower() |>
+    str_replace_all("[^a-z0-9]+", " ") |>
+    str_squish()
+}
+
+normalized <- normalize_for_matching(incoming$analysis_text)
+similarity <- function(left, right) {
+  distance <- as.integer(adist(left, right))
+  1 - distance / max(str_length(left), str_length(right))
+}
+containment <- function(left, right) {
+  left_words <- unique(str_split_1(left, " "))
+  right_words <- unique(str_split_1(right, " "))
+  shorter <- if (length(left_words) <= length(right_words)) {
+    left_words
+  } else {
+    right_words
+  }
+  longer <- if (length(left_words) <= length(right_words)) {
+    right_words
+  } else {
+    left_words
+  }
+
+  mean(shorter %in% longer)
+}
+
+pair_scores <- tibble(
+  left = incoming$document_id[
+    c(1L, 1L, 1L, 2L, 2L, 3L)
+  ],
+  right = incoming$document_id[
+    c(2L, 3L, 4L, 3L, 4L, 4L)
+  ],
+  similarity = map2_dbl(
+    normalized[c(1L, 1L, 1L, 2L, 2L, 3L)],
+    normalized[c(2L, 3L, 4L, 3L, 4L, 4L)],
+    similarity
+  ),
+  containment = map2_dbl(
+    normalized[c(1L, 1L, 1L, 2L, 2L, 3L)],
+    normalized[c(2L, 3L, 4L, 3L, 4L, 4L)],
+    containment
+  )
+)
+
+stopifnot(
+  identical(exact_duplicate_found, FALSE),
+  identical(nrow(pair_scores), 6L),
+  all(pair_scores$similarity >= 0),
+  all(pair_scores$similarity <= 1),
+  all(pair_scores$containment >= 0),
+  all(pair_scores$containment <= 1),
+  identical(
+    pair_scores$right[which.max(pair_scores$similarity)],
+    "seasonal-faq-account"
+  ),
+  identical(
+    pair_scores$left[which.max(pair_scores$similarity)],
+    "account-access"
+  ),
+  sum(pair_scores$similarity > 0.6) == 1L,
+  sum(pair_scores$containment > 0.9) == 1L
+)
+
+knitr::kable(
+  pair_scores |>
+    mutate(
+      similarity = round(similarity, 3),
+      containment = round(containment, 3)
+    ) |>
+    arrange(desc(similarity)),
+  col.names = c(
+    "Document",
+    "Compared with",
+    "Character similarity",
+    "Word containment"
+  ),
+  caption = "All six document pairs, most similar first",
+  row.names = FALSE
+)
+```
+
+The exact-duplicate check returns `FALSE`: no two documents are byte-identical.
+The two comparisons that follow both single out the same pair, and they
+disagree about how strong the resemblance is.
+
+Character similarity reaches 0.65 for the reprint. The added courtesy line
+holds it down, because every extra character counts as a difference. Word
+containment asks a narrower question, whether one document's words all appear in
+the other, and returns 1.00. When a copy is extended rather than edited,
+containment is the measure that keeps working.
+
+The thresholds used here, 0.6 and 0.9, are decisions rather than discoveries.
+Any threshold belongs in the record with the measure that produced it, because
+the same pair can be a near duplicate under one measure and a distinct document
+under another. Both comparisons are quadratic in the number of documents, which
+is invisible at four and prohibitive at four million.
+
+### Keep families together, then report what left
+
+A near duplicate creates a second problem. If one copy trains a model and the
+other tests it, the overlap may inflate the evaluation by letting the model
+reuse wording or memorize examples. This lesson does not train a model, so it
+cannot determine which mechanism would cause the inflation. The preventive
+step is to group related documents into a **family** and let a split move the
+whole family at once.
+
+```{r}
+families <- incoming |>
+  mutate(
+    family_id = if_else(
+      document_id %in% c("account-access", "seasonal-faq-account"),
+      "account-access-family",
+      document_id
+    ),
+    kept = document_id != "seasonal-faq-account"
+  )
+
+family_split <- families |>
+  distinct(family_id) |>
+  mutate(
+    split = if_else(
+      family_id == "returns",
+      "evaluation",
+      "development"
+    )
+  )
+
+assigned <- families |>
+  left_join(family_split, by = join_by(family_id))
+removed <- assigned |>
+  filter(!kept)
+
+split_is_family_consistent <- assigned |>
+  summarise(splits = n_distinct(split), .by = family_id) |>
+  pull(splits) |>
+  max()
+
+stopifnot(
+  identical(nrow(assigned), 4L),
+  identical(sum(assigned$kept), 3L),
+  identical(nrow(removed), 1L),
+  identical(split_is_family_consistent, 1L),
+  identical(
+    n_distinct(assigned$family_id),
+    3L
+  ),
+  identical(
+    removed$family_id,
+    "account-access-family"
+  )
+)
+
+knitr::kable(
+  assigned |>
+    select(document_id, family_id, split, kept),
+  col.names = c("Document", "Family", "Split", "Kept"),
+  caption = "Four candidates, three kept, one removed with its family recorded",
+  row.names = FALSE
+)
+
+removed$analysis_text
+```
+
+Four candidates went in, three came out, and the removed text is printed rather
+than summarized. Reading what a cleaning step deleted is the only way to notice
+that it deleted the wrong thing. Here the discarded copy carries one sentence
+the original does not, about contacting the help desk, so a careful editor might
+merge that line instead of dropping the file.
+
+`split_is_family_consistent` is the falsifiable part. It counts the distinct
+splits any family received, and the corpus is only safe to evaluate on when that
+number is one.
+
 ## A corpus is a set of choices
 
 The successful search does not make the collection neutral. Someone decided
@@ -384,25 +646,32 @@ Record:
 1. where the documents came from;
 2. when they were collected;
 3. what one row represents;
-4. why any documents were excluded;
-5. what each metadata field means; and
-6. what license, permission, or consent supports the use;
-7. which privacy risks were checked;
-8. whether people or communities are missing from the collection; and
-9. which fingerprint identifies each untouched source file.
+4. which frame the collection covers and which rule selected from it;
+5. why any documents were excluded;
+6. what each metadata field means;
+7. what license, permission, or consent supports the use;
+8. which privacy risks were checked;
+9. whether people or communities are missing from the collection;
+10. which near-duplicate rule and threshold were applied; and
+11. which fingerprint identifies each untouched source file.
 
 ## What to remember
 
 - A corpus is an organized collection of text documents.
 - The document unit should match the question being asked.
+- Name the frame the collection came from, even when it is a census.
 - Metadata keeps each document connected to its source and context.
 - Preserve source text separately from text changed for analysis.
 - Empty files, duplicate IDs, and duplicate text should be checked early.
+- Near duplicates survive exact-match checks and need a stated threshold.
+- Related documents belong to one family and move between splits together.
 - A technically clean corpus can still be incomplete or unrepresentative.
 
 The password-reset answer is now findable without losing the article around
-it. For a larger corpus, keep the same small label beside every document: what
-this text is, where it came from, and why it belongs in the collection.
+it. The seasonal reprint is out of the collection, its family is recorded, and
+the sentence it added is still on the page for someone to judge. For a larger
+corpus, keep the same small label beside every document: what this text is,
+where it came from, and why it belongs in the collection.
 
 ## Sources
 

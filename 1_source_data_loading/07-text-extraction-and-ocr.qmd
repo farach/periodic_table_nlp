@@ -30,7 +30,8 @@ By the end of this lesson, you will be able to:
 - explain the difference between digital text and text inside an image;
 - run the Tesseract OCR engine from R;
 - compare OCR output with a known reference transcript;
-- interpret character-level edit distance; and
+- interpret character-level edit distance;
+- report character and word error rates for a damaged image; and
 - identify conditions that make OCR output less reliable.
 :::
 
@@ -94,6 +95,10 @@ image_metadata <- flyer_metadata |>
   filter(artifact == "training-flyer.png")
 transcript_metadata <- flyer_metadata |>
   filter(artifact == "training-flyer-ground-truth.txt")
+recorded_ocr_metadata <- flyer_metadata |>
+  filter(artifact == "training-flyer-ocr-5.3.2.txt")
+degraded_ocr_metadata <- flyer_metadata |>
+  filter(artifact == "training-flyer-degraded-ocr-5.3.2.txt")
 image_path <- "data/workforce/training-flyer.png"
 image_array <- png::readPNG(
   image_path,
@@ -120,6 +125,8 @@ stopifnot(
   ),
   identical(nrow(image_metadata), 1L),
   identical(nrow(transcript_metadata), 1L),
+  identical(nrow(recorded_ocr_metadata), 1L),
+  identical(nrow(degraded_ocr_metadata), 1L),
   identical(
     image_dimensions,
     c(800L, 1200L)
@@ -131,6 +138,30 @@ stopifnot(
   identical(
     transcript_md5,
     transcript_metadata$md5
+  ),
+  identical(
+    digest::digest(
+      paste(
+        read_lines("data/workforce/training-flyer-ocr-5.3.2.txt"),
+        collapse = "\n"
+      ),
+      algo = "md5",
+      serialize = FALSE
+    ),
+    recorded_ocr_metadata$md5
+  ),
+  identical(
+    digest::digest(
+      paste(
+        read_lines(
+          "data/workforce/training-flyer-degraded-ocr-5.3.2.txt"
+        ),
+        collapse = "\n"
+      ),
+      algo = "md5",
+      serialize = FALSE
+    ),
+    degraded_ocr_metadata$md5
   )
 )
 
@@ -149,18 +180,24 @@ select English because the flyer is written in English.
 ```{r}
 ocr_information <- tesseract::tesseract_info()
 ocr_engine <- tesseract::tesseract("eng")
-ocr_text <- tesseract::ocr(
+diagnostic_ocr_text <- tesseract::ocr(
   "data/workforce/training-flyer.png",
   engine = ocr_engine
 )
-ocr_lines <- ocr_text |>
+diagnostic_ocr_lines <- diagnostic_ocr_text |>
   str_split_1(fixed("\n")) |>
   str_trim()
-ocr_lines <- ocr_lines[str_length(ocr_lines) > 0]
+diagnostic_ocr_lines <- diagnostic_ocr_lines[
+  str_length(diagnostic_ocr_lines) > 0
+]
+ocr_lines <- read_lines(
+  "data/workforce/training-flyer-ocr-5.3.2.txt"
+)
 
 stopifnot(
   str_length(ocr_information$version) > 0,
   "eng" %in% ocr_information$available,
+  length(diagnostic_ocr_lines) > 0L,
   identical(ocr_lines, reference_lines),
   identical(
     ocr_lines[5],
@@ -171,9 +208,10 @@ stopifnot(
 ocr_lines
 ```
 
-Tesseract recovered all six lines in this clear, high-contrast image. That
-result belongs to this image and software version; it is not a general OCR
-accuracy claim.
+The published transcript is the committed output recorded with native
+Tesseract 5.3.2. The host engine still runs as a diagnostic, but its result does
+not change the displayed transcript or metrics. The exact match belongs to this
+image and recorded software version; it is not a general OCR accuracy claim.
 
 ```{r}
 ocr_provenance <- tibble(
@@ -264,6 +302,242 @@ and line boundaries, and the denominator includes spaces. The code separately
 requires every raw line and the critical experience statement to match
 exactly.
 
+## Damage the image and measure what is lost
+
+A flyer generated at 1200 pixels wide and read at full size is the best case
+this pipeline will ever see. Real material arrives photographed at an angle,
+faxed, scanned at low resolution, or printed with a failing toner cartridge.
+
+The image below is degraded inside the lesson so the damage is reproducible.
+Two things happen to it. Every third row and column is kept, which reduces it
+to a third of its size, and every third remaining row is lightened, which
+imitates the banding a tired scanner produces. Both steps are arithmetic on the
+pixel array, with no randomness, so the same page produces the same file every
+time it renders.
+
+```{r}
+keep_every <- 3L
+row_positions <- seq(1L, dim(image_array)[1], by = keep_every)
+column_positions <- seq(1L, dim(image_array)[2], by = keep_every)
+degraded_array <- image_array[
+  row_positions,
+  column_positions,
+  ,
+  drop = FALSE
+]
+banded_rows <- seq(1L, dim(degraded_array)[1], by = 3L)
+degraded_array[banded_rows, , ] <- pmin(
+  degraded_array[banded_rows, , ] + 0.35,
+  1
+)
+
+degraded_path <- tempfile(fileext = ".png")
+png::writePNG(degraded_array, degraded_path)
+
+degraded_diagnostic_text <- tesseract::ocr(
+  degraded_path,
+  engine = ocr_engine
+)
+degraded_diagnostic_lines <- degraded_diagnostic_text |>
+  str_split_1(fixed("\n")) |>
+  str_trim()
+degraded_diagnostic_lines <- degraded_diagnostic_lines[
+  str_length(degraded_diagnostic_lines) > 0
+]
+degraded_lines <- read_lines(
+  "data/workforce/training-flyer-degraded-ocr-5.3.2.txt"
+)
+diagnostic_matches_fixture <- c(
+  identical(diagnostic_ocr_lines, ocr_lines),
+  identical(degraded_diagnostic_lines, degraded_lines)
+)
+
+stopifnot(
+  identical(dim(degraded_array)[1:2], c(267L, 400L)),
+  file.exists(degraded_path),
+  length(degraded_diagnostic_lines) > 0L,
+  !identical(degraded_lines, reference_lines)
+)
+
+tibble(
+  version = c("source image", "degraded copy"),
+  width_pixels = c(
+    dim(image_array)[2],
+    dim(degraded_array)[2]
+  ),
+  height_pixels = c(
+    dim(image_array)[1],
+    dim(degraded_array)[1]
+  ),
+  lines_returned = c(
+    length(ocr_lines),
+    length(degraded_lines)
+  ),
+  diagnostic_matches_fixture
+)
+```
+
+The final column reports whether the host engine reproduced each committed
+transcript. A `FALSE` value is a local-version difference, while the published
+metrics below remain tied to the recorded 5.3.2 output.
+
+### Character and word error rates
+
+Two rates are standard for this comparison. **Character error rate**, or CER,
+divides the character-level edit distance by the number of characters in the
+reference. **Word error rate**, or WER, does the same with whole words, so a
+word that is wrong in one letter counts once rather than once per letter.
+
+Word-level distance needs its own small calculation, because `adist()` compares
+characters. The function below fills a table of costs, one row per reference
+word and one column per observed word, and reads the answer from the corner.
+
+```{r}
+word_edit_distance <- function(reference_words, observed_words) {
+  costs <- matrix(
+    0L,
+    nrow = length(reference_words) + 1L,
+    ncol = length(observed_words) + 1L
+  )
+  costs[, 1L] <- seq.int(0L, length(reference_words))
+  costs[1L, ] <- seq.int(0L, length(observed_words))
+
+  for (row in seq_along(reference_words)) {
+    for (column in seq_along(observed_words)) {
+      substitution <- if (
+        identical(reference_words[row], observed_words[column])
+      ) {
+        0L
+      } else {
+        1L
+      }
+      costs[row + 1L, column + 1L] <- min(
+        costs[row, column + 1L] + 1L,
+        costs[row + 1L, column] + 1L,
+        costs[row, column] + substitution
+      )
+    }
+  }
+
+  costs[
+    length(reference_words) + 1L,
+    length(observed_words) + 1L
+  ]
+}
+
+error_rates <- function(reference, observed) {
+  reference_words <- str_split_1(reference, " ")
+  observed_words <- if (str_length(observed) == 0L) {
+    character()
+  } else {
+    str_split_1(observed, " ")
+  }
+  character_distance <- as.integer(adist(reference, observed))
+  word_distance <- word_edit_distance(
+    reference_words,
+    observed_words
+  )
+
+  tibble(
+    reference_characters = str_length(reference),
+    reference_word_count = length(reference_words),
+    cer = character_distance / str_length(reference),
+    wer = word_distance / length(reference_words)
+  )
+}
+
+degraded_observed <- normalize_for_comparison(degraded_lines)
+rate_table <- bind_rows(
+  error_rates(reference_text, observed_text) |>
+    mutate(version = "source image", .before = 1),
+  error_rates(reference_text, degraded_observed) |>
+    mutate(version = "degraded copy", .before = 1)
+)
+
+stopifnot(
+  identical(nrow(rate_table), 2L),
+  identical(rate_table$cer[1], 0),
+  identical(rate_table$wer[1], 0),
+  rate_table$cer[2] > 0,
+  rate_table$wer[2] > 0,
+  isTRUE(all.equal(
+    word_edit_distance(c("a", "b", "c"), c("a", "b", "c")),
+    0L
+  )),
+  isTRUE(all.equal(
+    word_edit_distance(c("a", "b", "c"), c("a", "x", "c")),
+    1L
+  )),
+  isTRUE(all.equal(
+    word_edit_distance(c("a", "b"), character()),
+    2L
+  ))
+)
+
+knitr::kable(
+  rate_table |>
+    mutate(
+      cer = round(cer, 3),
+      wer = round(wer, 3)
+    ) |>
+    select(version, reference_characters, reference_word_count, cer, wer),
+  col.names = c(
+    "Version",
+    "Reference characters",
+    "Reference words",
+    "CER",
+    "WER"
+  ),
+  caption = "Error rates for the source image and its degraded copy",
+  row.names = FALSE
+)
+```
+
+The source image scores zero on both rates. The degraded copy does not. Both
+rates come from committed Tesseract 5.3.2 transcripts, so a native engine
+upgrade cannot rewrite the published result. The diagnostic comparison above
+reports whether the local engine produced the same transcripts.
+
+```{r}
+comparison <- tibble(
+  line = seq_len(max(length(reference_lines), length(degraded_lines))),
+  reference = c(
+    reference_lines,
+    rep(NA_character_, max(0L, length(degraded_lines) - length(reference_lines)))
+  )[seq_len(max(length(reference_lines), length(degraded_lines)))],
+  degraded_reading = c(
+    degraded_lines,
+    rep(NA_character_, max(0L, length(reference_lines) - length(degraded_lines)))
+  )[seq_len(max(length(reference_lines), length(degraded_lines)))]
+)
+
+stopifnot(
+  identical(nrow(comparison), max(length(reference_lines), length(degraded_lines))),
+  any(
+    is.na(comparison$degraded_reading) |
+      comparison$reference != comparison$degraded_reading
+  )
+)
+
+knitr::kable(
+  comparison,
+  col.names = c("Line", "Reference transcript", "Degraded reading"),
+  caption = "The transcript beside what the degraded image produced",
+  row.names = FALSE
+)
+```
+
+Read the table beside the rate. A CER of 0.558 means 0.558 character edits per
+reference character; it is not a fraction of information preserved and has no
+meaningful midpoint. Insertions can even push CER or WER above one. Here, the
+remaining words are not a faithful partial transcript of the flyer.
+
+Two limits belong with these numbers. Both rates are computed against one
+transcript of one image, so they describe this pair and estimate nothing about
+OCR in general. The word rate also assumes that words are separated by spaces,
+which is true for this English flyer and false for Chinese, Japanese, and Thai,
+where a character rate or a script-aware segmentation is needed instead.
+
 ## OCR errors are not evenly distributed
 
 OCR becomes harder when a source has:
@@ -299,6 +573,8 @@ visible and let another reviewer return to the source.
 - Text inside an image must be recognized before ordinary text analysis.
 - OCR output is an estimate, not a transcription guarantee.
 - Compare important output with a human-checked reference.
+- Report character and word error rates, and say which image produced them.
+- One clean image cannot estimate accuracy on damaged material.
 - Measure errors and inspect meaning-changing cases.
 - Preserve the image, raw output, corrected text, and review history.
 

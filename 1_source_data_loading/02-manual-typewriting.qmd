@@ -1,8 +1,8 @@
 ---
-title: "Finding patterns in text"
-subtitle: "Learn regular expressions with small, hand-written examples"
+title: "Manual examples and pattern matching"
+subtitle: "Type a handful of messages by hand, then build a pattern you can test"
 author: "Alex Farach"
-description: "Find dates, email addresses, and order numbers in text with R."
+description: "Type small examples by hand and use them to find dates, email addresses, and order numbers in R."
 categories: [source data loading, regular expressions, testing]
 ---
 
@@ -12,10 +12,11 @@ contain an email address, and most contain neither. Reading a small inbox is
 easy. Repeating the job across hundreds of messages makes missed and mistaken
 matches more likely.
 
-The worker starts with five hand-written messages rather than the full inbox.
-Every expected answer fits on the screen, including the examples that should
-fail. This small rehearsal set will help us build a text pattern, test its
-limits, and hide an address before the messages are shared.
+The worker starts by typing five messages by hand rather than exporting the
+full inbox. Typing them is the point: every expected answer fits on the screen,
+including the examples that should fail, and nothing arrives from a system that
+might have reformatted it. This small rehearsal set will help us build a text
+pattern, test its limits, and hide an address before the messages are shared.
 
 ::: {.callout-tip}
 ## What you will learn
@@ -70,6 +71,14 @@ the lesson says it should be. That is what `stopifnot()` does. Here the checks
 confirm the number of messages and the text
 of the third one. R then prints all five messages. The number in square
 brackets at the left marks the position where that line of output begins.
+
+The messages are English, tagged `en` in the BCP 47 language tags used by web
+and publishing tools. That matters for two rules written later. The order ID
+rule assumes ASCII digits, and the `^ERROR:` rule assumes a Latin-script label
+in capital letters. Neither assumption survives a move to Arabic-Indic digits
+or a script without case. The email and date rules are about shape and travel
+further, though the date rule still assumes a Gregorian calendar written
+largest unit first.
 
 ## Search for exact text
 
@@ -297,18 +306,45 @@ redacted_messages <- str_replace_all(
   "[email]"
 )
 
+removed_addresses <- str_extract_all(messages, email_pattern) |>
+  list_c()
+changed_messages <- sum(redacted_messages != messages)
+
 stopifnot(
   identical(
     redacted_messages[2],
     "Email [email] before 17:30."
   ),
-  !any(str_detect(redacted_messages, fixed("@")))
+  !any(str_detect(redacted_messages, fixed("@"))),
+  identical(changed_messages, 1L),
+  identical(removed_addresses, "support@example.com"),
+  identical(
+    sum(str_count(messages, email_pattern)),
+    length(removed_addresses)
+  )
 )
 
-redacted_messages
+knitr::kable(
+  tibble(
+    message_number = seq_along(messages),
+    changed = redacted_messages != messages,
+    shared_version = redacted_messages
+  ),
+  col.names = c("Message", "Changed", "Version that leaves the building"),
+  caption = "Which messages the redaction step altered",
+  row.names = FALSE
+)
+
+removed_addresses
 ```
 
-The address is gone, while the rest of the sentence stays unchanged. One
+One message changed and one address was removed. Both numbers are printed, and
+so is the removed text itself. A redaction step that reports only its output
+cannot be audited: a pattern that quietly matched half a message would look
+exactly as successful. Read the removed material, count it, and compare that
+count with the number of matches the pattern found.
+
+The address is gone, while the rest of each sentence stays unchanged. One
 successful example is not enough to establish that a redaction method protects
 private information. Test varied cases carefully, inspect the result, and
 follow the privacy rules that apply to the real records.
@@ -460,11 +496,14 @@ straight into the full inbox:
 - A regular expression describes a family of possible matches.
 - Small hand-written examples make a pattern easier to understand.
 - Expected failures are as useful as expected matches.
+- Name the language and script a pattern assumes; digits and letter case do not
+  behave the same everywhere.
+- Count and read what a replacement removed, not only what it left behind.
 - A published example should stop the build when its result changes.
 
-The five-message rehearsal ends with both order IDs found and the address
-hidden in the shared copy. Keep the same two small piles beside any new
-pattern: examples it must accept and examples it must refuse.
+The five typed messages end with both order IDs found, one address removed, and
+that removal counted. Keep the same two small piles beside any new pattern:
+examples it must accept and examples it must refuse.
 
 ## Sources
 

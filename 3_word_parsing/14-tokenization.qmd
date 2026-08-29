@@ -10,7 +10,7 @@ A planning meeting begins with the Lab's labeled sentences on the table. The
 team has 28 reviewed text units from a job board page and a training flyer.
 Six came from the flyer, and 22 came from job-detail lines.
 
-The labels answer one question: what does each sentence say? The next question
+The labels answer one question: what does each text unit say? The next question
 is smaller and more mechanical. Before the Lab can count words, it has to decide
 what a word is.
 
@@ -27,7 +27,7 @@ By the end of this lesson, you will be able to:
 - compare whitespace and package word tokenizers;
 - check whether sentence tokenization changes row counts;
 - train a subword model without writing files into the project folder; and
-- describe why unfamiliar text can require more subword pieces.
+- explain what actually decides how many pieces a text costs.
 :::
 
 ```{r}
@@ -376,22 +376,203 @@ knitr::kable(
 
 The first sentence takes nine subword pieces. The phrase `unpredictability
 biotechnology`, which does not appear in the Riverton rows, takes 21 pieces in
-this toy model. A tokenizer used with a real language model learns tens of
-thousands of pieces from far more text and would likely split that phrase into a
-handful of pieces. What carries over is the direction: unfamiliar material costs
-more pieces than familiar material, not the size of the effect.
+this toy model. Larger released tokenizers use different training data,
+vocabularies, normalizers, and unknown policies, so their piece counts must be
+measured rather than inferred from this result.
+
+It is tempting to end there with a rule: unfamiliar material costs more pieces.
+The next section shows that the rule is false as stated.
+
+## What actually decides the number of pieces
+
+This model was trained on 28 English lines written in the Latin script, and
+`coverage = 1` told the trainer to keep every character it saw in that text. A
+character outside that set has no piece of its own, and the model falls back to
+`<UNK>`.
+
+Watch what that does to the piece count. The comparison below adds two texts the
+model has never seen: a Chinese phrase meaning "training course" and a Greek
+word. It also switches from `type = "subwords"` to `type = "ids"`, which reports
+the vocabulary entry each piece actually resolved to.
+
+```{r}
+unknown_id <- bpe_model$vocabulary$id[
+  bpe_model$vocabulary$subword == "<UNK>"
+]
+
+texts_to_encode <- c(
+  familiar_sentence = "Paid 12-week training is provided.",
+  unseen_english = "unpredictability biotechnology",
+  unseen_chinese = "\u57F9\u8BAD\u8BFE\u7A0B",
+  unseen_greek = "\u0393\u03BB\u03C9\u03C3\u03C3\u03B1"
+)
+
+piece_report <- tibble(
+  example = names(texts_to_encode),
+  text = unname(texts_to_encode),
+  ids = map(
+    unname(texts_to_encode),
+    \(one_text) bpe_encode(bpe_model, x = one_text, type = "ids")[[1]]
+  ),
+  subwords = map(
+    unname(texts_to_encode),
+    \(one_text) bpe_encode(bpe_model, x = one_text, type = "subwords")[[1]]
+  )
+) |>
+  mutate(
+    characters = str_length(text),
+    pieces = map_int(ids, length),
+    unknown_pieces = map_int(
+      ids,
+      \(id_vector) sum(id_vector == unknown_id)
+    ),
+    shown_as_subwords = map_chr(
+      subwords,
+      \(piece_vector) str_c(piece_vector, collapse = " | ")
+    ),
+    display_text = case_when(
+      example == "unseen_chinese" ~
+        "<span lang=\"zh\">培训课程</span>",
+      example == "unseen_greek" ~
+        "<span lang=\"el\">Γλωσσα</span>",
+      TRUE ~ text
+    ),
+    display_subwords = case_when(
+      example == "unseen_chinese" ~ str_c(
+        "<span lang=\"zh\">",
+        shown_as_subwords,
+        "</span>"
+      ),
+      example == "unseen_greek" ~ str_c(
+        "<span lang=\"el\">",
+        shown_as_subwords,
+        "</span>"
+      ),
+      TRUE ~ shown_as_subwords
+    )
+  )
+
+stopifnot(
+  identical(unknown_id, 1L),
+  identical(piece_report$pieces, c(9L, 21L, 2L, 2L)),
+  identical(piece_report$unknown_pieces, c(0L, 0L, 1L, 1L)),
+  piece_report$pieces[3] < piece_report$pieces[1],
+  identical(
+    piece_report$shown_as_subwords[3],
+    str_c("\u2581 | ", texts_to_encode[["unseen_chinese"]])
+  ),
+  str_detect(piece_report$display_text[3], fixed("lang=\"zh\"")),
+  str_detect(piece_report$display_text[4], fixed("lang=\"el\"")),
+  str_detect(piece_report$display_subwords[3], fixed("lang=\"zh\"")),
+  str_detect(piece_report$display_subwords[4], fixed("lang=\"el\""))
+)
+
+knitr::kable(
+  piece_report |>
+    select(display_text, characters, pieces, unknown_pieces, display_subwords),
+  col.names = c(
+    "Text",
+    "Characters",
+    "Pieces",
+    "Unknown pieces",
+    "What the subword view shows"
+  ),
+  caption = "Piece counts and unknown pieces for four texts",
+  row.names = FALSE,
+  escape = FALSE
+)
+```
+
+The Chinese phrase is the least familiar text on the page and costs two pieces,
+where the fully familiar English sentence costs nine. Nothing was learned about
+Chinese. One of those two pieces is `<UNK>`, the model's way of recording that
+it has no representation at all.
+
+That is the whole correction. The number of pieces depends on the tokenizer and
+the vocabulary it learned, on the script and the language, on the normalization
+the model applies before splitting, and above all on what the model does with a
+character it does not know. Under this model's unknown policy, unfamiliar
+material can cost fewer pieces than familiar material, because collapsing to
+`<UNK>` is cheap and lossy.
+
+The `shown_as_subwords` column is a second warning. It displays the Chinese
+characters as though the model had a piece for them, because the subword view
+reconstructs surface text rather than reporting vocabulary entries. Count
+unknowns from the ids, never from the printed pieces.
+
+### Check that the pieces can be turned back into text
+
+A tokenizer that cannot rebuild its input has lost something. Decoding the ids
+answers that question directly.
+
+```{r}
+round_trip <- piece_report |>
+  mutate(
+    decoded = map_chr(
+      ids,
+      \(id_vector) bpe_decode(bpe_model, id_vector)[[1]]
+    ),
+    recovers_input = decoded == text
+  )
+
+stopifnot(
+  identical(
+    round_trip$recovers_input,
+    c(TRUE, TRUE, FALSE, FALSE)
+  ),
+  all(str_detect(
+    round_trip$decoded[!round_trip$recovers_input],
+    fixed("<UNK>")
+  )),
+  identical(
+    round_trip$recovers_input,
+    round_trip$unknown_pieces == 0L
+  )
+)
+
+knitr::kable(
+  round_trip |>
+    select(display_text, pieces, unknown_pieces, decoded, recovers_input),
+  col.names = c(
+    "Text",
+    "Pieces",
+    "Unknown pieces",
+    "Decoded from ids",
+    "Recovers the input"
+  ),
+  caption = "Round-trip results for the four texts",
+  row.names = FALSE,
+  escape = FALSE
+)
+```
+
+Both Latin-script texts come back character for character, including the
+punctuation and the digits. Both unseen-script texts come back as `<UNK>`, and
+the check confirms the pattern exactly: the texts that fail to round-trip are
+precisely the texts that contained an unknown piece.
+
+Round-trip recovery tests reversible text identity. It does not test source
+alignment: some tokenizers can return offsets into the original input even when
+an unknown id cannot decode to its text. A task that marks spans or highlights
+matches must test those offset mappings separately.
 
 The result gives the team a rule for the meeting: a word count must name the
-rule that made the words.
+rule that made the words, and a piece count must name the vocabulary, the
+script it covers, and what it does with everything else.
 
 ## What to remember
 
 - Tokenization turns text into pieces according to a chosen rule.
 - The first Riverton sentence becomes 5, 6, or 8 word tokens under three rules.
 - Sentence tokenization preserves the 28 rows in this file.
-- BPE represents familiar material with larger pieces and unfamiliar material
-  with smaller pieces.
-- Text that looks unfamiliar to the model can take more pieces to represent.
+- This toy BPE used larger pieces for some material present in its training
+  text; that pattern is not universal.
+- Piece counts depend on the vocabulary, the script, the normalization the
+  model applies, and its policy for unknown characters.
+- Under an unknown-piece policy, unfamiliar text can cost fewer pieces and lose
+  everything it contained.
+- Count unknown pieces from the ids, and check that the ids decode back to the
+  input.
 
 The Lab can start counting only after it writes down the token rule. For these
 sentences, that rule changes the unit being counted before any summary appears.
@@ -401,3 +582,4 @@ sentences, that rule changes the unit being counted before any summary appears.
 - [tokenizers documentation for word and sentence tokenizers](https://docs.ropensci.org/tokenizers/reference/basic-tokenizers.html)
 - [tokenizers.bpe package documentation](https://cran.r-project.org/package=tokenizers.bpe)
 - [Neural Machine Translation of Rare Words with Subword Units](https://aclanthology.org/P16-1162/)
+- [SentencePiece: A simple and language independent subword tokenizer](https://aclanthology.org/D18-2012/)

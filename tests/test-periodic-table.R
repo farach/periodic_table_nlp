@@ -29,6 +29,12 @@ lesson_sources <- sub(
   ".qmd",
   task_map$lesson_path[has_lesson]
 )
+review_manifest <- read.csv(
+  "data/lesson_reviews.csv",
+  colClasses = "character",
+  na.strings = "",
+  check.names = FALSE
+)
 
 stopifnot(
   identical(nrow(task_map), 81L),
@@ -54,7 +60,28 @@ stopifnot(
     task_map$title[2],
     "Manual examples and pattern matching"
   ),
-  all(file.exists(lesson_sources))
+  all(file.exists(lesson_sources)),
+  identical(review_manifest$source_file, lesson_sources)
+)
+
+readme <- paste(
+  readLines("README.md", encoding = "UTF-8", warn = FALSE),
+  collapse = "\n"
+)
+readme_lesson_links <- regmatches(
+  readme,
+  gregexpr(
+    "[1-8]_[a-z_]+/[0-9]{2}-[a-z0-9-]+[.]qmd",
+    readme,
+    perl = TRUE
+  )
+)[[1]]
+
+stopifnot(
+  identical(
+    sort(unique(readme_lesson_links)),
+    sort(lesson_sources)
+  )
 )
 
 site_index <- "_site/index.html"
@@ -134,6 +161,13 @@ stopifnot(
     0L
   ),
   identical(
+    count_matches(
+      '(?s)<div class="nlp-element is-planned"[^>]*>.*?<span class="element-status">Planned</span>',
+      html
+    ),
+    39L
+  ),
+  identical(
     rendered_hrefs,
     task_map$lesson_path[has_lesson]
   ),
@@ -157,6 +191,17 @@ stopifnot(
     "This is a teaching aid, not a scientific taxonomy",
     html,
     fixed = TRUE
+  ),
+  identical(
+    count_matches('class="available-routes"', html),
+    1L
+  ),
+  identical(
+    count_matches(
+      '(?s)<nav class="available-routes"[^>]*>.*?<a href="[^"]+">',
+      html
+    ),
+    1L
   )
 )
 

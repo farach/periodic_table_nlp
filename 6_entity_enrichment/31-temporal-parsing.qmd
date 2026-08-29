@@ -346,6 +346,14 @@ spaCy labels `October 15` as `DATE`, `Evening` as `TIME`, and `12-week` as
 belongs in `DATE` under the scheme spaCy was trained on because that class
 includes periods. The label is right, and it is still not a calendar date.
 
+## Temporal parsing in production
+
+Finding a temporal span (like spaCy tagging `next Friday` as a `DATE`) is only the first step. Extracting a fully normalized value requires a dedicated tool like Meta's Duckling or Python's `dateparser` rather than hand-coded R branches.
+
+These tools organize key concepts that custom rules often mix together:
+- **Document Creation Time (DCT) / Reference Time**: A relative phrase like `next Friday` or `tomorrow` means nothing without a strict reference date. Parsers do not enforce this automatically; callers must provide the anchor (e.g., passing `RELATIVE_BASE` to `dateparser`).
+- **Granularity and representative ambiguity**: A phrase like `last month` is ambiguous. Depending on the context, does it mean the previous calendar month (a granularity of one month) or the last 30 days? A robust parser separates the span detection from the normalized value, keeping these assumptions visible.
+
 ## What to remember
 
 - A temporal parser needs a stated reference date for relative expressions.

@@ -1,8 +1,8 @@
 # Find prose that repeats across lessons.
 #
-# Lessons written from one brief will share phrasing, and a reader who notices
-# the template stops trusting the voice. This fails the build when repetition
-# passes what a careful writer would allow.
+# This deliberately narrow check catches exact repeated sentences and repeated
+# four-word openings. It does not detect a shared paragraph shape, argument, or
+# lesson shell; those require human editorial review.
 #
 # One sentence is meant to be identical everywhere: the notice that the
 # Riverton material is invented. A standard disclosure should read the same on
@@ -110,7 +110,10 @@ if (length(failures) > 0) {
 
 cat(
   sprintf(
-    "Repetition scan passed for %d lessons.\n",
+    paste0(
+      "Exact-sentence and four-word-opening scan passed for %d lessons. ",
+      "Broader structural review remains a human check.\n"
+    ),
     length(lesson_files)
   )
 )

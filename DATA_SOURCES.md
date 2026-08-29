@@ -9,11 +9,13 @@ The files below are fictional and were created for this project:
 
 - `data/customer_feedback.csv`
 - `data/help_articles/`
-- `data/riverton/riverton-inbox.csv`
 - `data/workforce/job-board.html`
 - `data/workforce/workforce_sentences.csv`
 - `data/workforce/crowd_annotations.csv`
 - `data/workforce/training-flyer-ground-truth.txt`
+- `data/workforce/training-flyer-ocr-5.3.2.txt`
+- `data/workforce/training-flyer-degraded-ocr-5.3.2.txt`
+- `data/workforce/training-flyer-metadata.csv`
 - `data/workforce/training-flyer.png`
 
 They contain no real workers, applicants, employers, customers, or research
@@ -142,7 +144,7 @@ The task names and groupings are adapted from Rob van Zoest's
 That page carries no licence statement and invites reuse. The individual task
 names are standard terminology in the field. The grouping decisions, wording,
 interface, data file, and lessons in this repository are separate work and
-carry this repository's MIT licence. If the source author asks for different
+carry this repository's MIT licence. If the original author asks for different
 terms, this project will follow them.
 
 Checked 28 August 2026.
@@ -186,6 +188,11 @@ Versions are pinned in `requirements-spacy.txt`: spaCy 3.8.7 and
 `en_core_web_sm` 3.8.0. `R/use-spacy.R` finds the project's Python environment
 and starts the pipeline, and stops with setup instructions if it is missing.
 Nothing is downloaded while a page renders.
+
+The UDPipe models in `data/treebank/` were trained in this repository on the
+documented 500-sentence excerpt and are deliberately weak teaching models.
+Comparisons with the released spaCy pipeline demonstrate provenance and domain
+effects; they are not fair model contests.
 
 The pipeline was trained on written web text. It has never seen the invented
 names in this project, and the lessons show it making mistakes on them. Those

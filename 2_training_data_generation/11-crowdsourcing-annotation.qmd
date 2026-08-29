@@ -29,7 +29,8 @@ By the end of this lesson, you will be able to:
 - keep reviewer labels separate;
 - calculate pairwise agreement with foundryR;
 - distinguish observed agreement from chance-corrected measures;
-- find items that need adjudication; and
+- test how much one item moves an agreement statistic;
+- find items that need adjudication and record the decision; and
 - explain why majority vote is not automatic truth.
 :::
 
@@ -113,7 +114,7 @@ allowed_labels <- c(
   "other"
 )
 source("R/workforce-codebook.R")
-crowd_codebook <- workforce_codebook()
+crowd_codebook <- workforce_codebook("1.0.0")
 
 stopifnot(
   identical(nrow(crowd_labels), 11L),
@@ -221,9 +222,9 @@ knitr::kable(
     mutate(
       observed_agreement = round(
         observed_agreement,
-        3
+        2
       ),
-      cohen_kappa = round(cohen_kappa, 3)
+      cohen_kappa = round(cohen_kappa, 2)
     ),
   col.names = c(
     "Reviewer pair",
@@ -237,6 +238,12 @@ knitr::kable(
 
 The B-and-C comparison is weaker than A and C. Reporting only one pair would
 hide that difference.
+
+The table shows two decimals on purpose. With 11 items, one reviewer changing
+one answer moves observed agreement by about nine points, so a third decimal
+describes arithmetic rather than measurement. Publishing 0.818 invites a reader
+to compare it with 0.812 from another study as though the difference meant
+something.
 
 Krippendorff's alpha summarizes all three reviewers at once. `pivot_longer()`
 puts the reviewer columns into one label column, then `pivot_wider()` builds the
@@ -304,7 +311,7 @@ tibble(
   ),
   value = round(
     c(all_rater_alpha, unanimity_share),
-    3
+    2
   )
 )
 ```
@@ -312,6 +319,76 @@ tibble(
 The 11-item example is too small for a precise population estimate. These
 statistics describe this annotation exercise and help locate problems; they do
 not certify the codebook or any reviewer.
+
+## Ask how much one item is worth
+
+"Too small for a precise estimate" is a phrase readers skim past. The way to
+make it concrete is to remove one item at a time and recompute, which for 11
+items means 11 recalculations and no new data.
+
+```{r}
+alpha_without_item <- map_dbl(
+  seq_len(nrow(rating_matrix)),
+  \(dropped) {
+    irr::kripp.alpha(
+      t(rating_matrix[-dropped, , drop = FALSE]),
+      method = "nominal"
+    )$value
+  }
+)
+
+sensitivity <- tibble(
+  sentence_id = numeric_ratings$sentence_id,
+  alpha_without_this_item = alpha_without_item
+) |>
+  arrange(desc(alpha_without_this_item))
+
+alpha_range <- range(alpha_without_item)
+
+stopifnot(
+  identical(length(alpha_without_item), 11L),
+  identical(
+    round(alpha_range, 2),
+    c(0.76, 0.91)
+  ),
+  identical(
+    sensitivity$sentence_id[1],
+    "s013"
+  ),
+  max(alpha_without_item) > all_rater_alpha,
+  min(alpha_without_item) < all_rater_alpha
+)
+
+knitr::kable(
+  sensitivity |>
+    mutate(
+      alpha_without_this_item = round(
+        alpha_without_this_item,
+        2
+      )
+    ),
+  col.names = c("Item removed", "Alpha for the other ten"),
+  caption = "Krippendorff's alpha after dropping each item in turn",
+  row.names = FALSE
+)
+```
+
+Alpha is 0.80 on all 11 items. Drop one item and it lands anywhere between 0.76
+and 0.91. The high end is not a coincidence: removing `s013`, the item all three
+reviewers read differently, is what produces it.
+
+This is not a confidence interval, and it should not be reported as one. It is a
+cruder statement and a sufficient one here: a summary this sensitive to a single
+item cannot support a claim that one codebook, task, or reviewer pool is more
+reliable than another. Reporting the range beside the estimate is honest;
+reporting 0.797 alone is not.
+
+A larger sample can reduce single-item sensitivity, but sample size alone does
+not determine how much alpha moves. Label prevalence, clustered documents,
+which item is removed, and the pattern of disagreement all matter. For a larger
+study, resample whole source documents rather than individual rows and report
+the resulting bootstrap distribution; this lesson's 11 items cannot predict
+what its width would be for 500.
 
 ## Find the disagreements
 
@@ -469,6 +546,93 @@ tie among top labels goes to `adjudicate`. Sentence `s013` returns `adjudicate`
 because three different answers do not form a majority. The team can review the
 sentence, codebook, and source labels before choosing a reference label.
 
+## Finish the adjudication
+
+An adjudication queue that stays a queue is not a quality process. Both flagged
+items were decided by a fourth reader who had not labeled them, working from the
+codebook text rather than from the vote counts.
+
+```{r}
+adjudication <- tibble(
+  sentence_id = c("s010", "s013"),
+  question = c(
+    "Is a preferred condition an entry condition or something else?",
+    "Does naming a credential make the unit a training offer?"
+  ),
+  rule_applied = c(
+    "requirement: the main claim states or prefers an entry condition",
+    "training: a credential required or preferred is not training"
+  ),
+  decision = c("requirement", "requirement"),
+  decided_by = "fourth reader, not one of the three reviewers"
+)
+
+adjudication_outcome <- adjudication |>
+  left_join(
+    sentence_text |>
+      select(sentence_id, text, reference_label),
+    by = join_by(sentence_id)
+  ) |>
+  left_join(
+    crowd_labels |>
+      select(sentence_id, all_of(reviewer_columns)),
+    by = join_by(sentence_id)
+  ) |>
+  mutate(
+    matches_reference_file = decision == reference_label,
+    reviewers_still_disagree = reviewer_a != reviewer_b |
+      reviewer_b != reviewer_c
+  )
+
+stopifnot(
+  identical(nrow(adjudication_outcome), 2L),
+  all(adjudication_outcome$matches_reference_file),
+  all(adjudication_outcome$reviewers_still_disagree),
+  str_detect(
+    crowd_codebook$instructions,
+    fixed("main claim states or prefers")
+  ),
+  str_detect(
+    crowd_codebook$instructions,
+    fixed("is not training")
+  ),
+  identical(nrow(crowd_labels), 11L)
+)
+
+knitr::kable(
+  adjudication_outcome |>
+    select(
+      sentence_id,
+      text,
+      reviewer_a,
+      reviewer_b,
+      reviewer_c,
+      decision
+    ),
+  col.names = c(
+    "Sentence ID",
+    "Text",
+    "Reviewer A",
+    "Reviewer B",
+    "Reviewer C",
+    "Adjudicated label"
+  ),
+  caption = "Both flagged items resolved, with the reviewer answers kept",
+  row.names = FALSE
+)
+```
+
+Both items resolve to `requirement`, and both decisions rest on a clause the
+adjudicator can point to in the codebook. The reviewer columns are still in the
+table with their disagreements intact, which is why the check above can confirm
+that the reviewers still differ after the item was settled.
+
+Notice what the adjudication of `s013` did not do. It did not make the item
+easy. Three trained readers reached three answers, and the sensitivity analysis
+showed that this one item carries most of the distance between an alpha of 0.80
+and one of 0.91. A decision closes the item; it does not retire the question,
+which belongs in the next codebook revision as a worked example.
+
 ## Agreement does not prove validity
 
 Reviewers can agree because:
@@ -502,15 +666,18 @@ as individual answers.
 
 - Keep individual reviewer labels before combining them.
 - Agreement measures summarize consistency, not truth.
+- Report agreement to a precision the sample size can support.
+- Show how far a statistic moves when one item is removed.
 - Inspect disagreement items and revise the codebook when needed.
+- Finish the adjudication and record which rule decided it.
 - Preserve whether a majority label was unanimous.
 - Fair pay, privacy, expertise, and appeal processes are part of data quality.
 
-The comparison leaves two boundary cases for adjudication rather than folding
-them into a majority vote. The following augmentation exercise keeps that
-annotation record intact and creates five separate fictional variants. Each is
-marked as synthetic and checked against the same codebook before it can join
-training data.
+The comparison leaves nothing in the queue: two boundary cases were adjudicated
+against named rules, and the reviewer answers that produced them are still on
+the page. The following augmentation exercise keeps that annotation record
+intact and creates fictional variants. Each is marked as synthetic and checked
+against the same codebook before it can join training data.
 
 ## Sources
 

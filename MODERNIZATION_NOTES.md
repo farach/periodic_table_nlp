@@ -16,13 +16,18 @@ not been replaced by large language models. Current tools can automate parts of
 the work, but they still receive bytes, text, records, and documents whose
 origin and meaning must be checked.
 
-## Lessons that need a modern treatment
+## Completed coverage that still needs review
+
+Lessons 14, 27, and 32 are available. Their current pages introduce subword
+tokenization, named-entity recognition, and entity linking, respectively.
+Future revisions should continue to test their claims against current
+tokenizers, prompted or structured-output extraction, and normalization-aware
+linking rather than treating publication as permanent completion.
+
+## Future lessons
 
 Future research should give extra attention to:
 
-- Task 14, tokenization: include subword methods used by transformer models.
-- Tasks 27 and 32, named entities: compare trained extractors with prompted and
-  structured-output models.
 - Tasks 43 through 47, model development: distinguish pretraining, task
   training, instruction tuning, preference-based post-training, evaluation,
   deployment, and monitoring.

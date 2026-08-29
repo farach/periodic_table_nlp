@@ -51,6 +51,24 @@ review_manifest <- read.csv(
 normalized_lesson_files <- gsub("\\\\", "/", lesson_files)
 
 if (
+  !identical(
+    names(review_manifest),
+    c(
+      "task_number",
+      "source_file",
+      "editorial_status",
+      "last_researched",
+      "last_code_run",
+      "project_narrative_review",
+      "project_prose_scan",
+      "project_adversarial_review",
+      "adversarial_rounds",
+      "project_automated_accessibility",
+      "manual_accessibility",
+      "human_approval",
+      "open_limitations"
+    )
+  ) ||
   !identical(nrow(review_manifest), length(lesson_files)) ||
   !identical(
     review_manifest$source_file,
@@ -72,14 +90,14 @@ if (
     "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
     review_manifest$last_code_run
   )) ||
-  !all(review_manifest$prose_scan == "passed") ||
-  !all(review_manifest$narrative_review == "passed") ||
-  !all(review_manifest$adversarial_review == "passed") ||
+  !all(review_manifest$project_prose_scan == "passed") ||
+  !all(review_manifest$project_narrative_review == "passed") ||
+  !all(review_manifest$project_adversarial_review == "passed") ||
   !all(
     as.integer(review_manifest$adversarial_rounds) >= 1L
   ) ||
   !all(
-    review_manifest$automated_accessibility ==
+    review_manifest$project_automated_accessibility ==
       "passed"
   ) ||
   !all(

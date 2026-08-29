@@ -76,3 +76,14 @@ from correlation to cause.
 The last read happens in the browser after code execution. Check the title,
 opening, transitions, tables, code output, captions, sources, and closing
 memory cue. Do not publish from the source view alone.
+
+## Check the series as a series
+
+Consistent headings can help readers move between lessons, but identical
+openings, paragraph sequences, and conclusions can make distinct topics feel
+interchangeable. The automated repetition check finds exact sentences and
+four-word openings only. A human editor must also read a run of neighboring
+lessons for repeated argument shape, pacing, and stock transitions.
+
+This review concerns observable prose, not authorship. Do not optimize text for
+an AI detector or describe a person or model as the author based on style.

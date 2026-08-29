@@ -447,6 +447,12 @@ that way, no threshold on these pairs can catch the paraphrase without also
 joining the distractor. The sweep confirms that threshold choice trades one error
 against another here; it is not a general law of deduplication.
 
+## Deduplication at scale
+
+The `expand_grid()` step used here builds an all-pairs combination, which mathematically scales at $O(N^2)$. Pairwise comparisons work for a tiny teaching set, but mathematically collapse in production. For real-world datasets, an all-pairs Jaccard distance calculation is too slow and requires too much memory.
+
+Production systems bypass this $O(N^2)$ scaling boundary by using Locality Sensitive Hashing (LSH) and MinHash over shingled text. R packages like `textreuse` (or Python's `datasketch`) implement these algorithms to group near-duplicates across millions of documents without comparing every pair.
+
 ## What to remember
 
 - Duplicate documents can inflate counts and leak between training and evaluation.

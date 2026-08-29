@@ -8,7 +8,7 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 7,Ext,Extracting text from an image,task,1,Source data loading,source,1_source_data_loading/07-text-extraction-and-ocr.html,available,2026-08-29
 8,Man,Turning decisions into labels,practice,2,Training data generation,source,2_training_data_generation/08-manual-annotation.html,available,2026-08-29
 9,Act,Choosing what to label next,practice,2,Training data generation,source,2_training_data_generation/09-annotation-with-active-learning.html,available,2026-08-29
-10,Pro,Choosing an outside data provider,service,2,Training data generation,source,2_training_data_generation/10-training-data-providers.html,available,2026-08-29
+10,Pro,Inspecting provider schemas and provenance,service,2,Training data generation,source,2_training_data_generation/10-training-data-providers.html,available,2026-08-29
 11,Cro,Working with several annotators,service,2,Training data generation,source,2_training_data_generation/11-crowdsourcing-annotation.html,available,2026-08-29
 12,Aug,Creating additional training examples,practice,2,Training data generation,source,2_training_data_generation/12-textual-data-augmentation.html,available,2026-08-29
 13,Rul,Labeling text with written rules,practice,2,Training data generation,source,2_training_data_generation/13-rule-based-training-data.html,available,2026-08-29

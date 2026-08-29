@@ -9,6 +9,11 @@ Read [EDITORIAL_GUIDE.md](EDITORIAL_GUIDE.md) before drafting and
 Use [MODERNIZATION_NOTES.md](MODERNIZATION_NOTES.md) to identify tasks that
 need current transformer, retrieval, inference, or evaluation research.
 
+The canonical task map is `data/periodic_table.csv`. An available tile needs an
+HTML lesson path and a review date. `_quarto.yml` must include every lesson
+directory; adding a file alone does not publish it. `data/lesson_reviews.csv`
+is the publishing manifest and must remain in sorted lesson-path order.
+
 ## Write for the reader
 
 - Begin with a problem the reader can recognize.
@@ -32,14 +37,14 @@ This project checks for visible writing habits and residue instead.
 
 1. Run `Rscript scripts/check-prose.R` for machine residue and common style
    patterns.
-2. Run `Rscript scripts/check-repetition.R`, which fails when lessons start to
-   read like one template. Openings are the tell: if many lessons begin the
-   same way, rewrite them so each opens on its own moment.
+2. Run `Rscript scripts/check-repetition.R`. It checks exact repeated sentences
+   and repeated four-word openings; it does not detect a repeated paragraph
+   shape or argument.
 3. Read the lesson aloud and remove stiff phrasing, repeated structures, and
    unnecessary setup.
 4. Ask an independent editor to challenge the voice, narrative, and clarity.
 5. Run a separate skeptical review of every factual claim and source.
-5. Proofread the final rendered page without editing while reading.
+6. Proofread the final rendered page without editing while reading.
 
 Record every round in the pull request checklist. A tool passing is not a
 substitute for editorial judgment.
@@ -50,6 +55,8 @@ Every published code chunk must have output produced by a real execution.
 
 1. Keep code evaluation enabled and caching disabled.
 2. Use deterministic inputs. Set a seed before any random operation.
+   Record the RNG kind and software version when a generated artifact depends
+   on them.
 3. Add an assertion for each important expected result.
 4. Render the entire site after changing code or package versions.
 5. Treat errors, unexpected output, and unexplained warnings as publishing
@@ -95,6 +102,14 @@ python -m venv .venv-spacy
 On Windows the second path is `.venv-spacy/Scripts/python`. Versions are
 pinned, and both spaCy and the English pipeline are MIT licensed.
 
+Before the first render, restore the R environment as well:
+
+```powershell
+Remove-Item Env:LC_CTYPE -ErrorAction SilentlyContinue
+$env:RENV_CONFIG_SANDBOX_ENABLED = "FALSE"
+Rscript -e "renv::restore()"
+```
+
 In a lesson, the entire setup is:
 
 ```r
@@ -122,6 +137,8 @@ page on each pull request.
 - Run `npm run test:a11y` after rendering the site.
 - Test with a real screen reader before public release; an automated scan does
   not reproduce a person's experience.
+- Keep automated accessibility, manual accessibility, narrative review,
+  adversarial review, and human approval as separate status fields.
 
 ## Check factual claims
 
@@ -134,6 +151,53 @@ For fast-moving topics, record when the research was checked. Separate
 established knowledge, current practice, emerging methods, and speculation.
 Search for evidence that contradicts the lesson before publishing it.
 
+State the language and scope of any language-dependent claim. For this
+English-language curriculum, use the BCP 47 tag `en` and do not imply that a
+result transfers to other languages, scripts, regions, or domains without
+evidence.
+
+## Preserve data and model provenance
+
+- Do not call package teaching fixtures authenticated extracts unless upstream
+  identifiers or a source digest establish that status.
+- Do not call reference labels ground truth.
+- Do not describe model scores as calibrated probabilities without evidence.
+- Account for errors, abstentions, and conflicts across every weak-label row.
+- Keep live API and model calls out of the render path; use dated fixtures or
+  credential-free package helpers.
+- Treat models under `data/treebank/` as deliberately small teaching models.
+  Do not present comparisons with released pipelines as fair contests.
+
+## Keep project invariants intact
+
+- Every R chunk in a lesson contains `stopifnot()`. Hidden setup chunks count as
+  source chunks even when they do not produce a rendered cell.
+- `R/workforce-codebook.R` is the canonical annotation instrument for tasks
+  8-13. Keep its foundryR hash on reference and crowd-annotation rows.
+- Preserve the 22 job-page details and six flyer transcript lines in
+  `data/workforce/workforce_sentences.csv` verbatim. Do not add inferred wording
+  to `text`.
+- Rebuild the flyer only with `data-raw/create-training-flyer.R`; its image and
+  transcript hashes belong in `training-flyer-metadata.csv`.
+- Treebank excerpts and locally trained models are committed because rebuilding
+  them takes several minutes. Preserve their CC BY-SA 4.0 license and recorded
+  fingerprints. Do not replace them with non-commercial pretrained UDPipe
+  models.
+- Mark model files as binary. A line-ending or byte change invalidates the
+  fingerprint in `data/treebank/treebank-metadata.csv`.
+- Pass an explicit temporary `model_path` to `tokenizers.bpe::bpe()`. Count
+  unknown pieces from `bpe_encode(type = "ids")`; the `subwords` display
+  reconstructs surface text and can hide unknown IDs.
+- Keep `data/openlibrary-nlp-search.json` as a dated fixture. Rendering must not
+  contact Open Library or any other live service.
+- The R `tesseract` package does not install the native OCR engine or language
+  data. `cld3` also needs protobuf on Linux. Keep those native dependencies in
+  CI. Hunspell is different: its English dictionaries are bundled with the R
+  package.
+- Planned map tiles remain static `div` elements. Do not add button semantics,
+  `aria-disabled`, or click handlers. Stage and status must never depend on
+  color alone.
+
 ## Review before publishing
 
 - [ ] A first-time reader can explain why the lesson matters.
@@ -145,3 +209,5 @@ Search for evidence that contradicts the lesson before publishing it.
 - [ ] Links, headings, tables, and image descriptions have been checked.
 - [ ] The page contains no drafting history or references to prior versions.
 - [ ] All writing-review and research-review rounds are recorded.
+- [ ] Manual accessibility and human approval are recorded independently from
+      automated checks.
