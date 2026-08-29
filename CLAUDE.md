@@ -160,6 +160,10 @@ environment is needed once; on macOS and Linux the pip path is
 - renv pins the R tesseract package, not the native OCR engine or English
   language data. CI installs those system packages before `setup-renv`, and
   the OCR lesson reports the native version at run time.
+- `cld3` links against protobuf at run time, so CI also installs
+  `libprotobuf-dev` and `protobuf-compiler`. Without them `renv::restore()`
+  fails on Linux only, while Windows is fine. Cross-platform package
+  requirements are the class of failure that local testing cannot catch.
 - `hunspell` is different: it bundles `en_US` and `en_GB` inside the package,
   so the dictionary is pinned by the package version and does not depend on a
   system install. Verified in 3.0.6.

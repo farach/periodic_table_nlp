@@ -35,6 +35,8 @@ jobs:
             libqpdf-dev \
             libtesseract-dev \
             libleptonica-dev \
+            libprotobuf-dev \
+            protobuf-compiler \
             poppler-data \
             tesseract-ocr \
             tesseract-ocr-eng
