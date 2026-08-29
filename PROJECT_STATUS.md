@@ -14,6 +14,9 @@
   rewrote every lesson in the tidyverse and rebuilt the home page around the
   task map in commit
   [`c0943e3`](https://github.com/farach/periodic_table_nlp/commit/c0943e3).
+- [Pull request 4](https://github.com/farach/periodic_table_nlp/pull/4)
+  added the word-parsing stage, tasks 14 to 17, in commit
+  [`f0cae28`](https://github.com/farach/periodic_table_nlp/commit/f0cae28).
 
 ## Reader-facing work
 
