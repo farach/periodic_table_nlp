@@ -290,7 +290,7 @@ separate field.
 
 Production pipelines track per-step changed and removed counts. Analysts perform a removed-side sample audit to ensure they aren't accidentally erasing meaningful data. This is crucial because aggressive text cleaning can have a disparate impact, disproportionately destroying names or phrases from specific languages or dialects that use characters a naive rule did not expect.
 
-Additionally, when mojibake repair is in scope, production NLP typically relies on robust ecosystem tools (like the Python package `ftfy` — "fixes text for you") rather than manual `iconv()` conversions.
+When mojibake repair is in scope, production NLP typically relies on robust ecosystem tools (like the Python package `ftfy` — "fixes text for you") rather than manual `iconv()` conversions.
 
 ## What to remember
 

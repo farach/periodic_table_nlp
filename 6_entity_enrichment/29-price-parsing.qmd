@@ -335,16 +335,25 @@ failure_examples <- tibble(
   text = c("thirty-eight thousand a year", "1.250,50 / hr", "$40/hr (CAD)")
 )
 
-parse_prices(failure_examples) |>
+failure_results <- parse_prices(failure_examples)
+
+stopifnot(
+  identical(nrow(failure_results), 3L),
+  is.na(failure_results$amount_lower[1]),
+  identical(failure_results$amount_lower[2], 1.25),
+  identical(failure_results$currency[3], "USD")
+)
+
+failure_results |>
   select(text, amount_lower, currency) |>
   knitr::kable(caption = "Representative failures of the custom regex parser")
 ```
 
 - **Value normalization**: The pattern misses `"thirty-eight thousand"` entirely because it only looks for digits.
-- **Locale formats**: It reads the European format `1.250,50` incorrectly (amount_lower is NA) because it expects commas as thousands separators.
+- **Locale formats**: It reads the European format `1.250,50` incorrectly: it silently matches `1.250` and yields an amount of 1.25 because it expects commas as thousands separators.
 - **Ambiguous currencies**: It assumes `$` means USD, which is wrong for CAD.
 
-In standard NLP workflows, relying entirely on custom regex for entity parsing is an anti-pattern. Production systems use specialized entity parsing libraries (such as Duckling) or Named Entity Recognition (like `MONEY` entities in spaCy) to handle these variations and extract structured, normalized values across locales.
+In standard NLP workflows, relying entirely on custom regex for entity parsing is an anti-pattern. Systems use Named Entity Recognition (like `MONEY` entities in spaCy) to detect relevant spans, and separate value parsers (like Duckling) to normalize amounts, currencies, and locales into structured data.
 
 ## What to remember
 

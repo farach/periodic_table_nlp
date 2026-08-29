@@ -270,10 +270,10 @@ detector changes the route to the same warning: the note still leaks a name.
 
 The simple toy rules above miss the complexity of handling real personal data. In production (often using specialized toolkits like Microsoft Presidio), teams must track several critical concepts:
 
-- **Pseudonymization vs. Anonymization**: Replacing a name with `[PERSON]` is pseudonymization (the data might still be linked back to the person if other clues remain). True anonymization makes re-identification impossible.
+- **Pseudonymization vs. Anonymization**: Replacing a name with `[PERSON]` is pseudonymization (the data might still be linked back to the person if other clues remain). Anonymization requires breaking those links so the subject cannot be reasonably identified.
 - **Quasi-identifiers**: Details like a unique medical symptom, an exact timeline, or a specific geographic area might not be direct identifiers on their own, but when combined, they uniquely identify a person.
 - **Category-wise recall**: An honest evaluation measures recall (the percentage of true identifiers successfully masked) *per category*. A system might have 99% recall on phone numbers but only 60% on names, and an overall score hides that danger.
-- **Legal basis and residual risk**: Processing and masking text requires documenting a legal basis (such as GDPR or HIPAA compliance) and maintaining residual-risk documentation that details the likelihood of re-identification from the leaked text that inevitably slips through.
+- **Legal basis and residual risk**: Processing text often involves separate legal boundaries, such as a lawful basis under GDPR or permitted uses under HIPAA. Teams maintain residual-risk documentation to describe the remaining chance of re-identification (the "reasonable basis to believe" standard) after masking.
 
 ## What to remember
 

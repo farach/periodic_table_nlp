@@ -307,7 +307,7 @@ meaning.
 
 ## Modern coreference resolution
 
-The deterministic nearest-agreeing-noun syntax rule shown here is an outdated baseline intended only to expose the mechanism of coreference. Modern production coreference resolution is handled almost entirely by neural models (such as AllenNLP or large language models).
+The deterministic nearest-agreeing-noun syntax rule shown here is an early baseline intended only to expose the mechanism of coreference. Most complex coreference tasks are now approached using neural models (such as AllenNLP or large language models) rather than fixed syntax rules.
 
 When evaluating modern systems, keep these limits in mind:
 - **Cluster metrics**: Coreference models are evaluated using specialized clustering metrics (like MUC, B³, and CEAF) rather than simple pairwise accuracy, because errors compound when linking long chains of mentions across a document.

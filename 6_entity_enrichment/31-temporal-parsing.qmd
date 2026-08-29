@@ -350,8 +350,8 @@ includes periods. The label is right, and it is still not a calendar date.
 
 Finding a temporal span (like spaCy tagging `next Friday` as a `DATE`) is only the first step. Extracting a fully normalized value requires a dedicated tool like Meta's Duckling or Python's `dateparser` rather than hand-coded R branches.
 
-These tools enforce key disciplines that custom rules often miss:
-- **Explicit document-time anchors**: A relative phrase like `next Friday` or `tomorrow` means nothing without a strict reference date. Production systems require you to pass the exact timestamp a document was published to anchor the calculation.
+These tools organize key concepts that custom rules often mix together:
+- **Document Creation Time (DCT) / Reference Time**: A relative phrase like `next Friday` or `tomorrow` means nothing without a strict reference date. Parsers do not enforce this automatically; callers must provide the anchor (e.g., passing `RELATIVE_BASE` to `dateparser`).
 - **Granularity and representative ambiguity**: A phrase like `last month` is ambiguous. Depending on the context, does it mean the previous calendar month (a granularity of one month) or the last 30 days? A robust parser separates the span detection from the normalized value, keeping these assumptions visible.
 
 ## What to remember

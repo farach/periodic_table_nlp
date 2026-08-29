@@ -359,7 +359,7 @@ reassurance.
 
 ## Language identification in production
 
-While `cld2` and `cld3` illustrate the routing problem, modern pipelines typically use Meta's `fasttext` as the current industry baseline for fast language identification. When deploying any model, keep these production realities in mind:
+While `cld2` and `cld3` illustrate the routing problem, models such as Meta's `fasttext` are common alternatives for fast language identification. When deploying any model, keep these production realities in mind:
 
 - **Language scope and BCP 47**: Projects must explicitly state their supported language scope upfront. When recording a language, use a standard like BCP 47 tags (e.g., `en-US`) rather than informal names.
 - **Per-language recall**: A model's overall accuracy hides its failures. Always measure recall *per language*, because models routinely fail on low-resource languages.
