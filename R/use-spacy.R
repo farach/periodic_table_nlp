@@ -28,12 +28,31 @@ use_project_spacy <- function(model = "en_core_web_sm",
     )
   }
 
-  Sys.setenv(
-    RETICULATE_PYTHON = normalizePath(found[[1]], winslash = "/")
-  )
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    stop("The reticulate package is not installed.", call. = FALSE)
+  }
 
   if (!requireNamespace("spacyr", quietly = TRUE)) {
     stop("The spacyr package is not installed.", call. = FALSE)
+  }
+
+  python <- normalizePath(found[[1]], winslash = "/")
+
+  # Bind reticulate explicitly. Setting RETICULATE_PYTHON alone is not enough,
+  # because it is ignored once Python has been initialised, and reticulate may
+  # otherwise pick an interpreter that has no spaCy in it.
+  Sys.setenv(RETICULATE_PYTHON = python)
+  reticulate::use_python(python, required = TRUE)
+
+  if (!reticulate::py_module_available("spacy")) {
+    stop(
+      paste0(
+        "The Python at '", python, "' has no spaCy module.\n",
+        "Install it with:\n",
+        "  ", venv, "/bin/python -m pip install -r requirements-spacy.txt"
+      ),
+      call. = FALSE
+    )
   }
 
   # spacyr's own Python helper contains an unescaped backslash, so importing it
@@ -58,7 +77,7 @@ use_project_spacy <- function(model = "en_core_web_sm",
 
   invisible(
     list(
-      python = Sys.getenv("RETICULATE_PYTHON"),
+      python = python,
       model = model
     )
   )
