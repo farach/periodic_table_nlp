@@ -47,6 +47,11 @@ The current review record lives in `data/lesson_reviews.csv`. An available
 lesson may still have human approval marked as pending. Availability means that
 the page can be read, not that every claim has final approval.
 
+Every `passed` value in that manifest is a project assertion about the named
+review or automated check. It is not independent certification. Narrative,
+adversarial, automated accessibility, manual accessibility, and human approval
+remain separate fields and cannot substitute for one another.
+
 Search for criticism before drafting the conclusion. If a result has not been
 replicated, say so.
 
@@ -129,6 +134,13 @@ A lesson about models or modern methods needs:
 4. one source focused on limitations, failures, or affected groups.
 
 Recheck links and time-sensitive claims immediately before publication.
+
+## State language scope
+
+Name the language and, where practical, its BCP 47 tag. These lessons currently
+use English (`en`). A result on English text does not establish behavior for
+another language, script, region, or domain. State broader coverage only when
+the examples and evaluation support it.
 
 ## Foundational references for future research
 

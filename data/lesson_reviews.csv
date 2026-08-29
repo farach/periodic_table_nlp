@@ -1,4 +1,4 @@
-task_number,source_file,editorial_status,last_researched,last_code_run,narrative_review,prose_scan,adversarial_review,adversarial_rounds,automated_accessibility,manual_accessibility,human_approval,open_limitations
+task_number,source_file,editorial_status,last_researched,last_code_run,project_narrative_review,project_prose_scan,project_adversarial_review,adversarial_rounds,project_automated_accessibility,manual_accessibility,human_approval,open_limitations
 1,1_source_data_loading/01-bits-to-character-encoding.qmd,review-ready,2026-08-28,2026-08-28,passed,passed,passed,2,passed,pending,pending,Constructed example; encoding diagnosis requires source metadata
 2,1_source_data_loading/02-manual-typewriting.qmd,review-ready,2026-08-28,2026-08-28,passed,passed,passed,2,passed,pending,pending,Regex behavior depends on the stated engine and character policy
 3,1_source_data_loading/03-loading-structured-datafile.qmd,review-ready,2026-08-28,2026-08-28,passed,passed,passed,2,passed,pending,pending,CSV dialect and missing-value rules must come from the provider

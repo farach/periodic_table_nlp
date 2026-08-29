@@ -27,8 +27,9 @@ and their tiles stay visible so you can see what is coming.
 ::: {.callout-tip}
 ## Start here
 
-Read in number order. Each lesson explains its own idea from the beginning, and
-its code assumes the R you have already seen.
+For a course, read in number order because the R code builds on earlier
+lessons. For a specific problem, open any available lesson; each page introduces
+its own NLP idea and points out the assumptions it needs.
 :::
 
 ```{r}
@@ -126,11 +127,7 @@ render_tile <- function(task_number,
                         ...) {
   is_available <- identical(status, "available")
   label_text <- if (is_available) "Read lesson" else "Planned"
-  status_class <- if (is_available) {
-    "element-status"
-  } else {
-    "element-status visually-hidden"
-  }
+  status_class <- "element-status"
 
   tile_contents <- sprintf(
     paste0(
@@ -250,8 +247,27 @@ table_html <- groups |>
   map_chr(render_group) |>
   paste(collapse = "")
 
+route_links <- available |>
+  group_by(group_id, group_name) |>
+  slice_min(task_number, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  mutate(
+    link = sprintf(
+      '<a href="%s">%s</a>',
+      escape_attribute(lesson_path),
+      escape_text(str_to_lower(group_name))
+    )
+  ) |>
+  pull(link)
+
+route_html <- paste(
+  route_links,
+  collapse = "; "
+)
+
 stopifnot(
   identical(length(groups), 15L),
+  identical(length(route_links), 8L),
   identical(
     str_count(table_html, fixed('class="element-slot"')),
     81L
@@ -295,6 +311,13 @@ cat(
   '<div class="periodic-table">',
   table_html,
   '</div></div>',
+  '<nav class="available-routes" aria-label="Available lesson routes">',
+  '<strong>Start with ',
+  '<a href="1_source_data_loading/01-bits-to-character-encoding.html">',
+  'task 1</a>, or enter an available group:</strong> ',
+  route_html,
+  '.',
+  '</nav>',
   sep = ""
 )
 ```
@@ -325,15 +348,12 @@ capable model does not settle this, because the difficulty is not what the
 model can do. It is what you meant.
 
 Then the margin around it. "About 22 percent" needs the "about" to come from
-somewhere. To find out how often an automatic answer is wrong, you compare it
-against something you trust more, usually a sample of the same material worked
-out by hand and drawn at random so that what you find in it carries over to the
-rest. Assumptions can stand in for part of that comparison. Several established
-methods estimate error from how far several automatic labellers agree with each
-other, and they work. What they buy the estimate with is an assumption about
-the shape of the errors, which is itself hard to check without doing some of
-the work by hand. A better model shrinks how much you have to check, without
-taking the number of checks to zero.
+somewhere. One way to investigate how often an automatic answer is wrong is to
+compare it with a hand-checked sample drawn from the same material. What that comparison
+supports depends on how the sample was drawn and what the checking rules mean.
+Some methods instead estimate error from agreement among automatic labellers,
+but those estimates depend on assumptions about how their errors relate.
+Checking those assumptions can still require hand-reviewed examples.
 
 Underneath both is the text itself. Every number about a body of writing is
 really a number about the version of that writing which arrived. Characters get
@@ -356,32 +376,38 @@ different skills, and in my experience the second comes from having produced
 such a number yourself, on your own untidy text, and having watched it flatter
 you.
 
-None of this says you must do the work by hand. For drafting, summarising, or
-getting a rough sense of an unfamiliar pile of text, these tools already save
-real time, and individual failures described in these lessons may well be fixed
-in the systems that come next. That case will keep getting stronger. What the
-parts named here describe is not a capability gap but the shape of a
-measurement: the definition, the comparison, and the text that actually
-arrived. How much each one costs is a separate question that depends on your
-text and on how much the answer matters, and this page cannot tell you either.
+None of this says you must do the work by hand. A tool may be useful for
+drafting, summarising, or exploring unfamiliar text while still needing checks
+that match the decision. What the parts named here describe is not a fixed
+capability gap but the shape of a measurement: the definition, the comparison,
+and the text that actually arrived. The useful amount of checking depends on
+your text and on the cost of a wrong answer; this page cannot set it for you.
 
-These lessons cover the near end of that work: getting text out of files, web
-pages and scans without damaging it, and building a set of hand-checked labels
-you can defend. Several also cover the shortcuts, including buying labels,
-generating examples, and writing rules, and where each one stops being
-trustworthy.
+The first thirteen lessons cover getting text out of files, web pages, and scans
+without damaging it, then building labels you can defend. Lessons 14 through 42
+follow the text through tokens and vocabularies, word forms and grammar links,
+phrases and entities, sentence and paragraph boundaries, and whole-document
+cleaning, comparison, metadata, and language identification. Together they show
+where each transformation helps and what information it can lose.
 
 ## About this site
 
-**Available** means a lesson exists and its automated checks passed. No lesson
-has had final human sign-off yet, and the review record for each one is kept in
-`data/lesson_reviews.csv`. Practice in this field moves quickly, so where a
-lesson describes current methods rather than settled ground, it says so and
-gives a date. The rules a lesson has to meet before it appears here are written
-down in
+**Available** means a lesson source exists and its project-recorded automated
+checks passed. Those `passed` values are project assertions, not independent
+certification. Manual accessibility and final human sign-off remain pending,
+and the separate review fields are kept in `data/lesson_reviews.csv`. Practice
+in this field moves quickly, so where a lesson describes current methods rather
+than settled ground, it says so and gives a date. The rules a lesson has to meet
+before it appears here are written down in
 [CONTRIBUTING.md](https://github.com/farach/periodic_table_nlp/blob/main/CONTRIBUTING.md)
 and
 [RESEARCH_STANDARDS.md](https://github.com/farach/periodic_table_nlp/blob/main/RESEARCH_STANDARDS.md).
+
+This repository builds and checks the source but does not deploy it. The
+canonical published location is
+[workforcefutures.net/learn/nlp/](https://workforcefutures.net/learn/nlp/).
+A successful repository build establishes a rendered artifact, not that the
+canonical host is current or that pending manual reviews have passed.
 
 The task names and groupings are adapted from Rob van Zoest's
 [Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).

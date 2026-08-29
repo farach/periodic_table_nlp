@@ -17,6 +17,7 @@ project:
 website:
   title: "Periodic Table of NLP Tasks in R"
   description: "Practical notes on natural language processing tasks in R."
+  site-url: "https://workforcefutures.net/learn/nlp/"
   repo-url: "https://github.com/farach/periodic_table_nlp"
   repo-actions: [source, issue]
   search: true

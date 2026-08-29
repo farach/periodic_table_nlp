@@ -120,6 +120,11 @@ Versions are pinned in `requirements-spacy.txt`: spaCy 3.8.7 and
 and starts the pipeline, and stops with setup instructions if it is missing.
 Nothing is downloaded while a page renders.
 
+The UDPipe models in `data/treebank/` were trained in this repository on the
+documented 500-sentence excerpt and are deliberately weak teaching models.
+Comparisons with the released spaCy pipeline demonstrate provenance and domain
+effects; they are not fair model contests.
+
 The pipeline was trained on written web text. It has never seen the invented
 names in this project, and the lessons show it making mistakes on them. Those
 mistakes are reported as evidence about domain mismatch, not as defects in the
