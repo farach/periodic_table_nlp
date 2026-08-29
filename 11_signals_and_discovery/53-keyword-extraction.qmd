@@ -140,7 +140,12 @@ The second approach starts with the UDPipe tagger from the part-of-speech lesson
 tagger <- udpipe_load_model("data/treebank/en_ewt-500-tagger.udpipe")
 
 vertical <- speeches$text |>
-  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  # A stated pattern rather than `tokenize_words()`. That function splits on ICU
+  # word boundaries, and ICU versions differ between machines, so the token
+  # stream handed to the tagger was not the same on a Linux runner as on a
+  # laptop. Words, numbers, and single punctuation marks are kept as separate
+  # tokens, which is what the vertical tokenizer expects.
+  str_extract_all("[A-Za-z]+(?:'[A-Za-z]+)*|[0-9]+|[[:punct:]]") |>
   vapply(\(tokens) paste(tokens, collapse = "\n"), character(1))
 
 annotated_all <- udpipe_annotate(
@@ -191,8 +196,8 @@ tagger_error <- annotated_all |>
   select(token, lemma, upos)
 
 stopifnot(
-  identical(nrow(annotated_all), 148427L),
-  identical(sum(annotated_all$relevant), 36407L),
+  identical(nrow(annotated_all), 148525L),
+  identical(sum(annotated_all$relevant), 36423L),
   identical(nrow(rake_top_20), 1200L),
   identical(nrow(rake_top), 15L),
   identical(
