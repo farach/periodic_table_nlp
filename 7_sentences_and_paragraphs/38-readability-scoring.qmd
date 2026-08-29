@@ -1,0 +1,391 @@
+---
+title: "Scoring readability formulas"
+subtitle: "Compute Flesch scores and measure the syllable shortcut"
+author: "Alex Farach"
+description: "Learn how readability formulas use sentence, word, and syllable counts, and why their limits are severe."
+categories: [sentences and paragraphs, readability scoring, workforce research]
+---
+
+Plain public help text is ready for review, but the coordinator still asks
+whether the job board is harder to read than the help articles. A single score
+would be convenient, but the score has to come from counted parts.
+
+**Readability formulas** estimate text difficulty from surface counts such as
+sentences, words, and syllables. A **syllable** is a spoken beat inside a word.
+The formulas in this lesson can be computed by hand, which makes their limits
+visible.
+
+::: {.callout-note}
+The job board and help articles scored here are fictional teaching texts.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define the counts used by Flesch Reading Ease;
+- define the counts used by Flesch-Kincaid Grade Level;
+- write a small syllable-counting heuristic;
+- measure that heuristic against hand-counted job-board words; and
+- explain why a readability score is not a reading level for a person.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Count syllables with a visible shortcut
+
+This lesson reads local files, extracts HTML with rvest, tokenises text, and uses
+dplyr, tibble, purrr, and stringr for the count checks. The syllable counter
+below is only a shortcut: clean the word, drop a final silent `e` unless the word
+ends in consonant plus `le`, then count groups of vowel letters including `y`.
+In the code, `\(word)` is R shorthand for a small function applied to one word.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tokenizers)
+library(rvest)
+
+stopifnot(all(c(
+  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "rvest"
+) %in% loadedNamespaces()))
+
+job_page <- read_html("data/workforce/job-board.html")
+
+job_all_blocks <- job_page |>
+  html_elements("h1, h2, p, li") |>
+  html_text2()
+
+job_detail_sentences <- job_page |>
+  html_elements("li.job-detail") |>
+  html_text2()
+
+job_context_blocks <- job_page |>
+  html_elements("h1, h2, p") |>
+  html_text2()
+
+help_text <- list.files(
+  "data/help_articles",
+  pattern = "[.]txt$",
+  full.names = TRUE
+) |>
+  sort() |>
+  map_chr(read_file) |>
+  str_c(collapse = "\n\n")
+
+count_syllables <- function(words) {
+  clean_words <- words |>
+    str_to_lower() |>
+    str_replace_all("[^a-z]", "")
+
+  map_int(clean_words, \(word) {
+    if (identical(word, "")) {
+      return(0L)
+    }
+
+    adjusted_word <- if (str_detect(word, "[^aeiou]le$")) {
+      word
+    } else {
+      str_remove(word, "e$")
+    }
+
+    max(1L, str_count(adjusted_word, "[aeiouy]+"))
+  })
+}
+
+syllable_check <- tibble(
+  word = c(
+    "paid",
+    "training",
+    "provided",
+    "prior",
+    "data",
+    "experience",
+    "required",
+    "evening",
+    "schedules",
+    "available",
+    "applicants",
+    "basic",
+    "spreadsheet",
+    "skills",
+    "employer",
+    "certification",
+    "rotating",
+    "workers",
+    "portfolio",
+    "remote",
+    "receives",
+    "mentor",
+    "medical",
+    "certificate",
+    "preferred",
+    "daytime",
+    "apprenticeship",
+    "valid",
+    "license",
+    "customer"
+  ),
+  hand_syllables = c(
+    1L, 2L, 3L, 2L, 2L, 4L, 2L, 3L, 2L, 4L,
+    3L, 2L, 2L, 1L, 3L, 5L, 3L, 2L, 4L, 2L,
+    2L, 2L, 3L, 4L, 2L, 2L, 4L, 2L, 2L, 3L
+  )
+) |>
+  mutate(
+    heuristic_syllables = count_syllables(word),
+    comparison = case_when(
+      heuristic_syllables == hand_syllables ~ "exact",
+      heuristic_syllables > hand_syllables ~ "overcount",
+      TRUE ~ "undercount"
+    )
+  )
+
+syllable_summary <- syllable_check |>
+  count(comparison, name = "words")
+
+job_detail_words <- tokenize_words(
+  job_detail_sentences,
+  lowercase = TRUE,
+  strip_punct = TRUE
+) |>
+  unlist(use.names = FALSE)
+
+expected_syllable_summary <- tibble(
+  comparison = c("exact", "overcount", "undercount"),
+  words = c(21L, 5L, 4L)
+)
+
+stopifnot(
+  identical(length(job_all_blocks), 41L),
+  identical(length(job_detail_sentences), 22L),
+  identical(nrow(syllable_check), 30L),
+  all(syllable_check$word %in% job_detail_words),
+  identical(syllable_summary, expected_syllable_summary),
+  identical(sum(syllable_check$hand_syllables), 78L),
+  identical(sum(syllable_check$heuristic_syllables), 79L)
+)
+
+knitr::kable(
+  syllable_check,
+  col.names = c("Word", "Hand count", "Heuristic count", "Comparison"),
+  caption = "Hand-counted job-board syllables compared with the vowel-group heuristic",
+  row.names = FALSE
+)
+
+knitr::kable(
+  syllable_summary,
+  col.names = c("Comparison", "Words"),
+  caption = "Syllable heuristic results for 30 job-board words",
+  row.names = FALSE
+)
+```
+
+On these 30 job-board words, the heuristic matches 21 of 30, overcounts 5 of 30,
+and undercounts 4 of 30. The hand counts sum to 78 syllables, while the heuristic
+sums to 79. That one-syllable difference is small here, but the error is still
+real and it enters the readability formulas directly. The failures show three
+common traps: adjacent vowels at a syllable break, final `es` endings, and `y`
+joining a vowel group as in `employer`.
+
+## Compute the formulas directly
+
+Flesch Reading Ease uses this formula:
+
+`206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)`
+
+Flesch-Kincaid Grade Level uses this formula:
+
+`0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59`
+
+The code below uses those definitions. It does not call a readability package to
+hide the arithmetic.
+
+```{r}
+score_from_counts <- function(document, sentence_count, word_count, syllable_count) {
+  tibble(
+    document = document,
+    sentences = sentence_count,
+    words = word_count,
+    syllables = syllable_count,
+    words_per_sentence = round(word_count / sentence_count, 1),
+    syllables_per_word = round(syllable_count / word_count, 1),
+    flesch_reading_ease = round(
+      206.835 - 1.015 * (word_count / sentence_count) -
+        84.6 * (syllable_count / word_count)
+    ),
+    flesch_kincaid_grade = round(
+      0.39 * (word_count / sentence_count) +
+        11.8 * (syllable_count / word_count) - 15.59
+    )
+  )
+}
+
+score_readability <- function(text, document) {
+  sentence_count <- tokenize_sentences(text) |>
+    map_int(length) |>
+    sum()
+  word_tokens <- tokenize_words(
+    text,
+    lowercase = TRUE,
+    strip_punct = TRUE
+  ) |>
+    unlist(use.names = FALSE)
+  word_count <- length(word_tokens)
+  syllable_count <- sum(count_syllables(word_tokens))
+
+  score_from_counts(document, sentence_count, word_count, syllable_count)
+}
+
+preprocessing_counts <- tibble(
+  text_set = c(
+    "all HTML blocks collapsed",
+    "job-detail list items",
+    "headings, employers, and locations"
+  ),
+  blocks = c(
+    length(job_all_blocks),
+    length(job_detail_sentences),
+    length(job_context_blocks)
+  ),
+  sentences = c(
+    length(tokenize_sentences(str_c(job_all_blocks, collapse = " "))[[1]]),
+    sum(map_int(tokenize_sentences(job_detail_sentences), length)),
+    sum(map_int(tokenize_sentences(job_context_blocks), length))
+  ),
+  words = c(
+    length(unlist(tokenize_words(str_c(job_all_blocks, collapse = " "), lowercase = TRUE, strip_punct = TRUE), use.names = FALSE)),
+    length(job_detail_words),
+    length(unlist(tokenize_words(job_context_blocks, lowercase = TRUE, strip_punct = TRUE), use.names = FALSE))
+  )
+)
+
+readability_scores <- bind_rows(
+  score_readability(job_detail_sentences, "job detail sentences"),
+  score_readability(help_text, "help articles")
+)
+
+collapsed_score <- score_readability(str_c(job_all_blocks, collapse = " "), "job board collapsed")
+
+job_score <- readability_scores |>
+  filter(document == "job detail sentences")
+
+help_score <- readability_scores |>
+  filter(document == "help articles")
+
+net_bias_ratio <- sum(syllable_check$heuristic_syllables) / sum(syllable_check$hand_syllables)
+adjusted_job_syllables <- round(job_score$syllables / net_bias_ratio)
+
+syllable_sensitivity <- bind_rows(
+  job_score,
+  score_from_counts(
+    "job detail sentences, net-bias adjusted",
+    job_score$sentences,
+    job_score$words,
+    adjusted_job_syllables
+  )
+)
+
+stopifnot(
+  identical(preprocessing_counts$sentences, c(22L, 22L, 19L)),
+  identical(preprocessing_counts$words, c(177L, 133L, 44L)),
+  identical(job_score$sentences, 22L),
+  identical(job_score$words, 133L),
+  identical(job_score$syllables, 230L),
+  isTRUE(all.equal(job_score$words_per_sentence, 6.0)),
+  isTRUE(all.equal(job_score$syllables_per_word, 1.7)),
+  isTRUE(all.equal(job_score$flesch_reading_ease, 54)),
+  isTRUE(all.equal(job_score$flesch_kincaid_grade, 7)),
+  identical(collapsed_score$sentences, 22L),
+  identical(collapsed_score$words, 177L),
+  identical(collapsed_score$flesch_reading_ease, 33),
+  identical(help_score$sentences, 6L),
+  identical(help_score$words, 56L),
+  identical(help_score$syllables, 89L),
+  isTRUE(all.equal(help_score$words_per_sentence, 9.3)),
+  isTRUE(all.equal(help_score$syllables_per_word, 1.6)),
+  isTRUE(all.equal(help_score$flesch_reading_ease, 63)),
+  isTRUE(all.equal(help_score$flesch_kincaid_grade, 7)),
+  identical(syllable_sensitivity$flesch_reading_ease, c(54, 56))
+)
+
+knitr::kable(
+  preprocessing_counts,
+  col.names = c("Text set", "Blocks", "Sentence pieces", "Words"),
+  caption = "What is included before the readability formulas run",
+  row.names = FALSE
+)
+
+knitr::kable(
+  readability_scores,
+  col.names = c(
+    "Document",
+    "Sentences",
+    "Words",
+    "Syllables",
+    "Words per sentence",
+    "Syllables per word",
+    "Flesch Reading Ease, rounded",
+    "Flesch-Kincaid grade, rounded"
+  ),
+  caption = "Readability formulas computed directly from counted parts",
+  row.names = FALSE
+)
+
+knitr::kable(
+  syllable_sensitivity |>
+    select(document, syllables, flesch_reading_ease, flesch_kincaid_grade),
+  col.names = c("Document", "Syllables", "Flesch Reading Ease, rounded", "Flesch-Kincaid grade, rounded"),
+  caption = "Effect of applying the observed net syllable bias to the job-board score",
+  row.names = FALSE
+)
+```
+
+The code scores only the 22 job-detail list items as job-board sentences. The 19
+headings, employer names, and location labels contain 44 words, but they are not
+running sentences. If all 41 HTML blocks are glued into one string, those labels
+run into the list items and the Flesch score rounds to 33. That is a preprocessing
+artefact, not a reading result.
+
+With the list items kept separate, the job-board detail sentences have 22
+sentences, 133 words, and 230 heuristic syllables. The help articles have 6
+sentences, 56 words, and 89 syllables. The rounded scores are 54 and 7 for the
+job details, and 63 and 7 for the help articles. On common Flesch bands, the
+collapsed score of 33 falls in the difficult range; treating short job-board
+sentences as college-level prose would be implausible. The split score is still
+driven by the syllable term, especially long nouns such as `certification` and
+`apprenticeship`.
+
+Those values compare two teaching texts under one set of counting rules. The
+formulas were fitted decades ago for particular readers and tasks. They count
+surface features and know nothing about meaning, layout, stakes, or whether a
+reader already knows the subject. The 30-word audit found errors on nearly a
+third of tested words, and the net bias alone moves the job-detail Flesch score
+from 54 to 56. The help article sample is only 56 words. Whole-number scores are
+already more precision than the inputs deserve.
+
+## What to remember
+
+- Readability formulas use sentence, word, and syllable counts.
+- Preprocessing can change the sentence and word counts before the formula runs.
+- The syllable shortcut matched 21 of 30 job-board words and missed 9.
+- Whole-number scores are still rough because the syllable input is rough.
+
+The help articles score a little easier than the job-detail sentences here, but
+the samples are small and the syllable counter is noisy. The numbers are a prompt
+to read the text, not a substitute for reading it.
+
+## Sources
+
+- [Flesch, A new readability yardstick](https://doi.org/10.1037/h0057532)
+- [Kincaid and colleagues, Derivation of new readability formulas](https://eric.ed.gov/?id=ED149038)
+- [tokenizers documentation for word and sentence tokenizers](https://docs.ropensci.org/tokenizers/reference/basic-tokenizers.html)

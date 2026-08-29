@@ -51,7 +51,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const makeScrollableOutputsFocusable = () => {
     document
       .querySelectorAll(
-        ".cell-output-display, .cell-output-stdout > pre, .table-scroll"
+        ".cell-output-display, .cell-output-stdout > pre, " +
+          ".cell-output-stderr > pre, .table-scroll, " +
+          "div.sourceCode, pre.sourceCode"
       )
       .forEach((output) => {
         if (output.scrollWidth <= output.clientWidth) {
@@ -61,16 +63,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const section = output.closest("section[id]");
         const heading = section?.querySelector("h2, h3, h4");
         const sectionName = heading?.textContent.trim() || "R";
+        const isSource = output.classList.contains("sourceCode");
         output.setAttribute("tabindex", "0");
         output.setAttribute("role", "region");
         output.setAttribute(
           "aria-label",
-          `Scrollable ${sectionName} output`
+          isSource
+            ? `Scrollable ${sectionName} code`
+            : `Scrollable ${sectionName} output`
         );
       });
   };
 
   window.requestAnimationFrame(makeScrollableOutputsFocusable);
+  window.addEventListener("resize", makeScrollableOutputsFocusable);
 
   const taskMap = document.querySelector("#nlp-task-map");
   const mapButtons = document.querySelectorAll(

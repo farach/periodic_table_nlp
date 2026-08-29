@@ -1,0 +1,302 @@
+---
+title: "Checking named entities against domain text"
+subtitle: "See what a trained NER model gets right and wrong"
+author: "Alex Farach"
+description: "Learn how spaCy labels named entities in the Riverton sentences and why invented local names are hard."
+categories: [phrases and entities, named entity recognition, workforce research]
+---
+
+Names in the Riverton job-board and flyer text need labels, not just highlights.
+The coordinator wants to know whether a span names an organisation, a date, a
+time, a quantity, or something else.
+
+A trained named-entity model can supply those labels quickly. The question is
+whether its labels survive contact with local names that did not appear in its
+training examples.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define named entity recognition in plain language;
+- run spaCy's small English pipeline through spacyr;
+- read spaCy entity labels such as PERSON, ORG, DATE, TIME, QUANTITY, and GPE;
+- hand-check entity spans from the 28 Riverton sentences; and
+- explain why local invented names need domain review.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Run the released pipeline
+
+The setup chunk reads the sentences, runs the released spaCy pipeline, and
+formats entity spans for inspection. **Named entity recognition**, or **NER**,
+finds names and assigns each one a type.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(spacyr)
+source("R/use-spacy.R")
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "stringr", "spacyr") %in%
+    loadedNamespaces()
+))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+pipeline <- use_project_spacy()
+pipeline_info <- spacy_pipeline_version()
+parsed <- spacy_parse(
+  setNames(sentences$text, sentences$sentence_id),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+)
+entities <- entity_extract(parsed, type = "all") |>
+  as_tibble() |>
+  transmute(
+    sentence_id = doc_id,
+    entity = str_replace_all(entity, "_", " "),
+    entity_type
+  )
+
+example_text <- "Riverton Skills Centre will run evening classes in October."
+example_parsed <- spacy_parse(
+  c(example = example_text),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+)
+example_entities <- entity_extract(example_parsed, type = "all") |>
+  as_tibble() |>
+  transmute(
+    entity = str_replace_all(entity, "_", " "),
+    predicted_type = entity_type,
+    actual_type = c("ORG", "TIME", "DATE"),
+    correct = predicted_type == actual_type
+  )
+
+title_case_heading <- "Riverton Skills Open House"
+title_case_parsed <- spacy_parse(
+  c(title_case = title_case_heading),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+)
+title_case_entities <- entity_extract(title_case_parsed, type = "all") |>
+  as_tibble() |>
+  transmute(
+    entity = str_replace_all(entity, "_", " "),
+    entity_type
+  )
+
+spacy_finalize()
+
+pipeline_table <- tibble(
+  field = names(pipeline_info),
+  value = unlist(pipeline_info, use.names = FALSE)
+)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(pipeline$model, "en_core_web_sm"),
+  identical(pipeline_info$version, "3.8.0"),
+  identical(pipeline_info$license, "MIT"),
+  identical(pipeline_info$spacy, "3.8.7"),
+  identical(nrow(parsed), 179L),
+  identical(example_entities$entity, c("Riverton Skills Centre", "evening", "October")),
+  identical(example_entities$predicted_type, c("PERSON", "TIME", "DATE")),
+  identical(example_entities$correct, c(FALSE, TRUE, TRUE)),
+  identical(title_case_entities$entity, "Riverton Skills Open House"),
+  identical(title_case_entities$entity_type, "PERSON")
+)
+
+knitr::kable(
+  pipeline_table,
+  col.names = c("Pipeline field", "Value"),
+  caption = "spaCy pipeline used for named entity recognition",
+  row.names = FALSE
+)
+
+knitr::kable(
+  example_entities,
+  col.names = c("Entity", "Predicted type", "Actual type", "Correct"),
+  caption = "NER output for a Riverton Skills Centre check sentence",
+  row.names = FALSE
+)
+
+knitr::kable(
+  title_case_entities,
+  col.names = c("Entity", "Entity type"),
+  caption = "spaCy output for a title-case version of the flyer heading",
+  row.names = FALSE
+)
+```
+
+The check sentence exposes the main lesson. spaCy labels `Riverton Skills Centre`
+as `PERSON`, which is wrong in this passage; it names the provider, so the hand
+check treats it as `ORG`. A facility reading would point toward `FAC`. The
+invented name explains the domain mismatch, but it does not make the output
+correct. A title-case version of the all-capital heading becomes one `PERSON`
+span, a small reminder that surface form can change the model output.
+
+## Read the labels
+
+These type names come from OntoNotes, one annotation project's category list.
+They are conventions, not natural divisions of the world. `PERSON` means a
+person. `ORG` covers organisations such as companies, agencies, and
+institutions. `DATE` covers dates and periods such as months or years. `TIME`
+marks a time of day or similar expression. `QUANTITY` marks an amount with a
+unit. `GPE` covers a geopolitical place such as a city, state, or country. The
+same word can be a `GPE` in `Riverton raised the training budget` and part of an
+`ORG` in `Riverton Skills Centre`, so the sentence matters.
+
+```{r}
+entity_type_counts <- entities |>
+  count(entity_type, name = "entities", sort = TRUE)
+
+stopifnot(
+  identical(nrow(entities), 10L),
+  identical(entity_type_counts$entity_type, c("DATE", "TIME", "ORG", "QUANTITY")),
+  identical(entity_type_counts$entities, c(6L, 2L, 1L, 1L)),
+  !any(entities$entity_type %in% c("CARDINAL", "GPE")),
+  identical(entities$entity[entities$sentence_id == "s023"], "HOUSE")
+)
+
+knitr::kable(
+  entity_type_counts,
+  col.names = c("Entity type", "Entities"),
+  caption = "Entity types returned for the 28 Riverton sentences",
+  row.names = FALSE
+)
+```
+
+The model finds 10 entity spans in the 28 sentences. Six are `DATE`, two are
+`TIME`, one is `ORG`, and one is `QUANTITY`. It returns nothing for `RIVERTON`
+in the all-capital heading. That is defensible: here `RIVERTON` is part of an
+event name rather than a reference to the town. The mistake in that sentence is
+`HOUSE`: the model takes one word out of a four-word event heading and calls it
+an organisation, so the span and the type are wrong.
+
+## Hand-check the Riverton entities
+
+The table below marks the model's returned spans by hand. The hand labels are
+teaching judgments for these 28 sentences, not a public benchmark.
+
+```{r}
+entity_answers <- tibble(
+  sentence_id = c("s001", "s003", "s008", "s010", "s011", "s014", "s019", "s020", "s023", "s028"),
+  entity = c("12 - week", "Evening", "50 pounds", "Six months", "two days", "daytime", "Two years", "Weekend", "HOUSE", "October 15"),
+  expected_span = c("12 - week", "Evening", "50 pounds", "Six months", "two days", "daytime", "Two years", "Weekend", "RIVERTON SKILLS OPEN HOUSE", "October 15"),
+  expected_type = c("DATE", "TIME", "QUANTITY", "DATE", "DATE", "TIME", "DATE", "DATE", "EVENT", "DATE"),
+  note = c(
+    rep("The span and type fit this sentence.", 8),
+    "The event heading is four words; `HOUSE` alone is the wrong span and `ORG` is the wrong type.",
+    "The span and type fit this sentence."
+  )
+)
+
+entity_judgments <- entities |>
+  left_join(entity_answers, by = c("sentence_id", "entity")) |>
+  mutate(
+    correct = entity == expected_span & entity_type == expected_type
+  )
+
+entity_score <- entity_judgments |>
+  summarise(
+    returned_spans = n(),
+    correct_spans = sum(correct),
+    wrong_spans = sum(!correct),
+    .groups = "drop"
+  )
+
+stopifnot(
+  identical(entity_score$returned_spans, 10L),
+  identical(entity_score$correct_spans, 9L),
+  identical(entity_score$wrong_spans, 1L),
+  !any(is.na(entity_judgments$expected_type)),
+  identical(entity_judgments$correct[entity_judgments$sentence_id == "s023"], FALSE),
+  identical(entity_judgments$expected_type[entity_judgments$sentence_id == "s023"], "EVENT"),
+  identical(entity_judgments$expected_type[entity_judgments$sentence_id == "s028"], "DATE")
+)
+
+knitr::kable(
+  entity_judgments,
+  col.names = c("Sentence ID", "Entity", "Predicted type", "Expected span", "Expected type", "Note", "Correct"),
+  caption = "Hand check of all spaCy entity spans returned from the 28 sentences",
+  row.names = FALSE
+)
+
+knitr::kable(
+  entity_score,
+  col.names = c("Returned spans", "Correct spans", "Wrong spans"),
+  caption = "Hand-check counts for returned entity spans",
+  row.names = FALSE
+)
+```
+
+Nine of the ten returned spans hold up, but that is not an evaluation. Eight of
+the correct spans are dates, durations, or times of day, and one is a weight.
+The only returned organisation-like case is the one the model gets wrong. A
+single figure hides that mix, and the check says nothing about names the model
+missed.
+
+## Keep domain mismatch visible
+
+spaCy `en_core_web_sm` 3.8.0 is a released production pipeline. The local
+Riverton names are invented for this lesson, so the model cannot rely on having
+seen them in training. It has to generalise from surface cues, word shape, and
+surrounding words. That is domain mismatch, not proof that the pipeline is weak.
+
+## What to remember
+
+- NER labels spans under an annotation scheme such as OntoNotes.
+- The spaCy run returned 10 entity spans from the 28 Riverton sentences.
+- Ten returned spans are too few, and too uneven by type, to evaluate a model.
+- Local invented names need direct review because domain mismatch can change outputs.
+
+For Riverton work, keep NER in the triage step: collect candidates, inspect the
+local names, and report the model version beside the examples.
+
+## Sources
+
+- [spaCy named entity recognition documentation](https://spacy.io/usage/linguistic-features#named-entities)
+- [spaCy model documentation for English pipelines](https://spacy.io/models/en)
+- [spacyr package documentation](https://spacyr.quanteda.io/)

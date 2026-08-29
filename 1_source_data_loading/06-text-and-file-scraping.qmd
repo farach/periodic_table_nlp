@@ -76,11 +76,17 @@ job_page_metadata <- read_csv(
     rights_note = col_character()
   )
 )
-job_page_size <- file.info(job_page_path)$size
+# A size read from disk counts the line endings the local copy happens to
+# use, so it changes between systems. Measuring the newline-joined text, the
+# same text the fingerprint covers, describes the content instead.
+job_page_size <- nchar(
+  paste(job_page_lines, collapse = "\n"),
+  type = "bytes"
+)
 
 stopifnot(
   file.exists(job_page_path),
-  job_page_size > 1000,
+  identical(job_page_size, 3441L),
   identical(length(job_page_lines), 82L),
   inherits(job_page_metadata, "tbl_df"),
   identical(nrow(job_page_metadata), 1L),

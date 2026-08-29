@@ -65,8 +65,9 @@ stopifnot(
 messages
 ```
 
-The `stopifnot()` lines are **assertions**, checks that make R stop if an
-expected result changes. Here they confirm the number of messages and the text
+An **assertion** is a check that stops R when a result no longer matches what
+the lesson says it should be. That is what `stopifnot()` does. Here the checks
+confirm the number of messages and the text
 of the third one. R then prints all five messages. The number in square
 brackets at the left marks the position where that line of output begins.
 

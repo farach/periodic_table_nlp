@@ -99,8 +99,9 @@ stopifnot(
 book_request
 ```
 
-The `stopifnot()` lines are **assertions**, checks that make R stop if an
-expected result changes. They confirm that httr2 built a request for the
+Those `stopifnot()` calls are **assertions**. Each one stops the page from
+building if the result it names ever changes. They confirm that httr2 built a
+request for the
 intended address. The printed request begins with `GET`, the standard method
 used here to ask a service to send information. Printing it lets us inspect the
 destination and search choices without contacting the service again.

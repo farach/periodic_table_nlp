@@ -1,0 +1,240 @@
+---
+title: "Finding paragraph boundaries"
+subtitle: "Keep layout units before text conversion removes them"
+author: "Alex Farach"
+description: "Learn how blank lines and HTML block elements define paragraphs in different file formats."
+categories: [sentences and paragraphs, paragraph segmentation, workforce research]
+---
+
+Help articles and job-board HTML reach the coordinator as readable text, yet
+their paragraph breaks live in different places. Comparing them requires keeping
+those boundaries before cleanup erases them.
+
+In a plain-text help article, a blank line can mark a new paragraph. HTML gives
+the team block elements it can use as paragraph boundaries. The standard's own
+definition of a paragraph is looser than a `<p>` element, so this is a working
+rule for the lesson rather than the specification's answer.
+
+::: {.callout-note}
+The help articles and job board are local fictional fixtures.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define a paragraph as a layout unit;
+- split plain text on blank lines;
+- collect paragraph-like blocks from HTML with rvest;
+- compare paragraph counts across file formats; and
+- explain why block boundaries should be captured before tag removal.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Split plain text on blank lines
+
+This section reads files with readr, repeats file work with purrr, splits text
+with stringr, expands list columns with tidyr, shapes tables with dplyr and
+tibble, and asks rvest for HTML. A **paragraph** is a block of text grouped by
+layout. It may contain one sentence or several.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tidyr)
+library(rvest)
+
+stopifnot(all(c(
+  "readr", "dplyr", "tibble", "purrr", "stringr", "tidyr", "rvest"
+) %in% loadedNamespaces()))
+
+help_files <- list.files(
+  "data/help_articles",
+  pattern = "[.]txt$",
+  full.names = TRUE
+) |>
+  sort()
+
+split_blank_lines <- function(text) {
+  str_split(str_trim(text), "\\r?\\n\\s*\\r?\\n+")[[1]] |>
+    str_trim() |>
+    discard(\(piece) identical(piece, ""))
+}
+
+help_articles <- tibble(
+  file = basename(help_files),
+  text = map_chr(help_files, read_file)
+) |>
+  mutate(paragraph = map(text, split_blank_lines))
+
+help_paragraphs <- help_articles |>
+  select(file, paragraph) |>
+  unnest_longer(paragraph) |>
+  group_by(file) |>
+  mutate(paragraph_number = row_number()) |>
+  ungroup()
+
+help_counts <- help_paragraphs |>
+  count(file, name = "paragraphs")
+
+total_help_paragraphs <- sum(help_counts$paragraphs)
+help_blank_line_counts <- str_count(help_articles$text, "\\r?\\n\\s*\\r?\\n+")
+
+stopifnot(
+  identical(length(help_files), 3L),
+  identical(help_counts$paragraphs, c(1L, 1L, 1L)),
+  identical(total_help_paragraphs, 3L),
+  identical(help_blank_line_counts, c(0L, 0L, 0L)),
+  str_detect(help_paragraphs$paragraph[1], fixed("password reset link"))
+)
+
+knitr::kable(
+  help_counts,
+  col.names = c("Help article", "Paragraphs from blank-line rule"),
+  caption = "Paragraph counts in the plain-text help articles",
+  row.names = FALSE
+)
+
+knitr::kable(
+  help_paragraphs,
+  col.names = c("Help article", "Paragraph", "Paragraph number"),
+  caption = "Plain-text paragraphs after splitting on blank lines",
+  row.names = FALSE
+)
+```
+
+None of these help files contains a blank line, so the rule has nothing to split
+on and returns each file whole. That is a fair result but an empty demonstration.
+The HTML section below is where the rule has to make a choice.
+
+## Take blocks from HTML
+
+HTML records layout with elements. The code below reads the job-board page and
+keeps headings, paragraphs, and list items. The selector `h1, h2, p, li` names
+the block types the team wants to treat as paragraph-like units.
+
+```{r}
+job_page <- read_html("data/workforce/job-board.html")
+block_nodes <- html_elements(job_page, "h1, h2, p, li")
+
+html_blocks <- tibble(
+  tag = html_name(block_nodes),
+  text = html_text2(block_nodes)
+) |>
+  mutate(block_number = row_number())
+
+html_tag_counts <- html_blocks |>
+  count(tag, name = "blocks") |>
+  arrange(tag)
+
+expected_tag_counts <- tibble(
+  tag = c("h1", "h2", "li", "p"),
+  blocks = c(1L, 6L, 22L, 12L)
+)
+
+stopifnot(
+  identical(nrow(html_blocks), 41L),
+  identical(html_tag_counts, expected_tag_counts),
+  identical(html_blocks$text[1], "Riverton workforce opportunities"),
+  identical(html_blocks$text[5], "Paid 12-week training is provided."),
+  identical(sum(html_blocks$tag == "li"), 22L)
+)
+
+knitr::kable(
+  html_tag_counts,
+  col.names = c("HTML tag", "Blocks captured"),
+  caption = "Paragraph-like blocks captured from the job-board HTML",
+  row.names = FALSE
+)
+
+knitr::kable(
+  html_blocks |>
+    slice_head(n = 8),
+  col.names = c("HTML tag", "Text", "Block number"),
+  caption = "The first eight block elements from the job board",
+  row.names = FALSE
+)
+```
+
+The HTML rule finds 41 blocks: 1 page heading, 6 job headings, 12 paragraph
+elements, and 22 list items. The job-detail sentences in the Riverton CSV came
+from those list items.
+
+## Show what tag removal loses
+
+A common conversion step removes tags and keeps only the visible words. That can
+be useful for word counts, but it is too late for paragraph segmentation if the
+block marks are gone.
+
+```{r}
+html_source <- read_file("data/workforce/job-board.html")
+stripped_before_squish <- html_source |>
+  str_remove_all("<[^>]+>")
+
+paragraphs_after_tag_removal <- split_blank_lines(stripped_before_squish)
+paragraphs_after_squish <- stripped_before_squish |>
+  str_squish() |>
+  split_blank_lines()
+
+boundary_loss <- tibble(
+  source = c(
+    "HTML block elements",
+    "Tags removed, whitespace preserved",
+    "Tags removed, whitespace squished"
+  ),
+  paragraph_like_units = c(
+    nrow(html_blocks),
+    length(paragraphs_after_tag_removal),
+    length(paragraphs_after_squish)
+  )
+)
+
+stopifnot(
+  identical(length(paragraphs_after_tag_removal), 14L),
+  identical(length(paragraphs_after_squish), 1L),
+  identical(boundary_loss$paragraph_like_units, c(41L, 14L, 1L)),
+  str_starts(paragraphs_after_squish[1], "Riverton workforce opportunities"),
+  str_ends(paragraphs_after_squish[1], "Clear written communication is an essential skill.")
+)
+
+knitr::kable(
+  boundary_loss,
+  col.names = c("Rule", "Paragraph-like units"),
+  caption = "Whitespace cleanup collapses the tag-stripped text",
+  row.names = FALSE
+)
+```
+
+Tag removal alone leaves 14 blank-line chunks because the source file still has
+line breaks and indentation. Those chunks are not paragraphs; they are source
+layout around titles, job cards, and lists. `str_squish()` removes the remaining
+blank-line boundaries and leaves one long text string. For this file, paragraph
+structure has to be captured before whitespace cleanup.
+
+## What to remember
+
+- A paragraph is a layout block, so the right rule depends on the file format.
+- These help files have no blank lines, so the blank-line rule cannot show much.
+- The chosen HTML selector captures 41 block-like units, including headings and
+  list items.
+- Squishing whitespace after tag removal collapses the text to one unit.
+
+The help files and the job-board HTML need different boundary rules. Here the
+reported counts are layout counts, not a grammar claim about where paragraphs
+must begin.
+
+## Sources
+
+- [rvest documentation](https://rvest.tidyverse.org/)
+- [HTML Living Standard section on grouping content](https://html.spec.whatwg.org/multipage/grouping-content.html)
+- [readr documentation for reading files](https://readr.tidyverse.org/reference/read_file.html)

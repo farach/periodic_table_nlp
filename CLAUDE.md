@@ -13,8 +13,11 @@ Run the complete local gate from the repository root:
 Remove-Item Env:LC_CTYPE -ErrorAction SilentlyContinue
 $env:RENV_CONFIG_SANDBOX_ENABLED = "FALSE"
 Rscript -e "renv::restore()"
+python -m venv .venv-spacy
+.venv-spacy/Scripts/python -m pip install -r requirements-spacy.txt
 npm ci
 Rscript scripts/check-prose.R
+Rscript scripts/check-repetition.R
 quarto render
 Rscript scripts/check-lessons.R
 Rscript tests/test-periodic-table.R
@@ -23,7 +26,9 @@ npm run test:a11y
 ```
 
 The `LC_CTYPE` cleanup avoids a machine-level Windows warning being promoted
-to an error. Lesson chunks intentionally set `options(warn = 2)`.
+to an error. Lesson chunks intentionally set `options(warn = 2)`. The Python
+environment is needed once; on macOS and Linux the pip path is
+`.venv-spacy/bin/python`.
 
 ## Architecture
 
@@ -60,6 +65,19 @@ to an error. Lesson chunks intentionally set `options(warn = 2)`.
 - Lesson code is tidyverse-first: `readr` to read, `tibble` to construct,
   `dplyr` to reshape, `tidyr` to pivot, `purrr` to iterate, `stringr` for
   strings. Use the native pipe `|>`; never `%>%`.
+- Use the standard text packages where they are the natural tool.
+  `tidytext::unnest_tokens()` for going from documents to tokens, `quanteda`
+  where a corpus or document-feature matrix reads better, `ggplot2` for a chart
+  that earns its place.
+- spaCy is reached through `spacyr`. Lessons call
+  `source("R/use-spacy.R"); use_project_spacy()` and nothing else; the helper
+  owns the Python path, the warning suppression, and the startup message. Call
+  `spacy_finalize()` at the end. Python packages are pinned in
+  `requirements-spacy.txt`, not in `renv.lock`.
+- Two models with different provenance are in play. The udpipe models under
+  `data/treebank/` were trained here on 500 sentences and are deliberately
+  weak. The spaCy pipeline is a released model. Comparing them is a teaching
+  device; never present it as a fair contest.
 - Each lesson loads its packages in a visible chunk near the top and asserts
   `all(c(...) %in% loadedNamespaces())`. Do not use `library(tidyverse)`; the
   meta-package is not a dependency, and naming each package teaches which one
@@ -84,6 +102,11 @@ to an error. Lesson chunks intentionally set `options(warn = 2)`.
 - Public lessons never discuss drafting history.
 - `scripts/check-prose.R` runs residue and style-pattern scans. It does not
   establish authorship.
+- `scripts/check-repetition.R` fails when more than four lessons share a
+  four-word opening or more than three share an identical sentence. Many
+  lessons written from one brief will drift into a template, and a reader who
+  notices the template stops trusting the voice. The fictionality disclosure is
+  exempt because a standard notice should read the same everywhere.
 - Narrative, adversarial, automated accessibility, manual accessibility, and
   human approval are separate manifest fields. Never convert one into another.
 - The home page is reader-facing only. Contributor process belongs in
@@ -137,3 +160,10 @@ to an error. Lesson chunks intentionally set `options(warn = 2)`.
 - renv pins the R tesseract package, not the native OCR engine or English
   language data. CI installs those system packages before `setup-renv`, and
   the OCR lesson reports the native version at run time.
+- `cld3` links against protobuf at run time, so CI also installs
+  `libprotobuf-dev` and `protobuf-compiler`. Without them `renv::restore()`
+  fails on Linux only, while Windows is fine. Cross-platform package
+  requirements are the class of failure that local testing cannot catch.
+- `hunspell` is different: it bundles `en_US` and `en_GB` inside the package,
+  so the dictionary is pinned by the package version and does not depend on a
+  system install. Verified in 3.0.6.

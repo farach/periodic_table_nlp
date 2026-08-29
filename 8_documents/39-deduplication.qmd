@@ -1,0 +1,467 @@
+---
+title: "Deduplicating documents"
+subtitle: "Find repeated records before they distort a collection"
+author: "Alex Farach"
+description: "Learn how exact, normalized, and near-duplicate checks behave on Riverton workforce documents."
+categories: [documents, deduplication, workforce research]
+---
+
+Before training and evaluation, one repeated record can make a collection look
+larger than it is. The coordinator sees the same training sentence more than
+once and has to decide whether it represents a repeated record or a separate
+notice.
+
+That choice affects every count that follows. A duplicate document can inflate a
+common phrase, make a rare label look common, and leak between a training split
+and an evaluation split.
+
+This lesson works at the document level. A **duplicate** is a record that should
+not be counted as a separate document for the question being asked.
+
+Lesson 12 builds augmented examples with `source_family_id`; those rows need the
+same split-protection idea. This page uses a smaller constructed set so the
+distance mechanism is easy to inspect.
+
+::: {.callout-note}
+Riverton is a teaching case; the documents and duplicate families below are
+fictional.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+After this lesson, you should be able to:
+
+- explain why duplicate documents change downstream counts;
+- find exact duplicates with a SHA-256 hash;
+- find formatting-only duplicates with a normalized hash;
+- compare near duplicates with character trigram distance; and
+- choose a threshold by naming the error it makes cheaper.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Build a small review set
+
+The review table starts with the sentence file, then adds table shaping,
+repeated calculations, text normalization, fingerprints, distance measures,
+pairs, and a threshold plot.
+
+A **hash** is a fixed-length fingerprint made from text. The same input gives the
+same hash. A changed input should give a different hash, so a hash checks exact
+identity rather than similarity.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(digest)
+library(stringdist)
+library(tidyr)
+library(ggplot2)
+
+workforce_sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+source_text <- workforce_sentences |>
+  filter(sentence_id == "s006") |>
+  pull(text)
+
+unrelated_text <- workforce_sentences |>
+  filter(sentence_id == "s004") |>
+  pull(text)
+
+documents <- tibble(
+  doc_id = c("D01", "D02", "D03", "D04", "D05", "D06"),
+  source = c(
+    "Riverton sentence s006",
+    "Exact author copy",
+    "Formatting author copy",
+    "One-word author variant",
+    "Near distractor",
+    "Unrelated Riverton sentence s004"
+  ),
+  text = c(
+    source_text,
+    source_text,
+    "  THE employer   pays for certification   TRAINING. ",
+    "The employer covers certification training.",
+    "The employer pays for certification exam.",
+    unrelated_text
+  ),
+  duplicate_family = c(
+    "certification-training",
+    "certification-training",
+    "certification-training",
+    "certification-training",
+    "certification-exam",
+    "spreadsheet-skills"
+  )
+)
+
+stopifnot(
+  identical(nrow(workforce_sentences), 28L),
+  identical(source_text, "The employer pays for certification training."),
+  identical(unrelated_text, "Applicants need basic spreadsheet skills."),
+  identical(nrow(documents), 6L),
+  identical(sum(documents$duplicate_family == "certification-training"), 4L)
+)
+
+knitr::kable(
+  documents |>
+    select(doc_id, source, text),
+  col.names = c("Document", "Source", "Text"),
+  caption = "Six documents prepared for duplicate review",
+  row.names = FALSE
+)
+```
+
+This six-row set was written to expose a known failure mode. Four rows are
+hand-marked as the same duplicate family: the source sentence, an exact copy, a
+spacing-and-case copy, and a one-word paraphrase. The exam sentence changes the
+claim while leaving much of the surface text intact. The spreadsheet sentence is
+unrelated.
+
+## Find exact duplicates
+
+An **exact duplicate** has the same text byte for byte. The code hashes each text
+value with SHA-256. In the code, `\(value)` is R shorthand for "for each value,
+run the small calculation that follows."
+
+```{r}
+documents <- documents |>
+  mutate(
+    exact_hash = map_chr(
+      text,
+      \(value) digest::digest(
+        value,
+        algo = "sha256",
+        serialize = FALSE
+      )
+    )
+  )
+
+exact_groups <- documents |>
+  count(exact_hash, name = "documents") |>
+  filter(documents > 1L)
+
+exact_duplicate_pairs <- sum(choose(exact_groups$documents, 2))
+
+stopifnot(
+  identical(n_distinct(documents$exact_hash), 5L),
+  identical(nrow(exact_groups), 1L),
+  identical(exact_groups$documents, 2L),
+  identical(exact_duplicate_pairs, 1)
+)
+
+knitr::kable(
+  documents |>
+    transmute(
+      doc_id,
+      text,
+      hash_start = str_sub(exact_hash, 1, 12)
+    ),
+  col.names = c("Document", "Text", "SHA-256 start"),
+  caption = "Exact hashes before normalization",
+  row.names = FALSE
+)
+```
+
+Only the source and the exact copy match, giving one exact duplicate pair. The
+formatting copy receives a different fingerprint because capital letters and
+extra spaces are real characters.
+
+## Normalize before hashing
+
+**Normalization** means applying a recorded rule before comparing text. This
+rule is narrow: lowercase the text and replace repeated whitespace with one
+space. It catches formatting-only differences and destroys information about
+capitalization and layout.
+
+```{r}
+documents <- documents |>
+  mutate(
+    normalized_text = str_squish(str_to_lower(text)),
+    normalized_hash = map_chr(
+      normalized_text,
+      \(value) digest::digest(
+        value,
+        algo = "sha256",
+        serialize = FALSE
+      )
+    )
+  )
+
+normalized_groups <- documents |>
+  count(normalized_hash, name = "documents") |>
+  filter(documents > 1L)
+
+normalized_duplicate_pairs <- sum(choose(normalized_groups$documents, 2))
+
+stopifnot(
+  identical(n_distinct(documents$normalized_hash), 4L),
+  identical(nrow(normalized_groups), 1L),
+  identical(normalized_groups$documents, 3L),
+  identical(normalized_duplicate_pairs, 3),
+  identical(
+    documents$normalized_text[1:3],
+    rep("the employer pays for certification training.", 3L)
+  )
+)
+
+knitr::kable(
+  documents |>
+    transmute(
+      doc_id,
+      normalized_text,
+      hash_start = str_sub(normalized_hash, 1, 12)
+    ),
+  col.names = c("Document", "Normalized text", "Normalized SHA-256 start"),
+  caption = "Normalized hashes after lowercasing and whitespace squishing",
+  row.names = FALSE
+)
+```
+
+The normalized hash joins three rows, which make three duplicate pairs. That is
+useful here, but risky for a flyer where line breaks or all-capital headings
+carry meaning.
+
+## Measure near duplicates
+
+A **near duplicate** is close enough to deserve review, even when the text is not
+identical. Cut each normalized string into every overlapping three-character
+piece, discard order and repeats, and the result is a set of character trigrams.
+Jaccard distance is the share of pieces the two sets do not have in common: 0
+when the sets match, 1 when they share nothing. Because order is discarded, the
+measure counts how much surface text differs, not which change matters.
+
+```{r}
+comparison_pairs <- expand_grid(
+  left_doc = documents$doc_id,
+  right_doc = documents$doc_id
+) |>
+  filter(left_doc < right_doc) |>
+  left_join(
+    documents |>
+      select(
+        left_doc = doc_id,
+        left_text = text,
+        left_norm = normalized_text,
+        left_family = duplicate_family
+      ),
+    by = join_by(left_doc)
+  ) |>
+  left_join(
+    documents |>
+      select(
+        right_doc = doc_id,
+        right_text = text,
+        right_norm = normalized_text,
+        right_family = duplicate_family
+      ),
+    by = join_by(right_doc)
+  ) |>
+  mutate(
+    manual_duplicate =
+      left_family == right_family &
+        left_family == "certification-training",
+    jaccard_distance = map2_dbl(
+      left_norm,
+      right_norm,
+      \(left, right) stringdist::stringdist(
+        left,
+        right,
+        method = "jaccard",
+        q = 3
+      )
+    )
+  )
+
+calibration_pair <- tibble(
+  left_text = "Evening shifts require a valid forklift certification.",
+  right_text = "Evening shifts require a valid forklift certificate."
+) |>
+  mutate(
+    jaccard_distance = stringdist::stringdist(
+      left_text,
+      right_text,
+      method = "jaccard",
+      q = 3
+    )
+  )
+
+calibration_distance <- calibration_pair$jaccard_distance
+
+stopifnot(
+  identical(nrow(comparison_pairs), 15L),
+  identical(nrow(calibration_pair), 1L),
+  identical(sum(comparison_pairs$manual_duplicate), 6L),
+  identical(round(calibration_distance, 4), 0.1132),
+  identical(
+    comparison_pairs |>
+      filter(left_doc == "D01", right_doc == "D04") |>
+      pull(jaccard_distance) |>
+      round(2),
+    0.32
+  ),
+  identical(
+    comparison_pairs |>
+      filter(left_doc == "D01", right_doc == "D05") |>
+      pull(jaccard_distance) |>
+      round(4),
+    0.2917
+  )
+)
+
+knitr::kable(
+  comparison_pairs |>
+    transmute(
+      pair = str_c(left_doc, right_doc, sep = " / "),
+      manual_duplicate,
+      jaccard_distance = round(jaccard_distance, 4)
+    ),
+  col.names = c("Pair", "Hand-marked duplicate", "Jaccard distance"),
+  caption = "Pairwise distances across the six review documents",
+  row.names = FALSE
+)
+
+knitr::kable(
+  calibration_pair |>
+    mutate(jaccard_distance = round(jaccard_distance, 4)),
+  col.names = c("Left text", "Right text", "Jaccard distance"),
+  caption = "Calibration pair for reading the Jaccard scale",
+  row.names = FALSE
+)
+```
+
+The calibration strings are not part of the review set; they show how to read the
+scale. Two sentences that differ only in `certification` versus `certificate`
+score 0.1132. In this constructed review set, the exam distractor scores 0.2917
+against the source, while the meaning-preserving paraphrase scores 0.32. The
+distractor changes one short word and the duplicate changes one longer phrase, so
+surface overlap and meaning point in opposite directions. Real collections can
+contain pairs like this; the small set is designed so the mechanism is visible.
+
+## Sweep the threshold
+
+A **threshold** is the distance at or below which the pipeline joins two
+documents. The threshold is not learned here. The team tries several values and
+counts both kinds of outcome.
+
+```{r}
+#| label: fig-dedup-threshold
+#| fig-cap: "Duplicate pairs caught and distinct pairs wrongly joined at each tested threshold."
+#| fig-alt: "Step chart showing true duplicate pairs caught at 3 until threshold 0.35 and 6 afterward, while wrongly joined distinct pairs move from 0 to 3, then 4, then 9."
+
+threshold_sweep <- tibble(
+  threshold = c(0, 0.2, 0.3, 0.35, 0.7, 0.99)
+) |>
+  mutate(
+    caught_true = map_int(
+      threshold,
+      \(cutoff) sum(
+        comparison_pairs$manual_duplicate &
+          comparison_pairs$jaccard_distance <= cutoff
+      )
+    ),
+    wrongly_joined = map_int(
+      threshold,
+      \(cutoff) sum(
+        !comparison_pairs$manual_duplicate &
+          comparison_pairs$jaccard_distance <= cutoff
+      )
+    )
+  )
+
+perfect_threshold <- threshold_sweep |>
+  filter(caught_true == 6L, wrongly_joined == 0L)
+
+stopifnot(
+  identical(threshold_sweep$caught_true, c(3L, 3L, 3L, 6L, 6L, 6L)),
+  identical(threshold_sweep$wrongly_joined, c(0L, 0L, 3L, 3L, 4L, 9L)),
+  identical(nrow(perfect_threshold), 0L)
+)
+
+knitr::kable(
+  threshold_sweep,
+  col.names = c(
+    "Threshold",
+    "True duplicate pairs caught",
+    "Distinct pairs wrongly joined"
+  ),
+  caption = "Near-duplicate results at six threshold values",
+  row.names = FALSE
+)
+
+threshold_sweep |>
+  tidyr::pivot_longer(
+    cols = c(caught_true, wrongly_joined),
+    names_to = "result",
+    values_to = "pairs"
+  ) |>
+  mutate(
+    result = case_when(
+      result == "caught_true" ~ "True duplicate pairs caught",
+      result == "wrongly_joined" ~ "Distinct pairs wrongly joined",
+      TRUE ~ result
+    )
+  ) |>
+  ggplot(aes(x = threshold, y = pairs, color = result)) +
+  geom_step(linewidth = 0.8, direction = "hv") +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = threshold_sweep$threshold) +
+  labs(
+    x = "Jaccard distance threshold",
+    y = "Pairs",
+    color = NULL
+  ) +
+  theme_minimal()
+```
+
+For this constructed set, 0.2917 is smaller than 0.32. The distractor is closer
+to the source than the paraphrase is. Because those two distances are ordered
+that way, no threshold on these pairs can catch the paraphrase without also
+joining the distractor. The sweep confirms that threshold choice trades one error
+against another here; it is not a general law of deduplication.
+
+## What to remember
+
+- Duplicate documents can inflate counts and leak between training and evaluation.
+- Exact hashes catch only byte-for-byte repeats.
+- Normalized hashes catch some formatting differences and erase formatting facts.
+- Character-trigram Jaccard distance measures surface overlap, not preserved meaning.
+- Near-duplicate thresholds trade missed duplicates against wrongly joined records in this set.
+- The right threshold depends on which error costs more for the project.
+
+Exact repeats can be removed automatically; near matches belong in review before
+any training or evaluation split. The threshold sweep is a warning label on this
+constructed set, not a universal setting for Riverton documents.
+
+## Sources
+
+- [digest package documentation](https://eddelbuettel.github.io/digest/)
+- [stringdist package documentation](https://cran.r-project.org/package=stringdist)
+- [The stringdist package for approximate string matching](https://journal.r-project.org/archive/2014/RJ-2014-011/index.html)

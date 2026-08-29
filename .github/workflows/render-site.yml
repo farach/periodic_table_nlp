@@ -35,11 +35,24 @@ jobs:
             libqpdf-dev \
             libtesseract-dev \
             libleptonica-dev \
+            libprotobuf-dev \
+            protobuf-compiler \
             poppler-data \
             tesseract-ocr \
             tesseract-ocr-eng
 
       - uses: r-lib/actions/setup-renv@v2
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install spaCy and its English pipeline
+        run: |
+          python -m venv .venv-spacy
+          .venv-spacy/bin/python -m pip install --upgrade pip
+          .venv-spacy/bin/python -m pip install -r requirements-spacy.txt
+          .venv-spacy/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
 
       - uses: actions/setup-node@v5
         with:
@@ -53,6 +66,9 @@ jobs:
 
       - name: Check writing
         run: Rscript scripts/check-prose.R
+
+      - name: Check repetition across lessons
+        run: Rscript scripts/check-repetition.R
 
       - name: Render site
         run: quarto render

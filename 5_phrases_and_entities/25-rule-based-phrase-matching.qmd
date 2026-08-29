@@ -1,0 +1,249 @@
+---
+title: "Finding phrases with readable rules"
+subtitle: "Score a credential pattern before trusting it"
+author: "Alex Farach"
+description: "Learn how simple string rules find credential phrases, how concordances help inspection, and why rules need maintenance."
+categories: [phrases and entities, rule-based matching, workforce research]
+---
+
+Credential requirements are easy to miss in a short job-board feed. The
+Riverton Workforce Lab starts with a readable rule, then checks whether the rule
+answers the same question a reviewer would ask.
+
+That readability is useful only if the rule is checked. A pattern can find real
+mentions, miss wording it did not include, and catch lines that use the same word
+for a different purpose.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+After this lesson, you should be able to:
+
+- write small phrase rules with stringr;
+- extract the matched credential word;
+- apply a written hand-marking rule for required credentials;
+- count false positives and false negatives without treating the counts as a rate; and
+- use a concordance to inspect matches in context.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Write the first rules
+
+The setup chunk reads the Riverton sentences, builds rule-result tables, handles
+regular expressions, and prepares a concordance. In stringr, regular expressions
+use the ICU engine, which defines how boundaries and letter classes behave.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(stringr)
+library(quanteda)
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "tidyr", "stringr", "quanteda") %in%
+    loadedNamespaces()
+))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+credential_terms <- c("certificate", "certification", "licen[cs]e")
+credential_pattern <- regex(
+  str_c("\\b(", str_c(credential_terms, collapse = "|"), ")\\b"),
+  ignore_case = TRUE
+)
+
+rule_results <- sentences |>
+  mutate(
+    rule_match = str_detect(text, credential_pattern),
+    matched_word = str_extract(text, credential_pattern),
+    hand_required_credential = sentence_id %in% c("s005", "s017")
+  )
+
+matched_rows <- rule_results |>
+  filter(rule_match | hand_required_credential) |>
+  select(sentence_id, text, matched_word, rule_match, hand_required_credential)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(sum(rule_results$rule_match), 4L),
+  identical(sum(rule_results$hand_required_credential), 2L),
+  identical(
+    matched_rows$sentence_id,
+    c("s005", "s006", "s013", "s017", "s024")
+  ),
+  identical(
+    as.character(na.omit(matched_rows$matched_word)),
+    c("certification", "certificate", "license", "CERTIFICATE")
+  )
+)
+
+knitr::kable(
+  matched_rows,
+  col.names = c("Sentence ID", "Text", "Matched word", "Rule matched", "Hand-marked required credential"),
+  caption = "Rule matches and hand markings for required credentials",
+  row.names = FALSE
+)
+```
+
+The rule searches for `certificate`, `certification`, and either spelling of
+`license`. The lesson author hand-marked each sentence against this written
+definition: mark the sentence if it says the employer requires a formal
+qualification issued by a school, licensing body, or certifying organisation,
+and do not mark a sentence that merely mentions one. Under that rule, `s005`
+and `s017` qualify. One reviewer applying one rule to 28 sentences gives a
+worked example, not a reference standard.
+
+## Score the rule
+
+A **false positive** is a sentence the rule flags but the hand marking rejects. A
+**false negative** is a sentence the hand marking accepts but the rule misses.
+The rule and the hand marking are not asking the same question: the pattern
+looks for a credential word, while the hand marking asks whether a credential is
+required. Nothing in the pattern tests for requirement, so it can fire on
+`preferred` and on a heading.
+
+```{r}
+score_counts <- rule_results |>
+  summarise(
+    true_positive = sum(rule_match & hand_required_credential),
+    false_positive = sum(rule_match & !hand_required_credential),
+    false_negative = sum(!rule_match & hand_required_credential),
+    .groups = "drop"
+  ) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "result",
+    values_to = "sentences"
+  )
+
+false_positive_ids <- rule_results |>
+  filter(rule_match & !hand_required_credential) |>
+  pull(sentence_id)
+false_negative_ids <- rule_results |>
+  filter(!rule_match & hand_required_credential) |>
+  pull(sentence_id)
+
+problem_examples <- tibble(
+  result = c("false positive", "false negative"),
+  sentence_id = c("s006", "s005"),
+  explanation = c(
+    "The line says the employer pays for certification training, not that certification is required.",
+    "The line says a diploma is required, but diploma was not in the rule."
+  )
+)
+
+stopifnot(
+  identical(score_counts$sentences, c(1L, 3L, 1L)),
+  identical(false_positive_ids, c("s006", "s013", "s024")),
+  identical(false_negative_ids, "s005"),
+  problem_examples$sentence_id[problem_examples$result == "false positive"] %in% false_positive_ids,
+  problem_examples$sentence_id[problem_examples$result == "false negative"] %in% false_negative_ids,
+  identical(rule_results$matched_word[rule_results$sentence_id == "s017"], "license")
+)
+
+knitr::kable(
+  score_counts,
+  col.names = c("Result", "Sentences"),
+  caption = "Sentence-level counts for the first credential rule",
+  row.names = FALSE
+)
+
+knitr::kable(
+  problem_examples,
+  col.names = c("Result", "Sentence ID", "Explanation"),
+  caption = "One false positive and one false negative",
+  row.names = FALSE
+)
+```
+
+This is a bad rule for required credentials: 3 of its 4 hits are wrong, and it
+misses 1 of the 2 hand-marked positives. Two positives cannot measure how well a
+rule works. These counts only show failure modes: `certificate` and
+`certification` can appear without a requirement, while `diploma` is absent from
+the pattern.
+
+## Inspect matches in context
+
+A **concordance** is a list of every place a word occurs in a text. The usual
+layout, called keyword in context, or **KWIC**, puts the matched word in the
+middle with a few words on each side.
+
+```{r}
+riverton_corpus <- corpus(setNames(sentences$text, sentences$sentence_id))
+riverton_tokens <- tokens(riverton_corpus, remove_punct = TRUE)
+
+credential_kwic <- kwic(
+  riverton_tokens,
+  pattern = credential_terms,
+  window = 4,
+  valuetype = "regex",
+  case_insensitive = TRUE
+) |>
+  as.data.frame() |>
+  as_tibble() |>
+  select(docname, pre, keyword, post)
+
+stopifnot(
+  identical(nrow(credential_kwic), 4L),
+  identical(credential_kwic$docname, c("s006", "s013", "s017", "s024")),
+  identical(str_to_lower(credential_kwic$keyword), c("certification", "certificate", "license", "certificate")),
+  identical(credential_kwic$post[credential_kwic$docname == "s006"], "training")
+)
+
+knitr::kable(
+  credential_kwic,
+  col.names = c("Sentence ID", "Before", "Keyword", "After"),
+  caption = "Concordance lines for the credential rule",
+  row.names = FALSE
+)
+```
+
+The KWIC display makes the maintenance problem visible. The token-level regex
+uses the same credential terms as the scoring pattern: it finds `certification
+training`, a `certificate` that is preferred, a `license` that is required, and a
+flyer heading.
+
+## What to remember
+
+- A readable rule can still answer the wrong question.
+- This first credential rule has 1 true positive, 3 false positives, and 1 false negative.
+- Two hand-marked positives are enough for a worked example, not for a performance estimate.
+- KWIC lines help reviewers see why a pattern fired.
+
+Use this pattern only as a review aid. Its next revision should test requirement
+language before widening the credential word list.
+
+## Sources
+
+- [stringr regular expression documentation](https://stringr.tidyverse.org/articles/regular-expressions.html)
+- [quanteda `kwic()` documentation](https://quanteda.io/reference/kwic.html)
+- [ICU regular expression documentation](https://unicode-org.github.io/icu/userguide/strings/regexp.html)

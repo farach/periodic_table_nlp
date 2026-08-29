@@ -1,0 +1,404 @@
+---
+title: "Checking small grammar rules"
+subtitle: "Score three checks and keep the limits visible"
+author: "Alex Farach"
+description: "Learn how small grammar checks can find planted errors and why they are not a full grammar checker."
+categories: [sentences and paragraphs, grammar checking, workforce research]
+---
+
+Correctly spelled sentences can still make a public summary sound broken, which
+is why the coordinator hesitates. Real words are not enough when the words do not
+fit together.
+
+Spelling asks whether a word exists. **Grammar** asks whether the words fit
+together in a sentence. This lesson builds three small checks and scores them on
+sentences where the planted errors are known.
+
+This project does not install a grammar checker, so the lesson builds three
+small checks by hand and treats them as a demonstration. Offline means the check
+runs from local files, without sending text to a web service.
+
+::: {.callout-note}
+The Riverton sentences and marked grammar examples are invented for this lesson.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain the difference between spelling and grammar checks;
+- use UDPipe dependency output to compare a subject and a verb;
+- find doubled words with a stringr pattern;
+- test a simple `a` and `an` rule; and
+- explain why a demonstration check is not a working grammar checker.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Make a marked test set
+
+The setup reads the Riverton CSV, prepares words with tokenizers and purrr, runs
+two pattern checks with stringr, and sends sentences to a local udpipe dependency
+parser. dplyr and tibble organise the results. A **dependency parser** labels how
+words relate to one another, such as which noun is the subject of a verb.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tokenizers)
+library(udpipe)
+
+stopifnot(all(c(
+  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "udpipe"
+) %in% loadedNamespaces()))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+marked_sentences <- tibble(
+  example_id = sprintf("g%02d", 1:14),
+  text = c(
+    "The worker checks the list.",
+    "The worker check the list.",
+    "The applicants submit forms.",
+    "The applicants submits forms.",
+    "Bring a badge to orientation.",
+    "Bring a envelope to orientation.",
+    "Apply for an evening class.",
+    "Apply for a evening class.",
+    "The session begins in an hour.",
+    "A university partner sends trainers.",
+    "The coordinator checks the the form.",
+    "The team needs needs support.",
+    "The employee uses a spreadsheet.",
+    "The employee use a spreadsheet."
+  ),
+  planted_check = c(
+    "none",
+    "subject-verb number",
+    "none",
+    "subject-verb number",
+    "none",
+    "article letters",
+    "none",
+    "article letters",
+    "none",
+    "none",
+    "doubled word",
+    "doubled word",
+    "none",
+    "subject-verb number"
+  )
+) |>
+  mutate(has_planted_error = planted_check != "none")
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(nrow(marked_sentences), 14L),
+  identical(sum(marked_sentences$has_planted_error), 7L),
+  identical(sum(!marked_sentences$has_planted_error), 7L),
+  identical(sum(marked_sentences$planted_check == "subject-verb number"), 3L),
+  identical(sum(marked_sentences$planted_check == "doubled word"), 2L),
+  identical(sum(marked_sentences$planted_check == "article letters"), 2L)
+)
+
+knitr::kable(
+  marked_sentences,
+  col.names = c("Example ID", "Sentence", "Planted check", "Has planted error"),
+  caption = "Author-marked sentences before running the checks",
+  row.names = FALSE
+)
+```
+
+Seven of the 14 test sentences are marked as correct, and seven contain exactly
+one planted error. These examples describe only themselves. A checker that works
+on them has not solved grammar checking.
+
+## Run the three checks
+
+The subject-verb check uses the UDPipe parser's `feats` column, which can contain
+values such as `Number=Sing` or `Number=Plur`. It looks for an `nsubj` relation,
+short for nominal subject, pointing to a verb. In the code, `\(tokens)` is R
+shorthand for a small function applied to one sentence's tokens.
+
+```{r}
+extract_number <- function(feats) {
+  str_match(coalesce(feats, ""), "Number=([^|]+)")[, 2]
+}
+
+find_subject_verb_flags <- function(annotated) {
+  annotated_with_number <- annotated |>
+    mutate(number = extract_number(feats))
+
+  subjects <- annotated_with_number |>
+    filter(dep_rel == "nsubj") |>
+    transmute(
+      doc_id,
+      head_token_id,
+      subject_token = token,
+      subject_number = number
+    )
+
+  verbs <- annotated_with_number |>
+    filter(upos %in% c("VERB", "AUX"), !is.na(number)) |>
+    transmute(
+      doc_id,
+      verb_token_id = token_id,
+      verb_token = token,
+      verb_number = number
+    )
+
+  verbs |>
+    inner_join(subjects, by = c("doc_id", "verb_token_id" = "head_token_id")) |>
+    mutate(flag = !is.na(subject_number) & subject_number != verb_number)
+}
+
+score_check <- function(flag, expected) {
+  tibble(
+    true_positive = sum(flag & expected),
+    false_positive = sum(flag & !expected),
+    false_negative = sum(!flag & expected),
+    true_negative = sum(!flag & !expected)
+  )
+}
+
+parser <- udpipe_load_model("data/treebank/en_ewt-500-parser.udpipe")
+
+marked_vertical <- marked_sentences$text |>
+  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  map_chr(\(tokens) paste(tokens, collapse = "\n"))
+
+marked_annotated <- udpipe_annotate(
+  parser,
+  x = marked_vertical,
+  doc_id = marked_sentences$example_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "default"
+) |>
+  as.data.frame() |>
+  as_tibble()
+
+agreement_pairs <- find_subject_verb_flags(marked_annotated)
+agreement_flags <- agreement_pairs |>
+  summarise(agreement_flag = any(flag), .by = doc_id)
+
+doubled_pattern <- regex("\\b([[:alpha:]]+)\\s+\\1\\b", ignore_case = TRUE)
+article_pattern <- regex(
+  "\\b(a)\\s+[aeiou][[:alpha:]]*|\\b(an)\\s+[^aeiou\\W][[:alpha:]]*",
+  ignore_case = TRUE
+)
+
+scored_examples <- marked_sentences |>
+  left_join(agreement_flags, by = c("example_id" = "doc_id")) |>
+  mutate(
+    agreement_flag = coalesce(agreement_flag, FALSE),
+    doubled_flag = str_detect(text, doubled_pattern),
+    article_flag = str_detect(text, article_pattern)
+  )
+
+check_scores <- bind_rows(
+  score_check(
+    scored_examples$agreement_flag,
+    scored_examples$planted_check == "subject-verb number"
+  ) |>
+    mutate(check = "subject-verb number"),
+  score_check(
+    scored_examples$doubled_flag,
+    scored_examples$planted_check == "doubled word"
+  ) |>
+    mutate(check = "doubled word"),
+  score_check(
+    scored_examples$article_flag,
+    scored_examples$planted_check == "article letters"
+  ) |>
+    mutate(check = "article letters")
+) |>
+  select(check, everything())
+
+expected_scores <- tibble(
+  check = c("subject-verb number", "doubled word", "article letters"),
+  true_positive = c(3L, 2L, 2L),
+  false_positive = c(0L, 0L, 2L),
+  false_negative = c(0L, 0L, 0L),
+  true_negative = c(11L, 12L, 10L)
+)
+
+stopifnot(
+  identical(
+    scored_examples$example_id[scored_examples$agreement_flag],
+    c("g02", "g04", "g14")
+  ),
+  identical(
+    scored_examples$example_id[scored_examples$doubled_flag],
+    c("g11", "g12")
+  ),
+  identical(
+    scored_examples$example_id[scored_examples$article_flag],
+    c("g06", "g08", "g09", "g10")
+  ),
+  identical(check_scores, expected_scores)
+)
+
+knitr::kable(
+  agreement_pairs |>
+    select(doc_id, subject_token, subject_number, verb_token, verb_number, flag),
+  col.names = c("Example ID", "Subject", "Subject number", "Verb", "Verb number", "Flagged"),
+  caption = "Subject-verb pairs found by the dependency parser",
+  row.names = FALSE
+)
+
+knitr::kable(
+  check_scores,
+  col.names = c("Check", "True positives", "False positives", "False negatives", "True negatives"),
+  caption = "Scores for the three grammar checks on marked examples",
+  row.names = FALSE
+)
+```
+
+The checks and expected answers share an author, so the score is a teaching
+check rather than an accuracy estimate. A true positive is a planted error that a
+check flags. A false positive is a correct sentence that a check flags. A false
+negative is a planted error that a check misses. A true negative is a correct
+sentence it leaves alone.
+
+The subject-verb number check catches all three planted number errors in this
+small set. The doubled-word check catches both repeated-word examples. The
+article check catches the two planted `a` mistakes, but it also flags two correct
+sentences: `an hour` and `A university`. That rule uses the first letter, while
+English article choice depends on sound. `Hour` begins with a silent h, so it
+sounds like a vowel. `University` begins with a y sound, so it sounds like a
+consonant. The rule reads letters and cannot hear either word.
+
+A real grammar checker uses thousands of rules, a trained model, or both. These
+three checks are a demonstration of the idea. The UDPipe model was trained here
+on 500 sentences and is deliberately weak, so every subject-verb result inherits
+its mistakes. The article check is wrong by design so the failure is visible.
+
+## Try the Riverton sentences
+
+The same three checks can be run over the 28 Riverton sentences. The output is a
+screening list, not a proof that every unflagged sentence is correct.
+
+```{r}
+riverton_vertical <- sentences$text |>
+  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  map_chr(\(tokens) paste(tokens, collapse = "\n"))
+
+riverton_annotated <- udpipe_annotate(
+  parser,
+  x = riverton_vertical,
+  doc_id = sentences$sentence_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "default"
+) |>
+  as.data.frame() |>
+  as_tibble()
+
+riverton_agreement_pairs <- find_subject_verb_flags(riverton_annotated)
+riverton_agreement_ids <- riverton_agreement_pairs |>
+  filter(flag) |>
+  pull(doc_id)
+riverton_pair_sentence_count <- n_distinct(riverton_agreement_pairs$doc_id)
+
+riverton_flags <- sentences |>
+  transmute(
+    sentence_id,
+    text,
+    agreement_flag = sentence_id %in% riverton_agreement_ids,
+    doubled_flag = str_detect(text, doubled_pattern),
+    article_flag = str_detect(text, article_pattern)
+  ) |>
+  mutate(any_flag = agreement_flag | doubled_flag | article_flag)
+
+riverton_flag_summary <- tibble(
+  check = c("subject-verb number", "doubled word", "article letters", "any check"),
+  flagged_sentences = c(
+    sum(riverton_flags$agreement_flag),
+    sum(riverton_flags$doubled_flag),
+    sum(riverton_flags$article_flag),
+    sum(riverton_flags$any_flag)
+  )
+)
+
+riverton_coverage <- tibble(
+  measure = c("sentences with subject-verb pair", "sentences without subject-verb pair"),
+  sentences = c(
+    riverton_pair_sentence_count,
+    nrow(sentences) - riverton_pair_sentence_count
+  )
+)
+
+stopifnot(
+  identical(nrow(riverton_agreement_pairs), 4L),
+  identical(riverton_coverage$sentences, c(4L, 24L)),
+  identical(riverton_flag_summary$flagged_sentences, c(0L, 0L, 0L, 0L)),
+  identical(sum(riverton_flags$any_flag), 0L),
+  identical(nrow(riverton_flags), 28L)
+)
+
+knitr::kable(
+  riverton_flag_summary,
+  col.names = c("Check", "Flagged Riverton sentences"),
+  caption = "Grammar-check flags in the 28 Riverton sentences",
+  row.names = FALSE
+)
+
+knitr::kable(
+  riverton_coverage,
+  col.names = c("Coverage measure", "Sentences"),
+  caption = "Subject-verb coverage in the Riverton sentences",
+  row.names = FALSE
+)
+```
+
+The three checks flag no Riverton sentence. The subject-verb check found only
+four subject-and-verb pairs in all 28 sentences, because it needs the tagger to
+mark a number feature on the verb and English verbs rarely carry one. On the
+other 24 sentences the check could not fire. A zero mostly measures coverage, not
+correctness.
+
+## What to remember
+
+- Spelling checks words; grammar checks how words fit together.
+- UDPipe's `feats` and `nsubj` labels can support a small subject-verb check.
+- A doubled-word pattern is simple and useful for one common typo.
+- The article-letter rule falsely flags `an hour` and `A university`.
+- These three checks are demonstrations, not an offline grammar checker for R.
+- No Riverton flags here means low coverage, not clean grammar.
+
+The three checks can produce a review queue. They cannot approve public text on
+their own, especially when the most technical check fires on only four Riverton
+sentences.
+
+## Sources
+
+- [UDPipe R package reference](https://bnosac.github.io/udpipe/docs/doc0.html)
+- [Universal Dependencies relation `nsubj`](https://universaldependencies.org/u/dep/nsubj.html)
+- [Universal Dependencies feature `Number`](https://universaldependencies.org/u/feat/Number.html)

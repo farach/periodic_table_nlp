@@ -1,0 +1,293 @@
+---
+title: "Making text comparable"
+subtitle: "Normalize carefully and keep the display text intact"
+author: "Alex Farach"
+description: "Learn how case, spacing, punctuation, and Unicode normalization change workforce text."
+categories: [word processing, normalization, workforce research]
+---
+
+Repeated phrases across the 28 sentences do not quite line up. One flyer
+heading is all capitals, `RIVERTON SKILLS OPEN HOUSE`, while the job
+details use ordinary case. The team also expects text pasted from other systems
+to arrive with stray spacing and accented characters, so it wants to know what
+each cleanup step costs before applying any of them.
+
+Before counting matches, the team has to decide which small differences to
+ignore. Each edit can make comparison easier and also erase information.
+
+**Normalization** is the set of small edits made before comparing text. Common
+steps include changing case, trimming spaces, removing punctuation, and putting
+Unicode characters into a consistent form.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. The text files are local and fixed.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain why text is normalized before comparison;
+- see how case folding and space repair change examples;
+- test punctuation removal with stringr's ICU regex engine; and
+- compare two Unicode forms of the same visible word.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load text with an accent check
+
+readr opens the CSV files, dplyr and tibble keep the examples in compact tables,
+stringr handles text operations, stringi handles Unicode normalization, and
+purrr repeats checks. The inputs are the Riverton sentences and a feedback file
+that contains the word `café`.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(stringi)
+library(purrr)
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+feedback <- read_csv(
+  "data/customer_feedback.csv",
+  na = character(),
+  col_types = cols(
+    feedback_id = col_character(),
+    submitted_at = col_character(),
+    channel = col_character(),
+    rating = col_character(),
+    comment = col_character()
+  )
+)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(sentences$text[23], "RIVERTON SKILLS OPEN HOUSE"),
+  identical(nrow(feedback), 5L),
+  identical(feedback$comment[2], "The café listing was easy to find.")
+)
+```
+
+The accent check matters because normalization can change text that looks stable
+on screen. The visible word may stay the same while the stored code points
+change.
+
+## Fold case and repair spaces
+
+**Case folding** means converting letters to one case before comparison. The
+next table uses one real Riverton string, one copy of `s002` with its spaces
+tripled to stand in for pasted text, and one short warning pair, `US` and `us`.
+
+```{r}
+padded_requirement <- str_replace_all(
+  sentences$text[sentences$sentence_id == "s002"],
+  " ",
+  "   "
+)
+padded_requirement <- paste0("  ", padded_requirement, "  ")
+
+case_space_examples <- tibble(
+  example = c(
+    "Flyer heading",
+    "Padded requirement sentence",
+    "Warning pair, capital",
+    "Warning pair, lower"
+  ),
+  raw_text = c(
+    sentences$text[sentences$sentence_id == "s023"],
+    padded_requirement,
+    "US",
+    "us"
+  ),
+  lowercased = str_to_lower(raw_text),
+  squished = str_squish(raw_text)
+)
+
+stopifnot(
+  identical(case_space_examples$lowercased[1], "riverton skills open house"),
+  identical(case_space_examples$squished[2], "No prior data experience is required."),
+  identical(case_space_examples$lowercased[3], case_space_examples$lowercased[4]),
+  identical(str_length(case_space_examples$raw_text[2]), 51L)
+)
+
+knitr::kable(
+  case_space_examples,
+  col.names = c("Example", "Raw text", "Lowercased", "Squished"),
+  caption = "Case folding and spacing changes",
+  row.names = FALSE
+)
+```
+
+Lowercasing makes `RIVERTON SKILLS OPEN HOUSE` easier to compare with ordinary
+case. It also makes `US` and `us` the same string. `str_squish()` removes leading
+and trailing spaces and turns repeated spaces into one space.
+
+## Remove punctuation only when it is safe
+
+Punctuation removal can make matching easier, but it can damage units such as
+`12-week`. The next table uses Riverton strings that contain hyphens,
+apostrophes, and periods.
+
+```{r}
+punctuation_examples <- tibble(
+  sentence_id = c("s001", "s015", "s017"),
+  raw_text = sentences$text[match(sentence_id, sentences$sentence_id)],
+  without_punctuation = str_remove_all(raw_text, "[[:punct:]]")
+)
+
+unicode_punctuation_check <- str_remove_all("“paid—training”", "[[:punct:]]")
+
+stopifnot(
+  identical(
+    punctuation_examples$without_punctuation[1],
+    "Paid 12week training is provided"
+  ),
+  identical(
+    punctuation_examples$without_punctuation[2],
+    "Onthejob training is provided"
+  ),
+  identical(
+    punctuation_examples$without_punctuation[3],
+    "A valid drivers license is required"
+  ),
+  identical(unicode_punctuation_check, "paidtraining")
+)
+
+knitr::kable(
+  punctuation_examples,
+  col.names = c("Sentence ID", "Raw text", "After punctuation removal"),
+  caption = "Punctuation removal can erase useful distinctions",
+  row.names = FALSE
+)
+```
+
+Removing punctuation destroys the hyphen in `12-week` and the apostrophe in
+`driver's`. `str_remove_all()` uses stringr's ICU engine, where `[[:punct:]]`
+means punctuation across Unicode, including curly quotes and em dashes pasted
+from word processors.
+
+## Normalize Unicode forms
+
+Unicode stores text using code points. The word `café` can be stored as one code
+point for `é`, or as `e` plus a combining accent. NFC keeps the composed form;
+NFD splits the accent into its own code point.
+
+```{r}
+cafe_word <- str_extract(feedback$comment[2], "café")
+cafe_nfc <- stri_trans_nfc(cafe_word)
+cafe_nfd <- stri_trans_nfd(cafe_word)
+
+unicode_forms <- tibble(
+  form = c("NFC", "NFD"),
+  text = c(cafe_nfc, cafe_nfd),
+  code_point_count = str_length(text),
+  bytes_utf8 = nchar(text, type = "bytes"),
+  code_points = map_chr(text, \(value) paste(utf8ToInt(value), collapse = ", "))
+)
+
+stopifnot(
+  identical(cafe_word, "café"),
+  identical(cafe_nfc, "café"),
+  !identical(cafe_nfc, cafe_nfd),
+  identical(unicode_forms$code_point_count, c(4L, 5L)),
+  identical(unicode_forms$bytes_utf8, c(5L, 6L)),
+  identical(unicode_forms$code_points[2], "99, 97, 102, 101, 769")
+)
+
+knitr::kable(
+  unicode_forms,
+  col.names = c("Form", "Text", "Code points", "Bytes as UTF-8", "Code point values"),
+  caption = "Two Unicode forms of the visible word 'café'",
+  row.names = FALSE
+)
+```
+
+The two forms look the same in the table, but `identical()` says they are not the
+same stored string. Both forms show four letters on screen. The NFC form stores
+them as 4 code points and, as UTF-8, 5 bytes. The NFD form stores them as 5 code
+points and 6 bytes, because the accent is a separate code point after the `e`.
+
+## Keep two columns
+
+The safe pattern is to store at least two versions: the raw text for display and
+a normalized text for comparison. The normalized column can be lowercased,
+squished, or changed to NFC as the task requires.
+
+```{r}
+display_and_match <- sentences |>
+  filter(sentence_id %in% c("s001", "s023")) |>
+  transmute(
+    sentence_id,
+    display_text = text,
+    comparison_text = text |>
+      stri_trans_nfc() |>
+      str_squish() |>
+      str_to_lower()
+  )
+
+stopifnot(
+  identical(display_and_match$display_text[1], "Paid 12-week training is provided."),
+  identical(display_and_match$comparison_text[1], "paid 12-week training is provided."),
+  identical(display_and_match$comparison_text[2], "riverton skills open house"),
+  !identical(display_and_match$display_text[2], display_and_match$comparison_text[2])
+)
+
+knitr::kable(
+  display_and_match,
+  col.names = c("Sentence ID", "Display text", "Comparison text"),
+  caption = "Keeping display text separate from comparison text",
+  row.names = FALSE
+)
+```
+
+Normalize for comparison, keep the raw text for display. These edits run one
+way. Once `US` has been lowercased to `us`, nothing in the normalized column can
+tell you which one it was. Pick NFC for the comparison column because it is the
+form recommended for web text, so strings arriving from different systems settle
+on the same spelling.
+
+## What to remember
+
+- Normalization makes text easier to compare.
+- Lowercasing can merge strings that mean different things.
+- ICU punctuation classes reach beyond keyboard punctuation.
+- Unicode forms can look the same while storing different code points.
+- Keep the display text and comparison text separate.
+- Raw text is the fallback when a cleanup step erases information.
+
+A normalized column is a matching aid, not display copy. The Riverton sentences
+that readers see should remain the raw sentences the Lab collected.
+
+## Sources
+
+- [stringr reference for case and whitespace helpers](https://stringr.tidyverse.org/reference/)
+- [stringi Unicode normalization reference](https://stringi.gagolewski.com/rapi/stri_trans_nf.html)
+- [Unicode normalization forms](https://unicode.org/reports/tr15/)

@@ -1,0 +1,306 @@
+---
+title: "Chopping word endings"
+subtitle: "Use Snowball stems without mistaking them for words"
+author: "Alex Farach"
+description: "Learn how stemming groups some workforce word forms and creates non-word stems."
+categories: [word processing, stemming, workforce research]
+---
+
+A short vocabulary list from the job-board and flyer sentences is the team's
+next goal. The team sees `shifts`, `skills`, and `schedules` and asks
+whether plural endings should count as separate words.
+
+That choice affects a simple summary. If every surface spelling stays separate,
+the list grows. If endings are chopped too aggressively, different meanings can
+collapse into one code.
+
+**Stemming** removes or changes word endings using fixed rules. In linguistics,
+a stem is the part of a word that an ending attaches to. Here the word is used
+more narrowly: a **stem** is whatever string these rules return. It is a
+comparison key. It may or may not be a word.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. The stems come from SnowballC running locally.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- describe what a stemmer does;
+- find stems that are not dictionary words;
+- identify collisions, where several words share one stem; and
+- name related words that a suffix rule leaves apart.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Build the Riverton vocabulary
+
+The vocabulary build uses readr, dplyr, tibble, tidytext, SnowballC, hunspell,
+purrr, and stringr. A word type is one distinct lowercased word form in these 28
+sentences using the same `tokenizers::tokenize_words()` rule as Lesson 15, so
+the count would change under a different tokenizer.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tidytext)
+library(SnowballC)
+library(hunspell)
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+vocabulary <- sentences |>
+  select(sentence_id, text) |>
+  unnest_tokens(word, text) |>
+  distinct(word) |>
+  arrange(word) |>
+  pull(word)
+
+known_to_hunspell <- \(words) map_lgl(hunspell(words), \(result) length(result) == 0L)
+
+stemmed_vocabulary <- tibble(
+  word = vocabulary,
+  stem = wordStem(vocabulary, language = "en")
+) |>
+  mutate(
+    changed = word != stem,
+    stem_in_dictionary = known_to_hunspell(stem)
+  )
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(length(vocabulary), 96L),
+  identical(stemmed_vocabulary$stem[stemmed_vocabulary$word == "shifts"], "shift"),
+  identical(stemmed_vocabulary$stem[stemmed_vocabulary$word == "required"], "requir"),
+  identical(sum(stemmed_vocabulary$changed), 43L),
+  identical(sum(!stemmed_vocabulary$changed), 53L)
+)
+
+knitr::kable(
+  stemmed_vocabulary |>
+    filter(word %in% c("shifts", "skills", "required", "provided", "training")) |>
+    arrange(word),
+  col.names = c("Word type", "Stem", "Changed", "Stem in dictionary"),
+  caption = "Five Riverton word types after stemming",
+  row.names = FALSE
+)
+```
+
+The stemmer changes 43 of the 96 word types. `shifts` becomes `shift`, a useful
+result for a count that should group singular and plural forms. `required`
+becomes `requir`, which is not a word a reader should see.
+
+## Watch the rule on a nearby word
+
+SnowballC's English stemmer, often called Porter2, uses a fixed rule system. The
+word `requires` is not in the Riverton vocabulary, but it shows the same kind of
+ending chop as `required`.
+
+```{r}
+example_stems <- tibble(
+  word = c("shifts", "requires", "required"),
+  stem = wordStem(word, language = "en")
+)
+
+stopifnot(
+  identical(example_stems$stem, c("shift", "requir", "requir")),
+  !"requires" %in% vocabulary,
+  identical(
+    example_stems$stem[example_stems$word == "requires"],
+    example_stems$stem[example_stems$word == "required"]
+  )
+)
+
+knitr::kable(
+  example_stems,
+  col.names = c("Word", "Snowball stem"),
+  caption = "A rule can produce useful stems and non-word stems",
+  row.names = FALSE
+)
+```
+
+Treat the returned stem as a machine comparison string. It should not be shown to
+a reader as if it were the dictionary form of the word.
+
+Hunspell checks a spelling dictionary and affix rules. SnowballC does not ask a
+dictionary before returning a stem, so it can return `requir`, `provid`, and
+`schedul`.
+
+## Count stems that are words and stems that are not
+
+The next table separates changed stems that are dictionary words from changed
+stems that hunspell flags as unknown.
+
+```{r}
+stem_quality <- stemmed_vocabulary |>
+  summarise(
+    word_types = n(),
+    changed_by_stemmer = sum(changed),
+    unchanged_by_stemmer = sum(!changed),
+    changed_to_dictionary_word = sum(changed & stem_in_dictionary),
+    changed_to_non_word = sum(changed & !stem_in_dictionary),
+    .groups = "drop"
+  )
+
+non_word_examples <- stemmed_vocabulary |>
+  filter(changed, !stem_in_dictionary) |>
+  arrange(word) |>
+  slice_head(n = 8)
+
+stopifnot(
+  identical(stem_quality$word_types, 96L),
+  identical(stem_quality$changed_by_stemmer, 43L),
+  identical(stem_quality$unchanged_by_stemmer, 53L),
+  identical(stem_quality$changed_to_dictionary_word, 21L),
+  identical(stem_quality$changed_to_non_word, 22L),
+  identical(non_word_examples$word[1], "able"),
+  identical(non_word_examples$stem[8], "essenti")
+)
+
+knitr::kable(
+  stem_quality,
+  col.names = c(
+    "Word types",
+    "Changed",
+    "Unchanged",
+    "Changed to dictionary word",
+    "Changed to non-word"
+  ),
+  caption = "Stemming outcomes for the Riverton vocabulary",
+  row.names = FALSE
+)
+
+knitr::kable(
+  non_word_examples,
+  col.names = c("Word type", "Stem", "Changed", "Stem in dictionary"),
+  caption = "Examples of non-word stems in the Riverton vocabulary",
+  row.names = FALSE
+)
+```
+
+Among these 96 word types, 21 changed forms lead to dictionary words and 22 lead
+to strings hunspell does not know. A dictionary-word stem can still be the wrong
+grouping key for a particular workforce question.
+
+## Find collisions
+
+A **collision** happens when different word types reduce to the same stem. A
+collision can help when the words are close enough for the question. It can also
+hide a useful distinction.
+
+```{r}
+collision_groups <- stemmed_vocabulary |>
+  group_by(stem) |>
+  filter(n() > 1L) |>
+  summarise(
+    word_types = paste(word, collapse = ", "),
+    n_words = n(),
+    .groups = "drop"
+  ) |>
+  arrange(stem)
+
+stopifnot(
+  identical(nrow(collision_groups), 4L),
+  identical(sum(collision_groups$n_words), 8L),
+  identical(
+    collision_groups$stem,
+    c("certif", "includ", "schedul", "skill")
+  ),
+  str_detect(collision_groups$word_types[1], fixed("certificate"))
+)
+
+knitr::kable(
+  collision_groups,
+  col.names = c("Stem", "Word types that share it", "Word types"),
+  caption = "Snowball collisions in the Riverton vocabulary",
+  row.names = FALSE
+)
+```
+
+The four collision groups contain eight word types. `schedule` and `schedules`
+are a helpful group. `certificate` and `certification` may or may not be close
+enough, depending on whether the Lab is counting credentials or training topics.
+
+## Find misses
+
+A **miss** is a related pair that the stemmer leaves apart. The team picked three
+pairs it already suspected the stemmer would keep apart, so the table is not a
+survey. It is a set of examples chosen to show what a suffix rule cannot see.
+
+```{r}
+miss_pairs <- tribble(
+  ~word_a, ~word_b, ~reason,
+  "applicants", "apply", "Both point to applying, but their stems differ.",
+  "paid", "pays", "Snowball strips suffixes. 'Paid' has no suffix to strip, so no rule can reach 'pay'.",
+  "work", "workers", "'-er' names the person doing the activity. Whether to group them depends on the question."
+) |>
+  mutate(
+    stem_a = wordStem(word_a, language = "en"),
+    stem_b = wordStem(word_b, language = "en"),
+    same_stem = stem_a == stem_b
+  )
+
+stopifnot(
+  identical(miss_pairs$stem_a, c("applic", "paid", "work")),
+  identical(miss_pairs$stem_b, c("appli", "pay", "worker")),
+  identical(sum(!miss_pairs$same_stem), 3L),
+  all(c(miss_pairs$word_a, miss_pairs$word_b) %in% vocabulary)
+)
+
+knitr::kable(
+  miss_pairs,
+  col.names = c("Word A", "Word B", "Why the pair was checked", "Stem A", "Stem B", "Same stem"),
+  caption = "Related Riverton word pairs that Snowball keeps apart",
+  row.names = FALSE
+)
+```
+
+All three selected pairs stay apart. The result says what these examples were
+chosen to show: suffix rules can miss irregular forms and relations whose meaning
+comes from more than an ending.
+
+## What to remember
+
+- Stemming chops word endings with fixed rules.
+- The Snowball English stemmer is a Porter2 rule system.
+- SnowballC changed 43 of the 96 Riverton word types.
+- In this vocabulary, 22 changed stems are non-words.
+- Collisions and selected misses both need human judgment.
+
+Stems are useful backstage keys for rough grouping. The public-facing list should
+show words a reader recognizes, with the disputed groups reviewed by a person.
+
+## Sources
+
+- [SnowballC package reference](https://cran.r-project.org/package=SnowballC)
+- [Snowball stemming algorithms](https://snowballstem.org/)
+- [hunspell package reference](https://docs.ropensci.org/hunspell/reference/hunspell.html)

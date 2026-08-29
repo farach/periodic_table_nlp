@@ -1,0 +1,601 @@
+---
+title: "Drawing grammar links between words"
+subtitle: "Read dependency parses from a small trained model"
+author: "Alex Farach"
+description: "Learn how a dependency parser links words in workforce text and why attachment scores need limits."
+categories: [word parsing, dependency parsing, workforce research]
+---
+
+Word labels are ready for the 28 Riverton sentences. The team then faces a
+harder decision: when a sentence says training is provided, which word
+is the thing provided, and does the sentence name a provider?
+
+That question matters because labels alone do not say how words fit together. A
+sentence can contain `experience` and `required` while still saying the opposite
+of a simple keyword match. A passive sentence can also leave the provider
+unnamed, so the team needs links between words and a habit of checking them by
+eye.
+
+A **dependency parse** says which word each token attaches to and what the link
+is called. The link points from one token to its **head**, the word it depends
+on. This lesson uses a local UDPipe model trained on the same 500-sentence
+English Web Treebank excerpt as the tagger in Lesson 17, with parsing turned on.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. The parser and scoring files are local artifacts,
+so the lesson does not download a model while it runs.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- describe a dependency parse in plain language;
+- read root, compound, numeric modifier, passive subject, and punctuation links;
+- compare two parses of the same sentence; and
+- explain why a parser score from weblog posts needs a baseline and local checks.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the local parser inputs
+
+The parser inputs come from local CSV files. dplyr, tibble, and purrr handle
+the table work; tokenizers and udpipe keep parsing tied to fixed tokens; digest
+records artifact fingerprints; and spacyr starts a comparison parse. The
+project helper `use_project_spacy()` starts the pinned spaCy pipeline.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(digest)
+library(tokenizers)
+library(udpipe)
+library(spacyr)
+source("R/use-spacy.R")
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+parser_score_path <- "data/treebank/parser-held-out-score.csv"
+parser_model_path <- "data/treebank/en_ewt-500-parser.udpipe"
+held_out_path <- "data/treebank/en_ewt-held-out.conllu"
+
+parser_score <- read_csv(
+  parser_score_path,
+  na = character(),
+  col_types = cols(
+    measure = col_character(),
+    value = col_double()
+  )
+)
+
+metadata <- read_csv(
+  "data/treebank/treebank-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    source_url = col_character(),
+    retrieved_on = col_character(),
+    license = col_character(),
+    fingerprint = col_character()
+  )
+)
+
+parser_score_fingerprint <- digest(
+  paste(read_lines(parser_score_path), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+parser_model_fingerprint <- digest(
+  parser_model_path,
+  algo = "sha256",
+  file = TRUE
+)
+expected_score_fingerprint <- metadata |>
+  filter(artifact == "parser-held-out-score.csv") |>
+  pull(fingerprint)
+expected_model_fingerprint <- metadata |>
+  filter(artifact == "en_ewt-500-parser.udpipe") |>
+  pull(fingerprint)
+
+held_out_lines <- read_lines(held_out_path)
+held_out_tokens <- tibble(
+  line = held_out_lines,
+  sentence_index = cumsum(grepl("^# sent_id", held_out_lines))
+) |>
+  filter(!grepl("^#", line), nzchar(line)) |>
+  mutate(fields = strsplit(line, "\t", fixed = TRUE)) |>
+  filter(map_int(fields, length) >= 8L) |>
+  transmute(
+    sentence_index,
+    token_id = map_chr(fields, 1),
+    head_token_id = map_chr(fields, 7),
+    dep_rel = map_chr(fields, 8)
+  ) |>
+  filter(
+    !grepl("-", token_id, fixed = TRUE),
+    !grepl(".", token_id, fixed = TRUE)
+  )
+
+stored_held_out_tokens <- as.integer(parser_score$value[parser_score$measure == "held_out_tokens"])
+stored_correct_head <- as.integer(parser_score$value[parser_score$measure == "correct_head"])
+stored_correct_head_and_relation <- as.integer(
+  parser_score$value[parser_score$measure == "correct_head_and_relation"]
+)
+computed_unlabelled <- round(stored_correct_head / stored_held_out_tokens, 4)
+computed_labelled <- round(stored_correct_head_and_relation / stored_held_out_tokens, 4)
+
+pipeline <- use_project_spacy()
+spacy_info <- spacy_pipeline_version()
+spacy_info_table <- tibble(
+  item = names(spacy_info),
+  value = unname(unlist(spacy_info))
+)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(sentences$sentence_id[1], "s001"),
+  identical(sentences$text[1], "Paid 12-week training is provided."),
+  identical(pipeline$model, "en_core_web_sm"),
+  identical(spacy_info$version, "3.8.0"),
+  identical(spacy_info$license, "MIT"),
+  identical(spacy_info$spacy, "3.8.7"),
+  identical(
+    parser_score$measure,
+    c(
+      "held_out_tokens",
+      "correct_head",
+      "unlabelled_attachment",
+      "correct_head_and_relation",
+      "labelled_attachment"
+    )
+  ),
+  identical(
+    parser_score$value,
+    c(4007, 2899, 0.7235, 2629, 0.6561)
+  ),
+  identical(nrow(held_out_tokens), stored_held_out_tokens),
+  identical(
+    computed_unlabelled,
+    parser_score$value[parser_score$measure == "unlabelled_attachment"]
+  ),
+  identical(
+    computed_labelled,
+    parser_score$value[parser_score$measure == "labelled_attachment"]
+  ),
+  all(nchar(metadata$fingerprint) == 64L),
+  identical(parser_score_fingerprint, expected_score_fingerprint),
+  identical(parser_model_fingerprint, expected_model_fingerprint)
+)
+
+knitr::kable(
+  parser_score,
+  col.names = c("Measure", "Value"),
+  caption = "Held-out parser scores bundled with the lesson",
+  row.names = FALSE
+)
+
+knitr::kable(
+  spacy_info_table,
+  col.names = c("Pipeline field", "Value"),
+  caption = "Local spaCy pipeline used for the comparison table",
+  row.names = FALSE
+)
+```
+
+The chunk checks the score file against the held-out token count, recomputes both
+ratios, and matches the parser and score fingerprints in the metadata. The
+parser attaches 2,899 of 4,007 held-out tokens to the right head word, about
+0.72, and gets both head and relation right for 2,629 tokens, about 0.66.
+
+## Parse fixed tokens
+
+The parser receives one token per line because the model has no tokenizer. The
+vertical text block hands udpipe each sentence as a stack of fixed tokens.
+
+```{r}
+parser <- udpipe_load_model(parser_model_path)
+
+vertical <- sentences$text |>
+  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  map_chr(\(tokens) paste(tokens, collapse = "\n"))
+
+parsed <- udpipe_annotate(
+  parser,
+  x = vertical,
+  doc_id = sentences$sentence_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "default"
+) |>
+  as.data.frame() |>
+  as_tibble()
+
+paid_parse <- parsed |>
+  filter(doc_id == "s001") |>
+  mutate(
+    head_word = if_else(
+      head_token_id == "0",
+      "root",
+      token[match(head_token_id, token_id)]
+    )
+  ) |>
+  select(token, head_word, dep_rel)
+
+stopifnot(
+  identical(nrow(parsed), 178L),
+  identical(
+    paid_parse$token,
+    c("Paid", "12", "-", "week", "training", "is", "provided", ".")
+  ),
+  identical(
+    paid_parse$head_word,
+    c("week", "Paid", "Paid", "training", "provided", "provided", "root", "provided")
+  ),
+  identical(
+    paid_parse$dep_rel,
+    c("compound", "flat", "punct", "compound", "nsubj:pass", "aux:pass", "root", "punct")
+  )
+)
+
+knitr::kable(
+  paid_parse,
+  col.names = c("Token", "Head word", "Relation"),
+  caption = "Dependency parse for 'Paid 12-week training is provided.'",
+  row.names = FALSE
+)
+```
+
+The parse says `provided` is the **root**, the central word of this sentence.
+`training` attaches to `provided` as a passive subject, and `is` attaches as a
+passive helper verb. Inside `Paid 12-week`, the parser is wrong. It makes `Paid`
+part of `week` and hangs `12` off `Paid`. A reader would attach `Paid` to
+`training` and `12` to `week`.
+
+The parse answers half the team's question. `training` is the thing provided.
+Nothing in the sentence says who provides it, because English lets a passive
+drop the doer. There is no word for the parser to point at.
+
+These tables use a few relation labels. `root` marks the central word.
+`compound` links words inside a larger noun phrase. `flat` is for flat name-like
+material, though it is a bad fit for `12` here. `nummod` marks a numeric
+modifier, and `nmod` marks a nominal modifier. `nsubj:pass` marks a passive
+subject, `aux:pass` marks a passive helper, `ccomp` marks a clausal complement,
+and `punct` marks punctuation.
+
+## Compare one sentence with spaCy
+
+The same idea can come from a different tool. spaCy's English parser does not
+use the Universal Dependencies label set. It uses another scheme, which is why
+`nsubjpass` will not be found in the UD documentation linked below.
+
+```{r}
+spacy_s001 <- spacy_parse(
+  c(s001 = "Paid 12-week training is provided."),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+) |>
+  as_tibble()
+
+spacy_paid_parse <- spacy_s001 |>
+  mutate(
+    head_word = if_else(
+      head_token_id == token_id,
+      "ROOT",
+      token[match(as.character(head_token_id), as.character(token_id))]
+    )
+  ) |>
+  select(token, head_word, dep_rel, lemma, pos)
+
+stopifnot(
+  identical(nrow(spacy_s001), 8L),
+  identical(
+    spacy_paid_parse$token,
+    c("Paid", "12", "-", "week", "training", "is", "provided", ".")
+  ),
+  identical(
+    spacy_paid_parse$head_word,
+    c("training", "week", "week", "training", "provided", "provided", "ROOT", "provided")
+  ),
+  identical(
+    spacy_paid_parse$dep_rel,
+    c("nmod", "nummod", "punct", "compound", "nsubjpass", "auxpass", "ROOT", "punct")
+  ),
+  identical(spacy_paid_parse$lemma[7], "provide")
+)
+
+knitr::kable(
+  spacy_paid_parse,
+  col.names = c("Token", "Head word", "spaCy relation", "Lemma", "POS tag"),
+  caption = "spaCy parse for the same sentence",
+  row.names = FALSE
+)
+
+invisible(suppressMessages(spacy_finalize()))
+```
+
+The two tools produce different structures, not a spelling difference in the
+labels. spaCy attaches `Paid` to `training` and `12` to `week`; UDPipe attaches
+`Paid` to `week` and `12` to `Paid`. Both outputs still have tokens, heads, and
+labels, but they disagree about this sentence.
+
+## Read morphology in context
+
+The parser output also includes the `feats` column. These are **morphological
+features**, compact labels for grammar carried by a token in this sentence.
+
+```{r}
+paid_features <- parsed |>
+  filter(doc_id == "s001", token %in% c("is", "provided")) |>
+  select(token, feats)
+
+stopifnot(
+  identical(paid_features$token, c("is", "provided")),
+  identical(
+    paid_features$feats,
+    c(
+      "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin",
+      "Tense=Past|VerbForm=Part|Voice=Pass"
+    )
+  )
+)
+
+knitr::kable(
+  paid_features,
+  col.names = c("Token", "Morphological features"),
+  caption = "In-context features for two tokens in sentence s001",
+  row.names = FALSE
+)
+```
+
+The feature string for `is` says it is a finite present-tense helper form. The
+feature string for `provided` says it is a past participle in passive voice. That
+is why the relation labels include passive forms.
+
+## Compare parsing with tagging
+
+A parser score needs its own baseline. The chunk below uses a deliberately weak
+one: attach each token to the token before it, with the first token in a sentence
+attached to the root.
+
+```{r}
+tagger_curve <- read_csv(
+  "data/treebank/tagger-learning-curve.csv",
+  na = character(),
+  col_types = cols(
+    training_sentences = col_integer(),
+    training_tokens = col_integer(),
+    held_out_tokens = col_integer(),
+    correct_tokens = col_integer(),
+    accuracy = col_double()
+  )
+)
+
+tagging_score <- tagger_curve |>
+  filter(training_sentences == 500L) |>
+  transmute(
+    system = "500-sentence tagger",
+    correct = correct_tokens,
+    tokens = held_out_tokens,
+    accuracy
+  )
+
+attachment_baseline <- held_out_tokens |>
+  group_by(sentence_index) |>
+  mutate(previous_head = if_else(row_number() == 1L, "0", lag(token_id))) |>
+  ungroup() |>
+  summarise(
+    system = "Previous-token baseline, head only",
+    correct = sum(head_token_id == previous_head),
+    tokens = n(),
+    attachment = round(correct / tokens, 4),
+    .groups = "drop"
+  )
+
+attachment_scores <- bind_rows(
+  attachment_baseline,
+  tibble(
+    system = c(
+      "500-sentence parser, head only",
+      "500-sentence parser, head and relation"
+    ),
+    correct = c(stored_correct_head, stored_correct_head_and_relation),
+    tokens = c(stored_held_out_tokens, stored_held_out_tokens),
+    attachment = c(computed_unlabelled, computed_labelled)
+  )
+)
+
+stopifnot(
+  identical(
+    tagger_curve$accuracy[tagger_curve$training_sentences == 500L],
+    0.9087
+  ),
+  identical(tagging_score$correct, 3641L),
+  identical(attachment_scores$correct, c(304L, 2899L, 2629L)),
+  identical(attachment_scores$tokens, c(4007L, 4007L, 4007L)),
+  identical(attachment_scores$attachment, c(0.0759, 0.7235, 0.6561))
+)
+
+knitr::kable(
+  tagging_score,
+  col.names = c("System", "Correct tokens", "Tokens scored", "Accuracy"),
+  caption = "Tagging accuracy on the held-out weblog tokens",
+  row.names = FALSE
+)
+
+knitr::kable(
+  attachment_scores,
+  col.names = c("System", "Correct tokens", "Tokens scored", "Attachment score"),
+  caption = "Parser attachment scores and a previous-token baseline",
+  row.names = FALSE
+)
+```
+
+Attaching every token to the word before it gets 304 of 4,007 heads right. The
+trained parser gets 2,899 heads right, about 0.72. The tagger's 0.91 belongs to
+a different task with a different set of choices, so the table keeps it separate.
+The head-and-relation row is stricter by construction: it can be right only when
+the head is right. These numbers come from one train-and-test split of thirteen
+weblog posts, and tokens inside a post are related because vocabulary, topic, and
+author repeat.
+
+## Check Riverton roots
+
+The held-out score is a warning, not a local audit. Because the Riverton set has
+only 28 sentences, the lesson can compare each parser root with a hand-chosen
+root for the sentence.
+
+```{r}
+parser_roots <- parsed |>
+  filter(head_token_id == "0") |>
+  transmute(sentence_id = doc_id, parser_root = token)
+
+hand_roots <- tribble(
+  ~sentence_id, ~hand_root,
+  "s001", "provided",
+  "s002", "required",
+  "s003", "available",
+  "s004", "need",
+  "s005", "required",
+  "s006", "pays",
+  "s007", "part",
+  "s008", "able",
+  "s009", "required",
+  "s010", "preferred",
+  "s011", "available",
+  "s012", "receives",
+  "s013", "preferred",
+  "s014", "uses",
+  "s015", "provided",
+  "s016", "apprenticeship",
+  "s017", "required",
+  "s018", "outdoors",
+  "s019", "required",
+  "s020", "required",
+  "s021", "included",
+  "s022", "skill",
+  "s023", "HOUSE",
+  "s024", "CERTIFICATE",
+  "s025", "stipend",
+  "s026", "classes",
+  "s027", "required",
+  "s028", "Apply"
+)
+
+root_audit <- hand_roots |>
+  left_join(parser_roots, by = "sentence_id") |>
+  mutate(root_matches = parser_root == hand_root)
+
+root_summary <- root_audit |>
+  summarise(
+    right_root = sum(root_matches),
+    wrong_root = sum(!root_matches),
+    total = n(),
+    .groups = "drop"
+  )
+
+root_mismatches <- root_audit |>
+  filter(!root_matches)
+
+stopifnot(
+  identical(nrow(root_audit), nrow(sentences)),
+  all(root_audit$sentence_id %in% sentences$sentence_id),
+  identical(root_summary$right_root, 21L),
+  identical(root_summary$wrong_root, 7L),
+  identical(
+    root_mismatches$sentence_id,
+    c("s004", "s017", "s021", "s023", "s024", "s026", "s028")
+  )
+)
+
+knitr::kable(
+  root_mismatches,
+  col.names = c("Sentence ID", "Hand root", "Parser root", "Root matches"),
+  caption = "Riverton sentences where the parser root needs review",
+  row.names = FALSE
+)
+```
+
+Of the 28 Riverton sentences, the parser picks the hand-marked root in 21 and
+misses 7. The misses cluster in noun-heavy lines and flyer headings, where there
+is little sentence structure for the parser to hold on to.
+
+```{r}
+included_parse <- parsed |>
+  filter(doc_id == "s021") |>
+  mutate(
+    head_word = if_else(
+      head_token_id == "0",
+      "root",
+      token[match(head_token_id, token_id)]
+    )
+  ) |>
+  select(token, head_word, dep_rel)
+
+stopifnot(
+  identical(included_parse$token, c("Product", "training", "is", "included", ".")),
+  identical(included_parse$head_word, c("root", "included", "included", "Product", "Product")),
+  identical(included_parse$dep_rel, c("root", "nsubj:pass", "aux:pass", "ccomp", "punct"))
+)
+
+knitr::kable(
+  included_parse,
+  col.names = c("Token", "Head word", "Relation"),
+  caption = "A Riverton parse that needs human review",
+  row.names = FALSE
+)
+```
+
+In `Product training is included`, the main claim is that training is included.
+The parser has made `Product` the head of the sentence and hung `included`
+beneath it as a subordinate clause, so the parser has the sentence inside out.
+
+## What to remember
+
+- A dependency parse links each token to a head word and names the relation.
+- UDPipe and spaCy disagree on the heads inside `Paid 12-week`.
+- A previous-token baseline gets 304 of 4,007 weblog heads right.
+- The trained parser gets 2,899 of 4,007 heads right, about 0.72.
+- The parser misses 7 of 28 hand-marked Riverton roots.
+- Parser links on job-posting text need direct inspection.
+
+Use dependency links as leads for reading, especially around passives. On this
+corpus the useful warning is concrete: seven root choices need review before any
+downstream count trusts them.
+
+## Sources
+
+- [UDPipe R package reference](https://bnosac.github.io/udpipe/docs/doc0.html)
+- [Universal Dependencies relations](https://universaldependencies.org/u/dep/)
+- [Universal Dependencies English Web Treebank](https://universaldependencies.org/treebanks/en_ewt/index.html)

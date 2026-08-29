@@ -6,8 +6,8 @@ description: "Learn how a part-of-speech tagger labels workforce text and why he
 categories: [word parsing, part-of-speech tagging, workforce research]
 ---
 
-The Riverton Workforce Lab has finished its sentence labels. The team points to
-a job posting and asks a smaller question: which words are the actions?
+With sentence labels finished, attention turns to single words. The team points
+to a job posting and asks a smaller question: which words are the actions?
 
 That question changes the level of analysis. The team is no longer asking
 whether a whole sentence is about training or schedules. It wants to know what
@@ -48,10 +48,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the local files
 
-The next chunk loads readr for files, dplyr and tibble for tables, purrr for
-repeated token work, tokenizers for word splitting, udpipe for tagging, and
-digest for file fingerprints. The model has already been trained, so the code
-only reads artifacts from disk.
+For this read-only pass, readr opens the files, dplyr and tibble handle tables,
+purrr repeats token work, tokenizers split words, udpipe tags them, and digest
+checks file fingerprints. The model has already been trained, so the code only
+reads artifacts from disk.
 
 ```{r}
 library(readr)
@@ -119,13 +119,21 @@ expected_curve_fingerprint <- metadata |>
   pull(fingerprint)
 
 metadata_display <- metadata |>
+  filter(
+    artifact %in% c(
+      "en_ewt-train-excerpt.conllu",
+      "en_ewt-held-out.conllu",
+      "en_ewt-500-tagger.udpipe",
+      "tagger-learning-curve.csv"
+    )
+  ) |>
   mutate(fingerprint_start = str_sub(fingerprint, 1, 12)) |>
   select(artifact, source, license, fingerprint_start)
 
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(nrow(learning_curve), 5L),
-  identical(nrow(metadata), 4L),
+  identical(nrow(metadata_display), 4L),
   all(str_length(metadata$fingerprint) == 64L),
   all(str_length(metadata_display$fingerprint_start) == 12L),
   identical(

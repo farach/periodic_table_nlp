@@ -1,0 +1,6 @@
+measure,value
+held_out_tokens,4007
+correct_head,2899
+unlabelled_attachment,0.7235
+correct_head_and_relation,2629
+labelled_attachment,0.6561

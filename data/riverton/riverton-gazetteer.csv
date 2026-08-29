@@ -1,0 +1,10 @@
+place_name,place_type,latitude,longitude,parent
+Riverton,city,41.821,-71.412,Marrow County
+Riverton Heights,neighbourhood,41.8402,-71.3988,Riverton
+East Riverton,neighbourhood,41.8117,-71.3841,Riverton
+Marrow County,county,41.7995,-71.4503,Calder
+Calder,state,41.65,-71.5,
+Bellhaven,city,41.9331,-71.276,Marrow County
+Riverton Skills Centre,building,41.8256,-71.4077,Riverton
+Norwood,city,41.7042,-71.6188,Calder
+Riverton,city,38.441,-75.1002,Tidewater

@@ -8,6 +8,11 @@ project:
     - 1_source_data_loading/*.qmd
     - 2_training_data_generation/*.qmd
     - 3_word_parsing/*.qmd
+    - 4_word_processing/*.qmd
+    - 5_phrases_and_entities/*.qmd
+    - 6_entity_enrichment/*.qmd
+    - 7_sentences_and_paragraphs/*.qmd
+    - 8_documents/*.qmd
 
 website:
   title: "Periodic Table of NLP Tasks in R"
@@ -40,17 +45,17 @@ website:
       - href: 1_source_data_loading/07-text-extraction-and-ocr.qmd
         text: Extracting text from an image
       - href: 2_training_data_generation/08-manual-annotation.qmd
-        text: Turning decisions into labels
+        text: Turning reading decisions into labels
       - href: 2_training_data_generation/09-annotation-with-active-learning.qmd
-        text: Choosing what to label next
+        text: Choosing which examples to label next
       - href: 2_training_data_generation/10-training-data-providers.qmd
         text: Choosing an outside data provider
       - href: 2_training_data_generation/11-crowdsourcing-annotation.qmd
         text: Working with several annotators
       - href: 2_training_data_generation/12-textual-data-augmentation.qmd
-        text: Creating more training examples
+        text: Creating additional training examples
       - href: 2_training_data_generation/13-rule-based-training-data.qmd
-        text: Labeling text with rules
+        text: Labeling text with written rules
       - href: 3_word_parsing/14-tokenization.qmd
         text: Deciding what counts as a word
       - href: 3_word_parsing/15-vocabulary-building.qmd
@@ -59,6 +64,56 @@ website:
         text: Looking inside words
       - href: 3_word_parsing/17-part-of-speech-tagging.qmd
         text: Tagging words by their job
+      - href: 3_word_parsing/18-dependency-parsing.qmd
+        text: Drawing grammar links between words
+      - href: 4_word_processing/19-stemming.qmd
+        text: Chopping word endings
+      - href: 4_word_processing/20-lemmatization.qmd
+        text: Choosing dictionary forms
+      - href: 4_word_processing/21-normalization.qmd
+        text: Making text comparable
+      - href: 4_word_processing/22-spell-checking.qmd
+        text: Checking dictionary unknowns
+      - href: 4_word_processing/23-negation-recognition.qmd
+        text: Finding what a sentence denies
+      - href: 5_phrases_and_entities/24-n-grams.qmd
+        text: Counting nearby words with n-grams
+      - href: 5_phrases_and_entities/25-rule-based-phrase-matching.qmd
+        text: Finding phrases with readable rules
+      - href: 5_phrases_and_entities/26-dependency-noun-chunks.qmd
+        text: Finding noun chunks from grammar links
+      - href: 5_phrases_and_entities/27-named-entity-recognition.qmd
+        text: Checking named entities against domain text
+      - href: 5_phrases_and_entities/28-abbreviation-finding.qmd
+        text: Finding abbreviations without trusting capitals
+      - href: 6_entity_enrichment/29-price-parsing.qmd
+        text: Parsing prices from text
+      - href: 6_entity_enrichment/30-geocoding.qmd
+        text: Geocoding place names
+      - href: 6_entity_enrichment/31-temporal-parsing.qmd
+        text: Parsing time expressions
+      - href: 6_entity_enrichment/32-named-entity-linking.qmd
+        text: Linking named entities
+      - href: 6_entity_enrichment/33-coreference-resolution.qmd
+        text: Resolving coreference
+      - href: 6_entity_enrichment/34-text-de-identification.qmd
+        text: De-identifying text
+      - href: 7_sentences_and_paragraphs/35-sentence-segmentation.qmd
+        text: Finding sentence boundaries
+      - href: 7_sentences_and_paragraphs/36-paragraph-segmentation.qmd
+        text: Finding paragraph boundaries
+      - href: 7_sentences_and_paragraphs/37-grammar-checking.qmd
+        text: Checking small grammar rules
+      - href: 7_sentences_and_paragraphs/38-readability-scoring.qmd
+        text: Scoring readability formulas
+      - href: 8_documents/39-deduplication.qmd
+        text: Deduplicating documents
+      - href: 8_documents/40-raw-text-cleaning.qmd
+        text: Cleaning raw text
+      - href: 8_documents/41-metadata-extraction.qmd
+        text: Extracting document metadata
+      - href: 8_documents/42-language-identification.qmd
+        text: Identifying document language
       - href: accessibility.qmd
         text: Accessibility
   page-footer:

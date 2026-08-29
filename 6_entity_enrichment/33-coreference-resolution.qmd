@@ -1,0 +1,323 @@
+---
+title: "Resolving coreference"
+subtitle: "Link pronouns to the noun phrases they may refer to"
+author: "Alex Farach"
+description: "Learn how a nearest-noun baseline handles pronouns in a constructed Riverton passage and where it fails."
+categories: [entity enrichment, coreference resolution, workforce research]
+---
+
+Pronouns make the short applicant note harder than it first appears: `she` is
+clear enough to a reader, while `he` could point to more than one person.
+
+**Coreference resolution** links different expressions that refer to the same
+thing. A pronoun such as `they` may refer back to `the workers`. This lesson uses
+a small baseline rule so its mistakes remain visible.
+
+::: {.callout-note}
+The Riverton passage and reference setting below are fictional.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define coreference in plain language;
+- inspect noun phrases and pronouns from a spaCy parse;
+- apply a nearest-agreeing-noun baseline;
+- compare the baseline with this page's expected answers; and
+- explain why document-level context matters.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Use a constructed passage
+
+The lesson first checks the Riverton CSV, then uses a constructed passage because
+the stored sentences are too thin for coreference teaching.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(spacyr)
+source("R/use-spacy.R")
+
+pipeline <- use_project_spacy()
+pipeline_version <- spacy_pipeline_version()
+
+stopifnot(all(c("readr", "dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+riverton_parsed <- spacy_parse(
+  setNames(sentences$text, sentences$sentence_id),
+  pos = TRUE,
+  lemma = TRUE
+) |>
+  as_tibble()
+
+riverton_pronouns <- riverton_parsed |>
+  filter(pos == "PRON")
+
+teaching_passage <- paste(
+  "The coordinator posted the training notice on Monday.",
+  "The applicant read it before the bus arrived.",
+  "The supervisor called the applicant after she finished the form.",
+  "The supervisor told the coordinator that he could open another class.",
+  "The workers thanked the supervisor because they needed evening seats.",
+  "The centre moved the flyer near the entrance, and it stayed there all week.",
+  sep = " "
+)
+
+parsed_raw <- spacy_parse(
+  c(teaching_passage = teaching_passage),
+  pos = TRUE,
+  tag = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE,
+  additional_attributes = c("morph")
+)
+
+parsed <- parsed_raw |>
+  as_tibble() |>
+  mutate(
+    global_token = row_number(),
+    morph = map_chr(morph, as.character)
+  )
+
+phrases <- nounphrase_extract(parsed_raw)
+
+stopifnot(
+  identical(pipeline_version$version, "3.8.0"),
+  identical(pipeline_version$license, "MIT"),
+  identical(pipeline_version$spacy, "3.8.7"),
+  identical(nrow(sentences), 28L),
+  identical(nrow(riverton_pronouns), 1L),
+  identical(nrow(phrases), 22L),
+  identical(sum(parsed$pos == "PRON"), 5L)
+)
+
+knitr::kable(
+  riverton_pronouns |>
+    select(doc_id, token, pos),
+  col.names = c("Sentence ID", "Token", "spaCy part of speech"),
+  caption = "Pronouns found in the 28 Riverton sentences",
+  row.names = FALSE
+)
+
+knitr::kable(
+  tibble(
+    name = pipeline_version$name,
+    version = pipeline_version$version,
+    language = pipeline_version$lang,
+    license = pipeline_version$license,
+    spacy = pipeline_version$spacy
+  ),
+  col.names = c("Pipeline", "Version", "Language", "License", "spaCy"),
+  caption = "spaCy pipeline used for the parse",
+  row.names = FALSE
+)
+
+knitr::kable(
+  phrases,
+  col.names = c("Document", "Sentence", "Noun phrase"),
+  caption = "Noun phrases extracted from the constructed passage",
+  row.names = FALSE
+)
+```
+
+spaCy marks one pronoun in the 28 Riverton sentences. One example is not enough
+to teach pronoun linking, so the constructed passage gives the rule more chances
+to fail.
+
+The installed `en_core_web_sm` pipeline has named-entity, tagger, parser, and
+other components, but no coreference component. The rule below is a baseline, not
+a full coreference system.
+
+## Apply the baseline rule
+
+The rule is explicit: link each personal pronoun to the nearest preceding noun
+phrase that has the same number feature. Here, number means singular or plural as
+reported by spaCy morphology on the noun-phrase head. The thing a pronoun points
+back to is called its antecedent.
+
+```{r}
+number_from_morph <- function(morph_value) {
+  case_when(
+    str_detect(morph_value, "Number=Plur") ~ "Plur",
+    str_detect(morph_value, "Number=Sing") ~ "Sing",
+    TRUE ~ NA_character_
+  )
+}
+
+phrase_tokens <- parsed |>
+  mutate(
+    np_inside = nounphrase != "",
+    np_id = if_else(np_inside, cumsum(str_detect(nounphrase, "beg")), NA_integer_)
+  ) |>
+  filter(np_inside)
+
+noun_phrases <- phrase_tokens |>
+  summarise(
+    phrase = paste(token, collapse = " "),
+    root_token = token[str_detect(nounphrase, "root")][1],
+    root_pos = pos[str_detect(nounphrase, "root")][1],
+    root_morph = morph[str_detect(nounphrase, "root")][1],
+    start_token = min(global_token),
+    end_token = max(global_token),
+    .by = np_id
+  ) |>
+  mutate(number = number_from_morph(root_morph))
+
+antecedents <- noun_phrases |>
+  filter(root_pos %in% c("NOUN", "PROPN"), !is.na(number)) |>
+  rename(antecedent = phrase, antecedent_number = number) |>
+  mutate(join_key = 1L)
+
+pronouns <- parsed |>
+  filter(pos == "PRON", str_to_lower(token) %in% c("it", "she", "he", "they")) |>
+  transmute(
+    pronoun_id = paste0("p", row_number()),
+    pronoun = token,
+    sentence_id,
+    pronoun_token = global_token,
+    pronoun_number = number_from_morph(morph),
+    join_key = 1L
+  )
+
+rule_links <- pronouns |>
+  left_join(antecedents, by = join_by(join_key), relationship = "many-to-many") |>
+  filter(end_token < pronoun_token, antecedent_number == pronoun_number) |>
+  arrange(pronoun_id, desc(end_token)) |>
+  summarise(
+    rule_antecedent = first(antecedent),
+    .by = c(pronoun_id, pronoun, sentence_id, pronoun_number)
+  )
+
+stopifnot(
+  identical(nrow(pronouns), 5L),
+  identical(nrow(rule_links), 5L),
+  identical(rule_links$rule_antecedent[1], "The applicant"),
+  identical(rule_links$rule_antecedent[5], "the entrance")
+)
+
+knitr::kable(
+  rule_links,
+  col.names = c("Pronoun ID", "Pronoun", "Sentence", "Number", "Rule antecedent"),
+  caption = "Nearest preceding noun phrase with matching number",
+  row.names = FALSE
+)
+```
+
+The rule chooses `The applicant` for the first `it` because that is the nearest
+singular noun phrase. A reader can see that `it` means the training notice.
+
+## Score the rule
+
+The expected answers treat `he` as genuinely ambiguous because the supervisor or
+the coordinator could open another class. That row is counted separately.
+
+```{r}
+marked_coreference <- tibble(
+  pronoun_id = c("p1", "p2", "p3", "p4", "p5"),
+  expected_antecedent = c(
+    "the training notice",
+    "the applicant",
+    "ambiguous",
+    "The workers",
+    "the flyer"
+  ),
+  scoreable = c(TRUE, TRUE, FALSE, TRUE, TRUE)
+)
+
+coreference_score <- rule_links |>
+  left_join(marked_coreference, by = join_by(pronoun_id)) |>
+  mutate(
+    result = case_when(
+      !scoreable ~ "ambiguous reference",
+      str_to_lower(rule_antecedent) == str_to_lower(expected_antecedent) ~ "correct",
+      TRUE ~ "wrong"
+    )
+  )
+
+score_counts <- tibble(result = c("correct", "wrong", "ambiguous reference")) |>
+  left_join(
+    coreference_score |>
+      count(result, name = "pronouns"),
+    by = join_by(result)
+  ) |>
+  mutate(pronouns = coalesce(pronouns, 0L))
+
+spacy_finalize()
+
+stopifnot(
+  identical(score_counts$pronouns, c(2L, 2L, 1L)),
+  identical(sum(score_counts$pronouns), 5L)
+)
+
+knitr::kable(
+  coreference_score |>
+    select(pronoun_id, pronoun, rule_antecedent, expected_antecedent, result),
+  col.names = c("Pronoun ID", "Pronoun", "Rule antecedent", "Expected answer", "Result"),
+  caption = "Coreference baseline compared with expected answers",
+  row.names = FALSE
+)
+
+knitr::kable(
+  score_counts,
+  col.names = c("Result", "Pronouns"),
+  caption = "Correct, wrong, and ambiguous pronoun links",
+  row.names = FALSE
+)
+```
+
+Because the baseline and expected answers share an author, the score is only a
+check on this page. The two correct answers are easy cases: `The workers` is the
+only plural phrase before `they`, and the rule links `she` without using gender.
+Excluding the ambiguous `he` row changes the scored denominator from five
+pronouns to four. Real coreference systems need document context, syntax, and
+meaning.
+
+## What to remember
+
+- Coreference links expressions that refer to the same thing.
+- `en_core_web_sm` does not include a coreference resolver.
+- A nearest-agreeing-noun rule is a baseline for inspection.
+- Ambiguous pronouns should be marked as ambiguous, not forced into certainty.
+
+After checking the five pronouns, the coordinator has two easy matches, two
+mistakes, and one ambiguity. That is enough to explain the baseline, not enough
+to use it as a resolver.
+
+## Sources
+
+- [spaCy linguistic features](https://spacy.io/usage/linguistic-features)
+- [spaCy English pipelines](https://spacy.io/models/en)
+- [Universal Dependencies features](https://universaldependencies.org/u/feat/index.html)

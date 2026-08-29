@@ -6,8 +6,8 @@ description: "Learn why tokenization is a rule-based decision before any word co
 categories: [word parsing, tokenization, workforce research]
 ---
 
-The Riverton Workforce Lab brings its labeled sentences to a planning meeting.
-The team has 28 reviewed text units from a job board page and a training flyer.
+A planning meeting begins with the Lab's labeled sentences on the table. The
+team has 28 reviewed text units from a job board page and a training flyer.
 Six came from the flyer, and 22 came from job-detail lines.
 
 The labels answer one question: what does each sentence say? The next question
@@ -39,10 +39,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Start with the sentence on the page
 
-The first visible chunk loads readr for files, dplyr and tibble for tables,
-purrr for repeated checks, stringr for strings, tokenizers for word and
-sentence splitting, and tokenizers.bpe for subword splitting. A **tibble** is a
-table that prints its size and column types.
+The first code the reader sees brings in readr for files, dplyr and tibble for
+tables, purrr for repeated checks, stringr for strings, tokenizers for word and
+sentence splitting, and tokenizers.bpe for subword splitting. A **tibble** is
+the tidyverse table shape that prints its dimensions and each column's type.
 
 ```{r}
 library(readr)
