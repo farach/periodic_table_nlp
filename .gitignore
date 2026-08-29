@@ -13,3 +13,8 @@ test-results/
 
 /.quarto/
 **/*.quarto_ipynb
+
+# Private project-management records are archived outside the repository.
+/PINBOARD.md
+/PROJECT_STATUS.md
+/sessions/

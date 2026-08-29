@@ -118,6 +118,22 @@ stopifnot(
   all(str_detect(detector_versions$package_version, "^\\d+\\.\\d+"))
 )
 
+display_samples <- language_samples |>
+  mutate(
+    display_text = str_c(
+      "<span lang=\"",
+      written_in,
+      "\">",
+      text,
+      "</span>"
+    )
+  )
+
+stopifnot(
+  !any(str_detect(language_samples$text, "[<>&]")),
+  all(str_detect(display_samples$display_text, fixed("<span lang=")))
+)
+
 knitr::kable(
   detector_versions,
   col.names = c("Detector package", "Version"),
@@ -136,16 +152,18 @@ knitr::kable(
 )
 
 knitr::kable(
-  language_samples,
+  display_samples |>
+    select(sample_id, written_in, display_text),
   col.names = c("Sample", "Recorded language", "Text"),
   caption = "Eight labelled language samples used for detection",
-  row.names = FALSE
+  row.names = FALSE,
+  escape = FALSE
 )
 ```
 
 The `written_in` column records the language the author meant to write, not a
-verified annotation. The Spanish `Casa abierta.` is grammatical, but as an event
-notice it is a calque rather than an idiomatic phrase. These results come from
+verified annotation. The Spanish [Casa abierta.]{lang="es"} is grammatical, but
+as an event notice it is a calque rather than an idiomatic phrase. These results come from
 the detector versions printed above; a package change can return different codes
 for the same strings.
 
@@ -164,7 +182,14 @@ detected_samples <- language_samples |>
     cld2_language = cld2::detect_language(text),
     cld3_language = cld3::detect_language(text),
     cld2_match = !is.na(cld2_language) & cld2_language == written_in,
-    cld3_match = !is.na(cld3_language) & cld3_language == written_in
+    cld3_match = !is.na(cld3_language) & cld3_language == written_in,
+    display_text = str_c(
+      "<span lang=\"",
+      written_in,
+      "\">",
+      text,
+      "</span>"
+    )
   )
 
 open_house <- detected_samples |>
@@ -191,7 +216,7 @@ knitr::kable(
     select(
       sample_id,
       written_in,
-      text,
+      display_text,
       characters,
       words,
       cld2_language,
@@ -207,7 +232,8 @@ knitr::kable(
     "CLD3"
   ),
   caption = "Language detector output for each sample",
-  row.names = FALSE
+  row.names = FALSE,
+  escape = FALSE
 )
 ```
 
@@ -356,6 +382,18 @@ is safer: no queue is selected until someone checks the item.
 These eight samples are all written in the Latin alphabet, so this page shows
 nothing about other writing systems. That is a limit of the file, not a
 reassurance.
+
+## Language identification in production
+
+While `cld2` and `cld3` illustrate the routing problem, models such as Meta's `fasttext` are common alternatives for fast language identification. When deploying any model, keep these production realities in mind:
+
+- **Language scope and BCP 47**: Projects must explicitly state their supported language scope upfront. When recording a language, use a standard like BCP 47 tags (e.g., `en-US`) rather than informal names.
+- **Per-language recall**: A model's overall accuracy hides its failures. Always measure recall *per language*, because models routinely fail on low-resource languages.
+- **Code-switching**: The single-label `cld2::detect_language()` and
+  `cld3::detect_language()` calls used here return one document label. Mixed
+  language text needs a detector designed for spans or tokens, or a review
+  route; single-label behavior should not be generalized to every model.
+- **Probability vs. certainty**: A model might return a confidence score like `0.95`, but do not treat this as a calibrated probability. It is only the model's internal score, not a statistical guarantee.
 
 ## What to remember
 

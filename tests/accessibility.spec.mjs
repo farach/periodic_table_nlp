@@ -94,6 +94,12 @@ test("periodic table supports keyboard navigation", async ({ page }) => {
   await expect(plannedTiles).toHaveCount(totalTasks - lessonPagePaths.length);
   await expect(plannedTiles.first()).not.toHaveAttribute("aria-disabled");
   await expect(plannedTiles.first()).not.toHaveAttribute("aria-label");
+  await expect(
+    plannedTiles.first().locator(".element-status")
+  ).toBeVisible();
+  await expect(
+    plannedTiles.first().locator(".element-status")
+  ).toHaveText("Planned");
 
   const labels = await availableTiles.evaluateAll((tiles) =>
     tiles.map((tile) => tile.getAttribute("aria-label"))
@@ -294,4 +300,11 @@ test("tile status survives forced colors and reduced motion", async ({
   expect(Number.parseFloat(styles.transitionDuration)).toBeLessThanOrEqual(
     0.01
   );
+});
+
+test("accessibility page records pending manual review", async ({ page }) => {
+  await page.goto("/accessibility.html");
+  await expect(
+    page.getByText(/Manual testing with current NVDA, JAWS, VoiceOver/)
+  ).toBeVisible();
 });

@@ -33,7 +33,8 @@ By the end of this lesson, you will be able to:
 - separate an initial labeled set from an annotation pool;
 - explain uncertainty sampling;
 - rank items by distance from a 50% model score;
-- reveal labels only after selection; and
+- reveal labels only after selection;
+- show that a selected subset moves an estimate either way; and
 - name the biases that active learning can introduce.
 :::
 
@@ -447,11 +448,108 @@ coverage targets, and deliberate tests of known failure modes. Keep a
 document-disjoint evaluation set that active learning never uses for feature
 design, selection, or training.
 
-One more consequence is easy to miss. A set of examples chosen because the
-model found them hard is not a picture of the whole collection. Measure the
-model's error rate on those items and the number comes out worse than the
-truth, because hard cases are over-represented by construction. Answering "how
-often is this wrong overall?" needs a separate sample drawn at random.
+## Selection changes the estimate, and not in a fixed direction
+
+One consequence is easy to state backwards. A set of examples chosen because
+the model found them hard is not a picture of the whole pool, so a number
+measured on it is not a pool-level number. The tempting next sentence, that the
+measured error therefore looks worse than the truth, is not a rule. It depends
+on what the rule selected.
+
+The comparison below measures one quantity, the gap between the model's score
+and the label a person applied, on three sets of items: the two the uncertainty
+rule chose, the two the model was most decisive about, and the whole pool.
+
+```{r}
+pool_outcomes <- annotation_pool |>
+  left_join(
+    held_back_labels,
+    by = join_by(sentence_id),
+    multiple = "error"
+  ) |>
+  mutate(
+    training_score = training_scores,
+    is_training = as.integer(reference_label == "training"),
+    score_gap = abs(training_score - is_training),
+    predicted_training = training_score > 0.5
+  )
+
+most_decisive <- selection_table |>
+  arrange(desc(distance_from_half), sentence_id) |>
+  slice_head(n = 2)
+
+gap_for <- function(ids) {
+  mean(
+    pool_outcomes$score_gap[pool_outcomes$sentence_id %in% ids]
+  )
+}
+
+selection_comparison <- tibble(
+  evaluated_on = c(
+    "two items the uncertainty rule chose",
+    "two items the model was most decisive about",
+    "all ten pool items"
+  ),
+  items = c(2L, 2L, nrow(pool_outcomes)),
+  mean_score_gap = c(
+    gap_for(selected_for_review$sentence_id),
+    gap_for(most_decisive$sentence_id),
+    gap_for(pool_outcomes$sentence_id)
+  )
+)
+
+pool_accuracy <- mean(
+  pool_outcomes$predicted_training ==
+    (pool_outcomes$is_training == 1L)
+)
+
+stopifnot(
+  identical(nrow(pool_outcomes), 10L),
+  identical(
+    most_decisive$sentence_id,
+    c("s019", "s027")
+  ),
+  identical(
+    round(selection_comparison$mean_score_gap, 3),
+    c(0.194, 0.019, 0.112)
+  ),
+  selection_comparison$mean_score_gap[1] >
+    selection_comparison$mean_score_gap[3],
+  selection_comparison$mean_score_gap[2] <
+    selection_comparison$mean_score_gap[3],
+  isTRUE(all.equal(pool_accuracy, 1))
+)
+
+knitr::kable(
+  selection_comparison |>
+    mutate(mean_score_gap = round(mean_score_gap, 3)),
+  col.names = c(
+    "Measured on",
+    "Items",
+    "Mean gap between score and label"
+  ),
+  caption = "One model, one pool, three ways of choosing what to measure",
+  row.names = FALSE
+)
+```
+
+The pool value is 0.112. Selecting by uncertainty raised the measured gap to
+0.194. Selecting by confidence lowered it to 0.019. Same model, same ten items,
+same quantity, and the estimate moved in opposite directions because the
+selection rule differed.
+
+Neither direction is a law. A rule that finds hard cases usually flatters the
+data and punishes the score; a rule that finds easy cases does the reverse; a
+rule that happens to select a class the model handles well can make a weak model
+look strong. What can be said in general is narrower and more useful: any
+estimate computed on a selected subset describes that subset.
+
+The remedy has not changed. Keep a fixed evaluation set drawn at random,
+disjoint by document from anything active learning touches, and report pool-level
+numbers only from it. In this exercise the classifier also happens to place all
+ten pool items on the correct side of 0.5, which is worth stating plainly and
+worth trusting very little: ten items, a vocabulary built from the labeled
+documents, and no independent test set.
 
 ## What to remember
 
@@ -459,6 +557,7 @@ often is this wrong overall?" needs a separate sample drawn at random.
 - Hide pool labels until after selection.
 - A score near 0.5 is uncertain only under the current model.
 - Confidence is not the same as correctness or social importance.
+- A number measured on selected items can land above or below the pool value.
 - Audit random, rare, and underrepresented cases alongside uncertainty.
 
 The selection trail accounts for two new reviews, but it does not broaden what

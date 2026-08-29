@@ -1,6 +1,7 @@
 source("R/workforce-codebook.R")
 
 codebook <- workforce_codebook()
+recorded_codebook <- workforce_codebook("1.0.0")
 
 rebuild_codebook <- function(
     instructions = codebook$instructions,
@@ -52,6 +53,12 @@ changed_version <- rebuild_codebook(
 
 stopifnot(
   identical(codebook$hash, same_codebook$hash),
+  identical(recorded_codebook$version, "1.0.0"),
+  identical(
+    recorded_codebook$hash,
+    "eb8e5fa0b3176d139fe6ea3f9b70d4cd25ef9631656aae128b512ecd16598da2"
+  ),
+  !identical(codebook$hash, recorded_codebook$hash),
   !identical(
     codebook$hash,
     changed_instructions$hash
@@ -82,10 +89,10 @@ stopifnot(
     sentences$sentence_id,
     sprintf("s%03d", 1:28)
   ),
-  all(sentences$codebook_hash == codebook$hash),
+  all(sentences$codebook_hash == recorded_codebook$hash),
   all(
     sentences$codebook_version ==
-      codebook$version
+      recorded_codebook$version
   ),
   all(sentences$transformation == "verbatim"),
   all(sentences$derived == "false")
@@ -118,12 +125,26 @@ recorded_ocr <- readLines(
   encoding = "UTF-8",
   warn = TRUE
 )
+recorded_degraded_ocr <- readLines(
+  paste0(
+    "data/workforce/",
+    "training-flyer-degraded-ocr-5.3.2.txt"
+  ),
+  encoding = "UTF-8",
+  warn = TRUE
+)
+degraded_ocr_md5 <- digest::digest(
+  paste(recorded_degraded_ocr, collapse = "\n"),
+  algo = "md5",
+  serialize = FALSE
+)
 
 stopifnot(
   identical(nrow(job_sentences), 22L),
   identical(nrow(flyer_sentences), 6L),
   identical(flyer_sentences$text, flyer_transcript),
-  identical(recorded_ocr, flyer_transcript)
+  identical(recorded_ocr, flyer_transcript),
+  !identical(recorded_degraded_ocr, flyer_transcript)
 )
 
 job_metadata <- read.csv(
@@ -169,6 +190,13 @@ stopifnot(
     flyer_metadata$md5[
       flyer_metadata$artifact ==
         "training-flyer-ground-truth.txt"
+    ]
+  ),
+  identical(
+    degraded_ocr_md5,
+    flyer_metadata$md5[
+      flyer_metadata$artifact ==
+        "training-flyer-degraded-ocr-5.3.2.txt"
     ]
   )
 )

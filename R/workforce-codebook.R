@@ -1,10 +1,10 @@
 workforce_label_definitions <- c(
   training = paste(
-    "Choose training when the sentence explicitly offers or describes",
+    "Choose training when the text unit explicitly offers or describes",
     "a learning program, mentoring, certification training,",
     "an apprenticeship, a class, or training-linked support.",
     "A credential that is required or preferred is not training",
-    "unless the sentence also says learning is offered."
+    "unless the text unit also says learning is offered."
   ),
   requirement = paste(
     "Choose requirement when the main claim states or prefers",
@@ -15,7 +15,7 @@ workforce_label_definitions <- c(
   ),
   schedule = paste(
     "Choose schedule when the main claim states when work, training,",
-    "or classes occur. If a sentence says a shift is required,",
+    "or classes occur. If a text unit says a shift is required,",
     "schedule takes precedence because timing is the main claim."
   ),
   skill = paste(
@@ -25,23 +25,46 @@ workforce_label_definitions <- c(
   other = paste(
     "Choose other when none of the four definitions applies.",
     "Headings, deadlines, location, work setting, and travel are other",
-    "unless the sentence explicitly states another category."
+    "unless the text unit explicitly states another category."
   )
 )
 
-workforce_codebook <- function() {
+workforce_codebook <- function(version = "1.1.0") {
+  stopifnot(version %in% c("1.0.0", "1.1.0"))
+  legacy <- identical(version, "1.0.0")
   labels <- names(workforce_label_definitions)
+  label_definitions <- if (legacy) {
+    gsub(
+      "text unit",
+      "sentence",
+      workforce_label_definitions,
+      fixed = TRUE
+    )
+  } else {
+    workforce_label_definitions
+  }
   definitions <- paste0(
     labels,
     ": ",
-    unname(workforce_label_definitions)
+    unname(label_definitions)
   )
-
-  instructions <- paste(
+  unit_instructions <- if (legacy) {
     c(
       "Annotation unit: one sentence with its document identifier.",
       "Use only information explicitly stated in the sentence.",
-      "Choose one label for the sentence's main claim.",
+      "Choose one label for the sentence's main claim."
+    )
+  } else {
+    c(
+      "Annotation unit: one source-text line with its document identifier.",
+      "Use only information explicitly stated in the text unit.",
+      "Choose one label for the text unit's main claim."
+    )
+  }
+
+  instructions <- paste(
+    c(
+      unit_instructions,
       definitions,
       paste(
         "Set uncertainty to needs_review when more than one label",
@@ -62,7 +85,11 @@ workforce_codebook <- function() {
       values = labels
     ),
     rationale = foundryR::type_string(
-      "Short explanation using only the sentence"
+      if (legacy) {
+        "Short explanation using only the sentence"
+      } else {
+        "Short explanation using only the text unit"
+      }
     ),
     uncertainty = foundryR::type_enum(
       desc = "Whether the item needs adjudication",
@@ -74,13 +101,13 @@ workforce_codebook <- function() {
     list(
       text = "Paid training is provided.",
       label = "training",
-      rationale = "The sentence explicitly offers training.",
+      rationale = "The text unit explicitly offers training.",
       uncertainty = "certain"
     ),
     list(
       text = "A portfolio is required.",
       label = "requirement",
-      rationale = "The sentence states an application requirement.",
+      rationale = "The text unit states an application requirement.",
       uncertainty = "certain"
     ),
     list(
@@ -92,7 +119,7 @@ workforce_codebook <- function() {
     list(
       text = "Clear writing is an essential skill.",
       label = "skill",
-      rationale = "The sentence names an ability used in work.",
+      rationale = "The text unit names an ability used in work.",
       uncertainty = "certain"
     ),
     list(
@@ -114,10 +141,24 @@ workforce_codebook <- function() {
       uncertainty = "needs_review"
     )
   )
+  if (legacy) {
+    examples <- lapply(
+      examples,
+      function(example) {
+        example$rationale <- gsub(
+          "text unit",
+          "sentence",
+          example$rationale,
+          fixed = TRUE
+        )
+        example
+      }
+    )
+  }
 
   foundryR::foundry_codebook(
     name = "workforce-information",
-    version = "1.0.0",
+    version = version,
     instructions = instructions,
     schema = schema,
     examples = examples

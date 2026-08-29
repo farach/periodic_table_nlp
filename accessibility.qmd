@@ -32,8 +32,7 @@ that a source supports the surrounding claim.
 
 ## Using the periodic table
 
-Tiles with a solid border and the words **Read lesson** are links. Dashed tiles
-say **Planned** and are plain text, not disabled controls.
+Tiles with a solid border and the words **Read lesson** are links. Dashed tiles show **Planned** and are plain text, not disabled controls.
 
 The table is wider than a phone screen. Touch users can swipe sideways.
 Keyboard users can focus the table and use the left and right arrow keys.
@@ -42,8 +41,10 @@ understand the organization.
 
 ## Checks that still need people
 
-Before a public release, the site also needs testing with current versions of
-NVDA, JAWS, VoiceOver, or another screen reader used by the intended audience.
+Manual testing with current NVDA, JAWS, VoiceOver, keyboard-only navigation,
+and human zoom remains **pending**. Automated success does not change that
+status. Before accessibility sign-off, the site needs testing with assistive
+technology used by the intended audience.
 Manual review should include:
 
 - heading and landmark announcements;

@@ -266,6 +266,24 @@ knitr::kable(
 spaCy finds the two full names and misses the standalone surname. This second
 detector changes the route to the same warning: the note still leaks a name.
 
+## Production de-identification
+
+The simple toy rules above miss the complexity of handling real personal data. In production (often using specialized toolkits like Microsoft Presidio), teams must track several critical concepts:
+
+- **Masking, pseudonymization, and anonymization**: Replacing a name with
+  `[PERSON]` is masking. Under GDPR, it is pseudonymization only when separately
+  held, protected additional information can restore the link to a person.
+  Pseudonymized data remains personal data. Anonymization asks whether a person
+  is no longer reasonably identifiable; it is not a promise that
+  re-identification is impossible.
+- **Quasi-identifiers**: Details like a unique medical symptom, an exact timeline, or a specific geographic area might not be direct identifiers on their own, but when combined, they uniquely identify a person.
+- **Category-wise recall**: An honest evaluation measures the share of true
+  identifiers found in each category. An overall score can hide a weak category.
+- **Legal regimes and residual risk**: GDPR processing needs an applicable
+  lawful basis. HIPAA instead defines permitted uses and two de-identification
+  routes, Safe Harbor and Expert Determination. A masking pass plus a residual
+  risk note does not by itself satisfy either regime.
+
 ## What to remember
 
 - De-identification starts by marking what must not escape.
@@ -283,6 +301,7 @@ real applicant notes.
 
 - [NIST Privacy Framework](https://www.nist.gov/privacy-framework)
 - [HIPAA de-identification guidance](https://www.hhs.gov/hipaa/for-professionals/privacy/special-topics/de-identification/index.html)
+- [General Data Protection Regulation, including Article 4(5)](https://eur-lex.europa.eu/eli/reg/2016/679/oj)
 - [North American Numbering Plan Administrator: 555 line numbers](https://nationalnanpa.com/enas/555LineNumbersReport.do)
 - [RFC 2606: Reserved Top Level DNS Names](https://www.rfc-editor.org/rfc/rfc2606)
 - [spaCy named entity recognition documentation](https://spacy.io/usage/linguistic-features#named-entities)

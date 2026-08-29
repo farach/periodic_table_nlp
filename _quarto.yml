@@ -17,6 +17,7 @@ project:
 website:
   title: "Periodic Table of NLP Tasks in R"
   description: "Practical notes on natural language processing tasks in R."
+  site-url: "https://workforcefutures.net/learn/nlp/"
   repo-url: "https://github.com/farach/periodic_table_nlp"
   repo-actions: [source, issue]
   search: true
@@ -49,7 +50,7 @@ website:
       - href: 2_training_data_generation/09-annotation-with-active-learning.qmd
         text: Choosing which examples to label next
       - href: 2_training_data_generation/10-training-data-providers.qmd
-        text: Choosing an outside data provider
+        text: Inspecting provider schemas and provenance
       - href: 2_training_data_generation/11-crowdsourcing-annotation.qmd
         text: Working with several annotators
       - href: 2_training_data_generation/12-textual-data-augmentation.qmd

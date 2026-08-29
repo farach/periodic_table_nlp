@@ -305,6 +305,15 @@ Excluding the ambiguous `he` row changes the scored denominator from five
 pronouns to four. Real coreference systems need document context, syntax, and
 meaning.
 
+## Modern coreference resolution
+
+The deterministic nearest-agreeing-noun syntax rule shown here is an early baseline intended only to expose the mechanism of coreference. Most complex coreference tasks are now approached using neural models (such as AllenNLP or large language models) rather than fixed syntax rules.
+
+When evaluating modern systems, keep these limits in mind:
+- **Cluster metrics**: Coreference models are evaluated using specialized clustering metrics (like MUC, B³, and CEAF) rather than simple pairwise accuracy, because errors compound when linking long chains of mentions across a document.
+- **Ambiguity**: Language is frequently ambiguous (like the `he` example). Deterministic models often force a link where a human would recognize true ambiguity.
+- **Stereotype and coverage asymmetry**: Coreference models often inherit training biases, successfully resolving pronouns that match occupational gender stereotypes (e.g., linking `he` to `doctor` and `she` to `nurse`) while failing on anti-stereotypical or gender-neutral (`they`) examples.
+
 ## What to remember
 
 - Coreference links expressions that refer to the same thing.

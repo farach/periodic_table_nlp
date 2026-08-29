@@ -1,8 +1,8 @@
 ---
-title: "Choosing an outside data provider"
-subtitle: "Compare workforce sources before combining their records"
+title: "Inspecting provider schemas and provenance"
+subtitle: "Check schema, units, provenance, and rights before combining records"
 author: "Alex Farach"
-description: "Use onet2r, cmapr, and huggingfaceR to inspect what different data providers can supply."
+description: "Use onet2r, cmapr, and huggingfaceR fixtures to inspect what an outside source records and what it cannot establish."
 categories: [training data, data providers, workforce research]
 ---
 
@@ -17,6 +17,14 @@ dataset tasks from the Hugging Face Hub.
 A **training data provider** supplies data or access to data. Provider does not
 mean neutral authority. Before combining records, the team must understand who
 created them, why, from whom, under which license, and what one row represents.
+
+This lesson is an inspection, and the distinction matters more than it might
+sound. Everything examined below is a small example file shipped inside an R
+package for demonstration, written by the author of these lessons. Reading such
+a file can show what fields a source records, what one row means, and which
+rights questions it raises. It cannot support any statement about how good,
+complete, or accurate O*NET, CMap, or Hugging Face datasets are, and no such
+statement is made or implied here.
 
 ::: {.callout-note}
 Riverton Workforce Lab is fictional. The package fixtures are executable
@@ -33,8 +41,9 @@ By the end of this lesson, you will be able to:
 - distinguish a package from the data source it helps access;
 - inspect versioned O*NET task records with onet2r;
 - load CMap example transitions with cmapr;
-- inspect Hugging Face task names with huggingfaceR; and
-- decide whether sources can answer the same research question.
+- inspect Hugging Face task names with huggingfaceR;
+- test whether two sources share a unit and a join key; and
+- say what an unauthenticated example file cannot establish.
 :::
 
 ```{r}
@@ -370,6 +379,94 @@ merged with a local sentence without a documented relationship. The team first
 needs a research question and a documented crosswalk between occupation codes,
 titles, or tasks.
 
+### Test the join instead of assuming it
+
+The claim that these tables do not join is checkable, and checking it is more
+convincing than asserting it. Two tests are enough: do the tables share a column
+name, and do their labels for people's work ever line up?
+
+```{r}
+onet_titles <- unique(onet_display$title)
+cmap_titles <- unique(
+  c(
+    cmap_transitions$job_title_from,
+    cmap_transitions$job_title_to
+  )
+)
+shared_column_names <- intersect(
+  names(onet_display),
+  names(cmap_transitions)
+)
+exact_title_matches <- intersect(onet_titles, cmap_titles)
+
+loosen <- function(titles) {
+  titles |>
+    str_to_lower() |>
+    str_remove("s$") |>
+    str_squish()
+}
+loose_title_matches <- intersect(
+  loosen(onet_titles),
+  loosen(cmap_titles)
+)
+
+join_report <- tibble(
+  test = c(
+    "shared column names",
+    "titles that match exactly",
+    "titles that match after lowercasing and dropping a final s",
+    "occupation codes present on both sides"
+  ),
+  result = c(
+    length(shared_column_names),
+    length(exact_title_matches),
+    length(loose_title_matches),
+    as.integer(
+      "onet_soc_code" %in% names(cmap_transitions)
+    )
+  )
+)
+
+stopifnot(
+  identical(length(shared_column_names), 0L),
+  identical(length(exact_title_matches), 0L),
+  identical(loose_title_matches, "registered nurse"),
+  !("onet_soc_code" %in% names(cmap_transitions)),
+  identical(join_report$result, c(0L, 0L, 1L, 0L)),
+  identical(
+    onet_display$onet_soc_code[
+      onet_display$title == "Registered Nurses"
+    ],
+    "29-1141.00"
+  )
+)
+
+knitr::kable(
+  join_report,
+  col.names = c("Test", "Count"),
+  caption = "What the two tables have in common",
+  row.names = FALSE
+)
+```
+
+No column name is shared and no title matches exactly. One pair survives a
+loosened comparison: the O*NET fixture's `Registered Nurses` and the CMap
+fixture's `Registered Nurse`.
+
+That single match is the trap, not the solution. On the O*NET side each row is
+an occupation-task statement: `29-1141.00` identifies the occupation and the
+task field identifies one activity associated with it. On the CMap side each
+row is a transition between job titles, and the table carries no occupation
+code. Making the strings equal does not make the units equal, and a join on the
+loosened string would attach task statements to title transitions on the
+strength of a dropped letter.
+
+A real link needs a crosswalk: a documented mapping from titles to occupation
+codes, with rules for the many-to-many cases, published by whoever is
+responsible for the classification. Building one from string similarity and
+calling the result a crosswalk is how a plausible table acquires an
+unsupportable claim.
+
 ## Questions for any provider
 
 The team records what it can establish and leaves unsupported fields as
@@ -410,13 +507,21 @@ modifications.
 - A package is a tool; it is not the authority that created the data.
 - Preserve provider, version, date, license, and row meaning.
 - Small teaching fixtures demonstrate structure, not population results.
+- An example file cannot support a judgment about the source it imitates.
 - Platform availability does not establish quality or permission.
+- Test a join before believing it, and treat a string match as a question.
 - Combine sources only after their units and taxonomies are reconciled.
 
-The outside resources stay separate because their rows answer different
-questions. Back in the local label table, another comparability problem remains.
-Three reviewers may read the same requirement differently, so their answers
-stay separate for the agreement analysis that follows.
+Three inspections produced three schemas, three units, three rights notes, and
+no combined table. That is the finding. Nothing here ranks these sources, and
+nothing here could: the files read above are demonstration data, and a
+comparison of what O*NET, CMap, or a Hub dataset actually delivers would need
+authenticated extracts, a stated research question, and evaluation against
+something other than itself.
+
+Back in the local label table, another comparability problem remains. Three
+reviewers may read the same requirement differently, so their answers stay
+separate for the agreement analysis that follows.
 
 ## Sources
 

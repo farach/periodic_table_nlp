@@ -51,7 +51,8 @@ stopifnot(identical(getOption("warn"), 2L))
 For this read-only pass, readr opens the files, dplyr and tibble handle tables,
 purrr repeats token work, tokenizers split words, udpipe tags them, and digest
 checks file fingerprints. The model has already been trained, so the code only
-reads artifacts from disk.
+reads artifacts from disk and records the settings needed to describe the
+bundled run.
 
 ```{r}
 library(readr)
@@ -108,6 +109,13 @@ metadata <- read_csv(
   )
 )
 
+builder_script_path <- "data-raw/build-treebank-tagger.R"
+builder_seed_match <- read_lines(builder_script_path) |>
+  str_subset("^set.seed\\(") |>
+  str_match("^set.seed\\((\\d+)\\)")
+builder_seed <- as.integer(builder_seed_match[1, 2])
+rng_settings <- RNGkind()
+
 learning_curve_path <- "data/treebank/tagger-learning-curve.csv"
 learning_curve_fingerprint <- digest(
   paste(read_lines(learning_curve_path), collapse = "\n"),
@@ -128,12 +136,31 @@ metadata_display <- metadata |>
     )
   ) |>
   mutate(fingerprint_start = str_sub(fingerprint, 1, 12)) |>
-  select(artifact, source, license, fingerprint_start)
+  select(artifact, source, retrieved_on, license, fingerprint_start)
+
+reproducibility_table <- tibble(
+  item = c(
+    "Builder seed from script",
+    "Current R RNG kind",
+    "Current normal generator",
+    "Current sample generator",
+    "Current R version"
+  ),
+  value = c(
+    as.character(builder_seed),
+    rng_settings[[1]],
+    rng_settings[[2]],
+    rng_settings[[3]],
+    R.version.string
+  )
+)
 
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(nrow(learning_curve), 5L),
   identical(nrow(metadata_display), 4L),
+  identical(builder_seed, 20260828L),
+  identical(length(rng_settings), 3L),
   all(str_length(metadata$fingerprint) == 64L),
   all(str_length(metadata_display$fingerprint_start) == 12L),
   identical(
@@ -153,8 +180,15 @@ stopifnot(
 
 knitr::kable(
   metadata_display,
-  col.names = c("Artifact", "Source", "License", "SHA-256 start"),
-  caption = "Local treebank artifacts used by the tagger lesson",
+  col.names = c("Artifact", "Source", "Retrieved", "License", "SHA-256 start"),
+  caption = "Local treebank artifacts and provenance used by the tagger lesson",
+  row.names = FALSE
+)
+
+knitr::kable(
+  reproducibility_table,
+  col.names = c("Reproducibility item", "Value"),
+  caption = "Recorded builder seed and the current rerun environment",
   row.names = FALSE
 )
 ```
@@ -163,8 +197,12 @@ The table prints the first 12 characters of each SHA-256 fingerprint so it stays
 readable at high zoom. The full values are in
 `data/treebank/treebank-metadata.csv`. A hash shows that a file has not changed
 since it was made. It says nothing about whether the numbers in the file are
-right. Only the 500-sentence tagger is included in this repository, so the other
-four rows of the learning curve cannot be rebuilt from the committed files.
+right. The second table mixes one build setting that is recorded in the builder
+script with details from the current rerun environment. The committed model does
+not carry build-time RNG kind, R version, or package-version metadata, so those
+details would need to be recorded on the next rebuild. Only the 500-sentence
+tagger is included in this repository, so the other four rows of the learning
+curve cannot be rebuilt from the committed files.
 
 ## Tag fixed tokens
 
@@ -565,9 +603,12 @@ increase, while 500 to 2,000 is a four-fold increase.
 
 The score is one number from one run over thirteen blog posts. Tokens inside a
 post are not independent, because vocabulary, topic, and author repeat within
-the post. The real spread is wider than the token count suggests. The script
-that made the model sets no seed, so this page reports the run that is bundled
-with the repository and does not add a confidence interval.
+the post. The real spread is wider than the token count suggests. The builder
+script sets `set.seed(20260828)`. The RNG and R-version rows above describe the
+current rerun environment, not the build-time environment of the committed
+model. This page still reports the bundled run only and does not add a
+confidence interval, because it does not retrain or rescore on new samples or
+domains.
 
 The Riverton sentences are job postings and flyer lines, a different kind of
 writing. This lesson does not claim the same rate there. On the Riverton text,
