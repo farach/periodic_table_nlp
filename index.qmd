@@ -247,27 +247,28 @@ table_html <- groups |>
   map_chr(render_group) |>
   paste(collapse = "")
 
-route_links <- available |>
-  group_by(group_id, group_name) |>
+stage_routes <- available |>
+  group_by(stage) |>
   slice_min(task_number, n = 1, with_ties = FALSE) |>
   ungroup() |>
+  arrange(task_number) |>
   mutate(
     link = sprintf(
       '<a href="%s">%s</a>',
       escape_attribute(lesson_path),
-      escape_text(str_to_lower(group_name))
+      escape_text(str_to_lower(unname(stage_labels[stage])))
     )
   ) |>
   pull(link)
 
-route_html <- paste(
-  route_links,
-  collapse = "; "
-)
+route_html <- paste(stage_routes, collapse = ", ")
 
 stopifnot(
   identical(length(groups), 15L),
-  identical(length(route_links), 12L),
+  identical(
+    length(stage_routes),
+    length(unique(available$stage))
+  ),
   identical(
     str_count(table_html, fixed('class="element-slot"')),
     81L
@@ -311,12 +312,24 @@ cat(
   '<div class="periodic-table">',
   table_html,
   '</div></div>',
-  '<nav class="available-routes" aria-label="Available lesson routes">',
-  '<strong>Start with ',
+  '<nav class="available-routes" aria-label="Ways into the map">',
+  '<p class="route-item">',
+  '<strong>Reading it as a course.</strong> ',
   '<a href="1_source_data_loading/01-bits-to-character-encoding.html">',
-  'task 1</a>, or enter an available group:</strong> ',
+  'Start at task 1</a> and work forward. ',
+  'Each lesson assumes the R introduced before it, so the code builds.',
+  '</p>',
+  '<p class="route-item">',
+  '<strong>Solving one problem.</strong> ',
+  'Open the stage that matches what is in front of you: ',
   route_html,
-  '.',
+  '. Every lesson states the idea it needs, so you can start in the middle.',
+  '</p>',
+  '<p class="route-item">',
+  '<strong>Looking one thing up.</strong> ',
+  'Find the task by where it sits in the map and read that page on its own. ',
+  'Each one names its limits and what it cannot tell you.',
+  '</p>',
   '</nav>',
   sep = ""
 )
