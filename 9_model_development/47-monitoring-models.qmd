@@ -271,7 +271,13 @@ period_lengths <- period_paragraphs |>
 
 drift_table <- period_paragraphs |>
   select(paragraph_id, period, paragraph) |>
-  unnest_tokens(token, paragraph) |>
+  # Tokenise with an explicit pattern rather than `unnest_tokens()`. The default
+  # word tokeniser uses ICU word boundaries, and ICU versions differ between
+  # machines, so the same text can yield slightly different token counts on a
+  # Linux runner than on a laptop. A stated pattern makes the count reproducible.
+  mutate(token = str_extract_all(tolower(paragraph), "[a-z']+")) |>
+  select(-paragraph) |>
+  unnest_longer(token) |>
   anti_join(tidytext::stop_words, by = join_by(token == word)) |>
   group_by(period) |>
   summarise(
@@ -288,9 +294,9 @@ stopifnot(
   identical(nrow(drift_table), 5L),
   identical(drift_table$paragraphs, c(220L, 265L, 317L, 371L, 204L)),
   identical(drift_table$median_words, c(149.5, 92, 67, 53, 43)),
-  identical(drift_table$tokens, c(15265L, 11366L, 11170L, 7769L, 4324L)),
-  identical(drift_table$absent_tokens, c(9347L, 6893L, 6615L, 4594L, 2631L)),
-  identical(round(drift_table$absent_share, 3), c(0.612, 0.606, 0.592, 0.591, 0.608)),
+  identical(drift_table$tokens, c(15251L, 11344L, 11148L, 7725L, 4299L)),
+  identical(drift_table$absent_tokens, c(9333L, 6872L, 6593L, 4551L, 2602L)),
+  identical(round(drift_table$absent_share, 3), c(0.612, 0.606, 0.591, 0.589, 0.605)),
   max(drift_table$median_words) - min(drift_table$median_words) > 100
 )
 
