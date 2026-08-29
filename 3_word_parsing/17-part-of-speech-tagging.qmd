@@ -140,11 +140,11 @@ metadata_display <- metadata |>
 
 reproducibility_table <- tibble(
   item = c(
-    "Builder seed",
-    "RNG kind",
-    "Normal generator",
-    "Sample generator",
-    "R version"
+    "Builder seed from script",
+    "Current R RNG kind",
+    "Current normal generator",
+    "Current sample generator",
+    "Current R version"
   ),
   value = c(
     as.character(builder_seed),
@@ -188,7 +188,7 @@ knitr::kable(
 knitr::kable(
   reproducibility_table,
   col.names = c("Reproducibility item", "Value"),
-  caption = "Settings recorded for rerunning the bundled tagger build",
+  caption = "Recorded builder seed and the current rerun environment",
   row.names = FALSE
 )
 ```
@@ -197,10 +197,12 @@ The table prints the first 12 characters of each SHA-256 fingerprint so it stays
 readable at high zoom. The full values are in
 `data/treebank/treebank-metadata.csv`. A hash shows that a file has not changed
 since it was made. It says nothing about whether the numbers in the file are
-right. The second table records the builder seed and the current R RNG settings
-used to describe a rerun. Only the 500-sentence tagger is included in this
-repository, so the other four rows of the learning curve cannot be rebuilt from
-the committed files.
+right. The second table mixes one build setting that is recorded in the builder
+script with details from the current rerun environment. The committed model does
+not carry build-time RNG kind, R version, or package-version metadata, so those
+details would need to be recorded on the next rebuild. Only the 500-sentence
+tagger is included in this repository, so the other four rows of the learning
+curve cannot be rebuilt from the committed files.
 
 ## Tag fixed tokens
 
@@ -602,9 +604,11 @@ increase, while 500 to 2,000 is a four-fold increase.
 The score is one number from one run over thirteen blog posts. Tokens inside a
 post are not independent, because vocabulary, topic, and author repeat within
 the post. The real spread is wider than the token count suggests. The builder
-script sets `set.seed(20260828)` and uses the R RNG settings recorded above.
-This page still reports the bundled run only and does not add a confidence
-interval, because it does not retrain or rescore on new samples or domains.
+script sets `set.seed(20260828)`. The RNG and R-version rows above describe the
+current rerun environment, not the build-time environment of the committed
+model. This page still reports the bundled run only and does not add a
+confidence interval, because it does not retrain or rescore on new samples or
+domains.
 
 The Riverton sentences are job postings and flyer lines, a different kind of
 writing. This lesson does not claim the same rate there. On the Riverton text,
