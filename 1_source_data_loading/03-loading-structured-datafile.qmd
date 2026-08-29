@@ -552,7 +552,7 @@ limits belong alongside the technical checks.
 
 At the meeting, the coordinator can report five records, one missing rating,
 and one recorded rating of two. The second file is a different report: six
-records, two usable, four held back with a stated reason each. The blank
+records, one usable, five held back with a stated reason each. The blank
 remains a blank, and the file's reach remains an open question. That is the
 useful discipline of an arrival check: say exactly what is recorded, what is
 blank, and what the file cannot settle.

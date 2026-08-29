@@ -590,7 +590,7 @@ stopifnot(
   all(adjudication_outcome$reviewers_still_disagree),
   str_detect(
     crowd_codebook$instructions,
-    fixed("still describes an entry condition")
+    fixed("main claim states or prefers")
   ),
   str_detect(
     crowd_codebook$instructions,

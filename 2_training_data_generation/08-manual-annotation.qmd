@@ -54,7 +54,8 @@ enough to check, while the `document_id` preserves the job posting or flyer that
 supplied the text.
 
 Calling those lines sentences would be convenient and wrong. Two of them are
-headings in capital letters, and four are noun phrases with no verb. The
+headings in capital letters, three are noun phrases with no verb, and one is an
+imperative clause without terminal punctuation. The
 distinction matters because a rule written for sentences, such as "label the
 main claim of the text unit," has to say what it does with a heading that makes
 no claim at all.
@@ -487,7 +488,7 @@ adjudication_log <- tibble(
 
 instructions <- annotation_codebook$instructions
 rule_clauses <- c(
-  "still describes an entry condition",
+  "main claim states or prefers",
   "is not training",
   "schedule takes precedence",
   "Headings, deadlines, location, work setting, and travel are other"

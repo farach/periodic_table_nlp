@@ -456,8 +456,8 @@ stopifnot(
 httr2::resp_status(rate_limited)
 ```
 
-The reader now has four saved replies and one function that has to survive all
-of them.
+The reader now has several saved replies and one function that has to survive
+all of them.
 
 ```{r}
 required_fields <- c("key", "title")
@@ -468,18 +468,29 @@ retry_reference_time <- as.POSIXct(
 )
 
 parse_retry_after <- function(value, now) {
+  if (length(value) == 0L || is.na(value) || identical(value, "")) {
+    return(NA_integer_)
+  }
   if (str_detect(value, "^[0-9]+$")) {
     return(as.integer(value))
   }
 
-  parsed <- as.POSIXct(
-    value,
-    format = "%a, %d %b %Y %H:%M:%S GMT",
-    tz = "GMT"
+  http_date_formats <- c(
+    "%a, %d %b %Y %H:%M:%S GMT",
+    "%A, %d-%b-%y %H:%M:%S GMT",
+    "%a %b %e %H:%M:%S %Y"
   )
-  if (is.na(parsed)) {
+  parsed_candidates <- map(
+    http_date_formats,
+    \(date_format) suppressWarnings(
+      as.POSIXct(value, format = date_format, tz = "GMT")
+    )
+  )
+  parsed_index <- which(!map_lgl(parsed_candidates, is.na))[1]
+  if (is.na(parsed_index)) {
     stop("Retry-After is neither delay-seconds nor an HTTP-date")
   }
+  parsed <- parsed_candidates[[parsed_index]]
 
   max(
     0L,
@@ -624,6 +635,12 @@ first_page <- read_saved_page(page_one, page_size)
 second_page <- read_saved_page(page_two, page_size)
 drifted <- read_saved_page(field_renamed, page_size)
 missing_docs <- read_saved_page(docs_missing, page_size)
+missing_retry_header <- saved_response(
+  429L,
+  '{"error": "too many requests"}',
+  url = page_one_request$url
+)
+missing_wait <- read_saved_page(missing_retry_header, page_size)
 
 collected <- bind_rows(
   first_page$records,
@@ -637,6 +654,21 @@ stopifnot(
   identical(refused$outcome, "rate limited"),
   identical(refused$wait_seconds, 30L),
   identical(date_refused$wait_seconds, 30L),
+  is.na(missing_wait$wait_seconds),
+  identical(
+    parse_retry_after(
+      "Sunday, 06-Nov-94 08:49:37 GMT",
+      as.POSIXct("1994-11-06 08:49:07", tz = "GMT")
+    ),
+    30L
+  ),
+  identical(
+    parse_retry_after(
+      "Sun Nov  6 08:49:37 1994",
+      as.POSIXct("1994-11-06 08:49:07", tz = "GMT")
+    ),
+    30L
+  ),
   identical(nrow(refused$records), 0L),
   identical(first_page$outcome, "more pages"),
   identical(first_page$next_start, 5L),

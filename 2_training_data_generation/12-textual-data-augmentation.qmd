@@ -176,7 +176,7 @@ schedule_variants <- tibble(
   vocabulary_row = NA_integer_,
   vocabulary_commit = NA_character_,
   text = sprintf(
-    "%s classes meet twice a week.",
+    "%s schedules are available.",
     c("Morning", "Weekend")
   ),
   label = "schedule",
@@ -310,7 +310,7 @@ review_decisions <- tibble(
   ),
   reason = c(
     rep("States an offer without hedging; label holds", 3L),
-    rep("States when classes meet; label holds", 2L),
+    rep("States when schedules are available; label holds", 2L),
     "\"may include\" removes the explicit offer the label requires",
     "Repeats a reviewed sentence word for word"
   )

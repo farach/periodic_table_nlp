@@ -2,7 +2,7 @@
 title: "Linking named entities"
 subtitle: "Turn mentions into stable identifiers"
 author: "Alex Farach"
-description: "Learn how alias tables link text mentions to entity identifiers while exposing clean, ambiguous, and missed links."
+description: "Learn how alias tables generate entity candidates and why resolution and NIL handling remain separate decisions."
 categories: [entity enrichment, entity linking, workforce research]
 ---
 
@@ -25,7 +25,7 @@ By the end of this lesson, you will be able to:
 
 - explain why an entity identifier matters;
 - join mention strings to an alias table;
-- count clean links, ambiguous links, and misses;
+- count mentions with zero, one, or several candidates;
 - show how one credential can have multiple aliases; and
 - state the limit of alias matching.
 :::
@@ -134,7 +134,7 @@ knitr::kable(
 The alias table contains two rows for `Riverton`. That deliberate duplicate makes
 `Riverton` an ambiguity case for this lesson. It also contains the exact strings
 used below, including `forklift certification` and `Forklift Operator Licence`,
-so the clean links are a property of this small teaching table.
+so the singleton candidates are a property of this small teaching table.
 
 `Riverton Skills Centre` is an organisation in this entity list. In the geocoding
 lesson, the same name is a building. The difference is a normal entity-linking
@@ -190,9 +190,13 @@ knitr::kable(
 A mention candidate is a span of text the team wants to link. This lesson starts
 with hand-selected mentions so the linking step remains visible.
 
-## Join normalized aliases to identifiers
+## Generate candidates from normalized aliases
 
-In real datasets, exact casing rarely matches perfectly. Before joining, both the mentions and the aliases should be normalized (e.g., lowercased) so that differently capitalized names match. The alias join returns candidate identifiers. A clean link has one candidate, an ambiguous link has more than one, and a miss has none.
+In real datasets, exact casing rarely matches perfectly. Before joining, both
+the mentions and aliases are lowercased so differently capitalized names can
+match. This join generates candidates; it does not prove a link. A mention can
+have zero, one, or several candidates, and a separate resolution policy must
+decide whether to accept one or return NIL.
 
 ```{r}
 library(stringr)
@@ -220,13 +224,29 @@ link_status <- linked_rows |>
   mutate(
     candidate_ids = if_else(candidate_ids == "", "none", candidate_ids),
     outcome = case_when(
-      candidates == 0L ~ "miss",
-      candidates == 1L ~ "clean link",
-      TRUE ~ "ambiguous"
+      candidates == 0L ~ "no candidate",
+      candidates == 1L ~ "one candidate",
+      TRUE ~ "multiple candidates"
     )
   )
 
-outcome_counts <- tibble(outcome = c("clean link", "ambiguous", "miss")) |>
+resolved_links <- link_status |>
+  mutate(
+    resolved_entity_id = if_else(
+      candidates == 1L,
+      candidate_ids,
+      NA_character_
+    ),
+    resolution = case_when(
+      candidates == 0L ~ "NIL",
+      candidates == 1L ~ "accepted singleton candidate",
+      TRUE ~ "needs disambiguation"
+    )
+  )
+
+outcome_counts <- tibble(
+  outcome = c("one candidate", "multiple candidates", "no candidate")
+) |>
   left_join(
     link_status |>
       count(outcome, name = "mentions"),
@@ -237,14 +257,18 @@ outcome_counts <- tibble(outcome = c("clean link", "ambiguous", "miss")) |>
 stopifnot(
   identical(nrow(linked_rows), 6L),
   identical(outcome_counts$mentions, c(3L, 1L, 1L)),
-  identical(sum(outcome_counts$mentions), 5L)
+  identical(sum(outcome_counts$mentions), 5L),
+  identical(
+    sort(count(resolved_links, resolution, name = "mentions")$mentions),
+    c(1L, 1L, 3L)
+  )
 )
 
 knitr::kable(
   link_status,
   col.names = c(
     "Mention ID", "Source", "Text", "Mention", "Candidate IDs",
-    "Candidates", "Outcome"
+    "Candidates", "Candidate outcome"
   ),
   caption = "Alias matching outcomes",
   row.names = FALSE
@@ -253,15 +277,17 @@ knitr::kable(
 knitr::kable(
   outcome_counts,
   col.names = c("Outcome", "Mentions"),
-  caption = "Clean, ambiguous, and missed links",
+  caption = "Candidate-generation outcomes",
   row.names = FALSE
 )
 ```
 
-The `relationship` argument tells dplyr that one mention may match several alias
-rows. `DATA SUPPORT CERTIFICATE` links cleanly. `Riverton` maps to two place
-records, so the alias alone cannot choose one. `Customer service badge` is a
-miss. The 3/1/1 counts describe only these five mention candidates.
+The `relationship` argument tells dplyr that one mention may match several
+alias rows. `DATA SUPPORT CERTIFICATE` produces one candidate. This toy policy
+accepts singleton candidates, but a production linker would still apply a
+score or NIL threshold. `Riverton` maps to two place records, so the alias alone
+cannot choose one. `Customer service badge` has no candidate. The 3/1/1 counts
+describe only candidate generation for these five mentions.
 
 ## Count by identifier
 
@@ -269,7 +295,10 @@ Two different aliases can point to the same credential identifier. That is the
 reason the identifier matters.
 
 ```{r}
-credential_mentions <- linked_rows |>
+credential_mentions <- resolved_links |>
+  filter(resolution == "accepted singleton candidate") |>
+  rename(entity_id = resolved_entity_id) |>
+  left_join(entities, by = join_by(entity_id)) |>
   filter(entity_type == "credential") |>
   count(entity_id, canonical_name, name = "mentions") |>
   arrange(entity_id)
@@ -294,7 +323,8 @@ credential.
 
 ## Real-world linking pipelines
 
-The exact (but normalized) join here shows the mechanism of an alias table. Production entity linking systems, however, are far more complex:
+The normalized join here shows candidate generation from an alias table.
+Production entity linking systems add a separate resolution step:
 
 - **Unicode and case normalization policy**: A pipeline must define how it handles accents (e.g., NFC/NFD normalization) and casing before joining, ensuring mentions and aliases are normalized consistently. Never report linking rates over an unnormalized exact string join.
 - **Candidate generation and ranking**: When an alias is ambiguous (like `Riverton`), a modern pipeline generates candidate entities and ranks them using the surrounding sentence context.

@@ -347,6 +347,10 @@ degraded_diagnostic_lines <- degraded_diagnostic_lines[
 degraded_lines <- read_lines(
   "data/workforce/training-flyer-degraded-ocr-5.3.2.txt"
 )
+diagnostic_matches_fixture <- c(
+  identical(diagnostic_ocr_lines, ocr_lines),
+  identical(degraded_diagnostic_lines, degraded_lines)
+)
 
 stopifnot(
   identical(dim(degraded_array)[1:2], c(267L, 400L)),
@@ -368,9 +372,14 @@ tibble(
   lines_returned = c(
     length(ocr_lines),
     length(degraded_lines)
-  )
+  ),
+  diagnostic_matches_fixture
 )
 ```
+
+The final column reports whether the host engine reproduced each committed
+transcript. A `FALSE` value is a local-version difference, while the published
+metrics below remain tied to the recorded 5.3.2 output.
 
 ### Character and word error rates
 
@@ -486,8 +495,8 @@ knitr::kable(
 
 The source image scores zero on both rates. The degraded copy does not. Both
 rates come from committed Tesseract 5.3.2 transcripts, so a native engine
-upgrade cannot rewrite the published result. The diagnostic run above can
-still reveal local engine differences.
+upgrade cannot rewrite the published result. The diagnostic comparison above
+reports whether the local engine produced the same transcripts.
 
 ```{r}
 comparison <- tibble(
