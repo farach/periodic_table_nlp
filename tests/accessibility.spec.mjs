@@ -1,23 +1,39 @@
+import { readdirSync } from "node:fs";
+import { join, posix } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const pages = [
-  "/",
-  "/accessibility.html",
-  "/1_source_data_loading/01-bits-to-character-encoding.html",
-  "/1_source_data_loading/02-manual-typewriting.html",
-  "/1_source_data_loading/03-loading-structured-datafile.html",
-  "/1_source_data_loading/04-generating-a-corpus.html",
-  "/1_source_data_loading/05-loading-from-api.html",
-  "/1_source_data_loading/06-text-and-file-scraping.html",
-  "/1_source_data_loading/07-text-extraction-and-ocr.html",
-  "/2_training_data_generation/08-manual-annotation.html",
-  "/2_training_data_generation/09-annotation-with-active-learning.html",
-  "/2_training_data_generation/10-training-data-providers.html",
-  "/2_training_data_generation/11-crowdsourcing-annotation.html",
-  "/2_training_data_generation/12-textual-data-augmentation.html",
-  "/2_training_data_generation/13-rule-based-training-data.html"
-];
+const siteDir = "_site";
+
+// Collect the published pages from the built site so a new lesson is covered
+// as soon as it renders, without anyone remembering to edit this list.
+function lessonPages() {
+  const found = [];
+
+  for (const entry of readdirSync(siteDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !/^[0-9]+_/.test(entry.name)) {
+      continue;
+    }
+
+    for (const file of readdirSync(join(siteDir, entry.name))) {
+      if (file.endsWith(".html")) {
+        found.push(posix.join("/", entry.name, file));
+      }
+    }
+  }
+
+  return found.sort();
+}
+
+const lessonPagePaths = lessonPages();
+const pages = ["/", "/accessibility.html", ...lessonPagePaths];
+const totalTasks = 81;
+
+if (pages.length < 3) {
+  throw new Error(
+    `Expected rendered lessons under ${siteDir}. Run "quarto render" first.`
+  );
+}
 
 for (const path of pages) {
   test(`WCAG 2.2 AA automated scan: ${path}`, async ({ page }) => {
@@ -74,15 +90,15 @@ test("periodic table supports keyboard navigation", async ({ page }) => {
   const availableTiles = page.locator(".nlp-element.is-available");
   const plannedTiles = page.locator(".nlp-element.is-planned");
 
-  await expect(availableTiles).toHaveCount(13);
-  await expect(plannedTiles).toHaveCount(68);
+  await expect(availableTiles).toHaveCount(lessonPagePaths.length);
+  await expect(plannedTiles).toHaveCount(totalTasks - lessonPagePaths.length);
   await expect(plannedTiles.first()).not.toHaveAttribute("aria-disabled");
   await expect(plannedTiles.first()).not.toHaveAttribute("aria-label");
 
   const labels = await availableTiles.evaluateAll((tiles) =>
     tiles.map((tile) => tile.getAttribute("aria-label"))
   );
-  expect(new Set(labels).size).toBe(13);
+  expect(new Set(labels).size).toBe(lessonPagePaths.length);
 
   const firstTile = availableTiles.first();
   await firstTile.focus();
@@ -105,21 +121,21 @@ test("periodic table supports keyboard navigation", async ({ page }) => {
 });
 
 test("every available tile opens its lesson", async ({ page }) => {
-  const lessons = [
-    [1, "01-bits-to-character-encoding.html"],
-    [2, "02-manual-typewriting.html"],
-    [3, "03-loading-structured-datafile.html"],
-    [4, "04-generating-a-corpus.html"],
-    [5, "05-loading-from-api.html"],
-    [6, "06-text-and-file-scraping.html"],
-    [7, "07-text-extraction-and-ocr.html"],
-    [8, "08-manual-annotation.html"],
-    [9, "09-annotation-with-active-learning.html"],
-    [10, "10-training-data-providers.html"],
-    [11, "11-crowdsourcing-annotation.html"],
-    [12, "12-textual-data-augmentation.html"],
-    [13, "13-rule-based-training-data.html"]
-  ];
+  // Each rendered lesson file starts with its task number, so the map link
+  // and the page on disk can be checked against each other without a list
+  // that has to be maintained by hand.
+  const lessons = lessonPagePaths.map((path) => {
+    const fileName = path.split("/").pop();
+    const taskNumber = Number.parseInt(fileName, 10);
+
+    if (!Number.isInteger(taskNumber)) {
+      throw new Error(`Lesson file does not start with a task number: ${path}`);
+    }
+
+    return [taskNumber, fileName];
+  });
+
+  expect(lessons.length).toBe(lessonPagePaths.length);
 
   for (const [taskNumber, fileName] of lessons) {
     await page.goto("/");

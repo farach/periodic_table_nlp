@@ -80,6 +80,33 @@ terms, this project will follow them.
 
 Checked 28 August 2026.
 
+## Universal Dependencies English treebank
+
+`data/treebank/` holds material derived from the Universal Dependencies English
+Web Treebank, version 2.18, released 2026-05-15:
+<https://github.com/UniversalDependencies/UD_English-EWT>.
+
+- `en_ewt-train-excerpt.conllu` is the first 500 sentences of the training
+  split.
+- `en_ewt-held-out.conllu` is the first 200 sentences of the development split
+  and is used only for scoring.
+- `en_ewt-500-tagger.udpipe` is a part-of-speech tagger trained on that
+  500-sentence excerpt alone, using `data-raw/build-treebank-tagger.R`.
+- `tagger-learning-curve.csv` records held-out accuracy for taggers trained on
+  100 to 2000 sentences.
+- `treebank-metadata.csv` records the source, retrieval date, licence, and a
+  SHA-256 fingerprint for each file.
+
+The treebank is published under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The excerpts
+and the trained tagger are derived from it and carry the same licence and
+share-alike requirement, which is separate from this repository's MIT licence.
+
+The pre-trained UDPipe models distributed through `udpipe_download_model()` are
+**not** used here. Most of them, including the full English model, carry a
+CC BY-SA-NC licence, and this project does not publish output derived from
+material restricted to non-commercial use.
+
 ## Hugging Face Hub
 
 Hugging Face hosts datasets from many contributors. Dataset cards can state a

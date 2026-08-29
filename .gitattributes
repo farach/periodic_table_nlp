@@ -1,8 +1,11 @@
 *.csv text eol=lf
+*.conllu text eol=lf
 *.html text eol=lf
 *.json text eol=lf
 *.md text eol=lf
 *.qmd text eol=lf
 *.R text eol=lf
 *.css text eol=lf
+*.udpipe binary
+*.png binary
 renv/activate.R -whitespace

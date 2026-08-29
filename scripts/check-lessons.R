@@ -1,15 +1,24 @@
+lesson_directories <- sort(
+  list.dirs(".", recursive = FALSE, full.names = FALSE)[
+    grepl("^[0-9]+_", list.dirs(".", recursive = FALSE, full.names = FALSE))
+  ]
+)
+
+stopifnot(length(lesson_directories) > 0)
+
 lesson_files <- sort(
-  c(
-    list.files(
-      "1_source_data_loading",
-      pattern = "[.]qmd$",
-      full.names = TRUE
+  unlist(
+    lapply(
+      lesson_directories,
+      function(directory) {
+        list.files(
+          directory,
+          pattern = "[.]qmd$",
+          full.names = TRUE
+        )
+      }
     ),
-    list.files(
-      "2_training_data_generation",
-      pattern = "[.]qmd$",
-      full.names = TRUE
-    )
+    use.names = FALSE
   )
 )
 

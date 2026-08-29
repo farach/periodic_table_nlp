@@ -17,18 +17,20 @@
 
 ## Reader-facing work
 
-The Quarto site has 13 linked lessons:
+The Quarto site has 17 linked lessons:
 
 - Source data loading, tasks 1-7
 - Training data generation, tasks 8-13
+- Word parsing, tasks 14-17
 
-Tasks 6-13 share a fictional workforce-research story. Riverton Workforce Lab
+Tasks 6-17 share a fictional workforce-research story. Riverton Workforce Lab
 collects a saved job board, extracts a training flyer, creates a versioned
 annotation codebook, tests active-learning selection, inspects outside data
-providers, compares several annotators, creates synthetic candidates, and
-stress-tests rule-based weak labels.
+providers, compares several annotators, creates synthetic candidates,
+stress-tests rule-based weak labels, then decides what counts as a word, which
+words to keep, what words are made of, and what job each word is doing.
 
-The 68 remaining map tiles are visible and marked as planned.
+The 64 remaining map tiles are visible and marked as planned.
 
 ## Package integration
 
@@ -81,6 +83,7 @@ lesson.
 
 ## Next content
 
-Task 14 is tokenization. It should continue the workforce text where useful and
-compare word, sentence, and transformer-era subword tokenization without
-treating one token definition as universal.
+Task 18 is dependency parsing, which follows naturally from the tagger in task
+17 and needs a parser model built the same way. Tasks 19 to 22 are stemming,
+lemmatization, normalization, and spell checking; `SnowballC` and `hunspell`
+are already locked and cover all four offline.

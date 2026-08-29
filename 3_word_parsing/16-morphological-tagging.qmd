@@ -1,0 +1,330 @@
+---
+title: "Looking inside words"
+subtitle: "Use dictionary stems without confusing spelling rules for meaning"
+author: "Alex Farach"
+description: "Learn how morphological tagging separates stems, affixes, ambiguity, and dictionary limits in workforce text."
+categories: [word parsing, morphology, workforce research]
+---
+
+The Riverton Workforce Lab has 28 reviewed sentences from a job board page and
+a training flyer. The team wants to know whether `shifts` and `shift` should
+count as the same word when it summarizes the vocabulary.
+
+That question matters because a worker may search for training, while a job
+posting may say `shifts`, `certification`, or `certificate`. The team needs a
+way to look inside a word before it decides what to group.
+
+**Morphology** is the internal structure of words. A **stem** carries the core
+meaning, and **affixes** are added pieces such as plural `s` or past-tense `ed`.
+English marks a small amount of grammar this way, so English speakers often
+notice word parts only when a form looks odd.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. The dictionary output is real and comes from the
+local hunspell package.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- describe a stem and an affix in plain language;
+- read a dictionary-based word analysis;
+- distinguish a useful decomposition from a misleading one;
+- find unanalyzed and ambiguous word types in a small vocabulary; and
+- explain why a spelling dictionary is not a full account of word meaning.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Read the workforce sentences
+
+The next chunk loads readr for files, dplyr and tibble for tables, purrr for
+repeated list checks, stringr for text checks, tokenizers for word splitting,
+and hunspell for dictionary analysis. It then reads the 28 reviewed workforce
+sentences.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tokenizers)
+library(hunspell)
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+document_counts <- sentences |>
+  count(document_id, name = "sentence_count") |>
+  arrange(document_id)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(
+    document_counts$document_id,
+    c("F001", sprintf("J%03d", 1:6))
+  ),
+  identical(
+    document_counts$sentence_count,
+    c(6L, 4L, 4L, 4L, 3L, 3L, 4L)
+  ),
+  str_detect(sentences$text[1], fixed("12-week training"))
+)
+
+knitr::kable(
+  document_counts,
+  col.names = c("Document ID", "Sentences"),
+  caption = "The 28 Riverton text units by source document",
+  row.names = FALSE
+)
+```
+
+The flyer has six rows, and the job-detail documents have 22 rows. The sample
+fits in a small table, but the vocabulary is large enough for several kinds of
+word behavior.
+
+## Ask the dictionary for analyses
+
+`hunspell_analyze()` checks each word against an English spelling dictionary and
+its affix rules. The output is compact. `st:` gives a stem, and `fl:` gives a
+flag used by the dictionary's rule system. A flag is a code in the dictionary,
+not a reader-friendly grammar label.
+
+In the code, `\(value)` is R shorthand for a small function. Here it means that
+each returned vector is named `value` before it is pasted into one string.
+
+```{r}
+example_words <- c(
+  "shifts",
+  "requires",
+  "certification",
+  "running",
+  "forklift"
+)
+
+word_analyses <- hunspell_analyze(example_words)
+word_stems <- hunspell_stem(example_words)
+
+analysis_table <- tibble(
+  word = example_words,
+  analyses = map_chr(word_analyses, \(value) paste(value, collapse = "; ")),
+  stems = map_chr(word_stems, \(value) paste(value, collapse = ", "))
+)
+
+stopifnot(
+  identical(word_analyses[[1]], " st:shift fl:S"),
+  identical(word_analyses[[2]], " fl:A st:quire fl:S"),
+  identical(
+    word_analyses[[3]],
+    c(" st:certification", " st:certificate fl:N")
+  ),
+  identical(word_analyses[[4]], " st:running"),
+  identical(word_analyses[[5]], " st:forklift"),
+  identical(word_stems[[1]], "shift"),
+  identical(word_stems[[2]], "quire"),
+  identical(word_stems[[3]], c("certification", "certificate")),
+  identical(word_stems[[4]], "running"),
+  identical(word_stems[[5]], "forklift")
+)
+
+knitr::kable(
+  analysis_table,
+  col.names = c("Word", "Allowed analyses", "Returned stems"),
+  caption = "Five words analyzed by hunspell",
+  row.names = FALSE
+)
+```
+
+For `shifts`, the dictionary finds the stem `shift` and marks the plural form
+with flag `S`.
+
+The entry for `requires` gives a warning. Hunspell can produce an analysis that
+is internally legal and completely false. It allows `re-` in front of dictionary
+words, and `quire` happens to be a dictionary word. The two have nothing to do
+with each other: `require` came into English whole, from Old French `requerre`,
+from Latin `requirere`. The rule found a path, not a history.
+
+`certification` has two analyses. It can stand as `certification`, or it can be
+connected to `certificate` through another rule. The letters alone do not choose
+between those analyses.
+
+With `running`, the word is listed as its own dictionary entry, so the analyzer
+returns `running` and stops there. A common form can be stored directly.
+
+## Count what the dictionary can see
+
+The team next applies the same dictionary check to the vocabulary of the 28
+sentences. A **word type** is one distinct word form after lowercasing. If
+`training` appears several times, it counts once in this vocabulary.
+
+```{r}
+tokens_by_sentence <- tokenize_words(
+  sentences$text,
+  lowercase = TRUE,
+  strip_punct = TRUE
+)
+vocabulary <- sort(
+  unique(unlist(tokens_by_sentence, use.names = FALSE))
+)
+vocabulary_analyses <- hunspell_analyze(vocabulary)
+
+vocabulary_summary <- tibble(
+  word = vocabulary,
+  analyses = vocabulary_analyses,
+  analysis_count = map_int(analyses, length),
+  recognized = analysis_count > 0L
+)
+
+summary_counts <- vocabulary_summary |>
+  summarise(
+    word_types = n(),
+    analyzed_by_dictionary = sum(recognized),
+    not_analyzed = sum(!recognized),
+    more_than_one_analysis = sum(analysis_count > 1L),
+    .groups = "drop"
+  )
+
+unanalyzed_words <- vocabulary_summary |>
+  filter(!recognized) |>
+  pull(word)
+
+multi_analysis_words <- vocabulary_summary |>
+  filter(analysis_count > 1L) |>
+  pull(word)
+
+stopifnot(
+  identical(summary_counts$word_types, 96L),
+  identical(summary_counts$analyzed_by_dictionary, 91L),
+  identical(summary_counts$not_analyzed, 5L),
+  identical(summary_counts$more_than_one_analysis, 8L),
+  identical(unanalyzed_words, c("12", "15", "50", "october", "riverton")),
+  identical(
+    multi_analysis_words,
+    c(
+      "available",
+      "certification",
+      "communication",
+      "customer",
+      "evening",
+      "outdoors",
+      "provided",
+      "training"
+    )
+  )
+)
+
+knitr::kable(
+  summary_counts,
+  col.names = c(
+    "Word types",
+    "Analyzed by dictionary",
+    "Not analyzed",
+    "More than one dictionary analysis"
+  ),
+  caption = "Dictionary coverage for the Riverton vocabulary",
+  row.names = FALSE
+)
+```
+
+The dictionary analyzes 91 of the 96 word types. Five receive no analysis: three
+numbers, the month `october`, and the place name `riverton`. Eight word types
+receive more than one analysis, which means the word form alone leaves more than
+one route through the dictionary.
+
+## Inspect the ambiguous cases
+
+Ambiguity is not a bug by itself. A single spelling can have several plausible
+paths through a dictionary. The next table shows the Riverton word types where
+hunspell returned more than one analysis.
+
+```{r}
+ambiguous_words <- vocabulary_summary |>
+  filter(analysis_count > 1L) |>
+  transmute(
+    word,
+    analyses = map_chr(analyses, \(value) paste(value, collapse = "; "))
+  )
+
+stopifnot(
+  identical(nrow(ambiguous_words), 8L),
+  identical(ambiguous_words$word[2], "certification"),
+  str_detect(
+    ambiguous_words$analyses[2],
+    fixed("st:certificate fl:N")
+  ),
+  identical(ambiguous_words$word[8], "training")
+)
+
+knitr::kable(
+  ambiguous_words,
+  col.names = c("Word", "Allowed analyses"),
+  caption = "Riverton word types with more than one dictionary analysis",
+  row.names = FALSE
+)
+```
+
+For the Lab, this table is useful because it slows the decision down. The
+dictionary has supplied possible word structures, not final labels. A person
+still has to decide whether the structure helps the question at hand.
+
+## Use morphology carefully
+
+English puts some information inside word endings: `shifts` marks plural, and
+`provided` marks a form related to tense or aspect. It leaves much else to word
+order and nearby helper words. Languages that mark case, person, tense, and
+number on the word itself place more information inside a single token. A tool
+built around English spelling assumptions will miss much of that structure.
+
+Hunspell is a spelling dictionary with affix rules. It is not a universal
+morphological analyzer. It can produce an analysis that is internally legal and
+completely false. Hunspell allows `re-` in front of dictionary words, and
+`quire` happens to be a dictionary word. The rule found a path, not a history.
+
+There is also a naming limit. In NLP, morphological tagging usually means
+assigning morphological features in context, such as `Number=Plur` or
+`Tense=Past`, to tokens in a sentence. Those features live in the `feats` column
+of a treebank and can be produced by the tagger in Lesson 17. This page runs a
+spelling dictionary over an out-of-context list of word types, which is a
+different task with a different input and output.
+
+## What to remember
+
+- Morphology studies the parts inside words.
+- A stem carries the core meaning; affixes modify the form.
+- Dictionary rules can produce useful analyses and misleading ones.
+- One word form can have more than one allowed analysis.
+- Hunspell checks spelling-style rules, not sentence meaning.
+
+The team can group `shifts` with `shift` for a plain vocabulary count, but every
+returned stem still needs human judgment about the text.
+
+## Sources
+
+- [hunspell package reference](https://docs.ropensci.org/hunspell/reference/hunspell.html)
+- [Hunspell project documentation](https://hunspell.github.io/)
+- [hunspell package repository](https://github.com/ropensci/hunspell)
