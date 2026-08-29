@@ -40,6 +40,10 @@ jobs:
             libgsl-dev \
             libxml2-dev \
             libsodium-dev \
+            libglpk-dev \
+            libpng-dev \
+            libx11-dev \
+            cmake \
             poppler-data \
             tesseract-ocr \
             tesseract-ocr-eng
