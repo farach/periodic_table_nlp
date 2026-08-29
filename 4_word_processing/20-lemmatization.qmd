@@ -124,6 +124,17 @@ spacy_parsed <- spacy_parse(
 ) |>
   as_tibble()
 
+knitr::kable(
+  spacy_info_table,
+  col.names = c("Pipeline field", "Value"),
+  caption = "Local spaCy pipeline used by this lesson",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(pipeline$model, "en_core_web_sm"),
@@ -134,13 +145,6 @@ stopifnot(
   identical(nrow(spacy_parsed), 179L),
   identical(udpipe_parsed$lemma[udpipe_parsed$doc_id == "s001" & udpipe_parsed$token == "provided"], "provid"),
   identical(spacy_parsed$lemma[spacy_parsed$doc_id == "s001" & spacy_parsed$token == "provided"], "provide")
-)
-
-knitr::kable(
-  spacy_info_table,
-  col.names = c("Pipeline field", "Value"),
-  caption = "Local spaCy pipeline used by this lesson",
-  row.names = FALSE
 )
 ```
 
@@ -210,16 +214,6 @@ lemma_stem_comparison <- same_word_lemmas |>
   ) |>
   arrange(match(word, comparison_words))
 
-stopifnot(
-  identical(nrow(vocabulary_words), 96L),
-  identical(sum(is.na(same_word_lemmas$spacy_lemma)), 1L),
-  identical(same_word_lemmas$word[is.na(same_word_lemmas$spacy_lemma)], "driver's"),
-  identical(lemma_stem_comparison$udpipe_lemma[1:4], c("be", "provid", "requi", "classe")),
-  identical(lemma_stem_comparison$spacy_lemma[1:4], c("be", "provide", "require", "class")),
-  identical(lemma_stem_comparison$stem[1:4], c("is", "provid", "requir", "class")),
-  identical(nrow(lemma_stem_comparison), 10L)
-)
-
 knitr::kable(
   lemma_stem_comparison,
   col.names = c(
@@ -232,6 +226,20 @@ knitr::kable(
   ),
   caption = "Lemmas and stems for selected Riverton word types",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(vocabulary_words), 96L),
+  identical(sum(is.na(same_word_lemmas$spacy_lemma)), 1L),
+  identical(same_word_lemmas$word[is.na(same_word_lemmas$spacy_lemma)], "driver's"),
+  identical(lemma_stem_comparison$udpipe_lemma[1:4], c("be", "provid", "requi", "classe")),
+  identical(lemma_stem_comparison$spacy_lemma[1:4], c("be", "provide", "require", "class")),
+  identical(lemma_stem_comparison$stem[1:4], c("is", "provid", "requir", "class")),
+  identical(nrow(lemma_stem_comparison), 10L)
 )
 ```
 
@@ -264,17 +272,21 @@ lemma_variation <- bind_rows(
   filter(distinct_lemmas > 1L) |>
   arrange(system, word)
 
-stopifnot(
-  identical(lemma_variation$system, c("UDPipe", "UDPipe", "UDPipe", "spaCy")),
-  identical(lemma_variation$word, c("evening", "paid", "skills", "skills")),
-  identical(lemma_variation$distinct_lemmas, c(2L, 2L, 2L, 2L))
-)
-
 knitr::kable(
   lemma_variation,
   col.names = c("System", "Word type", "Distinct lemmas", "Lemmas seen", "Occurrences"),
   caption = "Word types whose lemmas vary across Riverton occurrences",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(lemma_variation$system, c("UDPipe", "UDPipe", "UDPipe", "spaCy")),
+  identical(lemma_variation$word, c("evening", "paid", "skills", "skills")),
+  identical(lemma_variation$distinct_lemmas, c(2L, 2L, 2L, 2L))
 )
 ```
 
@@ -339,22 +351,6 @@ flagged_comparison <- compared_word_lemmas |>
     spacy_broken_string
   )
 
-stopifnot(
-  identical(nrow(compared_word_lemmas), 95L),
-  identical(lemma_quality$raw_dictionary_flags, c(8L, 2L)),
-  identical(lemma_quality$coverage_or_case_artifacts, c(2L, 2L)),
-  identical(lemma_quality$broken_string_flags, c(6L, 0L)),
-  identical(
-    flagged_comparison$word,
-    c("classes", "diploma", "includes", "need", "october", "provided", "required", "riverton")
-  ),
-  identical(
-    flagged_comparison$udpipe_lemma,
-    c("classe", "diploman", "includ", "ne", "october", "provid", "requi", "riverton")
-  ),
-  identical(flagged_comparison$spacy_flagged, c(FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE))
-)
-
 knitr::kable(
   lemma_quality,
   col.names = c(
@@ -382,6 +378,26 @@ knitr::kable(
   ),
   caption = "Where either model's lemma is flagged by hunspell",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(compared_word_lemmas), 95L),
+  identical(lemma_quality$raw_dictionary_flags, c(8L, 2L)),
+  identical(lemma_quality$coverage_or_case_artifacts, c(2L, 2L)),
+  identical(lemma_quality$broken_string_flags, c(6L, 0L)),
+  identical(
+    flagged_comparison$word,
+    c("classes", "diploma", "includes", "need", "october", "provided", "required", "riverton")
+  ),
+  identical(
+    flagged_comparison$udpipe_lemma,
+    c("classe", "diploman", "includ", "ne", "october", "provid", "requi", "riverton")
+  ),
+  identical(flagged_comparison$spacy_flagged, c(FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE))
 )
 ```
 
@@ -413,12 +429,6 @@ final_check <- tibble(
   )
 )
 
-stopifnot(
-  identical(final_check$provided_lemma, c("provid", "provide")),
-  identical(spacy_info$version, "3.8.0"),
-  identical(spacy_info$spacy, "3.8.7")
-)
-
 knitr::kable(
   final_check,
   col.names = c("Model", "Lemma for provided"),
@@ -427,6 +437,16 @@ knitr::kable(
 )
 
 invisible(suppressMessages(spacy_finalize()))
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(final_check$provided_lemma, c("provid", "provide")),
+  identical(spacy_info$version, "3.8.0"),
+  identical(spacy_info$spacy, "3.8.7")
+)
 ```
 
 ## What to remember

@@ -93,12 +93,16 @@ text <- c(
 
 bytes <- map(enc2utf8(text), charToRaw)
 
+bytes
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(bytes$letter_A, as.raw(0x41)),
   identical(bytes$e_with_accent, as.raw(c(0xC3, 0xA9)))
 )
-
-bytes
 ```
 
 Every `stopifnot()` here is an **assertion**: a check that halts R when a
@@ -125,6 +129,15 @@ utf8_name <- rawToChar(name_bytes)
 Encoding(utf8_name) <- "UTF-8"
 decoded_name <- enc2utf8(utf8_name)
 
+c(
+  read_as_latin1 = garbled_name,
+  read_as_utf8 = decoded_name
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     name_bytes,
@@ -132,11 +145,6 @@ stopifnot(
   ),
   identical(garbled_name, "Ana\u00C3\u00AFs"),
   identical(decoded_name, expected_name)
-)
-
-c(
-  read_as_latin1 = garbled_name,
-  read_as_utf8 = decoded_name
 )
 ```
 
@@ -188,11 +196,6 @@ strings <- c(
 
 declared_encoding <- Encoding(strings)
 
-stopifnot(
-  identical(unname(declared_encoding[1]), "unknown"),
-  identical(utf8ToInt(strings[2]), 233L)
-)
-
 knitr::kable(
   tibble(
     text = unname(strings),
@@ -201,6 +204,15 @@ knitr::kable(
   col.names = c("Text", "What R reports"),
   caption = "How R labels two character strings",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(unname(declared_encoding[1]), "unknown"),
+  identical(utf8ToInt(strings[2]), 233L)
 )
 ```
 
@@ -235,13 +247,17 @@ result <- list(
   utf8_bytes = charToRaw(utf8_text)
 )
 
+result
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(utf8ToInt(utf8_text), c(99L, 97L, 102L, 233L)),
   identical(result$latin1_bytes, as.raw(c(0x63, 0x61, 0x66, 0xE9))),
   identical(result$utf8_bytes, as.raw(c(0x63, 0x61, 0x66, 0xC3, 0xA9)))
 )
-
-result
 ```
 
 The converted text still reads `"café"`, but its final byte changes from `e9`
@@ -285,6 +301,10 @@ marked_result <- iconv(
   to = "UTF-8",
   sub = "\uFFFD"
 )
+```
+
+```{r}
+#| include: false
 
 stopifnot(
   identical(validUTF8(damaged_text), FALSE),
@@ -390,6 +410,24 @@ row_report <- tibble(
   ))
 )
 
+knitr::kable(
+  row_report,
+  col.names = c(
+    "Row",
+    "Stored bytes",
+    "Starts with BOM",
+    "Valid as UTF-8",
+    "Declared by source",
+    "Decoded text"
+  ),
+  caption = "Three rows with two encodings and one byte-order mark",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(row_report$starts_with_bom, c(TRUE, FALSE, FALSE)),
   identical(row_report$valid_as_utf8, c(TRUE, TRUE, FALSE)),
@@ -404,20 +442,6 @@ stopifnot(
     row_report$stored_bytes[2],
     row_report$stored_bytes[3]
   )
-)
-
-knitr::kable(
-  row_report,
-  col.names = c(
-    "Row",
-    "Stored bytes",
-    "Starts with BOM",
-    "Valid as UTF-8",
-    "Declared by source",
-    "Decoded text"
-  ),
-  caption = "Three rows with two encodings and one byte-order mark",
-  row.names = FALSE
 )
 ```
 
@@ -443,11 +467,15 @@ We can ask R about the current session:
 ```{r}
 encoding_info <- l10n_info()
 
+encoding_info[c("UTF-8", "Latin-1")]
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   all(c("UTF-8", "Latin-1") %in% names(encoding_info))
 )
-
-encoding_info[c("UTF-8", "Latin-1")]
 ```
 
 A value of `TRUE` next to `UTF-8` means that the current R session uses UTF-8
@@ -482,12 +510,6 @@ exact_match_after <- identical(
   unname(stri_trans_nfc(same_appearance[2]))
 )
 
-stopifnot(
-  identical(unname(counts), c(1L, 2L)),
-  identical(exact_match_before, FALSE),
-  identical(exact_match_after, TRUE)
-)
-
 knitr::kable(
   tibble(
     form = c("one code point", "letter plus accent"),
@@ -502,6 +524,16 @@ knitr::kable(
 c(
   exact_match_before_normalizing = exact_match_before,
   exact_match_after_normalizing = exact_match_after
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(unname(counts), c(1L, 2L)),
+  identical(exact_match_before, FALSE),
+  identical(exact_match_after, TRUE)
 )
 ```
 

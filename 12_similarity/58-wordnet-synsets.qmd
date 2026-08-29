@@ -114,6 +114,17 @@ metadata_summary <- tibble(
   )
 )
 
+kable(
+  metadata_summary,
+  col.names = c("Item", "Count"),
+  caption = "Size of the local WordNet extract used in this lesson",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   nrow(senses) > 400L,
   n_distinct(senses$lemma) == 38L,
@@ -122,13 +133,6 @@ stopifnot(
   sum(relations$relation == "hypernym") > 300L,
   sum(relations$relation == "hyponym") > sum(relations$relation == "hypernym"),
   metadata$value[metadata$field == "source_version"] == "Open English Wordnet 2024"
-)
-
-kable(
-  metadata_summary,
-  col.names = c("Item", "Count"),
-  caption = "Size of the local WordNet extract used in this lesson",
-  row.names = FALSE
 )
 ```
 
@@ -172,18 +176,6 @@ bank_sense_null <- permutation_null(
   alternative = "greater"
 )
 
-stopifnot(
-  sum(bank_senses$senses) == 18L,
-  identical(bank_senses$part_of_speech, c("noun", "verb")),
-  identical(bank_senses$senses, c(10L, 8L)),
-  nrow(bank_noun_senses) == 6L,
-  any(str_detect(bank_noun_senses$definition, "financial institution")),
-  any(str_detect(bank_noun_senses$definition, "body of water")),
-  bank_sense_null$observed == 18,
-  bank_sense_null$null_high > bank_sense_null$observed,
-  bank_sense_null$p_value > 0.05
-)
-
 kable(
   bank_noun_senses,
   col.names = c("Noun sense", "Definition"),
@@ -197,6 +189,22 @@ kable(
   col.names = c("Observed", "Null mean", "Null 5th pct", "Null 95th pct", "p-value", "Replicates", "Alternative"),
   caption = "Sense count for bank compared with random lemmas in the extract",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  sum(bank_senses$senses) == 18L,
+  identical(bank_senses$part_of_speech, c("noun", "verb")),
+  identical(bank_senses$senses, c(10L, 8L)),
+  nrow(bank_noun_senses) == 6L,
+  any(str_detect(bank_noun_senses$definition, "financial institution")),
+  any(str_detect(bank_noun_senses$definition, "body of water")),
+  bank_sense_null$observed == 18,
+  bank_sense_null$null_high > bank_sense_null$observed,
+  bank_sense_null$p_value > 0.05
 )
 ```
 
@@ -224,19 +232,23 @@ financial_bank_members <- members |>
   arrange(lemma) |>
   mutate(role = if_else(lemma == "bank", "queried word", "other member"))
 
+kable(
+  financial_bank_members,
+  col.names = c("Synset ID", "Lemma", "Role"),
+  caption = "Members of the financial-institution synset for bank",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   length(financial_bank_synset) == 1L,
   nrow(financial_bank_members) == 4L,
   "bank" %in% financial_bank_members$lemma,
   "depository financial institution" %in% financial_bank_members$lemma,
   sum(financial_bank_members$role == "other member") == 3L
-)
-
-kable(
-  financial_bank_members,
-  col.names = c("Synset ID", "Lemma", "Role"),
-  caption = "Members of the financial-institution synset for bank",
-  row.names = FALSE
 )
 ```
 
@@ -329,6 +341,17 @@ hypernym_path <- tibble(
   definition = vapply(path_ids, lookup_definition, character(1))
 )
 
+kable(
+  hypernym_path,
+  col.names = c("Level", "Synset ID", "Members", "Definition"),
+  caption = "A four-step hypernym path from chair to activity",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   chair_synset == "oewn-00599171-n",
   identical(
@@ -337,13 +360,6 @@ stopifnot(
   ),
   all(c("chair, professorship", "activity") %in% unname(hypernym_path$members)),
   nrow(hypernym_path) == 4L
-)
-
-kable(
-  hypernym_path,
-  col.names = c("Level", "Synset ID", "Members", "Definition"),
-  caption = "A four-step hypernym path from chair to activity",
-  row.names = FALSE
 )
 ```
 
@@ -380,17 +396,21 @@ limit_check <- tibble(
   )
 )
 
-stopifnot(
-  limit_check$value[limit_check$check == "version recorded"] == "Open English Wordnet 2024",
-  limit_check$value[limit_check$check == "licence recorded"] == "https://creativecommons.org/licenses/by/4.0",
-  as.integer(limit_check$value[limit_check$check == "target lemmas recorded"]) == n_distinct(senses$lemma)
-)
-
 kable(
   limit_check,
   col.names = c("Check", "Value"),
   caption = "Provenance fields carried with the WordNet extract",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  limit_check$value[limit_check$check == "version recorded"] == "Open English Wordnet 2024",
+  limit_check$value[limit_check$check == "licence recorded"] == "https://creativecommons.org/licenses/by/4.0",
+  as.integer(limit_check$value[limit_check$check == "target lemmas recorded"]) == n_distinct(senses$lemma)
 )
 ```
 

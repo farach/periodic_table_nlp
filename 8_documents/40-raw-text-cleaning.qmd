@@ -70,15 +70,6 @@ entity_html <- "<p>Training &amp; tools&nbsp;provided.</p>"
 regex_tag_stripped <- str_remove_all(entity_html, "<[^>]+>")
 html_text <- rvest::html_text2(rvest::read_html(entity_html))
 
-stopifnot(
-  identical(nrow(feedback), 5L),
-  identical(feedback$comment[2], "The café listing was easy to find."),
-  identical(regex_tag_stripped, "Training &amp; tools&nbsp;provided."),
-  identical(html_text, "Training & tools provided."),
-  str_detect(regex_tag_stripped, fixed("&amp;")),
-  str_detect(regex_tag_stripped, fixed("&nbsp;"))
-)
-
 knitr::kable(
   tibble(
     method = c("Remove tags with a regular expression", "Read HTML with rvest"),
@@ -87,6 +78,19 @@ knitr::kable(
   col.names = c("Method", "Result"),
   caption = "Entity handling after two HTML-cleaning approaches",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(feedback), 5L),
+  identical(feedback$comment[2], "The café listing was easy to find."),
+  identical(regex_tag_stripped, "Training &amp; tools&nbsp;provided."),
+  identical(html_text, "Training & tools provided."),
+  str_detect(regex_tag_stripped, fixed("&amp;")),
+  str_detect(regex_tag_stripped, fixed("&nbsp;"))
 )
 ```
 
@@ -127,6 +131,20 @@ flyer_lines <- workforce_sentences |>
 flyer_block <- paste(flyer_lines, collapse = "\n")
 squished_flyer <- str_squish(flyer_block)
 
+knitr::kable(
+  tibble(
+    version = c("Flyer lines", "After str_squish()"),
+    text = c(flyer_block, squished_flyer)
+  ),
+  col.names = c("Version", "Text"),
+  caption = "Whitespace squishing removes the flyer line layout",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(workforce_sentences), 28L),
   identical(length(flyer_lines), 6L),
@@ -136,16 +154,6 @@ stopifnot(
     squished_flyer,
     fixed("RIVERTON SKILLS OPEN HOUSE DATA SUPPORT CERTIFICATE")
   )
-)
-
-knitr::kable(
-  tibble(
-    version = c("Flyer lines", "After str_squish()"),
-    text = c(flyer_block, squished_flyer)
-  ),
-  col.names = c("Version", "Text"),
-  caption = "Whitespace squishing removes the flyer line layout",
-  row.names = FALSE
 )
 ```
 
@@ -170,18 +178,6 @@ control_text <- str_c("shift", intToUtf8(0x0001), "starts soon")
 control_marked <- str_replace_all(control_text, "[\\p{Cc}]", " ")
 control_repaired <- str_squish(control_marked)
 control_squished <- str_squish(control_text)
-
-stopifnot(
-  !identical(clean_label, damaged_label),
-  identical(nchar(clean_label), 12L),
-  identical(nchar(damaged_label), 13L),
-  8203L %in% utf8ToInt(damaged_label),
-  identical(label_repaired, clean_label),
-  identical(str_count(control_text, "[\\p{Cc}]"), 1L),
-  1L %in% utf8ToInt(control_text),
-  !identical(control_squished, control_repaired),
-  identical(control_repaired, "shift starts soon")
-)
 
 knitr::kable(
   tibble(
@@ -210,6 +206,22 @@ knitr::kable(
   col.names = c("Example", "Text", "Character count"),
   caption = "Invisible characters change a string even when it looks familiar",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  !identical(clean_label, damaged_label),
+  identical(nchar(clean_label), 12L),
+  identical(nchar(damaged_label), 13L),
+  8203L %in% utf8ToInt(damaged_label),
+  identical(label_repaired, clean_label),
+  identical(str_count(control_text, "[\\p{Cc}]"), 1L),
+  1L %in% utf8ToInt(control_text),
+  !identical(control_squished, control_repaired),
+  identical(control_repaired, "shift starts soon")
 )
 ```
 
@@ -258,6 +270,17 @@ encoding_examples <- tibble(
     )
   )
 
+knitr::kable(
+  encoding_examples,
+  col.names = c("Version", "Text", "Unicode code points"),
+  caption = "The word café after encoding damage and repair",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(accented_word, "café"),
   identical(mojibake_word, "cafÃ©"),
@@ -265,13 +288,6 @@ stopifnot(
   !identical(replacement_text, accented_word),
   identical(utf8ToInt(replacement_text), c(99L, 97L, 102L, 65533L)),
   identical(unname(encoding_examples$code_points[4]), "99, 97, 102, 65533")
-)
-
-knitr::kable(
-  encoding_examples,
-  col.names = c("Version", "Text", "Unicode code points"),
-  caption = "The word café after encoding damage and repair",
-  row.names = FALSE
 )
 ```
 

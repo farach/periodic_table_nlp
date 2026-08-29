@@ -11,3 +11,20 @@ Encoding: UTF-8
 
 RnwWeave: Sweave
 LaTeX: pdfLaTeX
+
+# The repository normalises every text file to LF through .gitattributes, and a
+# stale byte fingerprint or a spurious whitespace diff is easy to introduce from
+# an editor that does not match. These three settings keep RStudio in step.
+AutoAppendNewline: Yes
+StripTrailingWhitespace: Yes
+LineEndingConversion: Posix
+
+# Lessons are prose first. Hard-wrapping at 80 columns keeps diffs readable
+# line by line, which matters when a reviewer is editing sixty-two files.
+MarkdownWrap: Column
+MarkdownWrapAtColumn: 80
+MarkdownReferenceLocation: Document
+MarkdownCanonical: No
+
+# `quarto render` is the published gate, so the Build pane runs the whole site.
+BuildType: Website

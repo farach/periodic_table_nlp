@@ -51,8 +51,6 @@ library(dplyr)
 library(tibble)
 library(digest)
 
-stopifnot(all(c("readr", "dplyr", "tibble", "digest") %in% loadedNamespaces()))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -106,18 +104,24 @@ expected_hash <- metadata |>
   filter(artifact == "riverton-gazetteer.csv") |>
   pull(fingerprint)
 
-stopifnot(
-  identical(nrow(sentences), 28L),
-  identical(nrow(gazetteer), 9L),
-  identical(sum(gazetteer$place_name == "Riverton"), 2L),
-  identical(gazetteer_hash, expected_hash)
-)
-
 knitr::kable(
   gazetteer,
   col.names = c("Place name", "Type", "Latitude", "Longitude", "Parent"),
   caption = "Invented Riverton gazetteer used offline",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c("readr", "dplyr", "tibble", "digest") %in% loadedNamespaces()))
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(nrow(gazetteer), 9L),
+  identical(sum(gazetteer$place_name == "Riverton"), 2L),
+  identical(gazetteer_hash, expected_hash)
 )
 ```
 
@@ -167,12 +171,6 @@ geocoded_rows <- place_mentions |>
     relationship = "many-to-many"
   )
 
-stopifnot(
-  identical(nrow(place_mentions), 5L),
-  identical(nrow(geocoded_rows), 7L),
-  identical(sum(is.na(geocoded_rows$latitude)), 1L)
-)
-
 knitr::kable(
   geocoded_rows,
   col.names = c(
@@ -181,6 +179,16 @@ knitr::kable(
   ),
   caption = "Joining place mentions to the gazetteer",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(place_mentions), 5L),
+  identical(nrow(geocoded_rows), 7L),
+  identical(sum(is.na(geocoded_rows$latitude)), 1L)
 )
 ```
 
@@ -218,11 +226,6 @@ status_counts <- tibble(status = c("resolved", "ambiguous", "not found")) |>
   ) |>
   mutate(mentions = coalesce(mentions, 0L))
 
-stopifnot(
-  identical(status_counts$mentions, c(2L, 2L, 1L)),
-  identical(sum(status_counts$mentions), 5L)
-)
-
 knitr::kable(
   mention_status,
   col.names = c(
@@ -238,6 +241,15 @@ knitr::kable(
   col.names = c("Status", "Mentions"),
   caption = "Resolved, ambiguous, and not-found mentions",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(status_counts$mentions, c(2L, 2L, 1L)),
+  identical(sum(status_counts$mentions), 5L)
 )
 ```
 
@@ -265,12 +277,6 @@ with_parent_context <- riverton_candidates |>
   inner_join(supplied_context, by = join_by(mention)) |>
   filter(parent == parent_context)
 
-stopifnot(
-  identical(nrow(riverton_candidates), 2L),
-  identical(nrow(with_parent_context), 1L),
-  identical(with_parent_context$latitude, 41.821)
-)
-
 knitr::kable(
   riverton_candidates,
   col.names = c("Mention", "Latitude", "Longitude", "Parent"),
@@ -283,6 +289,16 @@ knitr::kable(
   col.names = c("Mention", "Latitude", "Longitude", "Parent", "Context supplied"),
   caption = "Parent context narrows the candidate list",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(riverton_candidates), 2L),
+  identical(nrow(with_parent_context), 1L),
+  identical(with_parent_context$latitude, 41.821)
 )
 ```
 

@@ -155,6 +155,24 @@ reproducibility_table <- tibble(
   )
 )
 
+knitr::kable(
+  metadata_display,
+  col.names = c("Artifact", "Source", "Retrieved", "License", "SHA-256 start"),
+  caption = "Local treebank artifacts and provenance used by the tagger lesson",
+  row.names = FALSE
+)
+
+knitr::kable(
+  reproducibility_table,
+  col.names = c("Reproducibility item", "Value"),
+  caption = "Recorded builder seed and the current rerun environment",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(nrow(learning_curve), 5L),
@@ -176,20 +194,6 @@ stopifnot(
     "b1c614e3cdd17ae13b1959992cb440e43c7bf4533e936cd6cb58dae42f255911"
   ),
   identical(learning_curve_fingerprint, expected_curve_fingerprint)
-)
-
-knitr::kable(
-  metadata_display,
-  col.names = c("Artifact", "Source", "Retrieved", "License", "SHA-256 start"),
-  caption = "Local treebank artifacts and provenance used by the tagger lesson",
-  row.names = FALSE
-)
-
-knitr::kable(
-  reproducibility_table,
-  col.names = c("Reproducibility item", "Value"),
-  caption = "Recorded builder seed and the current rerun environment",
-  row.names = FALSE
 )
 ```
 
@@ -238,6 +242,17 @@ paid_sentence_tags <- tagged |>
   filter(doc_id == "s001") |>
   select(token, upos, lemma)
 
+knitr::kable(
+  paid_sentence_tags,
+  col.names = c("Token", "POS tag", "Lemma"),
+  caption = "Tags for 'Paid 12-week training is provided.'",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(tagged), 178L),
   identical(
@@ -252,13 +267,6 @@ stopifnot(
     paid_sentence_tags$lemma,
     c("Paid", "12", "-", "week", "training", "be", "provid", ".")
   )
-)
-
-knitr::kable(
-  paid_sentence_tags,
-  col.names = c("Token", "POS tag", "Lemma"),
-  caption = "Tags for 'Paid 12-week training is provided.'",
-  row.names = FALSE
 )
 ```
 
@@ -313,6 +321,17 @@ expected_tag_counts <- tibble(
   n = c(45L, 25L, 24L, 20L, 17L, 16L, 11L, 7L, 6L, 2L, 2L, 1L, 1L, 1L)
 )
 
+knitr::kable(
+  tag_counts,
+  col.names = c("POS tag", "Tagged tokens"),
+  caption = "Universal POS tag counts across the 28 Riverton sentences",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(tag_counts, expected_tag_counts),
   identical(punctuation_tokens, 25L),
@@ -335,13 +354,6 @@ stopifnot(
       "October"
     )
   )
-)
-
-knitr::kable(
-  tag_counts,
-  col.names = c("POS tag", "Tagged tokens"),
-  caption = "Universal POS tag counts across the 28 Riverton sentences",
-  row.names = FALSE
 )
 ```
 
@@ -530,6 +542,31 @@ accuracy_comparison <- tibble(
   accuracy = round(correct / tokens, 4)
 )
 
+knitr::kable(
+  learning_curve_display,
+  col.names = c(
+    "Training sentences",
+    "Training tokens",
+    "Held-out tokens",
+    "Correct tokens",
+    "Accuracy",
+    "Accuracy percent"
+  ),
+  caption = "Held-out tagger accuracy as training data increases",
+  row.names = FALSE
+)
+
+knitr::kable(
+  accuracy_comparison,
+  col.names = c("Scope", "System", "Correct", "Tokens", "Accuracy"),
+  caption = "The 500-sentence tagger compared with a lookup baseline",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(train_newdoc_ids), 11L),
   identical(length(held_newdoc_ids), 13L),
@@ -556,27 +593,6 @@ stopifnot(
   identical(round(gain_500_to_2000, 1), 3.4),
   identical(training_ratio_100_to_500, 5),
   identical(training_ratio_500_to_2000, 4)
-)
-
-knitr::kable(
-  learning_curve_display,
-  col.names = c(
-    "Training sentences",
-    "Training tokens",
-    "Held-out tokens",
-    "Correct tokens",
-    "Accuracy",
-    "Accuracy percent"
-  ),
-  caption = "Held-out tagger accuracy as training data increases",
-  row.names = FALSE
-)
-
-knitr::kable(
-  accuracy_comparison,
-  col.names = c("Scope", "System", "Correct", "Tokens", "Accuracy"),
-  caption = "The 500-sentence tagger compared with a lookup baseline",
-  row.names = FALSE
 )
 ```
 

@@ -103,6 +103,18 @@ inbox_hash <- digest(
   serialize = FALSE
 )
 
+knitr::kable(
+  spam_counts |>
+    select(class, messages),
+  col.names = c("Recorded class", "Messages"),
+  caption = "Invented Riverton inbox labels",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   all(c(
     "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
@@ -116,14 +128,6 @@ stopifnot(
     "b71b06e353918e7a421327883950c7409ea149c34b6ba26396fc5bc8c27df216"
   ),
   identical(inbox_hash, inbox_metadata$fingerprint)
-)
-
-knitr::kable(
-  spam_counts |>
-    select(class, messages),
-  col.names = c("Recorded class", "Messages"),
-  caption = "Invented Riverton inbox labels",
-  row.names = FALSE
 )
 ```
 
@@ -182,6 +186,18 @@ surface_scores <- tibble(
     pull(.estimate)
 )
 
+knitr::kable(
+  surface_scores |>
+    mutate(across(c(accuracy, scam_recall, genuine_recall), \(value) round(value, 4))),
+  col.names = c("Shortcut", "Accuracy", "Scam recall", "Genuine recall"),
+  caption = "A grammar-only shortcut no longer solves the invented inbox",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   all(
     surface_matrix ==
@@ -195,14 +211,6 @@ stopifnot(
   identical(round(surface_scores$accuracy, 4), 0.6667),
   identical(round(surface_scores$scam_recall, 4), 0.3125),
   identical(round(surface_scores$genuine_recall, 4), 0.7955)
-)
-
-knitr::kable(
-  surface_scores |>
-    mutate(across(c(accuracy, scam_recall, genuine_recall), \(value) round(value, 4))),
-  col.names = c("Shortcut", "Accuracy", "Scam recall", "Genuine recall"),
-  caption = "A grammar-only shortcut no longer solves the invented inbox",
-  row.names = FALSE
 )
 ```
 
@@ -240,19 +248,23 @@ shortcut_sweep <- superficial_features |>
   ) |>
   arrange(desc(accuracy))
 
-stopifnot(
-  identical(nrow(shortcut_sweep), 5L),
-  max(shortcut_sweep$accuracy) < 0.80,
-  max(shortcut_sweep$scam_recall) < 0.95,
-  identical(shortcut_sweep$feature[[1]], "exclamation mark")
-)
-
 knitr::kable(
   shortcut_sweep |>
     mutate(across(where(is.numeric), \(value) round(value, 4))),
   col.names = c("Superficial feature", "Best accuracy", "Best scam recall"),
   caption = "No single superficial feature solves the rebuilt inbox, but two come close",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(shortcut_sweep), 5L),
+  max(shortcut_sweep$accuracy) < 0.80,
+  max(shortcut_sweep$scam_recall) < 0.95,
+  identical(shortcut_sweep$feature[[1]], "exclamation mark")
 )
 ```
 
@@ -321,6 +333,17 @@ rule_confusion <- yardstick::conf_mat(
 
 rule_matrix <- as.matrix(rule_confusion$table)
 
+knitr::kable(
+  as.data.frame(rule_confusion$table),
+  col.names = c("Rule prediction", "Recorded label", "Messages"),
+  caption = "Rule-based spam filter on the full invented inbox",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(sum(term_hits$messages_matched == 1L), 11L),
   all(
@@ -332,13 +355,6 @@ stopifnot(
       dimnames = dimnames(rule_matrix)
     )
   )
-)
-
-knitr::kable(
-  as.data.frame(rule_confusion$table),
-  col.names = c("Rule prediction", "Recorded label", "Messages"),
-  caption = "Rule-based spam filter on the full invented inbox",
-  row.names = FALSE
 )
 ```
 
@@ -429,6 +445,24 @@ test_rule_confusion <- yardstick::conf_mat(
 )
 test_rule_matrix <- as.matrix(test_rule_confusion$table)
 
+knitr::kable(
+  as.data.frame(test_rule_confusion$table),
+  col.names = c("Rule prediction", "Recorded label", "Messages"),
+  caption = "Rule-based spam filter on the same invented test split",
+  row.names = FALSE
+)
+
+knitr::kable(
+  as.data.frame(model_confusion$table),
+  col.names = c("Model prediction", "Recorded label", "Messages"),
+  caption = "Model confusion matrix on the invented test split",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(spam_train), 41L),
   identical(nrow(spam_test), 19L),
@@ -461,20 +495,6 @@ stopifnot(
     0.972
   )
 )
-
-knitr::kable(
-  as.data.frame(test_rule_confusion$table),
-  col.names = c("Rule prediction", "Recorded label", "Messages"),
-  caption = "Rule-based spam filter on the same invented test split",
-  row.names = FALSE
-)
-
-knitr::kable(
-  as.data.frame(model_confusion$table),
-  col.names = c("Model prediction", "Recorded label", "Messages"),
-  caption = "Model confusion matrix on the invented test split",
-  row.names = FALSE
-)
 ```
 
 On the same 19 test rows, the rule labels 3 of the 5 invented scams as spam and
@@ -506,12 +526,6 @@ disagreements <- spam_scored |>
     text
   )
 
-stopifnot(
-  identical(disagreements$message_id, c("M004", "M030", "M034", "M046")),
-  identical(disagreements$recorded_label, c("genuine", "genuine", "genuine", "genuine")),
-  identical(disagreements$spam_probability, c(0.972, 0.869, 0.010, 0.998))
-)
-
 knitr::kable(
   disagreements,
   col.names = c(
@@ -524,6 +538,16 @@ knitr::kable(
   ),
   caption = "Where the readable rule and the trained model disagree",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(disagreements$message_id, c("M004", "M030", "M034", "M046")),
+  identical(disagreements$recorded_label, c("genuine", "genuine", "genuine", "genuine")),
+  identical(disagreements$spam_probability, c(0.972, 0.869, 0.010, 0.998))
 )
 ```
 
@@ -573,12 +597,6 @@ threshold_plot <- threshold_table |>
     )
   )
 
-stopifnot(
-  identical(threshold_table$genuine_blocked, c(4L, rep(3L, 16), 2L, 2L)),
-  identical(threshold_table$scams_missed, c(rep(1L, 5), rep(2L, 13), 3L)),
-  identical(threshold_table$sent_to_review, c(8L, rep(7L, 4), rep(6L, 12), 5L, 4L))
-)
-
 knitr::kable(
   threshold_table,
   col.names = c(
@@ -601,6 +619,16 @@ ggplot(threshold_plot, aes(x = threshold, y = messages, color = error_type)) +
     color = "Error type"
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(threshold_table$genuine_blocked, c(4L, rep(3L, 16), 2L, 2L)),
+  identical(threshold_table$scams_missed, c(rep(1L, 5), rep(2L, 13), 3L)),
+  identical(threshold_table$sent_to_review, c(8L, rep(7L, 4), rep(6L, 12), 5L, 4L))
+)
 ```
 
 For this invented split, thresholds from 0.30 through 0.85 have the same error

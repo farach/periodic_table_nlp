@@ -89,6 +89,17 @@ document_counts <- sentences |>
   count(document_id, name = "sentence_count") |>
   arrange(document_id)
 
+knitr::kable(
+  document_counts,
+  col.names = c("Document ID", "Sentences"),
+  caption = "The 28 Riverton text units by source document",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(
@@ -100,13 +111,6 @@ stopifnot(
     c(6L, 4L, 4L, 4L, 3L, 3L, 4L)
   ),
   str_detect(sentences$text[1], fixed("12-week training"))
-)
-
-knitr::kable(
-  document_counts,
-  col.names = c("Document ID", "Sentences"),
-  caption = "The 28 Riverton text units by source document",
-  row.names = FALSE
 )
 ```
 
@@ -142,6 +146,17 @@ analysis_table <- tibble(
   stems = map_chr(word_stems, \(value) paste(value, collapse = ", "))
 )
 
+knitr::kable(
+  analysis_table,
+  col.names = c("Word", "Allowed analyses", "Returned stems"),
+  caption = "Five words analyzed by hunspell",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(word_analyses[[1]], " st:shift fl:S"),
   identical(word_analyses[[2]], " fl:A st:quire fl:S"),
@@ -156,13 +171,6 @@ stopifnot(
   identical(word_stems[[3]], c("certification", "certificate")),
   identical(word_stems[[4]], "running"),
   identical(word_stems[[5]], "forklift")
-)
-
-knitr::kable(
-  analysis_table,
-  col.names = c("Word", "Allowed analyses", "Returned stems"),
-  caption = "Five words analyzed by hunspell",
-  row.names = FALSE
 )
 ```
 
@@ -223,6 +231,22 @@ multi_analysis_words <- vocabulary_summary |>
   filter(analysis_count > 1L) |>
   pull(word)
 
+knitr::kable(
+  summary_counts,
+  col.names = c(
+    "Word types",
+    "Analyzed by dictionary",
+    "Not analyzed",
+    "More than one dictionary analysis"
+  ),
+  caption = "Dictionary coverage for the Riverton vocabulary",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(summary_counts$word_types, 96L),
   identical(summary_counts$analyzed_by_dictionary, 91L),
@@ -242,18 +266,6 @@ stopifnot(
       "training"
     )
   )
-)
-
-knitr::kable(
-  summary_counts,
-  col.names = c(
-    "Word types",
-    "Analyzed by dictionary",
-    "Not analyzed",
-    "More than one dictionary analysis"
-  ),
-  caption = "Dictionary coverage for the Riverton vocabulary",
-  row.names = FALSE
 )
 ```
 
@@ -276,6 +288,17 @@ ambiguous_words <- vocabulary_summary |>
     analyses = map_chr(analyses, \(value) paste(value, collapse = "; "))
   )
 
+knitr::kable(
+  ambiguous_words,
+  col.names = c("Word", "Allowed analyses"),
+  caption = "Riverton word types with more than one dictionary analysis",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(ambiguous_words), 8L),
   identical(ambiguous_words$word[2], "certification"),
@@ -284,13 +307,6 @@ stopifnot(
     fixed("st:certificate fl:N")
   ),
   identical(ambiguous_words$word[8], "training")
-)
-
-knitr::kable(
-  ambiguous_words,
-  col.names = c("Word", "Allowed analyses"),
-  caption = "Riverton word types with more than one dictionary analysis",
-  row.names = FALSE
 )
 ```
 

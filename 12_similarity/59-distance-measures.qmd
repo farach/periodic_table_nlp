@@ -70,6 +70,18 @@ name_matches <- tibble(
 stevenson_rows <- name_matches |>
   filter(recorded == "Stevenson")
 
+kable(
+  name_matches |>
+    mutate(jaro_winkler = round(jaro_winkler, 4)),
+  col.names = c("Recorded", "Candidate", "Levenshtein", "Jaro-Winkler", "Levenshtein rank", "Jaro-Winkler rank"),
+  caption = "Two string distances rank the same candidate names differently",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   nrow(name_matches) == 6L,
   identical(stevenson_rows$candidate, c("Stephenson", "Steven")),
@@ -77,14 +89,6 @@ stopifnot(
   all(within_tolerance(stevenson_rows$jaro_winkler, c(0.0726, 0.0667), tolerance = 5e-4)),
   stevenson_rows$candidate[which.min(stevenson_rows$levenshtein)] == "Stephenson",
   stevenson_rows$candidate[which.min(stevenson_rows$jaro_winkler)] == "Steven"
-)
-
-kable(
-  name_matches |>
-    mutate(jaro_winkler = round(jaro_winkler, 4)),
-  col.names = c("Recorded", "Candidate", "Levenshtein", "Jaro-Winkler", "Levenshtein rank", "Jaro-Winkler rank"),
-  caption = "Two string distances rank the same candidate names differently",
-  row.names = FALSE
 )
 ```
 
@@ -145,6 +149,20 @@ pair_distances <- tibble(
   second_speech = paragraphs$speech_id[second]
 )
 
+kable(
+  tibble(
+    item = c("Paragraphs", "Speeches", "People", "Features", "Paragraph pairs"),
+    value = c(nrow(paragraphs), n_distinct(paragraphs$speech_id), n_distinct(paragraphs$president), nfeat(paragraph_dfm), nrow(pair_distances))
+  ),
+  col.names = c("Item", "Value"),
+  caption = "Paragraph vectors built from the inaugural-address corpus",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   nrow(paragraphs) == 1377L,
   n_distinct(paragraphs$speech_id) == 60L,
@@ -155,16 +173,6 @@ stopifnot(
   as.integer(max(token_lengths)) == 984L,
   all(is.finite(pair_distances$euclidean)),
   all(pair_distances$cosine >= 0 & pair_distances$cosine <= 1 + 1e-8)
-)
-
-kable(
-  tibble(
-    item = c("Paragraphs", "Speeches", "People", "Features", "Paragraph pairs"),
-    value = c(nrow(paragraphs), n_distinct(paragraphs$speech_id), n_distinct(paragraphs$president), nfeat(paragraph_dfm), nrow(pair_distances))
-  ),
-  col.names = c("Item", "Value"),
-  caption = "Paragraph vectors built from the inaugural-address corpus",
-  row.names = FALSE
 )
 ```
 
@@ -213,15 +221,6 @@ same_speech_examples <- pair_distances |>
     jaccard = round(jaccard, 3)
   )
 
-stopifnot(
-  all(within_tolerance(length_correlations$correlation_with_length_difference, c(0.951, -0.268, 0.275), tolerance = 1e-3)),
-  same_speech_examples$first_paragraph[1] == "1841-Harrison-p10",
-  same_speech_examples$second_paragraph[1] == "1841-Harrison-p22",
-  same_speech_examples$length_difference[1] == 915L,
-  within_tolerance(same_speech_examples$euclidean[1], 147.46, tolerance = 0.01),
-  within_tolerance(same_speech_examples$cosine[1], 0.330, tolerance = 0.001)
-)
-
 kable(
   length_correlations |>
     mutate(correlation_with_length_difference = round(correlation_with_length_difference, 3)),
@@ -235,6 +234,19 @@ kable(
   col.names = c("First paragraph", "Second paragraph", "Speech", "First length", "Second length", "Length difference", "Euclidean", "Cosine", "Jaccard"),
   caption = "Long and short paragraphs from the same speech can be far apart under Euclidean distance",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(within_tolerance(length_correlations$correlation_with_length_difference, c(0.951, -0.268, 0.275), tolerance = 1e-3)),
+  same_speech_examples$first_paragraph[1] == "1841-Harrison-p10",
+  same_speech_examples$second_paragraph[1] == "1841-Harrison-p22",
+  same_speech_examples$length_difference[1] == 915L,
+  within_tolerance(same_speech_examples$euclidean[1], 147.46, tolerance = 0.01),
+  within_tolerance(same_speech_examples$cosine[1], 0.330, tolerance = 0.001)
 )
 ```
 
@@ -266,18 +278,22 @@ same_speech_null <- permutation_null(
   alternative = "less"
 )
 
-stopifnot(
-  same_speech_null$observed < same_speech_null$null_low,
-  same_speech_null$p_value < 0.01,
-  same_speech_null$replicates == 1000L
-)
-
 kable(
   same_speech_null |>
     mutate(across(where(is.numeric), ~ round(.x, 3))),
   col.names = c("Observed", "Null mean", "Null 5th pct", "Null 95th pct", "p-value", "Replicates", "Alternative"),
   caption = "Same-speech paragraph cosine distance compared with shuffled speech labels",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  same_speech_null$observed < same_speech_null$null_low,
+  same_speech_null$p_value < 0.01,
+  same_speech_null$replicates == 1000L
 )
 ```
 
@@ -300,12 +316,6 @@ plot_pairs <- pair_distances |>
     values_to = "value"
   )
 
-stopifnot(
-  nrow(plot_pairs) == 9000L,
-  identical(sort(unique(plot_pairs$distance)), c("cosine", "euclidean", "jaccard")),
-  max(plot_pairs$length_difference) > 900L
-)
-
 ggplot(plot_pairs, aes(x = length_difference, y = value)) +
   geom_point(alpha = 0.18, size = 0.7) +
   facet_wrap(~ distance, scales = "free_y") +
@@ -315,6 +325,16 @@ ggplot(plot_pairs, aes(x = length_difference, y = value)) +
     title = "Raw Euclidean distance mostly follows length"
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(plot_pairs) == 9000L,
+  identical(sort(unique(plot_pairs$distance)), c("cosine", "euclidean", "jaccard")),
+  max(plot_pairs$length_difference) > 900L
+)
 ```
 
 The plot turns the correlation into a visible warning. A long paragraph and a

@@ -54,10 +54,6 @@ library(stringr)
 library(tokenizers)
 library(spacyr)
 
-stopifnot(all(c(
-  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "spacyr"
-) %in% loadedNamespaces()))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -93,12 +89,6 @@ expected_sentences <- c(
   "Bring a photo ID."
 )
 
-stopifnot(
-  identical(nrow(sentences), 28L),
-  identical(length(expected_sentences), 5L),
-  any(str_detect(sentences$text, fixed("Apply by October 15")))
-)
-
 knitr::kable(
   tibble(
     expected_number = seq_along(expected_sentences),
@@ -107,6 +97,20 @@ knitr::kable(
   col.names = c("Expected sentence", "Author-marked text"),
   caption = "The five expected sentence boundaries",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c(
+  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "spacyr"
+) %in% loadedNamespaces()))
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(length(expected_sentences), 5L),
+  any(str_detect(sentences$text, fixed("Apply by October 15")))
 )
 ```
 
@@ -192,18 +196,6 @@ splitter_scores <- split_results |>
     matches_expected_count = pieces_found == expected_pieces
   )
 
-stopifnot(
-  identical(spacy_metadata$version, "3.8.0"),
-  identical(spacy_metadata$license, "MIT"),
-  identical(spacy_metadata$spacy, "3.8.7"),
-  identical(length(naive_pieces), 7L),
-  identical(length(tokenizer_pieces), 5L),
-  identical(length(spacy_pieces), 2L),
-  identical(splitter_scores$pieces_found, c(7L, 5L, 2L)),
-  identical(splitter_scores$exact_expected_pieces, c(0L, 1L, 0L)),
-  identical(splitter_scores$count_difference, c(2L, 0L, -3L))
-)
-
 knitr::kable(
   splitter_scores,
   col.names = c(
@@ -224,6 +216,22 @@ knitr::kable(
   col.names = c("Splitter", "Piece", "Piece number", "Exact expected sentence"),
   caption = "Where each splitter puts the boundaries",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(spacy_metadata$version, "3.8.0"),
+  identical(spacy_metadata$license, "MIT"),
+  identical(spacy_metadata$spacy, "3.8.7"),
+  identical(length(naive_pieces), 7L),
+  identical(length(tokenizer_pieces), 5L),
+  identical(length(spacy_pieces), 2L),
+  identical(splitter_scores$pieces_found, c(7L, 5L, 2L)),
+  identical(splitter_scores$exact_expected_pieces, c(0L, 1L, 0L)),
+  identical(splitter_scores$count_difference, c(2L, 0L, -3L))
 )
 ```
 
@@ -269,19 +277,23 @@ job_rows <- sentences |>
   filter(document_id != "F001") |>
   nrow()
 
+knitr::kable(
+  row_boundary_summary,
+  col.names = c("Document ID", "Rows", "Sentence pieces"),
+  caption = "Sentence splitting agrees with the stored Riverton rows",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(sentence_piece_counts, rep(1L, 28L)),
   identical(sum(row_boundary_summary$rows), 28L),
   identical(sum(row_boundary_summary$tokenizer_pieces), 28L),
   identical(flyer_rows, 6L),
   identical(job_rows, 22L)
-)
-
-knitr::kable(
-  row_boundary_summary,
-  col.names = c("Document ID", "Rows", "Sentence pieces"),
-  caption = "Sentence splitting agrees with the stored Riverton rows",
-  row.names = FALSE
 )
 ```
 

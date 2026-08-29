@@ -55,10 +55,6 @@ library(stringr)
 library(tokenizers)
 library(rvest)
 
-stopifnot(all(c(
-  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "rvest"
-) %in% loadedNamespaces()))
-
 job_page <- read_html("data/workforce/job-board.html")
 
 job_all_blocks <- job_page |>
@@ -165,16 +161,6 @@ expected_syllable_summary <- tibble(
   words = c(21L, 5L, 4L)
 )
 
-stopifnot(
-  identical(length(job_all_blocks), 41L),
-  identical(length(job_detail_sentences), 22L),
-  identical(nrow(syllable_check), 30L),
-  all(syllable_check$word %in% job_detail_words),
-  identical(syllable_summary, expected_syllable_summary),
-  identical(sum(syllable_check$hand_syllables), 78L),
-  identical(sum(syllable_check$heuristic_syllables), 79L)
-)
-
 knitr::kable(
   syllable_check,
   col.names = c("Word", "Hand count", "Heuristic count", "Comparison"),
@@ -187,6 +173,24 @@ knitr::kable(
   col.names = c("Comparison", "Words"),
   caption = "Syllable heuristic results for 30 job-board words",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c(
+  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "rvest"
+) %in% loadedNamespaces()))
+
+stopifnot(
+  identical(length(job_all_blocks), 41L),
+  identical(length(job_detail_sentences), 22L),
+  identical(nrow(syllable_check), 30L),
+  all(syllable_check$word %in% job_detail_words),
+  identical(syllable_summary, expected_syllable_summary),
+  identical(sum(syllable_check$hand_syllables), 78L),
+  identical(sum(syllable_check$heuristic_syllables), 79L)
 )
 ```
 
@@ -295,29 +299,6 @@ syllable_sensitivity <- bind_rows(
   )
 )
 
-stopifnot(
-  identical(preprocessing_counts$sentences, c(22L, 22L, 19L)),
-  identical(preprocessing_counts$words, c(177L, 133L, 44L)),
-  identical(job_score$sentences, 22L),
-  identical(job_score$words, 133L),
-  identical(job_score$syllables, 230L),
-  isTRUE(all.equal(job_score$words_per_sentence, 6.0)),
-  isTRUE(all.equal(job_score$syllables_per_word, 1.7)),
-  isTRUE(all.equal(job_score$flesch_reading_ease, 54)),
-  isTRUE(all.equal(job_score$flesch_kincaid_grade, 7)),
-  identical(collapsed_score$sentences, 22L),
-  identical(collapsed_score$words, 177L),
-  identical(collapsed_score$flesch_reading_ease, 33),
-  identical(help_score$sentences, 6L),
-  identical(help_score$words, 56L),
-  identical(help_score$syllables, 89L),
-  isTRUE(all.equal(help_score$words_per_sentence, 9.3)),
-  isTRUE(all.equal(help_score$syllables_per_word, 1.6)),
-  isTRUE(all.equal(help_score$flesch_reading_ease, 63)),
-  isTRUE(all.equal(help_score$flesch_kincaid_grade, 7)),
-  identical(syllable_sensitivity$flesch_reading_ease, c(54, 56))
-)
-
 knitr::kable(
   preprocessing_counts,
   col.names = c("Text set", "Blocks", "Sentence pieces", "Words"),
@@ -347,6 +328,33 @@ knitr::kable(
   col.names = c("Document", "Syllables", "Flesch Reading Ease, rounded", "Flesch-Kincaid grade, rounded"),
   caption = "Effect of applying the observed net syllable bias to the job-board score",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(preprocessing_counts$sentences, c(22L, 22L, 19L)),
+  identical(preprocessing_counts$words, c(177L, 133L, 44L)),
+  identical(job_score$sentences, 22L),
+  identical(job_score$words, 133L),
+  identical(job_score$syllables, 230L),
+  isTRUE(all.equal(job_score$words_per_sentence, 6.0)),
+  isTRUE(all.equal(job_score$syllables_per_word, 1.7)),
+  isTRUE(all.equal(job_score$flesch_reading_ease, 54)),
+  isTRUE(all.equal(job_score$flesch_kincaid_grade, 7)),
+  identical(collapsed_score$sentences, 22L),
+  identical(collapsed_score$words, 177L),
+  identical(collapsed_score$flesch_reading_ease, 33),
+  identical(help_score$sentences, 6L),
+  identical(help_score$words, 56L),
+  identical(help_score$syllables, 89L),
+  isTRUE(all.equal(help_score$words_per_sentence, 9.3)),
+  isTRUE(all.equal(help_score$syllables_per_word, 1.6)),
+  isTRUE(all.equal(help_score$flesch_reading_ease, 63)),
+  isTRUE(all.equal(help_score$flesch_kincaid_grade, 7)),
+  identical(syllable_sensitivity$flesch_reading_ease, c(54, 56))
 )
 ```
 

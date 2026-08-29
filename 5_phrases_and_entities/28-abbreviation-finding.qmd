@@ -53,11 +53,6 @@ library(purrr)
 library(stringr)
 library(hunspell)
 
-stopifnot(all(
-  c("readr", "dplyr", "tibble", "tidyr", "purrr", "stringr", "hunspell") %in%
-    loadedNamespaces()
-))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -86,6 +81,22 @@ all_caps_hits <- sentences |>
   ) |>
   unnest(token)
 
+knitr::kable(
+  all_caps_hits,
+  col.names = c("Sentence ID", "Text", "All-capital token"),
+  caption = "All-capital tokens found in the Riverton text",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "tidyr", "purrr", "stringr", "hunspell") %in%
+    loadedNamespaces()
+))
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(nrow(all_caps_hits), 7L),
@@ -94,13 +105,6 @@ stopifnot(
     c("RIVERTON", "SKILLS", "OPEN", "HOUSE", "DATA", "SUPPORT", "CERTIFICATE")
   ),
   identical(unique(all_caps_hits$sentence_id), c("s023", "s024"))
-)
-
-knitr::kable(
-  all_caps_hits,
-  col.names = c("Sentence ID", "Text", "All-capital token"),
-  caption = "All-capital tokens found in the Riverton text",
-  row.names = FALSE
 )
 ```
 
@@ -159,18 +163,6 @@ guard_failure_examples <- tibble(token = c("UNESCO", "IT")) |>
     guarded_match = !longer_than_five & !in_dictionary
   )
 
-stopifnot(
-  identical(capital_score$candidates, c(7L, 0L)),
-  identical(capital_score$hand_rejected, c(7L, 0L)),
-  identical(capital_score$true_abbreviations_found, c(0L, 0L)),
-  identical(sum(scored_caps$in_dictionary), 6L),
-  identical(sum(scored_caps$longer_than_five), 4L),
-  identical(any(scored_caps$guarded_match), FALSE),
-  identical(scored_caps$in_dictionary[scored_caps$token == "RIVERTON"], FALSE),
-  identical(scored_caps$longer_than_five[scored_caps$token == "RIVERTON"], TRUE),
-  identical(guard_failure_examples$guarded_match, c(FALSE, FALSE))
-)
-
 knitr::kable(
   capital_score,
   col.names = c("Rule", "Candidates kept", "Hand-rejected hits", "True abbreviations found"),
@@ -190,6 +182,22 @@ knitr::kable(
   col.names = c("Token", "Lowercase token", "In dictionary", "Longer than five", "Kept by guard"),
   caption = "Two real short forms the guard would reject",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(capital_score$candidates, c(7L, 0L)),
+  identical(capital_score$hand_rejected, c(7L, 0L)),
+  identical(capital_score$true_abbreviations_found, c(0L, 0L)),
+  identical(sum(scored_caps$in_dictionary), 6L),
+  identical(sum(scored_caps$longer_than_five), 4L),
+  identical(any(scored_caps$guarded_match), FALSE),
+  identical(scored_caps$in_dictionary[scored_caps$token == "RIVERTON"], FALSE),
+  identical(scored_caps$longer_than_five[scored_caps$token == "RIVERTON"], TRUE),
+  identical(guard_failure_examples$guarded_match, c(FALSE, FALSE))
 )
 ```
 
@@ -263,17 +271,6 @@ parenthetical_score <- tibble(
   definitions_found = nrow(definitions)
 )
 
-stopifnot(
-  identical(nrow(riverton_definitions), 0L),
-  identical(riverton_parenthetical_score$definitions_found, 0L),
-  identical(nrow(definitions), 2L),
-  identical(definitions$long_form, c("Natural Language Processing", "Data Support Certificate")),
-  identical(definitions$short_form, c("NLP", "DSC")),
-  identical(parenthetical_score$definitions_found, 2L),
-  identical(shape_only_example$long_form, "Riverton Skills Centre"),
-  identical(shape_only_example$short_form, "NLP")
-)
-
 knitr::kable(
   riverton_parenthetical_score,
   col.names = c("Source", "Definitions found"),
@@ -293,6 +290,21 @@ knitr::kable(
   col.names = c("True definitions in constructed passage", "Definitions found"),
   caption = "Parenthetical rule on the constructed positive cases",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(riverton_definitions), 0L),
+  identical(riverton_parenthetical_score$definitions_found, 0L),
+  identical(nrow(definitions), 2L),
+  identical(definitions$long_form, c("Natural Language Processing", "Data Support Certificate")),
+  identical(definitions$short_form, c("NLP", "DSC")),
+  identical(parenthetical_score$definitions_found, 2L),
+  identical(shape_only_example$long_form, "Riverton Skills Centre"),
+  identical(shape_only_example$short_form, "NLP")
 )
 ```
 

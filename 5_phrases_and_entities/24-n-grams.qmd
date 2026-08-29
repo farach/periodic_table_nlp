@@ -52,11 +52,6 @@ library(stringr)
 library(tidytext)
 library(ggplot2)
 
-stopifnot(all(
-  c("readr", "dplyr", "tibble", "tidyr", "stringr", "tidytext", "ggplot2") %in%
-    loadedNamespaces()
-))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -80,19 +75,28 @@ source_counts <- sentences |>
   mutate(source = if_else(document_id == "F001", "training flyer", "job details")) |>
   count(source, name = "rows")
 
+knitr::kable(
+  source_counts,
+  col.names = c("Source", "Rows"),
+  caption = "The 28 Riverton sentences by source",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "tidyr", "stringr", "tidytext", "ggplot2") %in%
+    loadedNamespaces()
+))
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(sum(sentences$document_id == "F001"), 6L),
   identical(sum(sentences$document_id != "F001"), 22L),
   identical(sentences$text[1], "Paid 12-week training is provided."),
   identical(sentences$text[28], "Apply by October 15")
-)
-
-knitr::kable(
-  source_counts,
-  col.names = c("Source", "Rows"),
-  caption = "The 28 Riverton sentences by source",
-  row.names = FALSE
 )
 ```
 
@@ -141,6 +145,17 @@ top_phrases <- bind_rows(
 ) |>
   select(kind, ngram, frequency)
 
+knitr::kable(
+  top_phrases,
+  col.names = c("N-gram type", "N-gram", "Frequency"),
+  caption = "The most frequent bigrams and trigrams in the 28 sentences",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(bigrams), 112L),
   identical(nrow(trigrams), 96L),
@@ -150,13 +165,6 @@ stopifnot(
   identical(bigrams$frequency[1], 4L),
   identical(trigrams$ngram[1], "training is provided"),
   identical(trigrams$frequency[1], 2L)
-)
-
-knitr::kable(
-  top_phrases,
-  col.names = c("N-gram type", "N-gram", "Frequency"),
-  caption = "The most frequent bigrams and trigrams in the 28 sentences",
-  row.names = FALSE
 )
 ```
 
@@ -191,17 +199,21 @@ ngram_summary <- tibble(
   seen_once_label = str_c(seen_once, "/", distinct_items)
 )
 
-stopifnot(
-  identical(ngram_summary$distinct_items, c(96L, 112L, 96L)),
-  identical(ngram_summary$seen_once, c(72L, 102L, 95L)),
-  identical(ngram_summary$seen_once_label, c("72/96", "102/112", "95/96"))
-)
-
 knitr::kable(
   ngram_summary,
   col.names = c("n", "Unit", "Distinct units", "Seen once", "Seen-once fraction"),
   caption = "Distinct n-grams and one-time n-grams in the Riverton sentences",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(ngram_summary$distinct_items, c(96L, 112L, 96L)),
+  identical(ngram_summary$seen_once, c(72L, 102L, 95L)),
+  identical(ngram_summary$seen_once_label, c("72/96", "102/112", "95/96"))
 )
 ```
 
@@ -222,12 +234,6 @@ plot_data <- ngram_summary |>
     seen_once_label
   )
 
-stopifnot(
-  all(plot_data$seen_once_share > 0),
-  all(plot_data$seen_once_share < 1),
-  identical(plot_data$seen_once_label[plot_data$name == "trigrams"], "95/96")
-)
-
 ggplot(plot_data, aes(x = name, y = seen_once_share)) +
   geom_col(fill = "#4C78A8") +
   geom_text(aes(label = seen_once_label), vjust = -0.4) +
@@ -237,6 +243,16 @@ ggplot(plot_data, aes(x = name, y = seen_once_share)) +
   ) +
   scale_y_continuous(labels = \(value) str_c(round(value * 100), "%"), limits = c(0, 1)) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(plot_data$seen_once_share > 0),
+  all(plot_data$seen_once_share < 1),
+  identical(plot_data$seen_once_label[plot_data$name == "trigrams"], "95/96")
+)
 ```
 
 The chart focuses on the quantity the table asks the reader to compare: how much

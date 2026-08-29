@@ -100,14 +100,6 @@ split_size <- tibble(
   rows = c(nrow(riverton_training), nrow(riverton_testing))
 )
 
-stopifnot(
-  identical(nrow(riverton_sentences), 28L),
-  identical(n_distinct(riverton_sentences$reference_label), 5L),
-  identical(nrow(riverton_training), 21L),
-  identical(nrow(riverton_testing), 7L),
-  identical(sum(riverton_label_counts$sentences), 28L)
-)
-
 knitr::kable(
   riverton_label_counts,
   col.names = c("Label", "Sentences"),
@@ -120,6 +112,18 @@ knitr::kable(
   col.names = c("Split part", "Rows"),
   caption = "A 75 percent split leaves only seven test sentences",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(riverton_sentences), 28L),
+  identical(n_distinct(riverton_sentences$reference_label), 5L),
+  identical(nrow(riverton_training), 21L),
+  identical(nrow(riverton_testing), 7L),
+  identical(sum(riverton_label_counts$sentences), 28L)
 )
 ```
 
@@ -159,17 +163,6 @@ era_counts <- paragraphs |>
     .groups = "drop"
   )
 
-stopifnot(
-  identical(nrow(paragraphs), 1377L),
-  identical(n_distinct(paragraphs$speech_id), 60L),
-  identical(n_distinct(paragraphs$president), 40L),
-  identical(n_distinct(paragraphs$surname), 36L),
-  "paragraph_words" %in% names(paragraphs),
-  identical(as.integer(era_counts$paragraphs), c(485L, 892L)),
-  identical(as.numeric(era_counts$median_words), c(112, 54)),
-  identical(levels(paragraphs$era), c("before 1900", "1900 or later"))
-)
-
 knitr::kable(
   corpus_summary,
   col.names = c("Measure", "Value"),
@@ -182,6 +175,21 @@ knitr::kable(
   col.names = c("Era", "Paragraphs", "Median paragraph words"),
   caption = "Paragraphs by era",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  identical(n_distinct(paragraphs$speech_id), 60L),
+  identical(n_distinct(paragraphs$president), 40L),
+  identical(n_distinct(paragraphs$surname), 36L),
+  "paragraph_words" %in% names(paragraphs),
+  identical(as.integer(era_counts$paragraphs), c(485L, 892L)),
+  identical(as.numeric(era_counts$median_words), c(112, 54)),
+  identical(levels(paragraphs$era), c("before 1900", "1900 or later"))
 )
 ```
 
@@ -318,6 +326,18 @@ score_table <- tibble(
   )
 )
 
+knitr::kable(
+  score_table |>
+    mutate(accuracy = round(accuracy, 4)),
+  col.names = c("Measure", "Accuracy"),
+  caption = "One live model score with same-split baselines",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(era_training), 1042L),
   identical(nrow(era_testing), 335L),
@@ -328,14 +348,6 @@ stopifnot(
   identical(round(length_rule_accuracy, 4), 0.6388),
   identical(round(corpus_baseline, 4), 0.6478),
   all(era_predictions$.pred_class %in% levels(paragraphs$era))
-)
-
-knitr::kable(
-  score_table |>
-    mutate(accuracy = round(accuracy, 4)),
-  col.names = c("Measure", "Accuracy"),
-  caption = "One live model score with same-split baselines",
-  row.names = FALSE
 )
 ```
 

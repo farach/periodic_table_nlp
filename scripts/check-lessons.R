@@ -210,17 +210,38 @@ for (lesson_file in lesson_files) {
         perl = TRUE
       ))
 
+    # Every chunk must still be covered by an assertion, but the assertion no
+    # longer has to sit inside the chunk a reader sees. A verification block may
+    # live in an `#| include: false` chunk placed directly after the chunk it
+    # checks. That keeps the guarantee, since the block still executes in order
+    # and still stops the render, while keeping build checks out of the reader's
+    # way. Assertions were 18 percent of the visible code before this changed.
+    is_hidden <- grepl(
+      "#\\|\\s*include:\\s*false",
+      chunks,
+      ignore.case = TRUE,
+      perl = TRUE
+    )
+    asserts <- grepl("stopifnot(", chunks, fixed = TRUE)
+
     for (chunk_number in seq_along(chunks)) {
-      if (!grepl("stopifnot(", chunks[chunk_number], fixed = TRUE)) {
-        failures <- c(
-          failures,
-          sprintf(
-            "%s chunk %d has no expected-result assertion",
-            lesson_file,
-            chunk_number
-          )
+      if (asserts[chunk_number]) next
+
+      next_number <- chunk_number + 1L
+      covered_by_next <- next_number <= length(chunks) &&
+        is_hidden[next_number] &&
+        asserts[next_number]
+
+      if (covered_by_next) next
+
+      failures <- c(
+        failures,
+        sprintf(
+          "%s chunk %d has no expected-result assertion, in itself or in a hidden verification chunk after it",
+          lesson_file,
+          chunk_number
         )
-      }
+      )
     }
   }
 

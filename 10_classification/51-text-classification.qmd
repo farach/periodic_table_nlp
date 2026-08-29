@@ -107,25 +107,6 @@ era_evidence <- split_study |>
 era_baseline_metadata <- baselines |>
   filter(task == "era")
 
-stopifnot(
-  all(c(
-    "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
-    "ggplot2", "tidymodels", "textrecipes", "glmnet", "quanteda"
-  ) %in% loadedNamespaces()),
-  identical(nrow(paragraphs), 1377L),
-  identical(era_counts$paragraphs, c(485L, 892L)),
-  identical(n_distinct(paragraphs$speech_id), 60L),
-  identical(n_distinct(paragraphs$president), 40L),
-  identical(round(era_evidence$speech_split_accuracy, 4), 0.8457),
-  identical(round(era_evidence$split_minimum, 4), 0.7970),
-  identical(round(era_evidence$split_maximum, 4), 0.9039),
-  identical(round(era_evidence$split_spread, 4), 0.1069),
-  identical(round(era_evidence$deployable_baseline, 4), 0.6282),
-  identical(round(era_evidence$length_rule_accuracy, 4), 0.6827),
-  identical(era_baseline_metadata$people, 40L),
-  all(c("era", "era_party_rows", "party") %in% unique(split_study$task))
-)
-
 knitr::kable(
   era_counts,
   col.names = c("Era label", "Paragraphs"),
@@ -147,6 +128,29 @@ knitr::kable(
   ),
   caption = "Committed evidence for the era classifier",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c(
+    "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
+    "ggplot2", "tidymodels", "textrecipes", "glmnet", "quanteda"
+  ) %in% loadedNamespaces()),
+  identical(nrow(paragraphs), 1377L),
+  identical(era_counts$paragraphs, c(485L, 892L)),
+  identical(n_distinct(paragraphs$speech_id), 60L),
+  identical(n_distinct(paragraphs$president), 40L),
+  identical(round(era_evidence$speech_split_accuracy, 4), 0.8457),
+  identical(round(era_evidence$split_minimum, 4), 0.7970),
+  identical(round(era_evidence$split_maximum, 4), 0.9039),
+  identical(round(era_evidence$split_spread, 4), 0.1069),
+  identical(round(era_evidence$deployable_baseline, 4), 0.6282),
+  identical(round(era_evidence$length_rule_accuracy, 4), 0.6827),
+  identical(era_baseline_metadata$people, 40L),
+  all(c("era", "era_party_rows", "party") %in% unique(split_study$task))
 )
 ```
 
@@ -319,20 +323,6 @@ feature_gaps <- feature_replicates |>
 test_counts <- era_test |>
   count(era, name = "paragraphs")
 
-stopifnot(
-  identical(nrow(era_train), 1044L),
-  identical(nrow(era_test), 333L),
-  identical(test_counts$paragraphs, c(111L, 222L)),
-  identical(round(feature_comparison$accuracy, 4), c(0.8799, 0.8949)),
-  identical(round(feature_gap, 4), 0.0150),
-  identical(round(feature_replicates$accuracy, 4), c(
-    0.8799, 0.8949, 0.7632, 0.7690, 0.8764,
-    0.8966, 0.8347, 0.8320, 0.8365, 0.8459
-  )),
-  isTRUE(all.equal(round(feature_summary$spread, 4), c(0.1167, 0.1275))),
-  max(feature_gaps$gap) < min(feature_summary$spread)
-)
-
 knitr::kable(
   feature_comparison |>
     mutate(accuracy = round(accuracy, 4)),
@@ -347,6 +337,24 @@ knitr::kable(
   col.names = c("Representation", "Mean accuracy", "Minimum", "Maximum", "Spread"),
   caption = "Five same-configuration speech-level splits for each representation",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(era_train), 1044L),
+  identical(nrow(era_test), 333L),
+  identical(test_counts$paragraphs, c(111L, 222L)),
+  identical(round(feature_comparison$accuracy, 4), c(0.8799, 0.8949)),
+  identical(round(feature_gap, 4), 0.0150),
+  identical(round(feature_replicates$accuracy, 4), c(
+    0.8799, 0.8949, 0.7632, 0.7690, 0.8764,
+    0.8966, 0.8347, 0.8320, 0.8365, 0.8459
+  )),
+  isTRUE(all.equal(round(feature_summary$spread, 4), c(0.1167, 0.1275))),
+  max(feature_gaps$gap) < min(feature_summary$spread)
 )
 ```
 
@@ -382,14 +390,6 @@ probability_summary <- tfidf_scores |>
     .groups = "drop"
   )
 
-stopifnot(
-  isTRUE(all.equal(round(as.numeric(probability_summary$minimum), 4), 0.0240)),
-  isTRUE(all.equal(round(as.numeric(probability_summary$tenth), 4), 0.1394)),
-  isTRUE(all.equal(round(as.numeric(probability_summary$median), 4), 0.8629)),
-  isTRUE(all.equal(round(as.numeric(probability_summary$ninetieth), 4), 0.9928)),
-  isTRUE(all.equal(round(as.numeric(probability_summary$maximum), 4), 1.0000))
-)
-
 knitr::kable(
   probability_summary |>
     mutate(across(everything(), \(value) round(value, 4))),
@@ -406,6 +406,18 @@ ggplot(tfidf_scores, aes(x = prob_1900_or_later, fill = era)) +
     fill = "Recorded era"
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  isTRUE(all.equal(round(as.numeric(probability_summary$minimum), 4), 0.0240)),
+  isTRUE(all.equal(round(as.numeric(probability_summary$tenth), 4), 0.1394)),
+  isTRUE(all.equal(round(as.numeric(probability_summary$median), 4), 0.8629)),
+  isTRUE(all.equal(round(as.numeric(probability_summary$ninetieth), 4), 0.9928)),
+  isTRUE(all.equal(round(as.numeric(probability_summary$maximum), 4), 1.0000))
+)
 ```
 
 Many scores sit near 0 or 1, and the median is 0.8629 because the later era is
@@ -435,11 +447,6 @@ era_thresholds <- tibble(threshold = c(0.40, 0.50, 0.60)) |>
   ) |>
   unnest(results)
 
-stopifnot(
-  identical(era_thresholds$before_1900_sent_late, c(31L, 28L, 17L)),
-  identical(era_thresholds$late_sent_before, c(7L, 12L, 22L))
-)
-
 knitr::kable(
   era_thresholds,
   col.names = c(
@@ -449,6 +456,15 @@ knitr::kable(
   ),
   caption = "Cut-point trade-off for the tf-idf model",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(era_thresholds$before_1900_sent_late, c(31L, 28L, 17L)),
+  identical(era_thresholds$late_sent_before, c(7L, 12L, 22L))
 )
 ```
 

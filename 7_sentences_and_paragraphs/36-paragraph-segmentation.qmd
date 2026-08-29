@@ -54,10 +54,6 @@ library(stringr)
 library(tidyr)
 library(rvest)
 
-stopifnot(all(c(
-  "readr", "dplyr", "tibble", "purrr", "stringr", "tidyr", "rvest"
-) %in% loadedNamespaces()))
-
 help_files <- list.files(
   "data/help_articles",
   pattern = "[.]txt$",
@@ -90,14 +86,6 @@ help_counts <- help_paragraphs |>
 total_help_paragraphs <- sum(help_counts$paragraphs)
 help_blank_line_counts <- str_count(help_articles$text, "\\r?\\n\\s*\\r?\\n+")
 
-stopifnot(
-  identical(length(help_files), 3L),
-  identical(help_counts$paragraphs, c(1L, 1L, 1L)),
-  identical(total_help_paragraphs, 3L),
-  identical(help_blank_line_counts, c(0L, 0L, 0L)),
-  str_detect(help_paragraphs$paragraph[1], fixed("password reset link"))
-)
-
 knitr::kable(
   help_counts,
   col.names = c("Help article", "Paragraphs from blank-line rule"),
@@ -110,6 +98,22 @@ knitr::kable(
   col.names = c("Help article", "Paragraph", "Paragraph number"),
   caption = "Plain-text paragraphs after splitting on blank lines",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c(
+  "readr", "dplyr", "tibble", "purrr", "stringr", "tidyr", "rvest"
+) %in% loadedNamespaces()))
+
+stopifnot(
+  identical(length(help_files), 3L),
+  identical(help_counts$paragraphs, c(1L, 1L, 1L)),
+  identical(total_help_paragraphs, 3L),
+  identical(help_blank_line_counts, c(0L, 0L, 0L)),
+  str_detect(help_paragraphs$paragraph[1], fixed("password reset link"))
 )
 ```
 
@@ -142,14 +146,6 @@ expected_tag_counts <- tibble(
   blocks = c(1L, 6L, 22L, 12L)
 )
 
-stopifnot(
-  identical(nrow(html_blocks), 41L),
-  identical(html_tag_counts, expected_tag_counts),
-  identical(html_blocks$text[1], "Riverton workforce opportunities"),
-  identical(html_blocks$text[5], "Paid 12-week training is provided."),
-  identical(sum(html_blocks$tag == "li"), 22L)
-)
-
 knitr::kable(
   html_tag_counts,
   col.names = c("HTML tag", "Blocks captured"),
@@ -163,6 +159,18 @@ knitr::kable(
   col.names = c("HTML tag", "Text", "Block number"),
   caption = "The first eight block elements from the job board",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(html_blocks), 41L),
+  identical(html_tag_counts, expected_tag_counts),
+  identical(html_blocks$text[1], "Riverton workforce opportunities"),
+  identical(html_blocks$text[5], "Paid 12-week training is provided."),
+  identical(sum(html_blocks$tag == "li"), 22L)
 )
 ```
 
@@ -199,19 +207,23 @@ boundary_loss <- tibble(
   )
 )
 
+knitr::kable(
+  boundary_loss,
+  col.names = c("Rule", "Paragraph-like units"),
+  caption = "Whitespace cleanup collapses the tag-stripped text",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(paragraphs_after_tag_removal), 14L),
   identical(length(paragraphs_after_squish), 1L),
   identical(boundary_loss$paragraph_like_units, c(41L, 14L, 1L)),
   str_starts(paragraphs_after_squish[1], "Riverton workforce opportunities"),
   str_ends(paragraphs_after_squish[1], "Clear written communication is an essential skill.")
-)
-
-knitr::kable(
-  boundary_loss,
-  col.names = c("Rule", "Paragraph-like units"),
-  caption = "Whitespace cleanup collapses the tag-stripped text",
-  row.names = FALSE
 )
 ```
 

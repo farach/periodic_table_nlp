@@ -93,11 +93,15 @@ expected_files <- c(
   "returns.txt"
 )
 
+basename(article_paths)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(basename(article_paths), expected_files)
 )
-
-basename(article_paths)
 ```
 
 The `stopifnot()` line is an **assertion**, a check that makes R stop if an
@@ -137,6 +141,12 @@ analysis_documents <- str_replace_all(
   " "
 )
 
+source_documents
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(source_documents), 3L),
   identical(names(source_documents), expected_files),
@@ -151,8 +161,6 @@ stopifnot(
     fixed("password reset link")
   )
 )
-
-source_documents
 ```
 
 `map_chr()` runs `read_document()` once for each path and returns a character
@@ -202,6 +210,18 @@ corpus <- tibble(
   analysis_text = unname(analysis_documents)
 )
 
+knitr::kable(
+  corpus |>
+    select(document_id, topic, source_file),
+  col.names = c("Document ID", "Topic", "Source file"),
+  caption = "The documents and their metadata",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   inherits(corpus, "tbl_df"),
   identical(nrow(corpus), 3L),
@@ -214,14 +234,6 @@ stopifnot(
     expected_files
   ),
   all(str_detect(corpus$source_hash, "^[0-9a-f]{32}$"))
-)
-
-knitr::kable(
-  corpus |>
-    select(document_id, topic, source_file),
-  col.names = c("Document ID", "Topic", "Source file"),
-  caption = "The documents and their metadata",
-  row.names = FALSE
 )
 ```
 
@@ -270,6 +282,17 @@ collection_record <- tibble(
   )
 )
 
+knitr::kable(
+  collection_record,
+  col.names = c("Field", "Recorded value"),
+  caption = "What the collection covers and what it leaves out",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(collection_record), 7L),
   all(str_length(collection_record$value) > 0),
@@ -279,13 +302,6 @@ stopifnot(
     ],
     "all active articles on the collection date, no sampling"
   )
-)
-
-knitr::kable(
-  collection_record,
-  col.names = c("Field", "Recorded value"),
-  caption = "What the collection covers and what it leaves out",
-  row.names = FALSE
 )
 ```
 
@@ -314,6 +330,18 @@ corpus <- corpus |>
     )
   )
 
+knitr::kable(
+  corpus |>
+    select(document_id, topic, whitespace_token_count),
+  col.names = c("Document ID", "Topic", "Whitespace-token count"),
+  caption = "Whitespace-token counts for the three documents",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(count_whitespace_tokens(""), 0L),
   identical(count_whitespace_tokens("   "), 0L),
@@ -322,14 +350,6 @@ stopifnot(
     corpus$whitespace_token_count,
     c(18L, 16L, 21L)
   )
-)
-
-knitr::kable(
-  corpus |>
-    select(document_id, topic, whitespace_token_count),
-  col.names = c("Document ID", "Topic", "Whitespace-token count"),
-  caption = "Whitespace-token counts for the three documents",
-  row.names = FALSE
 )
 ```
 
@@ -372,13 +392,17 @@ quality_checks <- tibble(
   )
 )
 
+quality_checks
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   inherits(quality_checks, "tbl_df"),
   identical(nrow(quality_checks), 5L),
   all(quality_checks$passed)
 )
-
-quality_checks
 ```
 
 Every `passed` value is `TRUE`, so the corpus passes these structural checks.
@@ -402,6 +426,17 @@ matching_documents <- corpus |>
   ) |>
   select(document_id, topic, analysis_text)
 
+knitr::kable(
+  matching_documents,
+  col.names = c("Document ID", "Topic", "Text"),
+  caption = "The document that mentions a password reset",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   inherits(matching_documents, "tbl_df"),
   identical(nrow(matching_documents), 1L),
@@ -409,13 +444,6 @@ stopifnot(
     matching_documents$document_id,
     "account-access"
   )
-)
-
-knitr::kable(
-  matching_documents,
-  col.names = c("Document ID", "Topic", "Text"),
-  caption = "The document that mentions a password reset",
-  row.names = FALSE
 )
 ```
 
@@ -506,6 +534,27 @@ pair_scores <- tibble(
   )
 )
 
+knitr::kable(
+  pair_scores |>
+    mutate(
+      similarity = round(similarity, 3),
+      containment = round(containment, 3)
+    ) |>
+    arrange(desc(similarity)),
+  col.names = c(
+    "Document",
+    "Compared with",
+    "Character similarity",
+    "Word containment"
+  ),
+  caption = "All six document pairs, most similar first",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(exact_duplicate_found, FALSE),
   identical(nrow(pair_scores), 6L),
@@ -523,23 +572,6 @@ stopifnot(
   ),
   sum(pair_scores$similarity > 0.6) == 1L,
   sum(pair_scores$containment > 0.9) == 1L
-)
-
-knitr::kable(
-  pair_scores |>
-    mutate(
-      similarity = round(similarity, 3),
-      containment = round(containment, 3)
-    ) |>
-    arrange(desc(similarity)),
-  col.names = c(
-    "Document",
-    "Compared with",
-    "Character similarity",
-    "Word containment"
-  ),
-  caption = "All six document pairs, most similar first",
-  row.names = FALSE
 )
 ```
 
@@ -599,6 +631,20 @@ split_is_family_consistent <- assigned |>
   pull(splits) |>
   max()
 
+knitr::kable(
+  assigned |>
+    select(document_id, family_id, split, kept),
+  col.names = c("Document", "Family", "Split", "Kept"),
+  caption = "Four candidates, three kept, one removed with its family recorded",
+  row.names = FALSE
+)
+
+removed$analysis_text
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(assigned), 4L),
   identical(sum(assigned$kept), 3L),
@@ -613,16 +659,6 @@ stopifnot(
     "account-access-family"
   )
 )
-
-knitr::kable(
-  assigned |>
-    select(document_id, family_id, split, kept),
-  col.names = c("Document", "Family", "Split", "Kept"),
-  caption = "Four candidates, three kept, one removed with its family recorded",
-  row.names = FALSE
-)
-
-removed$analysis_text
 ```
 
 Four candidates went in, three came out, and the removed text is printed rather

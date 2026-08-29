@@ -52,8 +52,6 @@ library(dplyr)
 library(tibble)
 library(digest)
 
-stopifnot(all(c("readr", "dplyr", "tibble", "digest") %in% loadedNamespaces()))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -115,19 +113,25 @@ expected_alias_hash <- metadata |>
   filter(artifact == "riverton-aliases.csv") |>
   pull(fingerprint)
 
+knitr::kable(
+  entities,
+  col.names = c("Entity ID", "Canonical name", "Type", "Description"),
+  caption = "Invented Riverton entity reference list",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(c("readr", "dplyr", "tibble", "digest") %in% loadedNamespaces()))
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(nrow(entities), 8L),
   identical(nrow(aliases), 17L),
   identical(sum(aliases$alias == "Riverton"), 2L),
   identical(alias_hash, expected_alias_hash)
-)
-
-knitr::kable(
-  entities,
-  col.names = c("Entity ID", "Canonical name", "Type", "Description"),
-  caption = "Invented Riverton entity reference list",
-  row.names = FALSE
 )
 ```
 
@@ -173,17 +177,21 @@ mention_candidates <- bind_rows(
   )
 )
 
-stopifnot(
-  identical(nrow(real_mentions), 2L),
-  identical(nrow(mention_candidates), 5L),
-  any(mention_candidates$mention == "forklift certification")
-)
-
 knitr::kable(
   mention_candidates,
   col.names = c("Mention ID", "Source", "Text", "Mention"),
   caption = "Mention candidates for alias matching",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(real_mentions), 2L),
+  identical(nrow(mention_candidates), 5L),
+  any(mention_candidates$mention == "forklift certification")
 )
 ```
 
@@ -254,16 +262,6 @@ outcome_counts <- tibble(
   ) |>
   mutate(mentions = coalesce(mentions, 0L))
 
-stopifnot(
-  identical(nrow(linked_rows), 6L),
-  identical(outcome_counts$mentions, c(3L, 1L, 1L)),
-  identical(sum(outcome_counts$mentions), 5L),
-  identical(
-    sort(count(resolved_links, resolution, name = "mentions")$mentions),
-    c(1L, 1L, 3L)
-  )
-)
-
 knitr::kable(
   link_status,
   col.names = c(
@@ -279,6 +277,20 @@ knitr::kable(
   col.names = c("Outcome", "Mentions"),
   caption = "Candidate-generation outcomes",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(linked_rows), 6L),
+  identical(outcome_counts$mentions, c(3L, 1L, 1L)),
+  identical(sum(outcome_counts$mentions), 5L),
+  identical(
+    sort(count(resolved_links, resolution, name = "mentions")$mentions),
+    c(1L, 1L, 3L)
+  )
 )
 ```
 
@@ -303,17 +315,21 @@ credential_mentions <- resolved_links |>
   count(entity_id, canonical_name, name = "mentions") |>
   arrange(entity_id)
 
-stopifnot(
-  identical(credential_mentions$entity_id, c("CRD-0001", "CRD-0002")),
-  identical(credential_mentions$mentions, c(2L, 1L)),
-  identical(sum(credential_mentions$mentions), 3L)
-)
-
 knitr::kable(
   credential_mentions,
   col.names = c("Entity ID", "Canonical name", "Mentions"),
   caption = "Credential mentions counted by stable identifier",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(credential_mentions$entity_id, c("CRD-0001", "CRD-0002")),
+  identical(credential_mentions$mentions, c(2L, 1L)),
+  identical(sum(credential_mentions$mentions), 3L)
 )
 ```
 

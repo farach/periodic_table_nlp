@@ -51,11 +51,6 @@ library(tidyr)
 library(stringr)
 library(quanteda)
 
-stopifnot(all(
-  c("readr", "dplyr", "tibble", "tidyr", "stringr", "quanteda") %in%
-    loadedNamespaces()
-))
-
 sentences <- read_csv(
   "data/workforce/workforce_sentences.csv",
   na = character(),
@@ -92,6 +87,22 @@ matched_rows <- rule_results |>
   filter(rule_match | hand_required_credential) |>
   select(sentence_id, text, matched_word, rule_match, hand_required_credential)
 
+knitr::kable(
+  matched_rows,
+  col.names = c("Sentence ID", "Text", "Matched word", "Rule matched", "Hand-marked required credential"),
+  caption = "Rule matches and hand markings for required credentials",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "tidyr", "stringr", "quanteda") %in%
+    loadedNamespaces()
+))
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(sum(rule_results$rule_match), 4L),
@@ -104,13 +115,6 @@ stopifnot(
     as.character(na.omit(matched_rows$matched_word)),
     c("certification", "certificate", "license", "CERTIFICATE")
   )
-)
-
-knitr::kable(
-  matched_rows,
-  col.names = c("Sentence ID", "Text", "Matched word", "Rule matched", "Hand-marked required credential"),
-  caption = "Rule matches and hand markings for required credentials",
-  row.names = FALSE
 )
 ```
 
@@ -161,15 +165,6 @@ problem_examples <- tibble(
   )
 )
 
-stopifnot(
-  identical(score_counts$sentences, c(1L, 3L, 1L)),
-  identical(false_positive_ids, c("s006", "s013", "s024")),
-  identical(false_negative_ids, "s005"),
-  problem_examples$sentence_id[problem_examples$result == "false positive"] %in% false_positive_ids,
-  problem_examples$sentence_id[problem_examples$result == "false negative"] %in% false_negative_ids,
-  identical(rule_results$matched_word[rule_results$sentence_id == "s017"], "license")
-)
-
 knitr::kable(
   score_counts,
   col.names = c("Result", "Sentences"),
@@ -182,6 +177,19 @@ knitr::kable(
   col.names = c("Result", "Sentence ID", "Explanation"),
   caption = "One false positive and one false negative",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(score_counts$sentences, c(1L, 3L, 1L)),
+  identical(false_positive_ids, c("s006", "s013", "s024")),
+  identical(false_negative_ids, "s005"),
+  problem_examples$sentence_id[problem_examples$result == "false positive"] %in% false_positive_ids,
+  problem_examples$sentence_id[problem_examples$result == "false negative"] %in% false_negative_ids,
+  identical(rule_results$matched_word[rule_results$sentence_id == "s017"], "license")
 )
 ```
 
@@ -212,18 +220,22 @@ credential_kwic <- kwic(
   as_tibble() |>
   select(docname, pre, keyword, post)
 
-stopifnot(
-  identical(nrow(credential_kwic), 4L),
-  identical(credential_kwic$docname, c("s006", "s013", "s017", "s024")),
-  identical(str_to_lower(credential_kwic$keyword), c("certification", "certificate", "license", "certificate")),
-  identical(credential_kwic$post[credential_kwic$docname == "s006"], "training")
-)
-
 knitr::kable(
   credential_kwic,
   col.names = c("Sentence ID", "Before", "Keyword", "After"),
   caption = "Concordance lines for the credential rule",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(credential_kwic), 4L),
+  identical(credential_kwic$docname, c("s006", "s013", "s017", "s024")),
+  identical(str_to_lower(credential_kwic$keyword), c("certification", "certificate", "license", "certificate")),
+  identical(credential_kwic$post[credential_kwic$docname == "s006"], "training")
 )
 ```
 

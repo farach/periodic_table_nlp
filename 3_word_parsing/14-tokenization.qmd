@@ -84,6 +84,17 @@ document_counts <- sentences |>
 
 first_sentence <- sentences$text[1]
 
+knitr::kable(
+  document_counts,
+  col.names = c("Source group", "Rows"),
+  caption = "The 28 labeled text units by source",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(sentences), 28L),
   identical(
@@ -98,13 +109,6 @@ stopifnot(
     first_sentence,
     "Paid 12-week training is provided."
   )
-)
-
-knitr::kable(
-  document_counts,
-  col.names = c("Source group", "Rows"),
-  caption = "The 28 labeled text units by source",
-  row.names = FALSE
 )
 ```
 
@@ -126,14 +130,6 @@ whitespace_tokens <- str_split(
   simplify = FALSE
 )[[1]]
 
-stopifnot(
-  identical(length(whitespace_tokens), 5L),
-  identical(
-    whitespace_tokens,
-    c("Paid", "12-week", "training", "is", "provided.")
-  )
-)
-
 knitr::kable(
   tibble(
     token_number = seq_along(whitespace_tokens),
@@ -142,6 +138,18 @@ knitr::kable(
   col.names = c("Token number", "Whitespace token"),
   caption = "Tokens made by splitting on whitespace",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(length(whitespace_tokens), 5L),
+  identical(
+    whitespace_tokens,
+    c("Paid", "12-week", "training", "is", "provided.")
+  )
 )
 ```
 
@@ -157,14 +165,6 @@ six tokens: `paid`, `12`, `week`, `training`, `is`, and `provided`.
 ```{r}
 default_word_tokens <- tokenize_words(first_sentence)[[1]]
 
-stopifnot(
-  identical(length(default_word_tokens), 6L),
-  identical(
-    default_word_tokens,
-    c("paid", "12", "week", "training", "is", "provided")
-  )
-)
-
 knitr::kable(
   tibble(
     token_number = seq_along(default_word_tokens),
@@ -173,6 +173,18 @@ knitr::kable(
   col.names = c("Token number", "Default word token"),
   caption = "Tokens from tokenizers::tokenize_words()",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(length(default_word_tokens), 6L),
+  identical(
+    default_word_tokens,
+    c("paid", "12", "week", "training", "is", "provided")
+  )
 )
 ```
 
@@ -206,19 +218,23 @@ token_count_summary <- tibble(
   )
 )
 
+knitr::kable(
+  token_count_summary,
+  col.names = c("Rule", "Tokens from the first sentence"),
+  caption = "One sentence under three tokenization rules",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(case_punctuation_tokens), 8L),
   identical(
     case_punctuation_tokens,
     c("Paid", "12", "-", "week", "training", "is", "provided", ".")
   )
-)
-
-knitr::kable(
-  token_count_summary,
-  col.names = c("Rule", "Tokens from the first sentence"),
-  caption = "One sentence under three tokenization rules",
-  row.names = FALSE
 )
 ```
 
@@ -243,16 +259,20 @@ source_sentence_counts <- sentences |>
     .by = document_id
   )
 
-stopifnot(
-  identical(sentence_piece_counts, rep(1L, 28L)),
-  identical(sum(source_sentence_counts$pieces), 28L)
-)
-
 knitr::kable(
   source_sentence_counts,
   col.names = c("Document ID", "Rows", "Sentence pieces"),
   caption = "Sentence tokenizer results by document",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(sentence_piece_counts, rep(1L, 28L)),
+  identical(sum(source_sentence_counts$pieces), 28L)
 )
 ```
 
@@ -294,19 +314,23 @@ bpe_model <- bpe(
 first_vocabulary_rows <- bpe_model$vocabulary |>
   slice_head(n = 10)
 
+knitr::kable(
+  first_vocabulary_rows,
+  col.names = c("ID", "Subword"),
+  caption = "The first rows of the BPE vocabulary",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(bpe_model$vocabulary), 250L),
   identical(
     bpe_model$vocabulary$subword[1:6],
     c("<PAD>", "<UNK>", "<BOS>", "<EOS>", "▁", "e")
   )
-)
-
-knitr::kable(
-  first_vocabulary_rows,
-  col.names = c("ID", "Subword"),
-  caption = "The first rows of the BPE vocabulary",
-  row.names = FALSE
 )
 ```
 
@@ -347,6 +371,17 @@ subword_summary <- tibble(
   )
 )
 
+knitr::kable(
+  subword_summary,
+  col.names = c("Text", "Subword pieces", "Subwords"),
+  caption = "BPE pieces for familiar and unfamiliar text",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     first_sentence_subwords,
@@ -364,13 +399,6 @@ stopifnot(
   ),
   identical(length(first_sentence_subwords), 9L),
   identical(length(unseen_phrase_subwords), 21L)
-)
-
-knitr::kable(
-  subword_summary,
-  col.names = c("Text", "Subword pieces", "Subwords"),
-  caption = "BPE pieces for familiar and unfamiliar text",
-  row.names = FALSE
 )
 ```
 
@@ -452,21 +480,6 @@ piece_report <- tibble(
     )
   )
 
-stopifnot(
-  identical(unknown_id, 1L),
-  identical(piece_report$pieces, c(9L, 21L, 2L, 2L)),
-  identical(piece_report$unknown_pieces, c(0L, 0L, 1L, 1L)),
-  piece_report$pieces[3] < piece_report$pieces[1],
-  identical(
-    piece_report$shown_as_subwords[3],
-    str_c("\u2581 | ", texts_to_encode[["unseen_chinese"]])
-  ),
-  str_detect(piece_report$display_text[3], fixed("lang=\"zh\"")),
-  str_detect(piece_report$display_text[4], fixed("lang=\"el\"")),
-  str_detect(piece_report$display_subwords[3], fixed("lang=\"zh\"")),
-  str_detect(piece_report$display_subwords[4], fixed("lang=\"el\""))
-)
-
 knitr::kable(
   piece_report |>
     select(display_text, characters, pieces, unknown_pieces, display_subwords),
@@ -480,6 +493,25 @@ knitr::kable(
   caption = "Piece counts and unknown pieces for four texts",
   row.names = FALSE,
   escape = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(unknown_id, 1L),
+  identical(piece_report$pieces, c(9L, 21L, 2L, 2L)),
+  identical(piece_report$unknown_pieces, c(0L, 0L, 1L, 1L)),
+  piece_report$pieces[3] < piece_report$pieces[1],
+  identical(
+    piece_report$shown_as_subwords[3],
+    str_c("\u2581 | ", texts_to_encode[["unseen_chinese"]])
+  ),
+  str_detect(piece_report$display_text[3], fixed("lang=\"zh\"")),
+  str_detect(piece_report$display_text[4], fixed("lang=\"el\"")),
+  str_detect(piece_report$display_subwords[3], fixed("lang=\"zh\"")),
+  str_detect(piece_report$display_subwords[4], fixed("lang=\"el\""))
 )
 ```
 
@@ -515,21 +547,6 @@ round_trip <- piece_report |>
     recovers_input = decoded == text
   )
 
-stopifnot(
-  identical(
-    round_trip$recovers_input,
-    c(TRUE, TRUE, FALSE, FALSE)
-  ),
-  all(str_detect(
-    round_trip$decoded[!round_trip$recovers_input],
-    fixed("<UNK>")
-  )),
-  identical(
-    round_trip$recovers_input,
-    round_trip$unknown_pieces == 0L
-  )
-)
-
 knitr::kable(
   round_trip |>
     select(display_text, pieces, unknown_pieces, decoded, recovers_input),
@@ -543,6 +560,25 @@ knitr::kable(
   caption = "Round-trip results for the four texts",
   row.names = FALSE,
   escape = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    round_trip$recovers_input,
+    c(TRUE, TRUE, FALSE, FALSE)
+  ),
+  all(str_detect(
+    round_trip$decoded[!round_trip$recovers_input],
+    fixed("<UNK>")
+  )),
+  identical(
+    round_trip$recovers_input,
+    round_trip$unknown_pieces == 0L
+  )
 )
 ```
 

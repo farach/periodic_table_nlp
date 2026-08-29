@@ -102,15 +102,6 @@ era_length_summary <- paragraphs |>
     .groups = "drop"
   )
 
-stopifnot(
-  identical(nrow(paragraphs), 1377L),
-  identical(n_distinct(paragraphs$president), 40L),
-  identical(nrow(era_testing), 335L),
-  identical(round(held_out_accuracy, 4), 0.8209),
-  identical(as.integer(era_length_summary$paragraphs), c(485L, 892L)),
-  identical(as.numeric(era_length_summary$median_words), c(112, 54))
-)
-
 knitr::kable(
   tibble(
     item = c("paragraphs", "held-out paragraphs", "held-out accuracy"),
@@ -119,6 +110,19 @@ knitr::kable(
   col.names = c("Item", "Value"),
   caption = "Model and corpus size for the monitoring replay",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  identical(n_distinct(paragraphs$president), 40L),
+  identical(nrow(era_testing), 335L),
+  identical(round(held_out_accuracy, 4), 0.8209),
+  identical(as.integer(era_length_summary$paragraphs), c(485L, 892L)),
+  identical(as.numeric(era_length_summary$median_words), c(112, 54))
 )
 ```
 
@@ -194,21 +198,6 @@ lowest_slice <- period_accuracy |>
   filter(held_out_paragraphs > 0L) |>
   slice_min(accuracy, n = 1, with_ties = FALSE)
 
-stopifnot(
-  identical(nrow(period_accuracy), 5L),
-  identical(period_accuracy$held_out_paragraphs, c(67L, 128L, 23L, 117L, 0L)),
-  identical(period_accuracy$before_1900, c(67L, 128L, 0L, 0L, 0L)),
-  identical(period_accuracy$later_1900, c(0L, 0L, 23L, 117L, 0L)),
-  identical(period_accuracy$correct, c(58L, 87L, 17L, 113L, 0L)),
-  identical(
-    round(period_accuracy$accuracy[!is.na(period_accuracy$accuracy)], 3),
-    c(0.866, 0.680, 0.739, 0.966)
-  ),
-  identical(sum(period_accuracy$held_out_paragraphs), 335L),
-  identical(as.character(lowest_slice$period), "1850-1899"),
-  identical(lowest_slice$held_out_paragraphs, 128L)
-)
-
 knitr::kable(
   period_accuracy |>
     select(
@@ -227,6 +216,25 @@ knitr::kable(
   ),
   caption = "Held-out era scores by period with class composition",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(period_accuracy), 5L),
+  identical(period_accuracy$held_out_paragraphs, c(67L, 128L, 23L, 117L, 0L)),
+  identical(period_accuracy$before_1900, c(67L, 128L, 0L, 0L, 0L)),
+  identical(period_accuracy$later_1900, c(0L, 0L, 23L, 117L, 0L)),
+  identical(period_accuracy$correct, c(58L, 87L, 17L, 113L, 0L)),
+  identical(
+    round(period_accuracy$accuracy[!is.na(period_accuracy$accuracy)], 3),
+    c(0.866, 0.680, 0.739, 0.966)
+  ),
+  identical(sum(period_accuracy$held_out_paragraphs), 335L),
+  identical(as.character(lowest_slice$period), "1850-1899"),
+  identical(lowest_slice$held_out_paragraphs, 128L)
 )
 ```
 
@@ -289,17 +297,6 @@ drift_table <- period_paragraphs |>
   left_join(period_lengths, by = join_by(period)) |>
   select(period, paragraphs, median_words, tokens, absent_tokens, absent_share)
 
-stopifnot(
-  identical(length(training_vocabulary), 500L),
-  identical(nrow(drift_table), 5L),
-  identical(drift_table$paragraphs, c(220L, 265L, 317L, 371L, 204L)),
-  identical(drift_table$median_words, c(149.5, 92, 67, 53, 43)),
-  identical(drift_table$tokens, c(15251L, 11344L, 11148L, 7725L, 4299L)),
-  identical(drift_table$absent_tokens, c(9333L, 6872L, 6593L, 4551L, 2602L)),
-  identical(round(drift_table$absent_share, 3), c(0.612, 0.606, 0.591, 0.589, 0.605)),
-  max(drift_table$median_words) - min(drift_table$median_words) > 100
-)
-
 knitr::kable(
   drift_table |>
     mutate(absent_share = round(absent_share, 3)),
@@ -310,6 +307,21 @@ knitr::kable(
   ),
   caption = "Input drift checks by period using the training vocabulary",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(length(training_vocabulary), 500L),
+  identical(nrow(drift_table), 5L),
+  identical(drift_table$paragraphs, c(220L, 265L, 317L, 371L, 204L)),
+  identical(drift_table$median_words, c(149.5, 92, 67, 53, 43)),
+  identical(drift_table$tokens, c(15251L, 11344L, 11148L, 7725L, 4299L)),
+  identical(drift_table$absent_tokens, c(9333L, 6872L, 6593L, 4551L, 2602L)),
+  identical(round(drift_table$absent_share, 3), c(0.612, 0.606, 0.591, 0.589, 0.605)),
+  max(drift_table$median_words) - min(drift_table$median_words) > 100
 )
 ```
 
@@ -351,15 +363,6 @@ drift_plot <- drift_table |>
     values_to = "value"
   )
 
-stopifnot(
-  identical(nrow(drift_plot), 10L),
-  identical(
-    sort(unique(drift_plot$measure)),
-    c("median paragraph words", "share outside training features")
-  ),
-  max(drift_table$median_words) - min(drift_table$median_words) > 100
-)
-
 ggplot(drift_plot, aes(x = period, y = value, group = measure)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 3) +
@@ -369,6 +372,19 @@ ggplot(drift_plot, aes(x = period, y = value, group = measure)) +
     y = NULL
   ) +
   theme_minimal()
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(drift_plot), 10L),
+  identical(
+    sort(unique(drift_plot$measure)),
+    c("median paragraph words", "share outside training features")
+  ),
+  max(drift_table$median_words) - min(drift_table$median_words) > 100
+)
 ```
 
 The length pattern is much stronger than the absent-token pattern here. In a live
@@ -409,6 +425,22 @@ democratic_range <- paragraphs |>
 party_rows <- paragraphs |>
   filter(party %in% c("Democratic", "Republican"))
 
+knitr::kable(
+  bind_rows(
+    party_range |>
+      transmute(label = "all party labels", first_year, last_year, paragraphs = nrow(paragraphs)),
+    democratic_range |>
+      transmute(label = "Democratic", first_year, last_year, paragraphs)
+  ),
+  col.names = c("Label scope", "First year", "Last year", "Paragraphs"),
+  caption = "Long time spans in the party labels",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(party_range$first_year, 1789L),
   identical(party_range$last_year, 2025L),
@@ -420,18 +452,6 @@ stopifnot(
   identical(democratic_range$speeches, 22L),
   identical(nrow(party_rows), 1197L),
   identical(n_distinct(party_rows$president), 31L)
-)
-
-knitr::kable(
-  bind_rows(
-    party_range |>
-      transmute(label = "all party labels", first_year, last_year, paragraphs = nrow(paragraphs)),
-    democratic_range |>
-      transmute(label = "Democratic", first_year, last_year, paragraphs)
-  ),
-  col.names = c("Label scope", "First year", "Last year", "Paragraphs"),
-  caption = "Long time spans in the party labels",
-  row.names = FALSE
 )
 ```
 

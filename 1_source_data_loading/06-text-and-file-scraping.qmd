@@ -89,6 +89,16 @@ job_page_size <- nchar(
   type = "bytes"
 )
 
+tibble(
+  source_file = job_page_path,
+  bytes = job_page_size,
+  fingerprint = job_page_fingerprint
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   file.exists(job_page_path),
   identical(job_page_size, 3441L),
@@ -107,12 +117,6 @@ stopifnot(
     job_page_fingerprint,
     "^[0-9a-f]{32}$"
   )
-)
-
-tibble(
-  source_file = job_page_path,
-  bytes = job_page_size,
-  fingerprint = job_page_fingerprint
 )
 ```
 
@@ -134,11 +138,15 @@ job_cards <- rvest::html_elements(
   ".job-card"
 )
 
+length(job_cards)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(job_cards), 6L)
 )
-
-length(job_cards)
 ```
 
 R found six job cards. This count is the first signal that the selector matches
@@ -180,17 +188,6 @@ jobs <- tibble(
   location = card_text(job_cards, ".location")
 )
 
-stopifnot(
-  inherits(jobs, "tbl_df"),
-  identical(jobs$job_id, sprintf("J%03d", 1:6)),
-  n_distinct(jobs$job_id) == nrow(jobs),
-  all(!is.na(jobs$posted)),
-  all(str_length(jobs$title) > 0),
-  all(str_length(jobs$employer) > 0),
-  all(str_length(jobs$location) > 0),
-  identical(jobs$title[1], "Data analyst trainee")
-)
-
 knitr::kable(
   jobs,
   col.names = c(
@@ -202,6 +199,21 @@ knitr::kable(
   ),
   caption = "Six postings extracted from the archived job board",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  inherits(jobs, "tbl_df"),
+  identical(jobs$job_id, sprintf("J%03d", 1:6)),
+  n_distinct(jobs$job_id) == nrow(jobs),
+  all(!is.na(jobs$posted)),
+  all(str_length(jobs$title) > 0),
+  all(str_length(jobs$employer) > 0),
+  all(str_length(jobs$location) > 0),
+  identical(jobs$title[1], "Data analyst trainee")
 )
 ```
 
@@ -256,6 +268,18 @@ expected_job_sentences <- expected_sentences |>
   select(sentence_id, document_id, text) |>
   as_tibble()
 
+knitr::kable(
+  scraped_sentences |>
+    slice_head(n = 8),
+  col.names = c("Sentence ID", "Job ID", "Text"),
+  caption = "The first eight extracted job-detail sentences",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   inherits(scraped_sentences, "tbl_df"),
   inherits(expected_job_sentences, "tbl_df"),
@@ -264,14 +288,6 @@ stopifnot(
     scraped_sentences,
     expected_job_sentences
   )
-)
-
-knitr::kable(
-  scraped_sentences |>
-    slice_head(n = 8),
-  col.names = c("Sentence ID", "Job ID", "Text"),
-  caption = "The first eight extracted job-detail sentences",
-  row.names = FALSE
 )
 ```
 
@@ -339,19 +355,6 @@ drift_error <- tryCatch(
   error = conditionMessage
 )
 
-stopifnot(
-  identical(old_selector_hits, 0L),
-  identical(new_selector_hits, 1L),
-  identical(
-    drift_error,
-    "selector .job-card found 0 cards; expected 1"
-  ),
-  identical(
-    collect_cards(job_page, ".job-card", 6L)$status,
-    "counts agree"
-  )
-)
-
 knitr::kable(
   tibble(
     page = c("archived board", "redesigned page"),
@@ -365,6 +368,23 @@ knitr::kable(
   col.names = c("Page", "Selector", "Cards found", "Cards expected"),
   caption = "The same selector against two versions of one site",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(old_selector_hits, 0L),
+  identical(new_selector_hits, 1L),
+  identical(
+    drift_error,
+    "selector .job-card found 0 cards; expected 1"
+  ),
+  identical(
+    collect_cards(job_page, ".job-card", 6L)$status,
+    "counts agree"
+  )
 )
 ```
 
@@ -400,16 +420,6 @@ payload_text <- rvest::html_element(
 ) |>
   rvest::html_text2()
 
-stopifnot(
-  identical(
-    length(rvest::html_elements(dynamic_page, ".job-card")),
-    0L
-  ),
-  identical(visible_container_text, ""),
-  str_detect(payload_text, fixed("Night stocker")),
-  !str_detect(visible_container_text, fixed("Night stocker"))
-)
-
 tibble(
   source = c("visible container", "script payload"),
   characters = c(
@@ -420,6 +430,20 @@ tibble(
     str_detect(visible_container_text, fixed("Night stocker")),
     str_detect(payload_text, fixed("Night stocker"))
   )
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    length(rvest::html_elements(dynamic_page, ".job-card")),
+    0L
+  ),
+  identical(visible_container_text, ""),
+  str_detect(payload_text, fixed("Night stocker")),
+  !str_detect(visible_container_text, fixed("Night stocker"))
 )
 ```
 

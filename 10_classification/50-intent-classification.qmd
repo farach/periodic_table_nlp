@@ -78,6 +78,17 @@ inbox <- read_csv(
 intent_counts <- inbox |>
   count(intent, name = "messages")
 
+knitr::kable(
+  intent_counts,
+  col.names = c("Recorded intent", "Messages"),
+  caption = "Intent labels in the invented inbox",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   all(c(
     "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
@@ -95,13 +106,6 @@ stopifnot(
     )
   ),
   identical(intent_counts$messages, c(12L, 13L, 13L, 11L, 11L))
-)
-
-knitr::kable(
-  intent_counts,
-  col.names = c("Recorded intent", "Messages"),
-  caption = "Intent labels in the invented inbox",
-  row.names = FALSE
 )
 ```
 
@@ -153,6 +157,17 @@ predicted_distribution <- intent_predictions |>
   count(.pred_class, name = "messages") |>
   arrange(.pred_class)
 
+knitr::kable(
+  predicted_distribution,
+  col.names = c("Predicted intent", "Messages"),
+  caption = "Predicted-class distribution from the fitted multi-class model",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(intent_predictions), 60L),
   identical(length(levels(inbox$intent)), 5L),
@@ -169,13 +184,6 @@ stopifnot(
       "reset_access"
     )
   )
-)
-
-knitr::kable(
-  predicted_distribution,
-  col.names = c("Predicted intent", "Messages"),
-  caption = "Predicted-class distribution from the fitted multi-class model",
-  row.names = FALSE
 )
 ```
 
@@ -218,6 +226,23 @@ boundary_messages <- inbox |>
   ) |>
   select(message_id, intent, other_plausible_action, why_it_strains_the_schema, text)
 
+knitr::kable(
+  boundary_messages,
+  col.names = c(
+    "Message",
+    "Recorded intent",
+    "Other plausible action",
+    "Why one label is hard",
+    "Text"
+  ),
+  caption = "Boundary cases for the intent taxonomy",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(boundary_messages$message_id, c("M034", "M044", "M055")),
   identical(
@@ -233,19 +258,6 @@ stopifnot(
     )
   ),
   all(str_length(boundary_messages$why_it_strains_the_schema) > 40L)
-)
-
-knitr::kable(
-  boundary_messages,
-  col.names = c(
-    "Message",
-    "Recorded intent",
-    "Other plausible action",
-    "Why one label is hard",
-    "Text"
-  ),
-  caption = "Boundary cases for the intent taxonomy",
-  row.names = FALSE
 )
 ```
 

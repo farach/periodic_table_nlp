@@ -104,6 +104,19 @@ checked_coefficients <- era_coefficients |>
   filter(word %in% check_words) |>
   arrange(word)
 
+knitr::kable(
+  checked_coefficients |>
+    select(word, estimate, direction) |>
+    mutate(estimate = round(estimate, 2)),
+  col.names = c("Term", "Coefficient", "Pushes toward"),
+  caption = "Selected large era-model coefficients",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(paragraphs), 1377L),
   identical(n_distinct(paragraphs$president), 40L),
@@ -114,15 +127,6 @@ stopifnot(
     checked_coefficients$direction,
     rep("before 1900", length(check_words))
   )
-)
-
-knitr::kable(
-  checked_coefficients |>
-    select(word, estimate, direction) |>
-    mutate(estimate = round(estimate, 2)),
-  col.names = c("Term", "Coefficient", "Pushes toward"),
-  caption = "Selected large era-model coefficients",
-  row.names = FALSE
 )
 ```
 
@@ -153,19 +157,23 @@ era_extremes <- bind_rows(
 
 sensitive_terms <- c("slavery", "slave", "race", "war")
 
+knitr::kable(
+  era_extremes,
+  col.names = c("Term", "Pushes toward", "Coefficient"),
+  caption = "Strongest positive and negative coefficients in the era model",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(era_extremes), 16L),
   max(era_extremes$estimate) > 8,
   min(era_extremes$estimate) < -15,
   all(era_extremes$direction %in% levels(paragraphs$era)),
   !any(str_to_lower(era_extremes$word) %in% sensitive_terms)
-)
-
-knitr::kable(
-  era_extremes,
-  col.names = c("Term", "Pushes toward", "Coefficient"),
-  caption = "Strongest positive and negative coefficients in the era model",
-  row.names = FALSE
 )
 ```
 
@@ -239,6 +247,17 @@ party_speech <- party_summary |>
 party_president <- party_summary |>
   filter(split_scheme == "president")
 
+knitr::kable(
+  party_extremes,
+  col.names = c("Masked term", "Pushes toward", "Coefficient"),
+  caption = "Large coefficients from the party model that did not pass evaluation",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(party_rows), 1197L),
   identical(n_distinct(party_rows$president), 31L),
@@ -253,13 +272,6 @@ stopifnot(
   identical(round(party_president$mean_accuracy, 4), 0.4997),
   identical(round(party_president$mean_bal_accuracy, 4), 0.5090),
   max(abs(party_coefficients$estimate)) > 13
-)
-
-knitr::kable(
-  party_extremes,
-  col.names = c("Masked term", "Pushes toward", "Coefficient"),
-  caption = "Large coefficients from the party model that did not pass evaluation",
-  row.names = FALSE
 )
 ```
 

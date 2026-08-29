@@ -76,13 +76,6 @@ meta_table <- tibble(
   )
 )
 
-stopifnot(
-  identical(length(job_page_lines), 82L),
-  identical(page_title, "Riverton workforce opportunities"),
-  identical(nrow(meta_table), 1L),
-  identical(meta_table$attributes, "charset=utf-8")
-)
-
 knitr::kable(
   bind_rows(
     tibble(element = "title", attributes = page_title),
@@ -91,6 +84,17 @@ knitr::kable(
   col.names = c("HTML element", "Recorded value"),
   caption = "Title and meta elements claimed inside the HTML document",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(length(job_page_lines), 82L),
+  identical(page_title, "Riverton workforce opportunities"),
+  identical(nrow(meta_table), 1L),
+  identical(meta_table$attributes, "charset=utf-8")
 )
 ```
 
@@ -132,6 +136,17 @@ link_targets <- job_page |>
 
 link_markup_count <- sum(str_detect(job_page_lines, "<a(\\s|>)"))
 
+knitr::kable(
+  heading_summary,
+  col.names = c("Level", "Headings", "Example"),
+  caption = "Heading counts extracted from the job board page",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(heading_table), 7L),
   identical(nrow(heading_summary), 2L),
@@ -140,13 +155,6 @@ stopifnot(
   identical(heading_table$text[2], "Data analyst trainee"),
   identical(length(link_targets), 0L),
   identical(link_markup_count, 0L)
-)
-
-knitr::kable(
-  heading_summary,
-  col.names = c("Level", "Headings", "Example"),
-  caption = "Heading counts extracted from the job board page",
-  row.names = FALSE
 )
 ```
 
@@ -174,15 +182,6 @@ document_metadata <- tibble(
   )
 )
 
-stopifnot(
-  identical(nrow(document_metadata), 1L),
-  identical(document_metadata$meta_count, 1L),
-  identical(document_metadata$h1_count, 1L),
-  identical(document_metadata$h2_count, 6L),
-  identical(document_metadata$link_count, 0L),
-  identical(document_metadata$link_status, "no anchor elements in fixture")
-)
-
 knitr::kable(
   document_metadata,
   col.names = c(
@@ -196,6 +195,19 @@ knitr::kable(
   ),
   caption = "One-row metadata record for the saved job board page",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(document_metadata), 1L),
+  identical(document_metadata$meta_count, 1L),
+  identical(document_metadata$h1_count, 1L),
+  identical(document_metadata$h2_count, 6L),
+  identical(document_metadata$link_count, 0L),
+  identical(document_metadata$link_status, "no anchor elements in fixture")
 )
 ```
 
@@ -245,19 +257,6 @@ provenance <- document_metadata |>
     .after = document_id
   )
 
-stopifnot(
-  identical(nrow(recorded_page_metadata), 1L),
-  identical(recorded_page_metadata$created_for_lesson, "2026-08-28"),
-  identical(recorded_page_metadata$retrieval_status, "synthetic archived page"),
-  identical(source_size, 3441L),
-  identical(
-    content_fingerprint,
-    "ce1c515cfda7658ff586b4f42dd1d71c805041a6c32bc88c97b54a20f0fd5eba"
-  ),
-  identical(str_length(content_fingerprint), 64L),
-  identical(str_length(recorded_page_metadata$md5), 32L)
-)
-
 knitr::kable(
   provenance |>
     select(
@@ -280,6 +279,23 @@ knitr::kable(
   ),
   caption = "Two recorded claims and two computed facts joined to the document record",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(recorded_page_metadata), 1L),
+  identical(recorded_page_metadata$created_for_lesson, "2026-08-28"),
+  identical(recorded_page_metadata$retrieval_status, "synthetic archived page"),
+  identical(source_size, 3441L),
+  identical(
+    content_fingerprint,
+    "ce1c515cfda7658ff586b4f42dd1d71c805041a6c32bc88c97b54a20f0fd5eba"
+  ),
+  identical(str_length(content_fingerprint), 64L),
+  identical(str_length(recorded_page_metadata$md5), 32L)
 )
 ```
 

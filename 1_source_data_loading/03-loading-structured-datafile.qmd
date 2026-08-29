@@ -76,6 +76,12 @@ library(stringr)
 file_path <- "data/customer_feedback.csv"
 file_lines <- read_lines(file_path)
 
+head(file_lines, 3)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(file_lines), 6L),
   identical(
@@ -84,8 +90,6 @@ stopifnot(
   ),
   str_detect(file_lines[2], fixed('"Delivery was quick, thank you!"'))
 )
-
-head(file_lines, 3)
 ```
 
 The `stopifnot()` lines are **assertions**, checks that make R stop if an
@@ -116,6 +120,17 @@ feedback <- read_csv(
   )
 )
 
+knitr::kable(
+  feedback,
+  col.names = c("Feedback ID", "Submitted", "Channel", "Rating", "Comment"),
+  caption = "Customer feedback loaded from the CSV file",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   inherits(feedback, "tbl_df"),
   identical(nrow(feedback), 5L),
@@ -129,13 +144,6 @@ stopifnot(
     feedback$comment[2],
     "The café listing was easy to find."
   )
-)
-
-knitr::kable(
-  feedback,
-  col.names = c("Feedback ID", "Submitted", "Channel", "Rating", "Comment"),
-  caption = "Customer feedback loaded from the CSV file",
-  row.names = FALSE
 )
 ```
 
@@ -176,13 +184,6 @@ column_types <- map_chr(
   \(column) class(column)[1]
 )
 
-stopifnot(
-  identical(
-    unname(column_types),
-    c("character", "character", "character", "integer", "character")
-  )
-)
-
 knitr::kable(
   tibble(
     column = names(column_types),
@@ -191,6 +192,17 @@ knitr::kable(
   col.names = c("Column", "Type used by R"),
   caption = "The type assigned to each column",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    unname(column_types),
+    c("character", "character", "character", "integer", "character")
+  )
 )
 ```
 
@@ -215,20 +227,24 @@ feedback <- feedback |>
     )
   )
 
-stopifnot(
-  inherits(feedback$submitted_at, "Date"),
-  identical(
-    range(feedback$submitted_at),
-    as.Date(c("2026-08-21", "2026-08-25"))
-  )
-)
-
 knitr::kable(
   feedback |>
     select(feedback_id, submitted_at, channel),
   col.names = c("Feedback ID", "Submitted", "Channel"),
   caption = "Submission dates after conversion",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  inherits(feedback$submitted_at, "Date"),
+  identical(
+    range(feedback$submitted_at),
+    as.Date(c("2026-08-21", "2026-08-25"))
+  )
 )
 ```
 
@@ -249,11 +265,6 @@ missing_counts <- map_int(
   \(column) sum(is.na(column))
 )
 
-stopifnot(
-  identical(unname(missing_counts), c(0L, 0L, 0L, 1L, 0L)),
-  is.na(feedback$rating[3])
-)
-
 knitr::kable(
   tibble(
     column = names(missing_counts),
@@ -262,6 +273,15 @@ knitr::kable(
   col.names = c("Column", "Missing values"),
   caption = "Missing values in each column",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(unname(missing_counts), c(0L, 0L, 0L, 1L, 0L)),
+  is.na(feedback$rating[3])
 )
 ```
 
@@ -281,17 +301,21 @@ low_ratings <- feedback |>
   filter(!is.na(rating), rating <= 2) |>
   select(feedback_id, rating, comment)
 
-stopifnot(
-  identical(nrow(low_ratings), 1L),
-  identical(low_ratings$feedback_id, "1004"),
-  identical(low_ratings$rating, 2L)
-)
-
 knitr::kable(
   low_ratings,
   col.names = c("Feedback ID", "Rating", "Comment"),
   caption = "Feedback with a rating of two or lower",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(low_ratings), 1L),
+  identical(low_ratings$feedback_id, "1004"),
+  identical(low_ratings$rating, 2L)
 )
 ```
 
@@ -351,6 +375,15 @@ messy_raw <- suppressWarnings(
   )
 )
 
+tibble(
+  measure = c("Physical lines", "Records read"),
+  count = c(length(messy_lines), nrow(messy_feedback))
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(messy_lines), 8L),
   identical(nrow(messy_feedback), 6L),
@@ -359,11 +392,6 @@ stopifnot(
     names(messy_feedback),
     names(feedback)
   )
-)
-
-tibble(
-  measure = c("Physical lines", "Records read"),
-  count = c(length(messy_lines), nrow(messy_feedback))
 )
 ```
 
@@ -388,20 +416,6 @@ parse_problems <- problems(messy_feedback) |>
     actual
   )
 
-stopifnot(
-  inherits(parse_problems, "tbl_df"),
-  identical(nrow(parse_problems), 2L),
-  identical(
-    parse_problems$expected,
-    c("an integer", "5 columns")
-  ),
-  identical(
-    parse_problems$actual,
-    c("five", "6 columns")
-  ),
-  identical(parse_problems$feedback_id, c("1007", "1008"))
-)
-
 knitr::kable(
   parse_problems,
   col.names = c(
@@ -414,6 +428,24 @@ knitr::kable(
   ),
   caption = "What readr could not parse",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  inherits(parse_problems, "tbl_df"),
+  identical(nrow(parse_problems), 2L),
+  identical(
+    parse_problems$expected,
+    c("an integer", "5 columns")
+  ),
+  identical(
+    parse_problems$actual,
+    c("five", "6 columns")
+  ),
+  identical(parse_problems$feedback_id, c("1007", "1008"))
 )
 ```
 
@@ -472,6 +504,24 @@ status_counts <- row_report |>
 quarantined <- row_report |>
   filter(str_starts(status, "quarantine"))
 
+knitr::kable(
+  row_report |>
+    select(record_number, feedback_id, raw_rating, rating, status),
+  col.names = c(
+    "Record",
+    "Feedback ID",
+    "Raw rating",
+    "Parsed rating",
+    "Decision"
+  ),
+  caption = "Every record accounted for, including the ones held back",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(sum(status_counts$records), 6L),
   identical(nrow(quarantined), 5L),
@@ -491,20 +541,6 @@ stopifnot(
     n_distinct(messy_feedback$feedback_id),
     5L
   )
-)
-
-knitr::kable(
-  row_report |>
-    select(record_number, feedback_id, raw_rating, rating, status),
-  col.names = c(
-    "Record",
-    "Feedback ID",
-    "Raw rating",
-    "Parsed rating",
-    "Decision"
-  ),
-  caption = "Every record accounted for, including the ones held back",
-  row.names = FALSE
 )
 ```
 

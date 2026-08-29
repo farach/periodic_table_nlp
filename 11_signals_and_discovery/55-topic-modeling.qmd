@@ -64,6 +64,17 @@ matrix_summary <- tibble(
   value = c(ndoc(trimmed_dfm), nfeat(trimmed_dfm), sum(trimmed_dfm))
 )
 
+kable(
+  matrix_summary,
+  col.names = c("Measure", "Value"),
+  caption = "The trimmed paragraph matrix for LDA",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(paragraphs), 1377L),
   identical(ndoc(trimmed_dfm), 1377L),
@@ -71,13 +82,6 @@ stopifnot(
   identical(sum(trimmed_dfm), 52934),
   identical(nrow(lda_input), 1377L),
   identical(ncol(lda_input), 2587L)
-)
-
-kable(
-  matrix_summary,
-  col.names = c("Measure", "Value"),
-  caption = "The trimmed paragraph matrix for LDA",
-  row.names = FALSE
 )
 ```
 
@@ -117,6 +121,17 @@ topics_a <- terms_a |>
   slice_head(n = 8, by = topic) |>
   summarise(top_terms = paste(term, collapse = ", "), .by = topic)
 
+kable(
+  topics_a,
+  col.names = c("Topic number", "Top terms"),
+  caption = "Top terms from a five-topic LDA model with seed 42",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(topics_a), 5L),
   identical(
@@ -127,13 +142,6 @@ stopifnot(
     terms_a$term[terms_a$topic == 5][1:3],
     c("must", "government", "people")
   )
-)
-
-kable(
-  topics_a,
-  col.names = c("Topic number", "Top terms"),
-  caption = "Top terms from a five-topic LDA model with seed 42",
-  row.names = FALSE
 )
 ```
 
@@ -218,16 +226,6 @@ seed_null <- permutation_null(
 seed_null_display <- seed_null |>
   mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
 
-stopifnot(
-  identical(seed_summary$mean_shared_terms, c(5.6, 5.4, 5.0)),
-  identical(seed_summary$minimum_shared_terms, c(4L, 4L, 3L)),
-  identical(seed_summary$maximum_shared_terms, c(7L, 7L, 6L)),
-  identical(seed_summary$total_shared_terms, c(28L, 27L, 25L)),
-  identical(as.numeric(seed_null_display$observed), 5.6),
-  identical(as.numeric(seed_null_display$null_mean), 0.098),
-  identical(as.numeric(seed_null_display$p_value), 0.002)
-)
-
 kable(
   seed_matches,
   col.names = c("Comparison", "Topic in first run", "Matched topic in second run", "Shared top-10 terms"),
@@ -247,6 +245,20 @@ kable(
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Random-term null for seed 42 vs seed 7 overlap",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(seed_summary$mean_shared_terms, c(5.6, 5.4, 5.0)),
+  identical(seed_summary$minimum_shared_terms, c(4L, 4L, 3L)),
+  identical(seed_summary$maximum_shared_terms, c(7L, 7L, 6L)),
+  identical(seed_summary$total_shared_terms, c(28L, 27L, 25L)),
+  identical(as.numeric(seed_null_display$observed), 5.6),
+  identical(as.numeric(seed_null_display$null_mean), 0.098),
+  identical(as.numeric(seed_null_display$p_value), 0.002)
 )
 ```
 
@@ -271,16 +283,6 @@ topics_4 <- top_terms(lda_4, n = 8L) |>
 
 shared_first_terms <- length(intersect(topics_a$top_terms |> str_extract("^[^,]+"), topics_4$top_term))
 
-stopifnot(
-  identical(nrow(topics_4), 4L),
-  identical(
-    topics_4$top_term,
-    c("must", "people", "government", "public")
-  ),
-  identical(shared_first_terms, 2L),
-  identical(topics_4$top_terms[1], "must, government, people, can, us, power, country, now")
-)
-
 kable(
   topics_4 |>
     select(topic, top_terms),
@@ -294,6 +296,20 @@ kable(
   col.names = "Shared first terms with the seed-42 five-topic fit",
   caption = "A small comparison after changing k",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(topics_4), 4L),
+  identical(
+    topics_4$top_term,
+    c("must", "people", "government", "public")
+  ),
+  identical(shared_first_terms, 2L),
+  identical(topics_4$top_terms[1], "must, government, people, can, us, power, country, now")
 )
 ```
 

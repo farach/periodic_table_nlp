@@ -96,6 +96,21 @@ held_back_labels <- annotation_view |>
   filter(document_id %in% c("J006", "F001")) |>
   select(sentence_id, reference_label)
 
+knitr::kable(
+  annotation_pool,
+  col.names = c(
+    "Sentence ID",
+    "Document ID",
+    "Text"
+  ),
+  caption = "Ten text units waiting for annotation",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(initial_labels), 18L),
   identical(nrow(annotation_pool), 10L),
@@ -110,17 +125,6 @@ stopifnot(
       annotation_pool$document_id
     )
   ) == 0L
-)
-
-knitr::kable(
-  annotation_pool,
-  col.names = c(
-    "Sentence ID",
-    "Document ID",
-    "Text"
-  ),
-  caption = "Ten text units waiting for annotation",
-  row.names = FALSE
 )
 ```
 
@@ -260,6 +264,35 @@ score_training <- function(text) {
 
 training_scores <- score_training(annotation_pool$text)
 
+knitr::kable(
+  tibble(
+    term = keywords,
+    training_count = as.integer(training_term_count),
+    other_count = as.integer(other_term_count),
+    smoothed_training_rate = round(
+      term_rate_training,
+      3
+    ),
+    smoothed_other_rate = round(
+      term_rate_other,
+      3
+    )
+  ),
+  col.names = c(
+    "Term",
+    "Training rows",
+    "Other rows",
+    "Smoothed training rate",
+    "Smoothed other rate"
+  ),
+  caption = "Term evidence from the 18 labeled sentences",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     keywords,
@@ -284,31 +317,6 @@ stopifnot(
   all(direction_is_preserved),
   all(training_scores > 0),
   all(training_scores < 1)
-)
-
-knitr::kable(
-  tibble(
-    term = keywords,
-    training_count = as.integer(training_term_count),
-    other_count = as.integer(other_term_count),
-    smoothed_training_rate = round(
-      term_rate_training,
-      3
-    ),
-    smoothed_other_rate = round(
-      term_rate_other,
-      3
-    )
-  ),
-  col.names = c(
-    "Term",
-    "Training rows",
-    "Other rows",
-    "Smoothed training rate",
-    "Smoothed other rate"
-  ),
-  caption = "Term evidence from the 18 labeled sentences",
-  row.names = FALSE
 )
 ```
 
@@ -341,14 +349,6 @@ selection_table <- tibble(
 selected_for_review <- selection_table |>
   slice_head(n = 2)
 
-stopifnot(
-  identical(
-    selected_for_review$sentence_id,
-    c("s026", "s028")
-  ),
-  all(diff(selection_table$distance_from_half) >= 0)
-)
-
 knitr::kable(
   selection_table |>
     mutate(
@@ -366,6 +366,18 @@ knitr::kable(
   ),
   caption = "Annotation candidates ordered by model uncertainty",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    selected_for_review$sentence_id,
+    c("s026", "s028")
+  ),
+  all(diff(selection_table$distance_from_half) >= 0)
 )
 ```
 
@@ -405,14 +417,6 @@ updated_labels <- bind_rows(
   newly_labeled
 )
 
-stopifnot(
-  identical(
-    reviewed_selection$reference_label,
-    c("schedule", "other")
-  ),
-  identical(nrow(updated_labels), 20L)
-)
-
 knitr::kable(
   reviewed_selection,
   col.names = c(
@@ -424,6 +428,18 @@ knitr::kable(
   caption = "The two selected sentences after annotation",
   digits = 3,
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    reviewed_selection$reference_label,
+    c("schedule", "other")
+  ),
+  identical(nrow(updated_labels), 20L)
 )
 ```
 
@@ -503,6 +519,22 @@ pool_accuracy <- mean(
     (pool_outcomes$is_training == 1L)
 )
 
+knitr::kable(
+  selection_comparison |>
+    mutate(mean_score_gap = round(mean_score_gap, 3)),
+  col.names = c(
+    "Measured on",
+    "Items",
+    "Mean gap between score and label"
+  ),
+  caption = "One model, one pool, three ways of choosing what to measure",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(pool_outcomes), 10L),
   identical(
@@ -518,18 +550,6 @@ stopifnot(
   selection_comparison$mean_score_gap[2] <
     selection_comparison$mean_score_gap[3],
   isTRUE(all.equal(pool_accuracy, 1))
-)
-
-knitr::kable(
-  selection_comparison |>
-    mutate(mean_score_gap = round(mean_score_gap, 3)),
-  col.names = c(
-    "Measured on",
-    "Items",
-    "Mean gap between score and label"
-  ),
-  caption = "One model, one pool, three ways of choosing what to measure",
-  row.names = FALSE
 )
 ```
 

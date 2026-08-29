@@ -96,6 +96,22 @@ version_table <- tibble(
   commit = unname(package_commits)
 )
 
+knitr::kable(
+  version_table |>
+    mutate(commit = str_sub(commit, 1, 12)),
+  col.names = c(
+    "Package",
+    "Version",
+    "Git commit"
+  ),
+  caption = "Author package versions used in the lessons",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   all(str_length(package_versions) > 0),
   package_versions[["onet2r"]] == "0.5.0.9000",
@@ -111,18 +127,6 @@ stopifnot(
       "bdeccd40b211a20a09c9cb849545a3a5f2b535d7"
     )
   )
-)
-
-knitr::kable(
-  version_table |>
-    mutate(commit = str_sub(commit, 1, 12)),
-  col.names = c(
-    "Package",
-    "Version",
-    "Git commit"
-  ),
-  caption = "Author package versions used in the lessons",
-  row.names = FALSE
 )
 ```
 
@@ -161,16 +165,6 @@ onet_display <- onet_tasks |>
     source_date
   )
 
-stopifnot(
-  identical(nrow(onet_display), 3L),
-  all(onet_display$release_version == "30.3"),
-  identical(
-    onet_display$task_id,
-    c("1001", "1002", "2001")
-  ),
-  all(str_length(onet_display$task) > 0)
-)
-
 knitr::kable(
   onet_display,
   col.names = c(
@@ -183,6 +177,20 @@ knitr::kable(
   ),
   caption = "Three task statements from the onet2r teaching archive",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(onet_display), 3L),
+  all(onet_display$release_version == "30.3"),
+  identical(
+    onet_display$task_id,
+    c("1001", "1002", "2001")
+  ),
+  all(str_length(onet_display$task) > 0)
 )
 ```
 
@@ -216,21 +224,6 @@ cmap_transitions <- read_csv(
   )
 )
 
-stopifnot(
-  file.exists(cmap_path),
-  identical(nrow(cmap_transitions), 10L),
-  all(
-    c(
-      "job_title_from",
-      "job_title_to",
-      "sector",
-      "region"
-    ) %in% names(cmap_transitions)
-  ),
-  identical(cmap_transitions$job_title_from[[3]], "Data Analyst"),
-  identical(cmap_transitions$job_title_to[[3]], "Data Scientist")
-)
-
 knitr::kable(
   cmap_transitions |>
     select(
@@ -247,6 +240,25 @@ knitr::kable(
   ),
   caption = "Ten career transitions in the cmapr teaching fixture",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  file.exists(cmap_path),
+  identical(nrow(cmap_transitions), 10L),
+  all(
+    c(
+      "job_title_from",
+      "job_title_to",
+      "sector",
+      "region"
+    ) %in% names(cmap_transitions)
+  ),
+  identical(cmap_transitions$job_title_from[[3]], "Data Analyst"),
+  identical(cmap_transitions$job_title_to[[3]], "Data Scientist")
 )
 ```
 
@@ -267,6 +279,12 @@ classification_tasks <- huggingfaceR::hf_list_tasks(
   pattern = "classification"
 )
 
+classification_tasks
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     classification_tasks,
@@ -279,8 +297,6 @@ stopifnot(
     )
   )
 )
-
-classification_tasks
 ```
 
 The list shows the vocabulary bundled with this version of huggingfaceR, not a
@@ -306,6 +322,12 @@ zero_shot_payload <- huggingfaceR::hf_zero_shot_classification_payload(
   multi_label = FALSE
 )
 
+str(zero_shot_payload)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(
     zero_shot_payload$inputs,
@@ -326,8 +348,6 @@ stopifnot(
     FALSE
   )
 )
-
-str(zero_shot_payload)
 ```
 
 ## Do not join unlike rows
@@ -353,14 +373,6 @@ provider_units <- tibble(
   )
 )
 
-stopifnot(
-  identical(
-    provider_units$records_seen,
-    c(3L, 10L, 5L)
-  ),
-  identical(n_distinct(provider_units$row_or_item), 3L)
-)
-
 knitr::kable(
   provider_units,
   col.names = c(
@@ -370,6 +382,18 @@ knitr::kable(
   ),
   caption = "The three resources do not share one unit of analysis",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    provider_units$records_seen,
+    c(3L, 10L, 5L)
+  ),
+  identical(n_distinct(provider_units$row_or_item), 3L)
 )
 ```
 
@@ -427,6 +451,17 @@ join_report <- tibble(
   )
 )
 
+knitr::kable(
+  join_report,
+  col.names = c("Test", "Count"),
+  caption = "What the two tables have in common",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(length(shared_column_names), 0L),
   identical(length(exact_title_matches), 0L),
@@ -439,13 +474,6 @@ stopifnot(
     ],
     "29-1141.00"
   )
-)
-
-knitr::kable(
-  join_report,
-  col.names = c("Test", "Count"),
-  caption = "What the two tables have in common",
-  row.names = FALSE
 )
 ```
 

@@ -112,6 +112,12 @@ image_md5 <- digest::digest(
   file = TRUE
 )
 
+reference_lines
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   inherits(flyer_metadata, "tbl_df"),
   identical(length(reference_lines), 6L),
@@ -164,8 +170,6 @@ stopifnot(
     degraded_ocr_metadata$md5
   )
 )
-
-reference_lines
 ```
 
 The transcript is the comparison source for this controlled example. In real
@@ -194,6 +198,12 @@ ocr_lines <- read_lines(
   "data/workforce/training-flyer-ocr-5.3.2.txt"
 )
 
+ocr_lines
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   str_length(ocr_information$version) > 0,
   "eng" %in% ocr_information$available,
@@ -204,8 +214,6 @@ stopifnot(
     "No prior experience required"
   )
 )
-
-ocr_lines
 ```
 
 The published transcript is the committed output recorded with native
@@ -231,17 +239,21 @@ ocr_provenance <- tibble(
   )
 )
 
-stopifnot(
-  inherits(ocr_provenance, "tbl_df"),
-  identical(nrow(ocr_provenance), 4L),
-  all(str_length(ocr_provenance$value) > 0)
-)
-
 knitr::kable(
   ocr_provenance,
   col.names = c("Component", "Recorded value"),
   caption = "Software and image details for this OCR run",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  inherits(ocr_provenance, "tbl_df"),
+  identical(nrow(ocr_provenance), 4L),
+  all(str_length(ocr_provenance$value) > 0)
 )
 ```
 
@@ -279,20 +291,24 @@ normalized_distance_share <-
   normalized_edit_distance /
   str_length(reference_text)
 
-stopifnot(
-  identical(normalized_edit_distance, 0L),
-  identical(
-    ocr_lines[5],
-    reference_lines[5]
-  )
-)
-
 tibble(
   normalized_edit_distance =
     normalized_edit_distance,
   reference_characters = str_length(reference_text),
   normalized_distance_share =
     normalized_distance_share
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(normalized_edit_distance, 0L),
+  identical(
+    ocr_lines[5],
+    reference_lines[5]
+  )
 )
 ```
 
@@ -352,13 +368,6 @@ diagnostic_matches_fixture <- c(
   identical(degraded_diagnostic_lines, degraded_lines)
 )
 
-stopifnot(
-  identical(dim(degraded_array)[1:2], c(267L, 400L)),
-  file.exists(degraded_path),
-  length(degraded_diagnostic_lines) > 0L,
-  !identical(degraded_lines, reference_lines)
-)
-
 tibble(
   version = c("source image", "degraded copy"),
   width_pixels = c(
@@ -374,6 +383,17 @@ tibble(
     length(degraded_lines)
   ),
   diagnostic_matches_fixture
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(dim(degraded_array)[1:2], c(267L, 400L)),
+  file.exists(degraded_path),
+  length(degraded_diagnostic_lines) > 0L,
+  !identical(degraded_lines, reference_lines)
 )
 ```
 
@@ -454,6 +474,28 @@ rate_table <- bind_rows(
     mutate(version = "degraded copy", .before = 1)
 )
 
+knitr::kable(
+  rate_table |>
+    mutate(
+      cer = round(cer, 3),
+      wer = round(wer, 3)
+    ) |>
+    select(version, reference_characters, reference_word_count, cer, wer),
+  col.names = c(
+    "Version",
+    "Reference characters",
+    "Reference words",
+    "CER",
+    "WER"
+  ),
+  caption = "Error rates for the source image and its degraded copy",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(rate_table), 2L),
   identical(rate_table$cer[1], 0),
@@ -472,24 +514,6 @@ stopifnot(
     word_edit_distance(c("a", "b"), character()),
     2L
   ))
-)
-
-knitr::kable(
-  rate_table |>
-    mutate(
-      cer = round(cer, 3),
-      wer = round(wer, 3)
-    ) |>
-    select(version, reference_characters, reference_word_count, cer, wer),
-  col.names = c(
-    "Version",
-    "Reference characters",
-    "Reference words",
-    "CER",
-    "WER"
-  ),
-  caption = "Error rates for the source image and its degraded copy",
-  row.names = FALSE
 )
 ```
 
@@ -511,19 +535,23 @@ comparison <- tibble(
   )[seq_len(max(length(reference_lines), length(degraded_lines)))]
 )
 
+knitr::kable(
+  comparison,
+  col.names = c("Line", "Reference transcript", "Degraded reading"),
+  caption = "The transcript beside what the degraded image produced",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
 stopifnot(
   identical(nrow(comparison), max(length(reference_lines), length(degraded_lines))),
   any(
     is.na(comparison$degraded_reading) |
       comparison$reference != comparison$degraded_reading
   )
-)
-
-knitr::kable(
-  comparison,
-  col.names = c("Line", "Reference transcript", "Degraded reading"),
-  caption = "The transcript beside what the degraded image produced",
-  row.names = FALSE
 )
 ```
 
