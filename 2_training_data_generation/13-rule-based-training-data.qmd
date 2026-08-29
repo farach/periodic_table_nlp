@@ -31,6 +31,7 @@ By the end of this lesson, you will be able to:
 - express labeling rules as text patterns;
 - keep each rule's vote and avoid hiding conflicts;
 - calculate coverage, conflict, and abstention;
+- report each rule's own coverage and error;
 - compare usable weak labels with reference labels; and
 - stress-test rules on cases they were not designed to fit.
 :::
@@ -346,6 +347,267 @@ knitr::kable(
 These are in-sample results. The rules were written after reading the
 sentences, so they may encode the examples rather than the broader concept.
 
+## Look at each rule on its own
+
+The 21-of-23 figure is a pooled number, and pooled numbers hide which rule is
+carrying the work. Each rule has its own coverage and its own error, and the
+error looks different depending on whether the rule fired alone or alongside
+another.
+
+```{r}
+reference_labels <- workforce_sentences$reference_label
+votes_per_row <- as.integer(
+  rowSums(rule_votes[rule_labels])
+)
+
+rule_diagnostics <- map(
+  rule_labels,
+  \(rule_name) {
+    fired <- rule_votes[[rule_name]]
+    fired_alone <- fired & votes_per_row == 1L
+    matches_reference <- reference_labels == rule_name
+
+    tibble(
+      rule = rule_name,
+      rows_fired = sum(fired),
+      rows_fired_alone = sum(fired_alone),
+      alone_and_correct = sum(fired_alone & matches_reference),
+      correct_whenever_fired = sum(fired & matches_reference)
+    )
+  }
+) |>
+  list_rbind() |>
+  mutate(
+    precision_when_alone = alone_and_correct / rows_fired_alone
+  )
+
+stopifnot(
+  identical(
+    rule_diagnostics$rows_fired,
+    c(9L, 10L, 5L, 3L)
+  ),
+  identical(
+    rule_diagnostics$rows_fired_alone,
+    c(8L, 8L, 4L, 3L)
+  ),
+  identical(
+    rule_diagnostics$alone_and_correct,
+    c(7L, 8L, 4L, 2L)
+  ),
+  identical(
+    sum(rule_diagnostics$rows_fired_alone),
+    23L
+  ),
+  identical(
+    sum(rule_diagnostics$alone_and_correct),
+    21L
+  ),
+  isTRUE(all.equal(
+    rule_diagnostics$precision_when_alone,
+    c(7 / 8, 1, 1, 2 / 3)
+  ))
+)
+
+knitr::kable(
+  rule_diagnostics |>
+    mutate(
+      precision_when_alone = round(
+        precision_when_alone,
+        2
+      )
+    ) |>
+    select(
+      rule,
+      rows_fired,
+      rows_fired_alone,
+      alone_and_correct,
+      precision_when_alone
+    ),
+  col.names = c(
+    "Rule",
+    "Rows it fired on",
+    "Fired alone",
+    "Alone and correct",
+    "Precision when alone"
+  ),
+  caption = "Each rule's coverage and error, separated",
+  row.names = FALSE
+)
+```
+
+The pooled figure of 21 out of 23 becomes four different stories. The
+`requirement` and `schedule` rules were right every time they spoke alone. The
+`training` rule missed once in eight. The `skill` rule, which fired on only three
+rows, was wrong on one of them, and a precision of two thirds on three rows is a
+number to treat as a warning rather than an estimate.
+
+A rule that fires rarely is where in-sample results are least trustworthy. There
+is no way to distinguish a rule that is genuinely reliable from one that has not
+yet met the case that breaks it.
+
+## Rules that fire together are not independent evidence
+
+Weak supervision usually combines votes as though each rule were a separate
+witness. That assumption fails when two rules react to the same words, and the
+failure inflates confidence rather than reducing it.
+
+```{r}
+vote_matrix <- as.matrix(rule_votes[rule_labels])
+rule_pairs <- expand.grid(
+  first = rule_labels,
+  second = rule_labels,
+  stringsAsFactors = FALSE
+) |>
+  as_tibble() |>
+  filter(first < second) |>
+  mutate(
+    fired_together = map2_int(
+      first,
+      second,
+      \(left, right) {
+        sum(vote_matrix[, left] & vote_matrix[, right])
+      }
+    )
+  ) |>
+  arrange(desc(fired_together), first, second)
+
+stopifnot(
+  identical(nrow(rule_pairs), 6L),
+  identical(
+    sum(rule_pairs$fired_together),
+    2L
+  ),
+  identical(
+    rule_pairs$fired_together[
+      rule_pairs$first == "requirement" &
+        rule_pairs$second == "training"
+    ],
+    1L
+  ),
+  identical(
+    rule_pairs$fired_together[
+      rule_pairs$first == "requirement" &
+        rule_pairs$second == "schedule"
+    ],
+    1L
+  )
+)
+
+knitr::kable(
+  rule_pairs,
+  col.names = c("Rule", "Other rule", "Rows where both fired"),
+  caption = "How often each pair of rules spoke about the same row",
+  row.names = FALSE
+)
+```
+
+Only two pairs ever overlap here, and both overlaps are the conflicts already
+seen. `s013` triggers `training` and `requirement` because a certificate is a
+credential and a credential looks like training. `s020` triggers `requirement`
+and `schedule` because a required shift is both a demand and a time.
+
+That is what dependence between rules looks like at this scale: shared trigger
+words, not a statistical abstraction. A larger rule set produces the same
+pattern in bulk, which is the problem label models such as Snorkel are built
+for. They estimate how accurate each rule is and how rules correlate, without
+reference labels, and weight the votes accordingly.
+
+This lesson does not fit such a model, and it should not: four rules, 28 rows,
+and two overlaps do not contain enough information to estimate accuracies and
+correlations. The scope here stops at measuring where the rules agree, where
+they collide, and where they say nothing.
+
+### What a conflict policy would cost
+
+A team that needs a label for every row usually writes a priority order. Here is
+one, and here is the price it charges.
+
+```{r}
+priority_order <- c(
+  "schedule",
+  "requirement",
+  "training",
+  "skill"
+)
+
+resolve_by_priority <- function(row_votes) {
+  chosen <- priority_order[priority_order %in% rule_labels[row_votes]]
+
+  if (length(chosen) == 0L) {
+    NA_character_
+  } else {
+    chosen[1]
+  }
+}
+
+conflict_rows <- which(votes_per_row > 1L)
+conflict_outcomes <- tibble(
+  sentence_id = rule_votes$sentence_id[conflict_rows],
+  reference_label = reference_labels[conflict_rows],
+  resolved_label = map_chr(
+    conflict_rows,
+    \(row) resolve_by_priority(vote_matrix[row, ])
+  )
+) |>
+  mutate(policy_agrees = resolved_label == reference_label)
+
+abstain_rows <- which(votes_per_row == 0L)
+abstain_outcomes <- tibble(
+  sentence_id = rule_votes$sentence_id[abstain_rows],
+  reference_label = reference_labels[abstain_rows]
+)
+
+stopifnot(
+  identical(nrow(conflict_outcomes), 2L),
+  identical(
+    conflict_outcomes$sentence_id,
+    c("s013", "s020")
+  ),
+  identical(
+    conflict_outcomes$resolved_label,
+    c("requirement", "schedule")
+  ),
+  all(conflict_outcomes$policy_agrees),
+  identical(nrow(abstain_outcomes), 3L),
+  all(abstain_outcomes$reference_label == "other")
+)
+
+knitr::kable(
+  conflict_outcomes,
+  col.names = c(
+    "Sentence ID",
+    "Reference label",
+    "Priority policy label",
+    "Policy agrees"
+  ),
+  caption = "What a priority order does with the two conflicts",
+  row.names = FALSE
+)
+
+knitr::kable(
+  abstain_outcomes,
+  col.names = c("Sentence ID", "Reference label"),
+  caption = "What the three silent rows actually were",
+  row.names = FALSE
+)
+```
+
+The policy gets both conflicts right, and that is close to meaningless as
+evidence. The order was chosen by someone who had read the codebook rule saying
+timing takes precedence, and it was applied to two rows. Two successes chosen
+after the fact do not establish that the order generalizes.
+
+The three silent rows are more informative. All three carry the reference label
+`other`, which is the one category no rule was written for. Silence here is
+correct behavior expressed badly: the rules abstain because they have nothing to
+say, and a fifth rule for `other` would be worse, since `other` is defined by
+the absence of the other four rather than by any words of its own.
+
+Every one of the 28 rows now has an account. Twenty-one usable and correct, two
+usable and wrong, two in conflict and resolved by a stated policy, and three
+abstentions whose true label was outside the rule set. Nothing is left in a
+category called "the rest".
+
 ## Try cases the rules did not shape
 
 Before applying the rules to another batch, the team writes four fictional
@@ -458,6 +720,8 @@ biased source, or remove the need for people who understand the domain.
 - A weak label is a rule's proposal, not ground truth.
 - Rules should be allowed to abstain and expose conflicts.
 - Coverage, conflict, and agreement answer different questions.
+- Report each rule separately; a pooled score hides the weak one.
+- Rules that share trigger words are not independent votes.
 - In-sample success can reflect rules written around the examples.
 - Designed challenge cases expose known shortcuts; independent evaluation asks
   whether they generalize.

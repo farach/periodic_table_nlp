@@ -17,6 +17,10 @@ scrape the saved page, keep the job and sentence identifiers, and check every
 record before it becomes research data. This first stage collects what the
 notices say; it does not classify the sentences or generalize from them.
 
+The whole lesson works on static archived HTML: a file whose text is already in
+the markup when it is saved. That is the scope of what follows, and the last
+sections show two ordinary pages where the method stops working.
+
 ::: {.callout-note}
 The employers, postings, and Riverton Workforce Lab are fictional. The HTML
 file was written for this lesson and contains no personal information.
@@ -30,7 +34,8 @@ By the end of this lesson, you will be able to:
 - explain how HTML gives parts of a page names and structure;
 - select repeated job cards with rvest;
 - keep source identifiers beside extracted text;
-- compare scraped output with an expected fixture; and
+- compare scraped output with an expected fixture;
+- notice a renamed class and a page whose text is not in the markup; and
 - identify legal, ethical, and technical checks needed before live scraping.
 :::
 
@@ -278,6 +283,155 @@ Both the HTML and expected table were written for this lesson, so the
 comparison tests parser behavior rather than independent truth. A live
 collection would need a separately captured audit sample.
 
+## When the page changes shape
+
+The archived file is stable because it is a file. A live board is maintained by
+people who redesign it. The two pages below are written into the lesson as short
+HTML strings, and both would break the code above in ways worth telling apart.
+
+The first is a redesign. The employer's new template renames `job-card` to
+`posting` and moves the title into a heading.
+
+```{r}
+redesigned_html <- str_c(
+  "<html><body>",
+  "<div class='posting' data-job-id='J007'>",
+  "<h3 class='posting-title'>Warehouse trainee</h3>",
+  "<ul><li class='posting-detail'>Paid training is provided.</li></ul>",
+  "</div>",
+  "</body></html>"
+)
+
+redesigned_page <- rvest::read_html(redesigned_html)
+old_selector_hits <- length(
+  rvest::html_elements(redesigned_page, ".job-card")
+)
+new_selector_hits <- length(
+  rvest::html_elements(redesigned_page, ".posting")
+)
+
+collect_cards <- function(page, selector, expected) {
+  cards <- rvest::html_elements(page, selector)
+
+  list(
+    selector = selector,
+    found = length(cards),
+    expected = expected,
+    status = if (identical(length(cards), expected)) {
+      "counts agree"
+    } else {
+      "stop: selector no longer matches the page"
+    }
+  )
+}
+
+drift_check <- collect_cards(redesigned_page, ".job-card", 1L)
+
+stopifnot(
+  identical(old_selector_hits, 0L),
+  identical(new_selector_hits, 1L),
+  identical(drift_check$found, 0L),
+  identical(
+    drift_check$status,
+    "stop: selector no longer matches the page"
+  ),
+  identical(
+    collect_cards(job_page, ".job-card", 6L)$status,
+    "counts agree"
+  )
+)
+
+knitr::kable(
+  tibble(
+    page = c("archived board", "redesigned page"),
+    selector = ".job-card",
+    cards_found = c(
+      length(job_cards),
+      old_selector_hits
+    ),
+    cards_expected = c(6L, 1L)
+  ),
+  col.names = c("Page", "Selector", "Cards found", "Cards expected"),
+  caption = "The same selector against two versions of one site",
+  row.names = FALSE
+)
+```
+
+Zero matches is the dangerous result, because zero matches is also what an
+empty page produces. Without the expected count, the scraper would write an
+empty table and the day's collection would look like a day with no postings.
+An expected count turns a silent redesign into a stop.
+
+The second page is harder. Its job text is not in the markup at all. The
+browser would fetch it and place it on the screen afterwards, so what a saved
+file contains is a container and a payload.
+
+```{r}
+dynamic_html <- str_c(
+  "<html><body>",
+  "<div id='board'></div>",
+  "<script type='application/json' id='board-data'>",
+  '{"jobs": [{"id": "J008", "title": "Night stocker"}]}',
+  "</script>",
+  "</body></html>"
+)
+
+dynamic_page <- rvest::read_html(dynamic_html)
+visible_container_text <- rvest::html_element(
+  dynamic_page,
+  "#board"
+) |>
+  rvest::html_text2()
+payload_text <- rvest::html_element(
+  dynamic_page,
+  "#board-data"
+) |>
+  rvest::html_text2()
+
+stopifnot(
+  identical(
+    length(rvest::html_elements(dynamic_page, ".job-card")),
+    0L
+  ),
+  identical(visible_container_text, ""),
+  str_detect(payload_text, fixed("Night stocker")),
+  !str_detect(visible_container_text, fixed("Night stocker"))
+)
+
+tibble(
+  source = c("visible container", "script payload"),
+  characters = c(
+    str_length(visible_container_text),
+    str_length(payload_text)
+  ),
+  mentions_the_job = c(
+    str_detect(visible_container_text, fixed("Night stocker")),
+    str_detect(payload_text, fixed("Night stocker"))
+  )
+)
+```
+
+The container holds no characters. The job title exists on the page, inside a
+script element that the browser reads and rvest treats as text.
+
+This example is deliberately gentle: the payload is sitting in the file. Many
+sites fetch it separately after the page loads, in which case a saved copy of
+the HTML contains nothing to extract, and neither rvest nor any other HTML
+parser can recover it.
+
+Three routes exist from there, and they differ in cost and in what they promise.
+A documented API returns the same data with stated terms, and is the first thing
+to look for. The underlying data request the page itself makes can sometimes be
+called directly, which is faster but relies on an interface nobody promised to
+keep. A headless browser, driven from R through chromote or from Python through
+Playwright or Selenium, runs the page as a browser would; it is the general
+answer and by far the most expensive to run and maintain.
+
+Whichever route is chosen, record it. Text recovered from a rendered page and
+text read from a saved file are not the same evidence, and a reader deserves to
+know which one produced a number.
+
+
 ## A saved page is still incomplete evidence
 
 The archived HTML shows what was captured, not every posting that existed.
@@ -303,6 +457,9 @@ collected or republished.
 - Archive the source and record when it was collected.
 - Keep source IDs attached to extracted text.
 - Assert expected counts and content so selectors cannot fail silently.
+- Zero matches and an empty page look identical without an expected count.
+- Some pages hold their text outside the markup, where an HTML parser cannot
+  reach it.
 - Review terms, rate limits, privacy, and research ethics before live
   collection.
 

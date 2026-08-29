@@ -25,7 +25,9 @@ By the end of this lesson, you will be able to:
 - explain the request-and-response pattern used by an API;
 - add search choices to an API request;
 - check whether the request succeeded;
-- turn a JSON response into a table in R; and
+- turn a JSON response into a table in R;
+- replay a rate limit, a second page, and a changed schema from saved
+  responses; and
 - handle changing results, service limits, and secret API keys.
 :::
 
@@ -316,8 +318,12 @@ page markup. Only the validated Open Library addresses are rendered as links.
 
 ## Live data can change
 
-Open Library may add records, correct dates, or reorder results. The live check
-therefore tests a bounded structure rather than five specific titles:
+Open Library may add records, correct dates, or reorder results. Nothing in this
+page contacts the service while it builds, so the displayed table comes from the
+saved response and stays stable.
+
+When the request is sent again, the checks worth applying describe a bounded
+structure rather than five specific titles:
 
 - the service returned a successful status;
 - the response is JSON;
@@ -332,6 +338,280 @@ the current licensing statement rather than assume a blanket license.
 
 Respect the service's rate limit and stated preference for low-volume,
 human-facing requests.
+
+## Replay the awkward responses
+
+A successful reply is the easy case. The three awkward ones are a refusal, a
+result set too large for one reply, and a reply whose fields have moved. Each is
+reconstructed below from the status codes and body shapes the service documents,
+built inside the lesson with `httr2::response()`. No request leaves the machine.
+
+```{r}
+saved_response <- function(status, body, extra_headers = list()) {
+  httr2::response(
+    status_code = status,
+    url = book_request$url,
+    method = "GET",
+    headers = c(
+      list("content-type" = "application/json"),
+      extra_headers
+    ),
+    body = charToRaw(body)
+  )
+}
+
+make_docs <- function(keys, titles) {
+  str_c(
+    sprintf(
+      '{"key": "%s", "title": "%s"}',
+      keys,
+      titles
+    ),
+    collapse = ", "
+  )
+}
+
+rate_limited <- saved_response(
+  429L,
+  '{"error": "too many requests"}',
+  list("retry-after" = "30")
+)
+
+page_one <- saved_response(
+  200L,
+  str_c(
+    '{"numFound": 7, "start": 0, "docs": [',
+    make_docs(
+      sprintf("/works/OL%d", 1:5),
+      sprintf("Candidate title %d", 1:5)
+    ),
+    ']}'
+  )
+)
+
+page_two <- saved_response(
+  200L,
+  str_c(
+    '{"numFound": 7, "start": 5, "docs": [',
+    make_docs(
+      c("/works/OL5", "/works/OL6"),
+      c("Candidate title 5", "Candidate title 6")
+    ),
+    ']}'
+  )
+)
+
+field_renamed <- saved_response(
+  200L,
+  str_c(
+    '{"numFound": 1, "start": 0, "docs": [',
+    '{"key": "/works/OL7", "name": "Title moved to a new field"}',
+    ']}'
+  )
+)
+
+stopifnot(
+  identical(httr2::resp_status(rate_limited), 429L),
+  identical(httr2::resp_status(page_one), 200L),
+  identical(
+    httr2::resp_header(rate_limited, "retry-after"),
+    "30"
+  ),
+  identical(
+    httr2::resp_content_type(page_one),
+    "application/json"
+  )
+)
+
+httr2::resp_status(rate_limited)
+```
+
+The reader now has four saved replies and one function that has to survive all
+of them.
+
+```{r}
+required_fields <- c("key", "title")
+
+read_saved_page <- function(response, page_size) {
+  status <- httr2::resp_status(response)
+
+  if (identical(status, 429L)) {
+    return(list(
+      outcome = "rate limited",
+      wait_seconds = as.integer(
+        httr2::resp_header(response, "retry-after")
+      ),
+      reported_total = NA_integer_,
+      records = tibble(
+        key = character(),
+        title = character()
+      )
+    ))
+  }
+
+  if (!identical(status, 200L)) {
+    return(list(
+      outcome = "http error",
+      wait_seconds = NA_integer_,
+      reported_total = NA_integer_,
+      records = tibble(
+        key = character(),
+        title = character()
+      )
+    ))
+  }
+
+  body <- httr2::resp_body_json(response)
+  documents <- body$docs
+  absent <- required_fields[
+    !map_lgl(
+      required_fields,
+      \(field) all(map_lgl(documents, \(record) field %in% names(record)))
+    )
+  ]
+
+  if (length(absent) > 0) {
+    return(list(
+      outcome = str_c(
+        "schema failure: missing ",
+        str_c(absent, collapse = ", ")
+      ),
+      wait_seconds = NA_integer_,
+      reported_total = as.integer(body$numFound),
+      records = tibble(
+        key = character(),
+        title = character()
+      )
+    ))
+  }
+
+  list(
+    outcome = if (length(documents) < page_size) {
+      "last page"
+    } else {
+      "full page"
+    },
+    wait_seconds = NA_integer_,
+    reported_total = as.integer(body$numFound),
+    records = tibble(
+      key = map_chr(documents, "key"),
+      title = map_chr(documents, "title")
+    )
+  )
+}
+
+page_size <- 5L
+refused <- read_saved_page(rate_limited, page_size)
+first_page <- read_saved_page(page_one, page_size)
+second_page <- read_saved_page(page_two, page_size)
+drifted <- read_saved_page(field_renamed, page_size)
+
+collected <- bind_rows(
+  first_page$records,
+  second_page$records
+)
+distinct_records <- collected |>
+  distinct(key, .keep_all = TRUE)
+shortfall <- first_page$reported_total - nrow(distinct_records)
+
+stopifnot(
+  identical(refused$outcome, "rate limited"),
+  identical(refused$wait_seconds, 30L),
+  identical(nrow(refused$records), 0L),
+  identical(first_page$outcome, "full page"),
+  identical(second_page$outcome, "last page"),
+  identical(drifted$outcome, "schema failure: missing title"),
+  identical(nrow(drifted$records), 0L),
+  identical(nrow(collected), 7L),
+  identical(nrow(distinct_records), 6L),
+  identical(first_page$reported_total, 7L),
+  identical(shortfall, 1L)
+)
+
+knitr::kable(
+  tibble(
+    saved_reply = c(
+      "429 with Retry-After",
+      "page 1 of results",
+      "page 2 of results",
+      "title field renamed"
+    ),
+    outcome = c(
+      refused$outcome,
+      first_page$outcome,
+      second_page$outcome,
+      drifted$outcome
+    ),
+    records_returned = c(
+      nrow(refused$records),
+      nrow(first_page$records),
+      nrow(second_page$records),
+      nrow(drifted$records)
+    )
+  ),
+  col.names = c("Saved reply", "Outcome", "Records used"),
+  caption = "Four saved replies and what the reading function did with each",
+  row.names = FALSE
+)
+```
+
+Four things happened, and none of them was a crash or a quietly empty table.
+
+The refusal returned no records and a waiting time taken from the
+`Retry-After` header, which is the service telling the client how long to pause.
+Guessing that number, or retrying immediately, is how a temporary limit becomes
+a ban.
+
+The first page filled its five slots, which is the signal that more results
+exist. The second page returned two, fewer than the page size, which is the
+signal to stop asking.
+
+The renamed field is the quiet one. The record still parsed as JSON and still
+had a key. Only the explicit list of required fields turned it into a reported
+failure instead of a table with a missing column.
+
+### Do not let the arithmetic pass unexamined
+
+The service reported seven matching records. Seven rows arrived across two
+pages. Six of them were distinct, because one work appeared on both pages, which
+happens when ranking shifts between two requests.
+
+```{r}
+pagination_report <- tibble(
+  measure = c(
+    "reported by the service",
+    "rows received",
+    "distinct works kept",
+    "unexplained shortfall"
+  ),
+  value = c(
+    first_page$reported_total,
+    nrow(collected),
+    nrow(distinct_records),
+    shortfall
+  )
+)
+
+stopifnot(
+  identical(pagination_report$value, c(7L, 7L, 6L, 1L)),
+  identical(
+    distinct_records$key,
+    sprintf("/works/OL%d", 1:6)
+  )
+)
+
+knitr::kable(
+  pagination_report,
+  col.names = c("Measure", "Count"),
+  caption = "Reported, received, and kept records after paging",
+  row.names = FALSE
+)
+```
+
+The shortfall of one is the useful number. A collection script that reported six
+records without it would look complete. Record the totals the service claimed,
+the rows you received, and the rows you kept, and treat any gap as a question
+about the collection rather than a rounding detail.
 
 ## Keep API keys private
 
@@ -373,6 +653,10 @@ an apparently complete result.
 - Query parameters describe what to return and how much.
 - Check the status and response type before using the body.
 - Some JSON structures can be reshaped into rows and columns in R.
+- A refusal, a second page, and a renamed field can all be rehearsed from saved
+  replies before any request is sent.
+- Honor the waiting time a service sends instead of guessing one.
+- Compare the total a service reports with the rows you actually kept.
 - Live API results may change even when the code stays the same.
 - A dated fixture can preserve the output used in a published example.
 - Keys and other secrets never belong in published code.

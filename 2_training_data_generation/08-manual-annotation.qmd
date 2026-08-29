@@ -34,6 +34,7 @@ By the end of this lesson, you will be able to:
 - define an annotation unit and label set;
 - write rules for what each label includes and excludes;
 - create a versioned codebook with foundryR;
+- run a pilot and let disagreement change the rules;
 - inspect ambiguous cases rather than hiding them; and
 - explain why a human label is a documented judgment, not automatic truth.
 :::
@@ -47,15 +48,26 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Decide what one label describes
 
-The annotation unit is one sentence. That keeps each decision small enough to
-check, while the `document_id` preserves the job posting or flyer that supplied
-the text. The next chunk loads readr for files, dplyr and tibble for tables,
-and stringr for text checks, then reads the CSV into a tibble.
+The annotation unit is one line of source text: a single job-detail list item
+from a posting, or a single line from the flyer. That keeps each decision small
+enough to check, while the `document_id` preserves the job posting or flyer that
+supplied the text.
+
+Calling those lines sentences would be convenient and wrong. Two of them are
+headings in capital letters, and four are noun phrases with no verb. The
+distinction matters because a rule written for sentences, such as "label the
+main claim of the sentence," has to say what it does with a heading that makes
+no claim at all.
+
+The next chunk loads readr for files, dplyr and tibble for tables,
+purrr for repeated checks, and stringr for text checks, then reads the CSV into
+a tibble.
 
 ```{r}
 library(readr)
 library(dplyr)
 library(tibble)
+library(purrr)
 library(stringr)
 
 workforce_sentences <- read_csv(
@@ -115,7 +127,7 @@ knitr::kable(
     "Reference label",
     "Uncertainty"
   ),
-  caption = "The first eight manually labeled sentences",
+  caption = "The first eight manually labeled text units",
   row.names = FALSE
 )
 ```
@@ -123,6 +135,62 @@ knitr::kable(
 The file calls the reviewed result a **reference label**, not a ground-truth
 label. The label records how this codebook was applied. Another defensible
 codebook could divide the concepts differently.
+
+### Count what the units actually are
+
+The claim that these are not all sentences is checkable. Two properties are
+enough: whether a unit ends in a full stop, question mark, or exclamation mark,
+and whether it is written entirely in capital letters.
+
+```{r}
+unit_shapes <- workforce_sentences |>
+  mutate(
+    ends_with_terminal_mark = str_detect(text, "[.!?]$"),
+    written_in_capitals = text == str_to_upper(text),
+    shape = case_when(
+      written_in_capitals ~ "heading in capitals",
+      ends_with_terminal_mark ~ "complete sentence",
+      TRUE ~ "phrase without a verb ending"
+    )
+  )
+
+shape_counts <- unit_shapes |>
+  count(shape, name = "units")
+
+stopifnot(
+  identical(sum(shape_counts$units), 28L),
+  identical(
+    sum(unit_shapes$ends_with_terminal_mark),
+    22L
+  ),
+  identical(
+    sum(unit_shapes$written_in_capitals),
+    2L
+  ),
+  identical(
+    unit_shapes$shape[unit_shapes$sentence_id == "s025"],
+    "phrase without a verb ending"
+  ),
+  all(
+    unit_shapes$document_id[!unit_shapes$ends_with_terminal_mark] == "F001"
+  )
+)
+
+knitr::kable(
+  shape_counts,
+  col.names = c("Shape of the unit", "Units"),
+  caption = "Twenty-two sentences, two headings, four phrases",
+  row.names = FALSE
+)
+```
+
+Six of the 28 units are not sentences, and all six come from the flyer, whose
+lines were laid out for a reader walking past a noticeboard. `Paid training
+stipend` has no verb; `RIVERTON SKILLS OPEN HOUSE` announces an event.
+
+Both still receive a label, and the codebook has to say how. That is the reason
+the rules below talk about the unit's main explicit claim rather than the
+sentence's subject.
 
 The six flyer rows match its six-line checked transcript. No wording has been
 expanded or interpreted in the annotation file.
@@ -316,6 +384,161 @@ than worked carelessly. The team should record the disagreement, discuss the
 rule, and issue a new codebook version if the definition changes. Overwriting
 the label would erase the evidence needed to improve the instrument.
 
+## Run a pilot before labeling everything
+
+The rules above did not arrive fully formed. They came from a pilot: two
+reviewers labeled six units independently, without discussion, and the pairs
+that disagreed decided what the codebook still had to say.
+
+```{r}
+pilot_round <- tibble(
+  sentence_id = c("s001", "s004", "s010", "s013", "s020", "s024"),
+  reviewer_p = c(
+    "training",
+    "skill",
+    "requirement",
+    "training",
+    "requirement",
+    "training"
+  ),
+  reviewer_q = c(
+    "training",
+    "skill",
+    "other",
+    "requirement",
+    "schedule",
+    "other"
+  )
+) |>
+  left_join(
+    workforce_sentences |>
+      select(sentence_id, text, reference_label),
+    by = join_by(sentence_id)
+  ) |>
+  mutate(agreed = reviewer_p == reviewer_q)
+
+pilot_agreement <- mean(pilot_round$agreed)
+
+stopifnot(
+  identical(nrow(pilot_round), 6L),
+  identical(sum(pilot_round$agreed), 2L),
+  isTRUE(all.equal(pilot_agreement, 2 / 6)),
+  all(!is.na(pilot_round$text)),
+  identical(
+    pilot_round$sentence_id[!pilot_round$agreed],
+    c("s010", "s013", "s020", "s024")
+  )
+)
+
+knitr::kable(
+  pilot_round |>
+    select(sentence_id, text, reviewer_p, reviewer_q, agreed),
+  col.names = c(
+    "Unit",
+    "Text",
+    "Reviewer P",
+    "Reviewer Q",
+    "Agreed"
+  ),
+  caption = "The six-unit pilot, before any rule was written",
+  row.names = FALSE
+)
+```
+
+Two of six matched. That rate would be alarming as a final result and is
+ordinary for a first pass, because the four disagreements are not carelessness.
+Each one is a place where two readings of the same words were both defensible
+under the instructions as they stood.
+
+### Turn each disagreement into a rule
+
+The Lab wrote one rule per disagreement, then adjudicated the four units under
+those rules. The adjudicator was a third reader who had not labeled the pilot.
+
+```{r}
+adjudication_log <- tibble(
+  sentence_id = c("s010", "s013", "s020", "s024"),
+  question = c(
+    "Is a preferred condition still an entry condition?",
+    "Does naming a credential make a unit a training offer?",
+    "Does a required shift describe timing or an entry condition?",
+    "Does a heading claim what its words name?"
+  ),
+  rule_added = c(
+    "A preference is still an entry condition.",
+    "A credential that is required or preferred is not training unless learning is offered.",
+    "Timing takes precedence when a shift is required.",
+    "Headings are other unless the unit explicitly states another category."
+  ),
+  adjudicated_label = c(
+    "requirement",
+    "requirement",
+    "schedule",
+    "other"
+  )
+)
+
+instructions <- annotation_codebook$instructions
+rule_clauses <- c(
+  "still describes an entry condition",
+  "is not training",
+  "schedule takes precedence",
+  "Headings, deadlines, location, work setting, and travel are other"
+)
+
+adjudication_check <- adjudication_log |>
+  left_join(
+    workforce_sentences |>
+      select(sentence_id, reference_label, uncertainty),
+    by = join_by(sentence_id)
+  ) |>
+  mutate(
+    matches_file = adjudicated_label == reference_label,
+    clause_in_codebook = map_lgl(
+      rule_clauses,
+      \(clause) str_detect(instructions, fixed(clause))
+    )
+  )
+
+stopifnot(
+  identical(nrow(adjudication_check), 4L),
+  all(adjudication_check$matches_file),
+  all(adjudication_check$clause_in_codebook),
+  identical(annotation_codebook$version, "1.0.0")
+)
+
+knitr::kable(
+  adjudication_check |>
+    select(sentence_id, question, rule_added, adjudicated_label, uncertainty),
+  col.names = c(
+    "Unit",
+    "Question raised",
+    "Rule written in response",
+    "Decision",
+    "Uncertainty kept"
+  ),
+  caption = "Four pilot disagreements, four rules, four recorded decisions",
+  row.names = FALSE
+)
+```
+
+Every rule in that table is present in the instructions the codebook carries,
+and the check above reads them back out of the instrument rather than trusting
+the description. Every adjudicated decision matches the label the annotation
+file holds today. The cycle is therefore closed: disagreement, rule, decision,
+and a version and hash that identify which instrument produced the labels.
+
+Two details are worth keeping visible. The `uncertainty` column stays at
+`needs_review` for the units that started the argument, so a later reader can
+find the hard cases without re-running the pilot. And the codebook's own
+instruction line still calls the unit a sentence, which the flyer lines show is
+not exact; a later version should say line. That mismatch is recorded here
+rather than quietly corrected.
+
+Pilots are cheap and the instinct to skip them is strong. Six units and one
+afternoon produced four rules that would otherwise have been decided
+inconsistently across 28 units by whoever happened to read them.
+
 ## Protect the people doing the work
 
 Manual annotation can involve sensitive, repetitive, or distressing material.
@@ -335,8 +558,10 @@ perspectives should be designed into the study rather than treated as noise.
 ## What to remember
 
 - Annotation labels are measurements created from written rules.
-- One sentence per row keeps the decision small and traceable.
+- Name the unit precisely; a heading and a phrase are not sentences.
+- One unit per row keeps the decision small and traceable.
 - A codebook needs a version, examples, and a change record.
+- Run a pilot and let its disagreements write the rules.
 - Ambiguity should lead to review, not silent correction.
 - Human labels require ethical working conditions and relevant expertise.
 

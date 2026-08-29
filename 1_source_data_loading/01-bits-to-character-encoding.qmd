@@ -28,7 +28,8 @@ By the end of this lesson, you will be able to:
 
 - distinguish a visible text unit, a code point, and a byte;
 - explain the different jobs of Unicode and UTF-8;
-- convert text to UTF-8 in R; and
+- convert text to UTF-8 in R;
+- recognize bytes that no UTF-8 decoder can read, and a byte-order mark; and
 - check text that looks the same but behaves differently.
 :::
 
@@ -248,6 +249,186 @@ to the two-byte UTF-8 sequence `c3 a9`. `sub = NA_character_` tells R to return
 a missing value rather than silently replace a byte that cannot be converted.
 That visible missing value gives us a chance to investigate the source.
 
+## Bytes that no decoder can read
+
+The attendance file arrived from a system that had already lost track of its own
+encoding, so part of it is not valid UTF-8 at all. UTF-8 has a strict shape: a
+byte such as `c3` promises that a continuation byte follows. When the promised
+byte is missing, the sequence is **malformed** and no decoder can recover the
+intended character.
+
+The example below builds `Hi ` followed by `c3 28`. The byte `28` is an opening
+parenthesis, not a continuation byte, so the pair is broken.
+
+```{r}
+damaged_bytes <- as.raw(c(0x48, 0x69, 0x20, 0xC3, 0x28))
+damaged_text <- rawToChar(damaged_bytes)
+Encoding(damaged_text) <- "UTF-8"
+
+prefix_is_valid <- map_lgl(
+  seq_along(damaged_bytes),
+  \(position) validUTF8(rawToChar(damaged_bytes[seq_len(position)]))
+)
+first_broken_byte <- which(!prefix_is_valid)[1]
+
+strict_result <- iconv(
+  damaged_text,
+  from = "UTF-8",
+  to = "UTF-8",
+  sub = NA_character_
+)
+marked_result <- iconv(
+  damaged_text,
+  from = "UTF-8",
+  to = "UTF-8",
+  sub = "\uFFFD"
+)
+
+stopifnot(
+  identical(validUTF8(damaged_text), FALSE),
+  identical(validUTF8("Hi \u00E9"), TRUE),
+  identical(first_broken_byte, 4L),
+  is.na(strict_result),
+  identical(marked_result, "Hi \uFFFD(")
+)
+
+knitr::kable(
+  tibble(
+    step = c(
+      "Bytes received",
+      "First byte where the prefix stops being valid",
+      "Strict decode with sub = NA_character_",
+      "Decode with a replacement character"
+    ),
+    value = c(
+      paste(as.character(damaged_bytes), collapse = " "),
+      as.character(first_broken_byte),
+      "NA",
+      marked_result
+    )
+  ),
+  col.names = c("Step", "Result"),
+  caption = "One malformed byte sequence read three ways",
+  row.names = FALSE
+)
+```
+
+Three behaviors are worth separating. `validUTF8()` answers yes or no. Strict
+conversion returns `NA`, which is loud and easy to count. Replacement produces
+`U+FFFD`, the replacement character, which keeps the row readable while
+destroying the evidence of what was there.
+
+Position four is where the prefix stops being decodable, and that number is
+worth keeping. Report the file, the offset, and the raw bytes rather than the
+repaired string. A byte offset lets someone open the source and see the record
+that produced it; `Hi \uFFFD(` does not.
+
+Never write the repaired text back over the source. Keep the original bytes,
+record the substitution rule, and count how many values needed it.
+
+## A byte-order mark and a file with two encodings
+
+Two more arrival problems show up in the same class list. Some tools begin a
+UTF-8 file with the three bytes `ef bb bf`, a **byte-order mark**, usually
+shortened to BOM. It carries no text. Left in place it becomes an invisible
+prefix on the first field, so `name` stops matching `name`.
+
+The file also mixes encodings, because rows were appended by two systems. That
+is common in exported data and it means one encoding rule cannot decode the
+whole file.
+
+```{r}
+byte_order_mark <- as.raw(c(0xEF, 0xBB, 0xBF))
+file_rows <- list(
+  header = c(byte_order_mark, charToRaw("name")),
+  row_from_utf8_system = charToRaw(enc2utf8("caf\u00E9")),
+  row_from_latin1_system = as.raw(c(0x63, 0x61, 0x66, 0xE9))
+)
+declared_source_encoding <- c("UTF-8", "UTF-8", "latin1")
+
+drop_byte_order_mark <- function(bytes) {
+  if (
+    length(bytes) >= 3L &&
+      identical(bytes[1:3], byte_order_mark)
+  ) {
+    bytes[-(1:3)]
+  } else {
+    bytes
+  }
+}
+
+decode_row <- function(bytes, declared) {
+  text <- rawToChar(drop_byte_order_mark(bytes))
+  Encoding(text) <- declared
+  enc2utf8(text)
+}
+
+row_report <- tibble(
+  row = names(file_rows),
+  stored_bytes = unname(map_chr(
+    file_rows,
+    \(bytes) paste(as.character(bytes), collapse = " ")
+  )),
+  starts_with_bom = unname(map_lgl(
+    file_rows,
+    \(bytes) {
+      length(bytes) >= 3L &&
+        identical(bytes[1:3], byte_order_mark)
+    }
+  )),
+  valid_as_utf8 = unname(map_lgl(
+    file_rows,
+    \(bytes) validUTF8(rawToChar(drop_byte_order_mark(bytes)))
+  )),
+  declared_by_source = declared_source_encoding,
+  decoded = unname(map2_chr(
+    file_rows,
+    declared_source_encoding,
+    decode_row
+  ))
+)
+
+stopifnot(
+  identical(row_report$starts_with_bom, c(TRUE, FALSE, FALSE)),
+  identical(row_report$valid_as_utf8, c(TRUE, TRUE, FALSE)),
+  identical(row_report$decoded[1], "name"),
+  identical(row_report$decoded[2], "caf\u00E9"),
+  identical(row_report$decoded[3], "caf\u00E9"),
+  identical(
+    row_report$decoded[2],
+    row_report$decoded[3]
+  ),
+  !identical(
+    row_report$stored_bytes[2],
+    row_report$stored_bytes[3]
+  )
+)
+
+knitr::kable(
+  row_report,
+  col.names = c(
+    "Row",
+    "Stored bytes",
+    "Starts with BOM",
+    "Valid as UTF-8",
+    "Declared by source",
+    "Decoded text"
+  ),
+  caption = "Three rows with two encodings and one byte-order mark",
+  row.names = FALSE
+)
+```
+
+The last two rows display the same word from different bytes. That is the point
+of the provenance column: `declared_by_source` records where the decoding rule
+came from, and it is metadata from the sending system rather than a guess made
+from appearance. The third row would have been lost had the whole file been
+decoded as UTF-8, since its bytes are not valid there.
+
+Detecting an encoding by inspection is possible and sometimes necessary, but a
+detector returns a ranked guess. Keep the guess, its confidence, and the byte
+evidence beside the decoded text so that a later reader can disagree with it.
+
 ## A note for Windows users
 
 R 4.2 and newer use UTF-8 as the native encoding on supported versions of
@@ -335,10 +516,12 @@ another system:
 
 1. Find out which encoding the source promises to use.
 2. Read the text using that encoding.
-3. Convert the working copy to UTF-8.
-4. Check accented letters, non-Latin scripts, and emoji.
-5. Normalize only when the task requires equivalent forms to match.
-6. Keep conversion warnings visible.
+3. Remove a byte-order mark before comparing or joining on the first field.
+4. Convert the working copy to UTF-8.
+5. Count the values that failed to decode and keep their byte offsets.
+6. Check accented letters, non-Latin scripts, and emoji.
+7. Normalize only when the task requires equivalent forms to match.
+8. Keep conversion warnings visible.
 
 Avoid `useBytes = TRUE` for normal text work. It tells R to work one byte at a
 time and can split a multi-byte character.
@@ -349,6 +532,10 @@ time and can split a multi-byte character.
 - UTF-8 stores Unicode scalar values as bytes.
 - Reading bytes with the wrong encoding is one common cause of garbled text,
   but appearance alone does not prove the cause.
+- Some byte sequences are valid in no encoding you were promised. Decide
+  whether they become `NA` or a replacement character, and record which.
+- A byte-order mark is invisible and still breaks an exact match.
+- One file can hold rows written under two encodings.
 - An encoding label does not convert text.
 - UTF-8 is a practical working format for text from many languages.
 - Text that looks identical may need Unicode normalization before comparison.

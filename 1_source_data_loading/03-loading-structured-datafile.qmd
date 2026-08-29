@@ -15,7 +15,8 @@ A file can open without an error while a column is missing, an accent mark is
 damaged, or an identification number has changed format. A blank rating can
 also be mistaken for a score if its meaning is not checked. We will follow the
 coordinator's arrival check from the file's raw lines to the one low rating the
-table can support.
+table can support, then repeat the check on a second export that arrives with a
+repeated identifier, an impossible rating, and a row that has too many fields.
 
 ::: {.callout-note}
 The feedback records in this lesson are fictional and were created for
@@ -30,7 +31,9 @@ By the end of this lesson, you will be able to:
 - explain how a structured data file organizes information;
 - load a CSV file into R;
 - check rows, columns, and data types;
-- find missing values; and
+- find missing values;
+- inspect the parse problems, duplicate keys, and out-of-range values in a
+  flawed file; and
 - select records that meet a stated condition.
 :::
 
@@ -296,6 +299,180 @@ One record meets the condition: feedback `1004`, which says that the parcel
 arrived late. The missing rating remains separate because the file does not
 tell us how that person would have scored the experience.
 
+## When the next file is not clean
+
+Everything above worked because the file was well formed. That is the
+uninteresting case. The next export from the same web form is written out
+below, inside the lesson rather than saved to disk, so the damage is visible
+line by line.
+
+It contains six records and six problems: a repeated `feedback_id`, a rating
+typed as a word, a row with an extra field, a rating outside the documented
+range of one to five, a blank rating, and a comment that runs across two
+physical lines inside its quotation marks.
+
+```{r}
+messy_text <- paste(
+  "feedback_id,submitted_at,channel,rating,comment",
+  "1006,2026-08-26,email,4,\"Arrived on time\"",
+  "1006,2026-08-26,email,4,\"Second row with the same ID\"",
+  "1007,2026-08-27,chat,five,\"Rating typed as a word\"",
+  "1008,2026-08-27,web,3,\"Extra field\",unexpected",
+  "1009,2026-08-28,web,9,\"Rating outside the documented range\"",
+  "1010,2026-08-28,email,,\"Comment that runs\non to a second line\"",
+  sep = "\n"
+)
+
+messy_lines <- read_lines(I(messy_text))
+messy_feedback <- suppressWarnings(
+  read_csv(
+    I(messy_text),
+    na = "",
+    col_types = cols(
+      feedback_id = col_character(),
+      submitted_at = col_character(),
+      channel = col_character(),
+      rating = col_integer(),
+      comment = col_character()
+    )
+  )
+)
+
+stopifnot(
+  identical(length(messy_lines), 8L),
+  identical(nrow(messy_feedback), 6L),
+  identical(
+    names(messy_feedback),
+    names(feedback)
+  )
+)
+
+tibble(
+  measure = c("Physical lines", "Records read"),
+  count = c(length(messy_lines), nrow(messy_feedback))
+)
+```
+
+Eight lines produced six records. The quoted line break is the reason, and it is
+why the arrival check earlier in this lesson could only compare a line count
+with a record count on a file known to have none.
+
+`suppressWarnings()` appears because this page turns warnings into errors.
+Suppressing the warning does not discard the evidence: readr keeps a structured
+report of everything it could not parse.
+
+### Read the parse problems
+
+```{r}
+parse_problems <- problems(messy_feedback) |>
+  select(row, col, expected, actual)
+
+stopifnot(
+  inherits(parse_problems, "tbl_df"),
+  identical(nrow(parse_problems), 2L),
+  identical(
+    parse_problems$expected,
+    c("an integer", "5 columns")
+  ),
+  identical(
+    parse_problems$actual,
+    c("five", "6 columns")
+  )
+)
+
+knitr::kable(
+  parse_problems,
+  col.names = c("Row", "Column", "Expected", "Found"),
+  caption = "What readr could not parse",
+  row.names = FALSE
+)
+```
+
+readr counts the header line, so the reported row 4 is the third record, the one
+whose rating was typed as `five`. That value became `NA`. The row with an extra
+field kept its data by folding the stray text into the comment, which is worth
+knowing: a parse problem does not always produce a missing value, and a missing
+value does not always come from a parse problem.
+
+The transferable idea is not the function name. Declaring column types and
+missing-value rules at read time, and keeping the parser's complaint, is the
+same discipline that `dtype` and `na_values` serve in pandas or an explicit
+schema serves in Arrow. A parser that guesses quietly is the hazard in every
+language.
+
+### Check the things a parser cannot know
+
+Parsing succeeds when the shape is right. It says nothing about whether the
+identification numbers are unique or the ratings are possible. Those rules come
+from the data dictionary, and each one can be written as a check that fails
+loudly.
+
+```{r}
+documented_rating_range <- 1:5
+
+row_report <- messy_feedback |>
+  mutate(
+    record_number = row_number(),
+    duplicate_id = feedback_id %in%
+      feedback_id[duplicated(feedback_id)],
+    rating_missing = is.na(rating),
+    rating_out_of_range = !rating_missing &
+      !(rating %in% documented_rating_range),
+    extra_field_text = str_detect(comment, fixed("unexpected")),
+    status = case_when(
+      duplicate_id ~ "quarantine: repeated feedback_id",
+      rating_out_of_range ~ "quarantine: rating outside 1 to 5",
+      extra_field_text ~ "quarantine: extra field folded into comment",
+      rating_missing ~ "keep: rating recorded as missing",
+      TRUE ~ "keep"
+    )
+  )
+
+status_counts <- row_report |>
+  count(status, name = "records")
+
+quarantined <- row_report |>
+  filter(str_starts(status, "quarantine"))
+
+stopifnot(
+  identical(sum(status_counts$records), 6L),
+  identical(nrow(quarantined), 4L),
+  identical(
+    quarantined$feedback_id,
+    c("1006", "1006", "1008", "1009")
+  ),
+  identical(
+    sum(row_report$rating_missing),
+    2L
+  ),
+  identical(
+    n_distinct(messy_feedback$feedback_id),
+    5L
+  )
+)
+
+knitr::kable(
+  row_report |>
+    select(record_number, feedback_id, rating, status),
+  col.names = c("Record", "Feedback ID", "Rating", "Decision"),
+  caption = "Every record accounted for, including the ones held back",
+  row.names = FALSE
+)
+```
+
+Four of six records are held back and the reasons differ. Two share an ID, so
+neither can be trusted as the record for `1006` until the source explains the
+repeat. One folded an extra field into its comment. One carries a rating of
+nine, which the dictionary does not allow.
+
+The two remaining records are kept, and one of them has no rating at all. A
+blank that the dictionary defines as missing is not an error.
+
+The important discipline is the accounting: six records in, six records
+classified, nothing dropped in silence. A pipeline that filtered to the clean
+rows and moved on would have reported two tidy records and lost the fact that a
+duplicate ID exists in the source.
+
 ## Questions to ask about any structured file
 
 The five-row arrival check is complete, but technical tidiness cannot answer
@@ -317,18 +494,24 @@ limits belong alongside the technical checks.
 
 - A structured file uses a consistent arrangement of rows and columns.
 - Quotation marks protect text that contains a separator such as a comma.
+- Quoted line breaks make physical lines and records different counts.
 - Choose important column types rather than relying on guesses.
+- Read the parser's problem report instead of only its output table.
+- Uniqueness and value ranges come from the data dictionary, not the parser.
 - Check missing values before filtering or summarizing.
 - Opening a file successfully is only the beginning of checking it.
 
 At the meeting, the coordinator can report five records, one missing rating,
-and one recorded rating of two. The blank remains a blank, and the file's reach
-remains an open question. That is the useful discipline of an arrival check:
-say exactly what is recorded, what is blank, and what the file cannot settle.
+and one recorded rating of two. The second file is a different report: six
+records, two usable, four held back with a stated reason each. The blank
+remains a blank, and the file's reach remains an open question. That is the
+useful discipline of an arrival check: say exactly what is recorded, what is
+blank, and what the file cannot settle.
 
 ## Sources
 
 - [readr documentation for `read_csv()`](https://readr.tidyverse.org/reference/read_delim.html)
+- [readr documentation for `problems()`](https://readr.tidyverse.org/reference/problems.html)
 - [Tibble documentation](https://tibble.tidyverse.org/)
 - [R Data Import/Export manual](https://cran.r-project.org/doc/manuals/r-release/R-data.html)
 - [RFC 4180: Common format and MIME type for CSV files](https://www.rfc-editor.org/rfc/rfc4180)

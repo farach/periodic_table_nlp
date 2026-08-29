@@ -32,8 +32,9 @@ By the end of this lesson, you will be able to:
 - distinguish a new text variant from a new observation;
 - create controlled template variants;
 - use cmapr job titles without importing unsupported claims;
-- prepare a classification-check payload with huggingfaceR; and
-- test duplication, label balance, and meaning-changing edits.
+- prepare a classification-check payload with huggingfaceR;
+- reject candidates whose label no longer holds; and
+- test duplication, label balance, and whether augmentation changed anything.
 :::
 
 ```{r}
@@ -55,6 +56,7 @@ types into a tibble.
 library(readr)
 library(dplyr)
 library(tibble)
+library(purrr)
 library(stringr)
 library(cmapr)
 library(huggingfaceR)
@@ -258,6 +260,242 @@ must stay outside the evaluation set with its whole family. The five rows
 remain candidates until a person checks that each is natural, useful, and
 consistent with the codebook.
 
+## Review the candidates and reject some
+
+A generator that produces only usable output is a generator nobody checked. The
+Lab added two more candidates that a template would happily produce, then sent
+all seven to a reviewer.
+
+```{r}
+risky_variants <- tibble(
+  source_sentence_id = c("s001", "s015"),
+  source_family_id = c(
+    "training-offer-s001",
+    "training-offer-s015"
+  ),
+  template_id = c(
+    "training-pathway-v1",
+    "training-restatement-v1"
+  ),
+  vocabulary_source = c(
+    "cmapr example_transitions.csv",
+    "author-created template"
+  ),
+  vocabulary_row = c(6L, NA_integer_),
+  vocabulary_commit = c(
+    "eb2d0b3810e07782aab4a81fba1f539133f2ba6a",
+    NA_character_
+  ),
+  text = c(
+    "The financial analyst pathway may include paid training.",
+    "On-the-job training is provided."
+  ),
+  label = "training",
+  synthetic = TRUE,
+  method = "controlled template",
+  codebook_version = augmentation_codebook$version,
+  codebook_hash = augmentation_codebook$hash,
+  review_status = "requires_human_review",
+  split = "training_candidate"
+)
+
+candidate_rows <- bind_rows(augmented_rows, risky_variants)
+
+review_decisions <- tibble(
+  text = candidate_rows$text,
+  decision = c(
+    rep("accept", 5L),
+    "reject",
+    "reject"
+  ),
+  reason = c(
+    rep("States an offer without hedging; label holds", 3L),
+    rep("States when classes meet; label holds", 2L),
+    "\"may include\" removes the explicit offer the label requires",
+    "Repeats a reviewed sentence word for word"
+  )
+)
+
+reviewed_candidates <- candidate_rows |>
+  left_join(review_decisions, by = join_by(text)) |>
+  mutate(
+    duplicates_reviewed_text = text %in%
+      workforce_sentences$text,
+    hedged = str_detect(text, "\\b(may|might|could)\\b")
+  )
+
+accepted_rows <- reviewed_candidates |>
+  filter(decision == "accept")
+rejected_rows <- reviewed_candidates |>
+  filter(decision == "reject")
+
+stopifnot(
+  identical(nrow(candidate_rows), 7L),
+  identical(nrow(accepted_rows), 5L),
+  identical(nrow(rejected_rows), 2L),
+  identical(
+    accepted_rows$text,
+    augmented_rows$text
+  ),
+  all(!accepted_rows$duplicates_reviewed_text),
+  all(!accepted_rows$hedged),
+  identical(sum(rejected_rows$hedged), 1L),
+  identical(
+    sum(rejected_rows$duplicates_reviewed_text),
+    1L
+  )
+)
+
+knitr::kable(
+  reviewed_candidates |>
+    select(text, label, decision, reason),
+  col.names = c(
+    "Candidate text",
+    "Proposed label",
+    "Decision",
+    "Reason"
+  ),
+  caption = "Seven candidates, five accepted, two rejected",
+  row.names = FALSE
+)
+```
+
+Both rejections are the kind a template cannot catch on its own.
+
+The hedged sentence is grammatical, plausible, and wrong for the label it
+carries. Under the codebook, `training` requires an explicit offer, and "may
+include" states a possibility. Training a model on it teaches that hedged
+language marks a training offer, which is close to the opposite of the rule the
+annotators applied.
+
+The repeated sentence is worse in a quieter way. It matches a reviewed row word
+for word, so it adds no information, and if its copy landed in training while
+the original sat in evaluation, the evaluation would measure recall of a string
+the model had already seen.
+
+Two rejections out of seven is a rejection rate, not a defect. A generator with
+no rejections usually means the review was skipped.
+
+## Ask whether the accepted rows changed anything
+
+The five accepted rows are safe. Safe is not the same as useful, and the way to
+find out is to run the downstream task twice.
+
+The task below is deliberately crude: decide whether a sentence is a training
+offer, using terms that appear in training examples and never in the others. It
+learns from the five complete postings `J001` through `J005`, and it is measured
+on the ten units from `J006` and the flyer, which no augmented row was derived
+from.
+
+```{r}
+labeled_pool <- workforce_sentences |>
+  filter(document_id %in% sprintf("J%03d", 1:5)) |>
+  select(text, label = reference_label)
+held_out <- workforce_sentences |>
+  filter(document_id %in% c("J006", "F001")) |>
+  select(sentence_id, text, label = reference_label)
+
+to_words <- function(text) {
+  text |>
+    str_to_lower() |>
+    str_replace_all("[^a-z0-9 ]", " ") |>
+    str_squish() |>
+    str_split(" ")
+}
+
+distinctive_terms <- function(examples) {
+  training_words <- unique(unlist(
+    to_words(examples$text[examples$label == "training"])
+  ))
+  other_words <- unique(unlist(
+    to_words(examples$text[examples$label != "training"])
+  ))
+
+  sort(setdiff(
+    training_words[str_length(training_words) > 2],
+    other_words
+  ))
+}
+
+predict_training <- function(terms, text) {
+  map_lgl(
+    to_words(text),
+    \(row_words) any(row_words %in% terms)
+  )
+}
+
+without_augmentation <- distinctive_terms(labeled_pool)
+with_augmentation <- distinctive_terms(
+  bind_rows(
+    labeled_pool,
+    accepted_rows |>
+      select(text, label)
+  )
+)
+
+is_training <- held_out$label == "training"
+ablation <- tibble(
+  condition = c("without augmentation", "with augmentation"),
+  distinctive_terms = c(
+    length(without_augmentation),
+    length(with_augmentation)
+  ),
+  correct = c(
+    sum(predict_training(without_augmentation, held_out$text) == is_training),
+    sum(predict_training(with_augmentation, held_out$text) == is_training)
+  ),
+  items = nrow(held_out)
+)
+
+new_terms <- setdiff(with_augmentation, without_augmentation)
+
+stopifnot(
+  identical(nrow(held_out), 10L),
+  identical(sum(is_training), 2L),
+  identical(ablation$distinctive_terms, c(13L, 18L)),
+  identical(ablation$correct, c(10L, 10L)),
+  identical(length(new_terms), 5L),
+  identical(
+    new_terms,
+    c("analyst", "assistant", "developer", "junior", "pathway")
+  ),
+  identical(
+    predict_training(without_augmentation, held_out$text),
+    predict_training(with_augmentation, held_out$text)
+  )
+)
+
+knitr::kable(
+  ablation,
+  col.names = c(
+    "Condition",
+    "Distinctive terms",
+    "Correct decisions",
+    "Items judged"
+  ),
+  caption = "The same held-out units judged with and without the augmented rows",
+  row.names = FALSE
+)
+
+new_terms
+```
+
+The augmented rows added five terms to the vocabulary and changed nothing. Every
+held-out decision is identical under both conditions, and both get all ten
+right.
+
+The five new terms explain why. Four of them are job titles and one is the word
+`pathway`, all of which arrived from the template rather than from any new
+observation about how employers describe training. The word doing the work,
+`training`, was already there.
+
+The honest reading of this comparison is modest in both directions. It does not
+show that augmentation is useless; ten items with two positive cases could not
+detect a small improvement, and a stronger model with more data might use the
+extra rows differently. It does show that these five rows earned nothing here,
+which is exactly the finding a report should carry when a training pool grows by
+more than a quarter and the result does not move.
+
 ## Prepare a model check without claiming a result
 
 huggingfaceR can prepare the payload for a zero-shot classification request.
@@ -389,13 +627,15 @@ representation of the underlying distribution.
 - Augmented text is synthetic data, not a newly observed case.
 - Record the source, method, label, and synthetic status.
 - A familiar word does not guarantee that meaning stayed the same.
+- Review every candidate and keep the rejected ones with their reasons.
 - Keep augmented rows out of evaluation data derived from their source.
-- Compare results with and without synthetic examples.
+- Compare results with and without synthetic examples, and report a flat result
+  as readily as a favorable one.
 
-The Lab ends this stage with five reviewable candidates and one rejected edit.
-Their synthetic status and method remain attached. Keyword rules are the final
-shortcut. They face both the designed data and cases with negation or misleading
-word matches.
+The Lab ends this stage with five accepted rows, two rejected ones, and a
+comparison that found no downstream difference. Their synthetic status and
+method remain attached. Keyword rules are the final shortcut. They face both the
+designed data and cases with negation or misleading word matches.
 
 ## Sources
 
