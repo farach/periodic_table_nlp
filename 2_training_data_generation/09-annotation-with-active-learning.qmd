@@ -6,8 +6,8 @@ description: "Learn how a small model can rank unlabeled workforce sentences for
 categories: [training data, active learning, workforce research]
 ---
 
-The Riverton Workforce Lab has a codebook for training, requirements,
-schedules, skills, and other text. For this exercise, five complete job
+A finished codebook covers training, requirements, schedules, skills, and other
+workforce text. For this exercise, five complete job
 postings form the labeled starting set. A sixth posting and the flyer form an
 unlabeled pool. The team could
 read the pool in file order. It tests whether a small model can point
@@ -50,9 +50,9 @@ The teaching file contains reviewed labels so the lesson can check its work.
 During selection, the model receives labels from documents `J001` through
 `J005`. The complete `J006` posting and `F001` flyer form the annotation pool.
 Keeping documents intact avoids training on one part of a posting while
-selecting another part from the same source. The next chunk loads readr for
-files, dplyr and tibble for tables, purrr for repeated checks, and stringr for
-text matching.
+selecting another part from the same source. The code below opens files with
+readr, handles tables with dplyr and tibble, repeats checks with purrr, and
+matches text with stringr.
 
 ```{r}
 library(readr)

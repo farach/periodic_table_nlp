@@ -1,0 +1,325 @@
+---
+title: "Finding abbreviations without trusting capitals"
+subtitle: "Compare all-capital tokens with parenthetical definitions"
+author: "Alex Farach"
+description: "Learn why capital letters create false abbreviation hits and how parenthetical long-form rules behave on constructed examples."
+categories: [phrases and entities, abbreviations, workforce research]
+---
+
+Short forms only help the Riverton Workforce Lab if they can be tied back to
+their long forms. A tempting shortcut is to look for all-capital tokens, then
+ask whether any of them are real abbreviations.
+
+The flyer immediately tests that shortcut. Its headings are printed in capitals,
+so a rule that treats capitals as an abbreviation signal may confuse design with
+meaning.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+In this lesson, you will practice how to:
+
+- find all-capital tokens with a regular expression;
+- hand-check capitalised heading hits;
+- test what a dictionary-and-length guard removes;
+- find `Long Form (SHORT)` definitions; and
+- separate real data from constructed examples.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Find all-capital tokens
+
+The setup chunk reads the sentence file, expands regex matches, and checks words
+against hunspell. stringr regular expressions use the ICU engine, but the
+`[A-Z]` range below is still an ASCII capital-letter rule; it will not match a
+token such as `ÉCOLE`.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(hunspell)
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "tidyr", "purrr", "stringr", "hunspell") %in%
+    loadedNamespaces()
+))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+all_caps_pattern <- "\\b[A-Z]{2,}\\b"
+all_caps_hits <- sentences |>
+  transmute(
+    sentence_id,
+    text,
+    token = str_extract_all(text, all_caps_pattern)
+  ) |>
+  unnest(token)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(nrow(all_caps_hits), 7L),
+  identical(
+    all_caps_hits$token,
+    c("RIVERTON", "SKILLS", "OPEN", "HOUSE", "DATA", "SUPPORT", "CERTIFICATE")
+  ),
+  identical(unique(all_caps_hits$sentence_id), c("s023", "s024"))
+)
+
+knitr::kable(
+  all_caps_hits,
+  col.names = c("Sentence ID", "Text", "All-capital token"),
+  caption = "All-capital tokens found in the Riverton text",
+  row.names = FALSE
+)
+```
+
+An **abbreviation** is any shortened written form, including `Dr.` and
+`approx.`. An **initialism** is built from initial letters and read letter by
+letter, like `NLP`. An **acronym** is built from initial letters and read as a
+word, like `NATO`. This rule finds none of those categories directly; it finds
+runs of two or more ASCII capital letters, a different thing that sometimes
+overlaps. Here it finds 7 tokens, all from the two flyer headings `RIVERTON
+SKILLS OPEN HOUSE` and `DATA SUPPORT CERTIFICATE`. The Riverton text contains no
+genuine short-form abbreviation in those headings.
+
+## Score and guard the capital rule
+
+The lesson author hand-checked every all-capital hit in the Riverton text and
+found no true short-form abbreviations. The guard below keeps only tokens that
+are five characters or shorter and absent from the dictionary.
+
+```{r}
+scored_caps <- all_caps_hits |>
+  mutate(
+    true_abbreviation = FALSE,
+    token_lower = str_to_lower(token),
+    in_dictionary = hunspell_check(token_lower),
+    longer_than_five = str_length(token) > 5L,
+    guarded_match = !longer_than_five & !in_dictionary,
+    removal_reason = case_when(
+      in_dictionary & longer_than_five ~ "dictionary word; longer than five",
+      in_dictionary ~ "dictionary word",
+      longer_than_five ~ "longer than five",
+      TRUE ~ "kept"
+    )
+  )
+
+capital_score <- tibble(
+  rule = c("all-capital token", "short and not in dictionary"),
+  candidates = c(nrow(scored_caps), sum(scored_caps$guarded_match)),
+  hand_rejected = c(
+    sum(!scored_caps$true_abbreviation),
+    sum(scored_caps$guarded_match & !scored_caps$true_abbreviation)
+  ),
+  true_abbreviations_found = c(
+    sum(scored_caps$true_abbreviation),
+    sum(scored_caps$guarded_match & scored_caps$true_abbreviation)
+  )
+)
+
+guard_details <- scored_caps |>
+  select(sentence_id, token, in_dictionary, longer_than_five, guarded_match, removal_reason)
+
+guard_failure_examples <- tibble(token = c("UNESCO", "IT")) |>
+  mutate(
+    token_lower = str_to_lower(token),
+    in_dictionary = hunspell_check(token_lower),
+    longer_than_five = str_length(token) > 5L,
+    guarded_match = !longer_than_five & !in_dictionary
+  )
+
+stopifnot(
+  identical(capital_score$candidates, c(7L, 0L)),
+  identical(capital_score$hand_rejected, c(7L, 0L)),
+  identical(capital_score$true_abbreviations_found, c(0L, 0L)),
+  identical(sum(scored_caps$in_dictionary), 6L),
+  identical(sum(scored_caps$longer_than_five), 4L),
+  identical(any(scored_caps$guarded_match), FALSE),
+  identical(scored_caps$in_dictionary[scored_caps$token == "RIVERTON"], FALSE),
+  identical(scored_caps$longer_than_five[scored_caps$token == "RIVERTON"], TRUE),
+  identical(guard_failure_examples$guarded_match, c(FALSE, FALSE))
+)
+
+knitr::kable(
+  capital_score,
+  col.names = c("Rule", "Candidates kept", "Hand-rejected hits", "True abbreviations found"),
+  caption = "Hand review of the capital-letter abbreviation rule before and after a guard",
+  row.names = FALSE
+)
+
+knitr::kable(
+  guard_details,
+  col.names = c("Sentence ID", "Token", "In dictionary", "Longer than five", "Kept by guard", "Removal reason"),
+  caption = "Dictionary guard details for the all-capital tokens",
+  row.names = FALSE
+)
+
+knitr::kable(
+  guard_failure_examples,
+  col.names = c("Token", "Lowercase token", "In dictionary", "Longer than five", "Kept by guard"),
+  caption = "Two real short forms the guard would reject",
+  row.names = FALSE
+)
+```
+
+The guard keeps zero candidates. In this file that means it removes 7
+hand-rejected heading words and finds 0 true abbreviations. A filter that removes
+every hit is not evidence of a good filter: six tokens are dictionary words, four
+are longer than five characters, and `RIVERTON` is removed only by the length
+limit. The same guard rejects `UNESCO` on length and `IT` because `it` is a
+dictionary word. The dictionary result also depends on the hunspell dictionary
+available at run time.
+
+## Look for parenthetical definitions
+
+The Riverton text has no true `Long Form (SHORT)` examples, so this section uses
+a tiny author-created passage. It is constructed only to show how the pattern
+works.
+
+In the code, `\(match_table, current_sentence_id)` is R shorthand for a small
+function that handles one sentence's match table and ID.
+
+```{r}
+definition_pattern <- regex(
+  "\\b((?:[A-Z][a-z]+\\s+){1,}[A-Z][a-z]+)\\s*\\(([A-Z]{2,})\\)"
+)
+
+extract_definitions <- function(text, sentence_id) {
+  match_tables <- str_match_all(text, definition_pattern)
+  pieces <- map2(match_tables, sentence_id, \(match_table, current_sentence_id) {
+    if (nrow(match_table) == 0L) {
+      return(tibble(
+        sentence_id = character(),
+        long_form = character(),
+        short_form = character()
+      ))
+    }
+    tibble(
+      sentence_id = current_sentence_id,
+      long_form = str_squish(match_table[, 2]),
+      short_form = match_table[, 3]
+    )
+  })
+  list_rbind(pieces)
+}
+
+riverton_definitions <- extract_definitions(sentences$text, sentences$sentence_id)
+riverton_parenthetical_score <- tibble(
+  source = "Riverton text",
+  definitions_found = nrow(riverton_definitions)
+)
+
+constructed_passage <- tibble(
+  sentence_id = c("c001", "c002"),
+  text = c(
+    "The note defines Natural Language Processing (NLP) for the workshop.",
+    "The class lists a Data Support Certificate (DSC) for applicants."
+  )
+)
+
+definitions <- extract_definitions(
+  constructed_passage$text,
+  constructed_passage$sentence_id
+)
+
+shape_only_example <- extract_definitions(
+  "Riverton Skills Centre (NLP)",
+  "c003"
+)
+
+parenthetical_score <- tibble(
+  true_definitions_in_constructed_passage = 2L,
+  definitions_found = nrow(definitions)
+)
+
+stopifnot(
+  identical(nrow(riverton_definitions), 0L),
+  identical(riverton_parenthetical_score$definitions_found, 0L),
+  identical(nrow(definitions), 2L),
+  identical(definitions$long_form, c("Natural Language Processing", "Data Support Certificate")),
+  identical(definitions$short_form, c("NLP", "DSC")),
+  identical(parenthetical_score$definitions_found, 2L),
+  identical(shape_only_example$long_form, "Riverton Skills Centre"),
+  identical(shape_only_example$short_form, "NLP")
+)
+
+knitr::kable(
+  riverton_parenthetical_score,
+  col.names = c("Source", "Definitions found"),
+  caption = "Parenthetical definition rule on the Riverton text",
+  row.names = FALSE
+)
+
+knitr::kable(
+  definitions,
+  col.names = c("Sentence ID", "Long form", "Short form"),
+  caption = "Constructed parenthetical abbreviation definitions",
+  row.names = FALSE
+)
+
+knitr::kable(
+  parenthetical_score,
+  col.names = c("True definitions in constructed passage", "Definitions found"),
+  caption = "Parenthetical rule on the constructed positive cases",
+  row.names = FALSE
+)
+```
+
+The parenthetical pattern finds zero definitions in the Riverton text. It finds
+`Natural Language Processing (NLP)` and `Data Support Certificate (DSC)` in the
+constructed passage, which contains only positive cases. That run cannot show
+how often the pattern fires where it should not, or what it misses. The pattern
+only checks shapes: capitalised words followed by a bracketed run of capitals.
+It does not check that the short-form letters come from the long form, so
+`Riverton Skills Centre (NLP)` also matches. The Schwartz and Hearst algorithm
+listed under Sources checks those letter links and allows lowercase long forms;
+this rule is much smaller.
+
+## What to remember
+
+- All-capital text is only a rough short-form signal.
+- The 7 capital-letter hits in the Riverton headings contain 0 true abbreviations.
+- A guard that keeps 0 of 7 hits has not proved that it protects true abbreviations.
+- The parenthetical rule finds 2 constructed positive cases and 0 Riverton definitions.
+- Shape-only parenthetical rules need a letter-link check before they can be trusted.
+
+Reject the all-capital shortcut for these flyer headings. For future text, keep
+candidate short forms visible until a rule has been tested on both true examples
+and counter-examples.
+
+## Sources
+
+- [stringr regular expression documentation](https://stringr.tidyverse.org/articles/regular-expressions.html)
+- [hunspell R package documentation](https://docs.ropensci.org/hunspell/)
+- [Schwartz and Hearst abbreviation algorithm paper](https://psb.stanford.edu/psb-online/proceedings/psb03/schwartz.pdf)

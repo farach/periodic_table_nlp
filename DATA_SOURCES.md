@@ -107,6 +107,24 @@ The pre-trained UDPipe models distributed through `udpipe_download_model()` are
 CC BY-SA-NC licence, and this project does not publish output derived from
 material restricted to non-commercial use.
 
+## spaCy and its English pipeline
+
+Some lessons use [spaCy](https://spacy.io/) through the
+[spacyr](https://cran.r-project.org/package=spacyr) package. spaCy is a Python
+library, so R reaches it through reticulate. Both spaCy and the
+`en_core_web_sm` pipeline are published under the MIT licence, which is why
+output derived from them can appear here.
+
+Versions are pinned in `requirements-spacy.txt`: spaCy 3.8.7 and
+`en_core_web_sm` 3.8.0. `R/use-spacy.R` finds the project's Python environment
+and starts the pipeline, and stops with setup instructions if it is missing.
+Nothing is downloaded while a page renders.
+
+The pipeline was trained on written web text. It has never seen the invented
+names in this project, and the lessons show it making mistakes on them. Those
+mistakes are reported as evidence about domain mismatch, not as defects in the
+package.
+
 ## Hugging Face Hub
 
 Hugging Face hosts datasets from many contributors. Dataset cards can state a

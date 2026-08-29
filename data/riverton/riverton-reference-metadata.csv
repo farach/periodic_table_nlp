@@ -1,0 +1,5 @@
+artifact,description,source,license,created_on,fingerprint
+riverton-gazetteer.csv,"Invented place names with coordinates, including one deliberate duplicate name",Created for this project,"MIT, same as this repository",2026-08-29,cb850449cf1bf08d24ec9440b46f420c81cdf8d543d79ce3793057c3bcb615b3
+riverton-entities.csv,Invented entities with stable identifiers,Created for this project,"MIT, same as this repository",2026-08-29,df260574f1f6088b51735a4778646ef22e5338186f74db321a96802d9033fe57
+riverton-aliases.csv,"Surface forms that map to those identifiers, including one ambiguous alias",Created for this project,"MIT, same as this repository",2026-08-29,0a419b6a8a742ffab404b8c58c209eaa90b0247a0ee30dbbfc85a6e914a85c64
+language-samples.csv,Short author-written strings labelled with the language they were written in,Created for this project,"MIT, same as this repository",2026-08-29,fa84ffaf608578b8dd0e4f0dbc7425049cd9d362e9d41a1773078973afeccf67

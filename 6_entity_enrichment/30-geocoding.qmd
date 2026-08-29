@@ -1,0 +1,309 @@
+---
+title: "Geocoding place names"
+subtitle: "Join text mentions to an offline gazetteer"
+author: "Alex Farach"
+description: "Learn how a gazetteer turns place names into coordinates while preserving ambiguous and not-found results."
+categories: [entity enrichment, geocoding, workforce research]
+---
+
+On the flyer transcript, `RIVERTON SKILLS OPEN HOUSE` looks ready for a map
+until `Riverton` matches two places in the reference table. The coordinator
+needs the tie to stay visible.
+
+A map needs coordinates, not only a place name. The team can join a mention to a
+small reference file, then keep the unresolved cases visible.
+
+::: {.callout-note}
+The places, lab, and flyer here belong to an invented Riverton setting.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define geocoding and gazetteers in plain language;
+- join place mentions to latitude and longitude;
+- detect duplicate place-name matches;
+- return a miss when a place is absent; and
+- explain why context matters in geocoding.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the offline reference files
+
+Geocoding means turning a place name in text into coordinates: a latitude and
+longitude a map can plot. CSV files supply the examples, dplyr and tibble handle
+the tables, and digest checks the gazetteer fingerprint. A **gazetteer** is a
+list of place names with location information attached. Gazetteers may be public,
+open-licence, or commercial reference datasets. This one is invented and local so
+the lesson can run offline.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(digest)
+
+stopifnot(all(c("readr", "dplyr", "tibble", "digest") %in% loadedNamespaces()))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+gazetteer <- read_csv(
+  "data/riverton/riverton-gazetteer.csv",
+  na = character(),
+  col_types = cols(
+    place_name = col_character(),
+    place_type = col_character(),
+    latitude = col_double(),
+    longitude = col_double(),
+    parent = col_character()
+  )
+)
+
+metadata <- read_csv(
+  "data/riverton/riverton-reference-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    license = col_character(),
+    created_on = col_character(),
+    fingerprint = col_character()
+  )
+)
+
+gazetteer_hash <- digest(
+  paste(read_lines("data/riverton/riverton-gazetteer.csv"), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+expected_hash <- metadata |>
+  filter(artifact == "riverton-gazetteer.csv") |>
+  pull(fingerprint)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(nrow(gazetteer), 9L),
+  identical(sum(gazetteer$place_name == "Riverton"), 2L),
+  identical(gazetteer_hash, expected_hash)
+)
+
+knitr::kable(
+  gazetteer,
+  col.names = c("Place name", "Type", "Latitude", "Longitude", "Parent"),
+  caption = "Invented Riverton gazetteer used offline",
+  row.names = FALSE
+)
+```
+
+The reference table has nine rows. The duplicate `Riverton` rows are deliberate:
+one sits in Marrow County, Calder, and one sits in Tidewater. The `parent` column
+names the larger place that contains a row. The coordinates are arbitrary teaching
+points, not the locations of real sites.
+
+`Riverton Skills Centre` is typed as a building here. In the entity-linking
+lesson, the same words name an organisation. That is not a data-cleaning lesson
+to hide; the same string can denote a place and an organisation, which is the
+ORG-versus-place ambiguity that named-entity lessons have to handle.
+
+## Join mentions to the gazetteer
+
+The team starts with five hand-identified place mentions. One comes from the
+Riverton flyer text. Four are constructed checks written in the same setting so
+we can see resolved, ambiguous, and not-found cases together.
+
+```{r}
+place_mentions <- bind_rows(
+  sentences |>
+    filter(sentence_id == "s023") |>
+    transmute(
+      mention_id = sentence_id,
+      source = "Riverton text",
+      text,
+      mention = "Riverton"
+    ),
+  tibble(
+    mention_id = c("place-02", "place-03", "place-04", "place-05"),
+    source = "constructed check",
+    text = c(
+      "Evening classes at Riverton Skills Centre",
+      "Applicants in Riverton can apply by October 15",
+      "Weekend shifts serve Bellhaven",
+      "The route reaches West Calder"
+    ),
+    mention = c("Riverton Skills Centre", "Riverton", "Bellhaven", "West Calder")
+  )
+)
+
+geocoded_rows <- place_mentions |>
+  left_join(
+    gazetteer,
+    by = join_by(mention == place_name),
+    relationship = "many-to-many"
+  )
+
+stopifnot(
+  identical(nrow(place_mentions), 5L),
+  identical(nrow(geocoded_rows), 7L),
+  identical(sum(is.na(geocoded_rows$latitude)), 1L)
+)
+
+knitr::kable(
+  geocoded_rows,
+  col.names = c(
+    "Mention ID", "Source", "Text", "Mention", "Type",
+    "Latitude", "Longitude", "Parent"
+  ),
+  caption = "Joining place mentions to the gazetteer",
+  row.names = FALSE
+)
+```
+
+The `relationship` argument tells dplyr that one mention may match several rows.
+That fan-out is the ambiguity this lesson is about, so the code declares it. The
+join returns seven rows from five mentions because `Riverton` matches twice.
+`West Calder` receives no coordinates because it is not in the gazetteer.
+
+## Name the unresolved states
+
+A geocoder should not pretend that every mention is solved. The next table gives
+each mention a status.
+
+```{r}
+mention_status <- geocoded_rows |>
+  summarise(
+    matches = sum(!is.na(latitude)),
+    candidate_parents = paste(na.omit(parent), collapse = ", "),
+    .by = c(mention_id, source, text, mention)
+  ) |>
+  mutate(
+    candidate_parents = if_else(candidate_parents == "", "none", candidate_parents),
+    status = case_when(
+      matches == 0L ~ "not found",
+      matches > 1L ~ "ambiguous",
+      TRUE ~ "resolved"
+    )
+  )
+
+status_counts <- tibble(status = c("resolved", "ambiguous", "not found")) |>
+  left_join(
+    mention_status |>
+      count(status, name = "mentions"),
+    by = join_by(status)
+  ) |>
+  mutate(mentions = coalesce(mentions, 0L))
+
+stopifnot(
+  identical(status_counts$mentions, c(2L, 2L, 1L)),
+  identical(sum(status_counts$mentions), 5L)
+)
+
+knitr::kable(
+  mention_status,
+  col.names = c(
+    "Mention ID", "Source", "Text", "Mention", "Matches",
+    "Candidate parents", "Status"
+  ),
+  caption = "Each mention receives a geocoding status",
+  row.names = FALSE
+)
+
+knitr::kable(
+  status_counts,
+  col.names = c("Status", "Mentions"),
+  caption = "Resolved, ambiguous, and not-found mentions",
+  row.names = FALSE
+)
+```
+
+Two mentions resolve to one row. Two are ambiguous. One is not found. These
+counts describe only the five mentions in this lesson.
+
+## Add context when the name is not enough
+
+The name `Riverton` alone cannot choose between the two rows. No county appears
+in the flyer, so the context below is supplied by the analyst to show the
+mechanism. In a pipeline that value would need to come from a document header, a
+posting address, or a stated scope for the collection.
+
+```{r}
+riverton_candidates <- geocoded_rows |>
+  filter(mention_id == "s023") |>
+  select(mention, latitude, longitude, parent)
+
+supplied_context <- tibble(
+  mention = "Riverton",
+  parent_context = "Marrow County"
+)
+
+with_parent_context <- riverton_candidates |>
+  inner_join(supplied_context, by = join_by(mention)) |>
+  filter(parent == parent_context)
+
+stopifnot(
+  identical(nrow(riverton_candidates), 2L),
+  identical(nrow(with_parent_context), 1L),
+  identical(with_parent_context$latitude, 41.821)
+)
+
+knitr::kable(
+  riverton_candidates,
+  col.names = c("Mention", "Latitude", "Longitude", "Parent"),
+  caption = "The name Riverton has two candidate locations",
+  row.names = FALSE
+)
+
+knitr::kable(
+  with_parent_context,
+  col.names = c("Mention", "Latitude", "Longitude", "Parent", "Context supplied"),
+  caption = "Parent context narrows the candidate list",
+  row.names = FALSE
+)
+```
+
+The context row shows a decision rule, not evidence from the flyer. Without the
+parent region, a prior belief, or surrounding text, the two `Riverton` rows remain
+tied.
+
+## What to remember
+
+- A gazetteer is a reference list of place names with locations attached.
+- Geocoding turns a place mention into coordinates.
+- Joining by name can return more than one coordinate pair.
+- A miss should stay a miss rather than becoming a guess.
+- Context such as a parent region can narrow candidates.
+- `ambiguous` and `not found` are first-class geocoding answers.
+
+This teaching gazetteer can map `Riverton Skills Centre` and `Bellhaven`. The
+word `Riverton` still has two candidate locations, and `West Calder` has none.
+
+## Sources
+
+- [GeoNames geographical database](https://www.geonames.org/)
+- [Natural Earth data](https://www.naturalearthdata.com/)
+- [Getty Thesaurus of Geographic Names](https://www.getty.edu/research/tools/vocabularies/tgn/)

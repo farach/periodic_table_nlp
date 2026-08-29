@@ -21,7 +21,7 @@ on the left, through cutting it into usable pieces, to models, generation,
 systems, and visual explanation. The arrangement is editorial: position tells
 you what a task is filed near and nothing else about it. Laying the field out
 at once means a lesson can be found by where it sits rather than by remembering
-its name. Seventeen of the eighty-one lessons are written. The rest are planned,
+its name. Forty-two of the eighty-one lessons are written. The rest are planned,
 and their tiles stay visible so you can see what is coming.
 
 ::: {.callout-tip}
@@ -85,7 +85,7 @@ stopifnot(
   identical(task_map$task_number, 1:81),
   identical(sort(unique(task_map$group_id)), 1:15),
   identical(group_sizes, expected_group_sizes),
-  identical(which(task_map$status == "available"), 1:17),
+  identical(which(task_map$status == "available"), 1:42),
   identical(length(unique(task_map$symbol)), 81L),
   all(task_map$status %in% c("available", "planned")),
   all(nzchar(available$lesson_path)),
@@ -258,7 +258,7 @@ stopifnot(
   ),
   identical(
     str_count(table_html, fixed('class="nlp-element is-available"')),
-    17L
+    42L
   )
 )
 

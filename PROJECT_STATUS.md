@@ -20,20 +20,39 @@
 
 ## Reader-facing work
 
-The Quarto site has 17 linked lessons:
+The Quarto site has 42 linked lessons:
 
 - Source data loading, tasks 1-7
 - Training data generation, tasks 8-13
-- Word parsing, tasks 14-17
+- Word parsing, tasks 14-18
+- Word processing, tasks 19-23
+- Phrases and entities, tasks 24-28
+- Entity enrichment, tasks 29-34
+- Sentences and paragraphs, tasks 35-38
+- Documents, tasks 39-42
 
-Tasks 6-17 share a fictional workforce-research story. Riverton Workforce Lab
-collects a saved job board, extracts a training flyer, creates a versioned
-annotation codebook, tests active-learning selection, inspects outside data
-providers, compares several annotators, creates synthetic candidates,
-stress-tests rule-based weak labels, then decides what counts as a word, which
-words to keep, what words are made of, and what job each word is doing.
+That completes the source-and-training-data stage and the whole
+language-structure stage. Tasks 6-42 share a fictional workforce-research
+story: Riverton Workforce Lab collects a saved job board, extracts a training
+flyer, builds a versioned annotation codebook, compares annotators, then works
+down through words, phrases, entities, sentences and whole documents.
 
-The 64 remaining map tiles are visible and marked as planned.
+The 39 remaining map tiles are visible and marked as planned.
+
+## Models in use
+
+Two, with deliberately different provenance:
+
+- `data/treebank/en_ewt-500-tagger.udpipe` and `en_ewt-500-parser.udpipe` were
+  trained for this site on 500 sentences of the Universal Dependencies English
+  Web Treebank, CC BY-SA 4.0. They are weak on purpose: held-out tagging
+  accuracy 0.9087, unlabelled attachment 0.7235, labelled attachment 0.6561.
+- spaCy `en_core_web_sm` 3.8.0 under spaCy 3.8.7, MIT licensed, reached through
+  `spacyr`. Python packages are pinned in `requirements-spacy.txt` and are not
+  managed by renv.
+
+Putting the two side by side is a teaching device, not a fair contest, and the
+lessons say so.
 
 ## Package integration
 
@@ -61,9 +80,10 @@ lesson.
   version.
 - Source HTML, image, transcript, API, and codebook fixtures have stored
   provenance or fingerprints.
-- Prose passes separate residue and style-pattern scans.
+- Prose passes separate residue and style-pattern scans, plus a repetition scan
+  that fails when lessons start to read like one template.
 - Tasks 6-13 received one narrative review and three independent adversarial
-  logic reviews. High-confidence findings were corrected.
+  logic reviews. Tasks 14-42 received one adversarial round each, applied.
 - The tidyverse rewrite was attacked by an independent hostile code reviewer.
   Two blocking findings were fixed: package-loading chunks whose assertions
   could not fail, and an assertion silently disabled by readr's default
@@ -86,7 +106,6 @@ lesson.
 
 ## Next content
 
-Task 18 is dependency parsing, which follows naturally from the tagger in task
-17 and needs a parser model built the same way. Tasks 19 to 22 are stemming,
-lemmatization, normalization, and spell checking; `SnowballC` and `hunspell`
-are already locked and cover all four offline.
+Task 43 begins the models-and-analysis stage with training models, which needs
+a different kind of lesson: the site has so far avoided fitting anything. Tasks
+43 to 47 cover the model lifecycle and are a natural group.

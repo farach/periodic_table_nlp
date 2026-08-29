@@ -1,0 +1,302 @@
+---
+title: "Extracting document metadata"
+subtitle: "Describe a source before analyzing its text"
+author: "Alex Farach"
+description: "Learn how to extract HTML metadata and compute provenance fields for a Riverton source file."
+categories: [documents, metadata, workforce research]
+---
+
+A saved job-board page can answer questions the sentence table cannot. The
+coordinator can read the sentence text, but a later reviewer will ask a different
+question: where did this document come from?
+
+The answer depends on **metadata**, the description of a document rather than the
+main content. Metadata lets a collection be filtered, cited, checked, and
+audited.
+
+Lesson 6 pulled sentences out of this page and recorded a fingerprint for the
+file. This lesson looks at what the page says about itself: its title, declared
+character set, headings, and absent links. Then it separates those claims from
+facts computed from the copy on disk.
+
+::: {.callout-note}
+The job board page is a fictional fixture written for metadata practice.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+Work through the examples so you can:
+
+- explain what document metadata records;
+- extract a title, meta elements, headings, and link counts from HTML;
+- assemble one row per document; and
+- separate author claims from computed provenance facts.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Read the document description
+
+The metadata pass reads source lines and recorded fields, builds document
+records, repeats attribute work, checks strings, computes fingerprints, and
+extracts HTML fields. A **provenance** field records where a document came from
+and how this copy can be checked.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(digest)
+library(rvest)
+
+job_page_path <- "data/workforce/job-board.html"
+job_page_lines <- read_lines(job_page_path)
+job_page <- rvest::read_html(job_page_path)
+
+page_title <- job_page |>
+  rvest::html_element("title") |>
+  rvest::html_text2()
+
+meta_nodes <- job_page |>
+  rvest::html_elements("meta")
+
+meta_table <- tibble(
+  element = "meta",
+  attributes = map_chr(
+    rvest::html_attrs(meta_nodes),
+    \(attributes) str_c(names(attributes), attributes, sep = "=", collapse = "; ")
+  )
+)
+
+stopifnot(
+  identical(length(job_page_lines), 82L),
+  identical(page_title, "Riverton workforce opportunities"),
+  identical(nrow(meta_table), 1L),
+  identical(meta_table$attributes, "charset=utf-8")
+)
+
+knitr::kable(
+  bind_rows(
+    tibble(element = "title", attributes = page_title),
+    meta_table
+  ),
+  col.names = c("HTML element", "Recorded value"),
+  caption = "Title and meta elements claimed inside the HTML document",
+  row.names = FALSE
+)
+```
+
+The title and `charset` value are claims written inside the file. They are useful
+metadata, but they come from the document itself.
+
+## Extract headings and links
+
+Headings summarize the structure around the job text. Link targets show where a
+page points. This fixture points nowhere: it was written without `<a>` elements,
+so the link count below is zero. A real job board would usually carry apply
+links; a zero count should prompt a check of the file.
+
+```{r}
+h1_text <- job_page |>
+  rvest::html_elements("h1") |>
+  rvest::html_text2()
+
+h2_text <- job_page |>
+  rvest::html_elements("h2") |>
+  rvest::html_text2()
+
+heading_table <- bind_rows(
+  tibble(level = "h1", text = h1_text),
+  tibble(level = "h2", text = h2_text)
+)
+
+heading_summary <- heading_table |>
+  group_by(level) |>
+  summarise(
+    headings = n(),
+    example = first(text),
+    .groups = "drop"
+  )
+
+link_targets <- job_page |>
+  rvest::html_elements("a") |>
+  rvest::html_attr("href")
+
+link_markup_count <- sum(str_detect(job_page_lines, "<a(\\s|>)"))
+
+stopifnot(
+  identical(nrow(heading_table), 7L),
+  identical(nrow(heading_summary), 2L),
+  identical(sum(heading_table$level == "h1"), 1L),
+  identical(sum(heading_table$level == "h2"), 6L),
+  identical(heading_table$text[2], "Data analyst trainee"),
+  identical(length(link_targets), 0L),
+  identical(link_markup_count, 0L)
+)
+
+knitr::kable(
+  heading_summary,
+  col.names = c("Level", "Headings", "Example"),
+  caption = "Heading counts extracted from the job board page",
+  row.names = FALSE
+)
+```
+
+The seven headings describe the page shape without reprinting the scraped
+sentence table. The zero link count is also metadata: this fixture has no
+outbound targets to preserve.
+
+## Make one row per document
+
+A collection table needs one record per document. Long lists can be collapsed for
+review while the detailed extraction stays available in code.
+
+```{r}
+document_metadata <- tibble(
+  document_id = "job-board-html",
+  title = page_title,
+  meta_count = nrow(meta_table),
+  h1_count = sum(heading_table$level == "h1"),
+  h2_count = sum(heading_table$level == "h2"),
+  link_count = length(link_targets),
+  link_status = if_else(
+    length(link_targets) == 0L,
+    "no anchor elements in fixture",
+    str_c(link_targets, collapse = " | ")
+  )
+)
+
+stopifnot(
+  identical(nrow(document_metadata), 1L),
+  identical(document_metadata$meta_count, 1L),
+  identical(document_metadata$h1_count, 1L),
+  identical(document_metadata$h2_count, 6L),
+  identical(document_metadata$link_count, 0L),
+  identical(document_metadata$link_status, "no anchor elements in fixture")
+)
+
+knitr::kable(
+  document_metadata,
+  col.names = c(
+    "Document ID",
+    "Title",
+    "Meta elements",
+    "H1 headings",
+    "H2 headings",
+    "Links",
+    "Link status"
+  ),
+  caption = "One-row metadata record for the saved job board page",
+  row.names = FALSE
+)
+```
+
+The row gives the coordinator a document-level handle for filtering and audit. It
+keeps the zero-link result visible rather than hiding an empty vector in code.
+
+## Add provenance fields
+
+HTML self-description is not enough. A collection also needs fields supplied by
+the collector and fields computed from the stored copy. The fingerprint here is
+SHA-256 over the file text joined with `\n` line endings.
+
+```{r}
+recorded_page_metadata <- read_csv(
+  "data/workforce/job-board-metadata.csv",
+  na = character(),
+  col_types = cols(
+    source_file = col_character(),
+    created_for_lesson = col_character(),
+    retrieval_status = col_character(),
+    records = col_character(),
+    md5 = col_character(),
+    rights_note = col_character()
+  )
+)
+
+source_size <- as.integer(file.info(job_page_path)$size)
+content_fingerprint <- digest::digest(
+  paste(read_lines(job_page_path), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+
+provenance <- document_metadata |>
+  mutate(
+    source_file = job_page_path,
+    recorded_creation_date = recorded_page_metadata$created_for_lesson,
+    retrieval_status = recorded_page_metadata$retrieval_status,
+    size_bytes = source_size,
+    sha256 = content_fingerprint,
+    .after = document_id
+  )
+
+stopifnot(
+  identical(nrow(recorded_page_metadata), 1L),
+  identical(recorded_page_metadata$created_for_lesson, "2026-08-28"),
+  identical(recorded_page_metadata$retrieval_status, "synthetic archived page"),
+  identical(source_size, 3524L),
+  identical(
+    content_fingerprint,
+    "ce1c515cfda7658ff586b4f42dd1d71c805041a6c32bc88c97b54a20f0fd5eba"
+  ),
+  identical(str_length(content_fingerprint), 64L),
+  identical(str_length(recorded_page_metadata$md5), 32L)
+)
+
+knitr::kable(
+  provenance |>
+    select(
+      document_id,
+      source_file,
+      recorded_creation_date,
+      retrieval_status,
+      size_bytes,
+      sha256,
+      title
+    ),
+  col.names = c(
+    "Document ID",
+    "Source file",
+    "Recorded creation date",
+    "Retrieval status",
+    "Bytes",
+    "SHA-256 fingerprint",
+    "Author-claimed title"
+  ),
+  caption = "Two recorded claims and two computed facts joined to the document record",
+  row.names = FALSE
+)
+```
+
+The title, charset, creation date, and retrieval status are assertions someone
+wrote down. Only the size and SHA-256 fingerprint were computed from the copy on
+disk. The SHA-256 hash follows the course rule: read the text lines, join them
+with `\n`, and hash that string. `tools::md5sum()` hashes raw file bytes, so line
+endings would be part of the answer.
+
+## What to remember
+
+- Metadata describes a document rather than its main content.
+- HTML can claim its own title, character set, headings, and links.
+- A collection needs recorded provenance fields and computed file checks.
+- Hash text files with a recorded line-ending rule and SHA-256.
+- Author claims and computed fingerprints answer different audit questions.
+
+For this page, the title and creation date are claims. The byte count, zero
+links, and SHA-256 are checks on the saved fixture. Those checks help audit the
+file; they do not make the fixture complete or externally sourced.
+
+## Sources
+
+- [rvest overview](https://rvest.tidyverse.org/)
+- [HTML Living Standard metadata content](https://html.spec.whatwg.org/multipage/dom.html#metadata-content)
+- [digest package documentation](https://eddelbuettel.github.io/digest/)

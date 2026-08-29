@@ -1,0 +1,397 @@
+---
+title: "Finding what a sentence denies"
+subtitle: "Use parser links to test a simple negation rule"
+author: "Alex Farach"
+description: "Learn why negation breaks keyword matching and how a small parser-based rule performs on workforce text."
+categories: [word processing, negation recognition, workforce research]
+---
+
+A search for experience requirements begins with an uneasy hit. The team tries a
+quick match for `experience` followed by `required` and finds a
+sentence that says, `No prior data experience is required.`
+
+That match is dangerous. The words are present, but the sentence says experience
+is not required. A keyword search has found the opposite of the claim the team
+cares about.
+
+**Negation recognition** looks for language that reverses or blocks an ordinary
+positive reading. A real system needs a **scope**, the part of the sentence that
+the negating word controls.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. The hand markings below are teaching judgments
+for these 28 sentences.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- show why a keyword search can misread negation;
+- find `no` in this corpus and name trigger words it does not test;
+- define a small scope rule using dependency links;
+- read a development-set score without treating it as performance; and
+- explain why trigger words alone are not enough.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Parse the sentences
+
+The parser starts with the CSV, then readr reads it, dplyr and tibble shape the
+tables, purrr repeats scope work, stringr matches text, tokenizers fixes the
+word split, and udpipe applies the local model. Each sentence is passed to
+udpipe as one vertical block of tokens.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tokenizers)
+library(udpipe)
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+parser <- udpipe_load_model(
+  "data/treebank/en_ewt-500-parser.udpipe"
+)
+
+vertical <- sentences$text |>
+  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  map_chr(\(tokens) paste(tokens, collapse = "\n"))
+
+parsed <- udpipe_annotate(
+  parser,
+  x = vertical,
+  doc_id = sentences$sentence_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "default"
+) |>
+  as.data.frame() |>
+  as_tibble()
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(nrow(parsed), 178L),
+  identical(sentences$text[sentences$sentence_id == "s002"], "No prior data experience is required."),
+  identical(parsed$lemma[parsed$doc_id == "s002" & parsed$token == "No"], "no")
+)
+```
+
+The parser supplies lemmas, relation labels, and head word IDs. Those columns
+let the team move beyond a plain string match.
+
+## Start with the tempting keyword search
+
+The naive search below lowercases each sentence and looks for `experience`
+before `required`.
+
+```{r}
+keyword_hits <- sentences |>
+  mutate(
+    lowered = str_to_lower(text),
+    keyword_match = str_detect(lowered, "experience.*required")
+  ) |>
+  filter(keyword_match) |>
+  select(sentence_id, text)
+
+stopifnot(
+  identical(keyword_hits$sentence_id, c("s002", "s019", "s027")),
+  identical(nrow(keyword_hits), 3L),
+  str_detect(keyword_hits$text[1], fixed("No prior data experience"))
+)
+
+knitr::kable(
+  keyword_hits,
+  col.names = c("Sentence ID", "Text"),
+  caption = "Keyword matches for experience before required",
+  row.names = FALSE
+)
+```
+
+The keyword search returns three sentences. Two of them start with `No`, so the
+plain match is not enough for the requirement question.
+
+## Mark negation by hand
+
+Before showing the rule, the team records a judgment for every sentence. For
+this teaching example, a sentence counts as negated when a word in it reverses
+the truth of the sentence's main claim. These are single-author teaching labels,
+so they are open to dispute.
+
+```{r}
+no_sentence_count <- sum(str_detect(str_to_lower(sentences$text), "\\bno\\b"))
+
+hand_judgments <- sentences |>
+  transmute(
+    sentence_id,
+    text,
+    hand_negated = sentence_id %in% c("s002", "s027"),
+    reason = case_when(
+      sentence_id == "s002" ~ "No negates prior data experience; experience is not required.",
+      sentence_id == "s027" ~ "No negates prior experience in this flyer headline.",
+      TRUE ~ "No negating word changes the main claim."
+    )
+  )
+
+stopifnot(
+  identical(nrow(hand_judgments), 28L),
+  all(hand_judgments$sentence_id %in% sentences$sentence_id),
+  identical(no_sentence_count, 2L),
+  identical(
+    hand_judgments$sentence_id[hand_judgments$hand_negated],
+    sentences$sentence_id[str_detect(str_to_lower(sentences$text), "\\bno\\b")]
+  )
+)
+
+knitr::kable(
+  hand_judgments,
+  col.names = c("Sentence ID", "Text", "Hand-marked negated", "Reason"),
+  caption = "Hand judgments for negation in the 28 Riverton sentences",
+  row.names = FALSE
+)
+```
+
+Only 2 of the 28 sentences are hand-marked as negated. Both use `No`, but they
+have different shapes: one is a full sentence and one is a flyer headline.
+
+## Define a parser-based scope rule
+
+The rule has three parts. First, find a trigger whose lemma is `no`, `not`, or
+`never`. A surface-form backup also checks `advmod` and `det` tokens; on these 28
+sentences it never has to add a trigger. Second, build a scope from the trigger's
+head, that head's clause head, and their direct dependents. Third, mark the
+sentence negated when that scope contains a form of `be`. The rule was shaped
+after reading `s002`, so this page treats the score as a demonstration.
+This trigger-and-scope shape echoes NegEx, a rule system built for clinical notes
+in 2001; the idea is broader than that setting.
+
+```{r}
+negating_words <- c("no", "not", "never")
+
+parsed_with_triggers <- parsed |>
+  mutate(
+    token_lower = str_to_lower(token),
+    lemma_lower = str_to_lower(lemma),
+    negation_trigger = lemma_lower %in% negating_words |
+      (dep_rel %in% c("advmod", "det") & token_lower %in% negating_words)
+  )
+
+surface_only_triggers <- parsed_with_triggers |>
+  filter(
+    !(lemma_lower %in% negating_words),
+    dep_rel %in% c("advmod", "det"),
+    token_lower %in% negating_words
+  )
+
+trigger_inventory <- parsed_with_triggers |>
+  filter(token_lower %in% negating_words) |>
+  distinct(token_lower) |>
+  arrange(token_lower)
+
+triggers <- parsed_with_triggers |>
+  filter(negation_trigger) |>
+  transmute(
+    sentence_id = doc_id,
+    trigger_id = token_id,
+    trigger = token,
+    trigger_head_id = head_token_id
+  )
+
+scope_for_trigger <- function(sentence_id, trigger_id, trigger, trigger_head_id) {
+  current_sentence_id <- sentence_id
+  current_trigger_id <- trigger_id
+  current_trigger <- trigger
+  current_trigger_head_id <- trigger_head_id
+
+  sentence_tokens <- parsed_with_triggers |>
+    filter(doc_id == current_sentence_id)
+
+  clause_head_id <- sentence_tokens$head_token_id[
+    match(current_trigger_head_id, sentence_tokens$token_id)
+  ]
+
+  if (is.na(clause_head_id) || identical(clause_head_id, "0")) {
+    clause_head_id <- current_trigger_head_id
+  }
+
+  sentence_tokens |>
+    filter(
+      token_id %in% c(current_trigger_id, current_trigger_head_id, clause_head_id) |
+        head_token_id %in% c(current_trigger_head_id, clause_head_id)
+    ) |>
+    transmute(sentence_id = doc_id, trigger = current_trigger, token, lemma, upos, dep_rel)
+}
+
+trigger_scopes <- pmap(triggers, scope_for_trigger) |>
+  list_rbind()
+
+rule_predictions <- trigger_scopes |>
+  group_by(sentence_id) |>
+  summarise(
+    rule_negated = any(lemma == "be" & upos == "AUX"),
+    scope_tokens = paste(token, collapse = " "),
+    .groups = "drop"
+  ) |>
+  right_join(sentences |> select(sentence_id), by = "sentence_id") |>
+  mutate(
+    rule_negated = if_else(is.na(rule_negated), FALSE, rule_negated),
+    scope_tokens = if_else(is.na(scope_tokens), "", scope_tokens)
+  )
+
+stopifnot(
+  identical(nrow(surface_only_triggers), 0L),
+  identical(trigger_inventory$token_lower, "no"),
+  identical(triggers$sentence_id, c("s002", "s027")),
+  identical(triggers$trigger, c("No", "No")),
+  identical(
+    trigger_scopes$token[trigger_scopes$sentence_id == "s002"],
+    c("No", "prior", "data", "experience", "is", "required", ".")
+  ),
+  identical(
+    trigger_scopes$token[trigger_scopes$sentence_id == "s027"],
+    c("No", "prior", "experience", "required")
+  ),
+  identical(
+    rule_predictions$sentence_id[rule_predictions$rule_negated],
+    "s002"
+  )
+)
+
+knitr::kable(
+  trigger_scopes,
+  col.names = c("Sentence ID", "Trigger", "Scoped token", "Lemma", "POS tag", "Relation"),
+  caption = "Tokens inside the simple negation scope",
+  row.names = FALSE
+)
+```
+
+The corpus contains `No` but not `not` or `never`; those words are in the rule so
+the pattern is explicit, not because this batch tests them. The surface-form
+backup adds no triggers here. The rule catches the full sentence because the
+scope contains `is`, and it misses the headline because the headline has no
+helper verb.
+
+## Show the development-set score
+
+The scoring table compares the parser-based rule with the hand judgments on the
+same sentences that shaped the rule. It is a demonstration, not a held-out test.
+
+```{r}
+negation_scored <- hand_judgments |>
+  select(sentence_id, hand_negated) |>
+  left_join(rule_predictions, by = "sentence_id") |>
+  mutate(
+    result = case_when(
+      hand_negated & rule_negated ~ "true positive",
+      !hand_negated & rule_negated ~ "false positive",
+      hand_negated & !rule_negated ~ "false negative",
+      TRUE ~ "true negative"
+    )
+  )
+
+score_summary <- negation_scored |>
+  summarise(
+    true_positive = sum(result == "true positive"),
+    false_positive = sum(result == "false positive"),
+    false_negative = sum(result == "false negative"),
+    true_negative = sum(result == "true negative"),
+    correct = sum(hand_negated == rule_negated),
+    total = n(),
+    correct_fraction = paste0(correct, "/", total),
+    .groups = "drop"
+  )
+
+mistakes <- negation_scored |>
+  filter(hand_negated != rule_negated) |>
+  left_join(sentences |> select(sentence_id, text), by = "sentence_id") |>
+  select(sentence_id, text, hand_negated, rule_negated, result, scope_tokens)
+
+stopifnot(
+  identical(score_summary$true_positive, 1L),
+  identical(score_summary$false_positive, 0L),
+  identical(score_summary$false_negative, 1L),
+  identical(score_summary$true_negative, 26L),
+  identical(score_summary$correct_fraction, "27/28"),
+  identical(mistakes$sentence_id, "s027")
+)
+
+knitr::kable(
+  score_summary,
+  col.names = c(
+    "True positives",
+    "False positives",
+    "False negatives",
+    "True negatives",
+    "Correct",
+    "Total",
+    "Correct fraction"
+  ),
+  caption = "Parser-rule score against hand negation judgments",
+  row.names = FALSE
+)
+
+knitr::kable(
+  mistakes,
+  col.names = c("Sentence ID", "Text", "Hand negated", "Rule negated", "Result", "Scope tokens"),
+  caption = "The case the simple rule gets wrong",
+  row.names = FALSE
+)
+```
+
+The rule agrees with the hand marking on 27 of 28 sentences. That number should
+not be read as performance. Twenty-six sentences contain no negation, so a rule
+that never fired would score 26 of 28. The rule was written after looking at the
+two negated sentences and was shaped to catch `s002`, so `s002` is not a test of
+it. One true positive and one false negative is a recall count from two cases,
+and zero false positives in twenty-six negatives is still consistent with false
+alarms in a larger set. The score also belongs to the parser: every trigger,
+scope, and lemma comes from the 500-sentence model. Keep the error: `No prior
+experience required` has no helper verb, and this rule requires one.
+
+## What to remember
+
+- Negation can reverse a keyword match.
+- This corpus tests `no`; it does not test `not` or `never`.
+- A scope says which words the trigger controls.
+- The simple parser rule catches `s002` and misses `s027`.
+- Trigger words are only one way English says no: `Experience is unnecessary`
+  has no trigger word and the same shape as `Experience is required`.
+- The 27/28 score is a demonstration on the development set.
+
+Use the rule as a triage note beside the sentence, not as an automatic label. The
+missed headline is the part to carry forward into the next design.
+
+## Sources
+
+- [Chapman et al. (2001), A Simple Algorithm for Identifying Negated Findings and Diseases in Discharge Summaries](https://doi.org/10.1006/jbin.2001.1029)
+- [Universal Dependencies relation `det`](https://universaldependencies.org/u/dep/det.html)
+- [Universal Dependencies relation `advmod`](https://universaldependencies.org/u/dep/advmod.html)
+- [UDPipe R package reference](https://bnosac.github.io/udpipe/docs/doc0.html)

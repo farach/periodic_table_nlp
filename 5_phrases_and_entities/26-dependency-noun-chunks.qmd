@@ -1,0 +1,364 @@
+---
+title: "Finding noun chunks from grammar links"
+subtitle: "Compare spaCy phrases with small dependency chunks"
+author: "Alex Farach"
+description: "Learn how noun chunks group nouns with attached words, using spaCy and a local UDPipe dependency parse."
+categories: [phrases and entities, noun chunks, workforce research]
+---
+
+After counting adjacent phrases, the Riverton Workforce Lab has a practical
+choice to make: should `basic spreadsheet skills` become one review item or
+three separate words?
+
+A grammar-aware method offers one convention for making that choice. It can
+group candidate phrases for review, but it does not create a single correct
+inventory of English phrases.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+Use this lesson to practice how to:
+
+- define a noun chunk in plain language;
+- extract noun chunks with a trained spaCy pipeline;
+- build simple chunks from a UDPipe dependency parse;
+- explain why chunk definitions differ across tools;
+- separate agreement from accuracy; and
+- explain why parser errors affect chunk rules.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Ask a trained pipeline for noun chunks
+
+This setup chunk reads the sentence file, runs spaCy, and later supports a small
+UDPipe-based rule. A **noun chunk** is a short, flat phrase built around one
+noun: the noun plus the determiners, numbers, compounds, and describing words
+directly in front of it. Chunks do not nest and do not reach past the noun, so
+`evening classes in October` becomes `evening classes` and `October`, not one
+long phrase. Where a chunk stops is a convention, and tools draw the line in
+different places.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tokenizers)
+library(udpipe)
+library(spacyr)
+source("R/use-spacy.R")
+
+stopifnot(all(
+  c("readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "udpipe", "spacyr") %in%
+    loadedNamespaces()
+))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+pipeline <- use_project_spacy()
+pipeline_info <- spacy_pipeline_version()
+parsed_spacy <- spacy_parse(
+  setNames(sentences$text, sentences$sentence_id),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+)
+spacy_phrases <- nounphrase_extract(parsed_spacy) |>
+  as_tibble() |>
+  transmute(doc_id, chunk = str_replace_all(nounphrase, "_", " "))
+
+example_text <- "Riverton Skills Centre will run evening classes in October."
+example_parsed <- spacy_parse(
+  c(example = example_text),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+)
+example_phrases <- nounphrase_extract(example_parsed) |>
+  as_tibble() |>
+  transmute(chunk = str_replace_all(nounphrase, "_", " "))
+
+spacy_finalize()
+
+pipeline_table <- tibble(
+  field = names(pipeline_info),
+  value = unlist(pipeline_info, use.names = FALSE)
+)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(pipeline$model, "en_core_web_sm"),
+  identical(pipeline_info$version, "3.8.0"),
+  identical(pipeline_info$license, "MIT"),
+  identical(pipeline_info$spacy, "3.8.7"),
+  identical(nrow(parsed_spacy), 179L),
+  identical(nrow(spacy_phrases), 40L),
+  identical(spacy_phrases$chunk[spacy_phrases$doc_id == "s001"], "Paid 12-week training"),
+  identical(spacy_phrases$chunk[spacy_phrases$doc_id == "s017"], "A valid driver's license"),
+  identical(
+    example_phrases$chunk,
+    c("Riverton Skills Centre", "evening classes", "October")
+  )
+)
+
+knitr::kable(
+  pipeline_table,
+  col.names = c("Pipeline field", "Value"),
+  caption = "spaCy pipeline used for noun chunks",
+  row.names = FALSE
+)
+
+knitr::kable(
+  spacy_phrases |>
+    slice_head(n = 12),
+  col.names = c("Sentence ID", "spaCy noun chunk"),
+  caption = "First spaCy noun chunks from the Riverton sentences",
+  row.names = FALSE
+)
+```
+
+The released spaCy pipeline returns 40 noun chunks for the 28 sentences. For the
+check sentence, it returns three flat chunks: `Riverton Skills Centre`, `evening
+classes`, and `October`.
+
+## Build chunks from dependency links
+
+The UDPipe model used here was trained for this site on 500 sentences. On 13
+held-out political weblog posts from 2003 to 2006, its unlabelled attachment
+score was 0.7235 and its labelled attachment score was 0.6561. spaCy's pipeline
+is a released production model trained on far more text. This comparison is a
+teaching device, not a contest between equals.
+
+The local UDPipe model has no tokenizer, so the lesson gives it one token per
+line. In the code, `\(tokens)` is R shorthand for a small function that handles
+one sentence's tokens at a time.
+
+This classroom rule starts from each token tagged as `NOUN` or `PROPN`. It then
+collects direct dependents whose relation is `det`, `amod`, `compound`, or
+`nummod`: a determiner such as `a` or `the`, a describing word, a noun working
+with another noun, or a number modifying a noun.
+
+```{r}
+parser <- udpipe_load_model("data/treebank/en_ewt-500-parser.udpipe")
+
+vertical <- sentences$text |>
+  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  map_chr(\(tokens) paste(tokens, collapse = "\n"))
+
+annotated <- udpipe_annotate(
+  parser,
+  x = vertical,
+  doc_id = sentences$sentence_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "default"
+) |>
+  as.data.frame() |>
+  as_tibble()
+
+token_count_gap <- parsed_spacy |>
+  count(doc_id, name = "spacy_tokens") |>
+  inner_join(
+    annotated |>
+      count(doc_id, name = "udpipe_tokens"),
+    by = "doc_id"
+  ) |>
+  filter(spacy_tokens != udpipe_tokens)
+
+chunk_relations <- c("det", "amod", "compound", "nummod")
+
+collect_chunk <- function(current_doc_id, current_token_id) {
+  annotated |>
+    filter(
+      doc_id == current_doc_id,
+      token_id == current_token_id |
+        (head_token_id == current_token_id & dep_rel %in% chunk_relations)
+    ) |>
+    arrange(as.integer(token_id)) |>
+    pull(token) |>
+    str_c(collapse = " ")
+}
+
+udpipe_chunks <- annotated |>
+  filter(upos %in% c("NOUN", "PROPN")) |>
+  transmute(
+    doc_id,
+    token_id,
+    chunk = map2_chr(doc_id, token_id, collect_chunk)
+  ) |>
+  select(doc_id, chunk)
+
+stopifnot(
+  identical(nrow(annotated), 178L),
+  identical(token_count_gap$doc_id, "s017"),
+  identical(token_count_gap$spacy_tokens, 8L),
+  identical(token_count_gap$udpipe_tokens, 7L),
+  identical(nrow(udpipe_chunks), 56L),
+  identical(udpipe_chunks$chunk[1:5], c("Paid", "Paid week", "week training", "No prior data experience", "Evening schedules")),
+  identical(annotated$upos[annotated$doc_id == "s001" & annotated$token == "Paid"], "PROPN"),
+  identical(udpipe_chunks$chunk[udpipe_chunks$doc_id == "s027"], "No prior experience")
+)
+
+knitr::kable(
+  token_count_gap,
+  col.names = c("Sentence ID", "spaCy tokens", "UDPipe tokens"),
+  caption = "The one token-count difference between the two parses",
+  row.names = FALSE
+)
+
+knitr::kable(
+  udpipe_chunks |>
+    slice_head(n = 12),
+  col.names = c("Sentence ID", "UDPipe-built chunk"),
+  caption = "First noun chunks built from dependency links",
+  row.names = FALSE
+)
+```
+
+The two systems report different row counts because they split words
+differently. spaCy separates `driver's` in `s017` into `driver` and `'s`; the
+tokenizer feeding UDPipe keeps it as one token, which accounts for the 179 versus
+178 row counts. The printed spaCy chunk strings still keep `Paid 12-week
+training` and `A valid driver's license`; the gap is in token rows, not those
+displayed chunk strings.
+
+This rule emits one chunk for every noun-like tag, so chunks can overlap. `Paid`,
+`Paid week`, and `week training` all come from the same four words in `s001`.
+The rule also pastes a head to its dependents without checking that the words sit
+next to each other, so `Paid week` skips over `12-` and is not a string in the
+sentence. `Paid` appears because the small tagger labelled it `PROPN`, which is
+wrong here: it describes the training. A chunk rule inherits tagging mistakes
+before it makes its own.
+
+## Compare the two lists
+
+Exact agreement is strict: the sentence ID and the chunk text must both match.
+That makes agreement a string match, not accuracy. Neither list is ground truth,
+and spaCy chunks are non-overlapping while the UDPipe-built list can overlap.
+
+```{r}
+agreed_chunks <- inner_join(
+  distinct(spacy_phrases),
+  distinct(udpipe_chunks),
+  by = c("doc_id", "chunk")
+)
+
+comparison_summary <- tibble(
+  measure = c("spaCy chunks", "UDPipe-built chunks", "exact agreements"),
+  count = c(nrow(spacy_phrases), nrow(udpipe_chunks), nrow(agreed_chunks))
+)
+
+different_examples <- tibble(
+  method = c("spaCy", "UDPipe-built"),
+  sentence_id = c("s005", "s005"),
+  chunk = c("A high school diploma", "A high school"),
+  explanation = c(
+    "spaCy keeps the full education phrase.",
+    "The dependency rule attaches words to school and leaves diploma outside this chunk."
+  )
+)
+
+spreadsheet_examples <- bind_rows(
+  spacy_phrases |>
+    filter(doc_id == "s004", str_detect(chunk, "spreadsheet")) |>
+    mutate(method = "spaCy"),
+  udpipe_chunks |>
+    filter(doc_id == "s004", str_detect(chunk, "spreadsheet")) |>
+    mutate(method = "UDPipe-built")
+) |>
+  select(method, doc_id, chunk)
+
+stopifnot(
+  identical(nrow(spacy_phrases), 40L),
+  identical(nrow(udpipe_chunks), 56L),
+  identical(nrow(agreed_chunks), 25L),
+  identical(spacy_phrases$chunk[spacy_phrases$doc_id == "s005"], "A high school diploma"),
+  identical(udpipe_chunks$chunk[udpipe_chunks$doc_id == "s005"], "A high school"),
+  identical(agreed_chunks$chunk[1], "No prior data experience"),
+  identical(
+    spreadsheet_examples$chunk,
+    c("basic spreadsheet skills", "spreadsheet", "need basic spreadsheet skills")
+  )
+)
+
+knitr::kable(
+  comparison_summary,
+  col.names = c("Measure", "Count"),
+  caption = "String matches across two chunking conventions",
+  row.names = FALSE
+)
+
+knitr::kable(
+  different_examples,
+  col.names = c("Method", "Sentence ID", "Chunk", "Explanation"),
+  caption = "One sentence where the two chunk methods differ",
+  row.names = FALSE
+)
+
+knitr::kable(
+  spreadsheet_examples,
+  col.names = c("Method", "Sentence ID", "Chunk"),
+  caption = "How each method handles the spreadsheet-skills phrase",
+  row.names = FALSE
+)
+```
+
+The two lists have 25 exact string matches. That is agreement, not accuracy, and
+the counts 40 and 56 are not two measurements of the same thing. For the opening
+question, spaCy groups `basic spreadsheet skills`, while the UDPipe-built rule
+also emits `spreadsheet` and overreaches to `need basic spreadsheet skills`. A
+bigram takes neighbouring words even across phrase boundaries; a chunk groups
+words the parser links together. Whether that helps depends on whether the
+parser is right.
+
+## What to remember
+
+- Noun chunks are flat, non-overlapping spans under a tool-specific convention.
+- spaCy returns 40 noun chunks for these 28 sentences.
+- The UDPipe-built rule returns 56 overlapping chunks from a deliberately weak teaching model.
+- The 25 exact matches are agreement, not accuracy.
+- `Paid week` shows how a rule can manufacture text by pasting non-adjacent tokens.
+- Tokenization alone explains the 179 versus 178 row-count gap.
+
+Review chunk lists as prompts for human inspection. When the two tools disagree,
+check the sentence, the tokenization, and the parse before drawing any conclusion
+about the phrase.
+
+## Sources
+
+- [spaCy documentation for linguistic features](https://spacy.io/usage/linguistic-features)
+- [spacyr package documentation](https://spacyr.quanteda.io/)
+- [UDPipe R package reference](https://bnosac.github.io/udpipe/docs/doc0.html)
+- [Universal Dependencies relation documentation](https://universaldependencies.org/u/dep/)

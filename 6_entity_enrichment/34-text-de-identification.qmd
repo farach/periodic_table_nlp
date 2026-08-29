@@ -1,0 +1,288 @@
+---
+title: "De-identifying text"
+subtitle: "Mask personal identifiers and measure what leaks"
+author: "Alex Farach"
+description: "Learn how simple masking rules find invented personal identifiers and why de-identification is judged by leaks."
+categories: [entity enrichment, de-identification, workforce research]
+---
+
+Sharing a sample applicant note raises a privacy question for the coordinator:
+can names, a phone number, an email address, a birth date, and a street address
+be hidden before the note enters a teaching packet?
+
+**Text de-identification** removes or masks details that identify a person. This
+lesson uses only invented values, then measures what the rules failed to hide.
+
+::: {.callout-note}
+The applicant note and Riverton setting are invented; no real person is described.
+:::
+
+::: {.callout-important}
+Every personal value in this lesson is invented for teaching. The phone number
+uses the reserved 555-0100 through 555-0199 fiction range, and the email address
+uses the reserved `example.com` domain.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- name common personal identifier categories;
+- write simple masking rules for an invented note;
+- compare found, missed, and wrongly masked identifiers;
+- use spaCy `PERSON` entities as a second detector; and
+- explain why rule-based redaction is not safe for real personal data.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Mark every identifier first
+
+The next chunk loads dplyr and tibble for tables, purrr for applying the masking
+patterns, stringr for matching text, and spacyr for the second detector. The
+author-marked table is the reference for this lesson. It includes a surname,
+`Green`, that also appears as a common word.
+
+```{r}
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(spacyr)
+
+stopifnot(all(c("dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
+
+applicant_note <- paste(
+  "Invented applicant note: Maya Green asked the Riverton Workforce Lab to call 555-0104.",
+  "Her email is maya.green@example.com and her date of birth is 2001-04-12.",
+  "She listed 123 Example Street as her address.",
+  "Taylor Reed can confirm the class seat.",
+  "Green prefers text messages after evening shifts.",
+  sep = " "
+)
+
+identifiers <- tibble(
+  identifier_id = paste0("id", 1:7),
+  category = c(
+    "person",
+    "phone",
+    "email",
+    "date_of_birth",
+    "street_address",
+    "person",
+    "person"
+  ),
+  surface = c(
+    "Maya Green",
+    "555-0104",
+    "maya.green@example.com",
+    "2001-04-12",
+    "123 Example Street",
+    "Taylor Reed",
+    "Green"
+  )
+)
+
+masking_rules <- tibble(
+  category = c("email", "phone", "date_of_birth", "street_address", "person"),
+  pattern = c(
+    "\\b[A-Za-z0-9._%+-]+@example\\.com\\b",
+    "\\b555-01\\d{2}\\b",
+    "\\b\\d{4}-\\d{2}-\\d{2}\\b",
+    "\\b\\d{1,4}\\s+Example\\s+(?:Street|Avenue|Road)\\b",
+    "\\b(?:Maya Green|Taylor Reed)\\b"
+  ),
+  replacement = c("[EMAIL]", "[PHONE]", "[DATE_OF_BIRTH]", "[STREET_ADDRESS]", "[PERSON]")
+)
+
+stopifnot(
+  identical(nrow(identifiers), 7L),
+  identical(sum(identifiers$category == "person"), 3L),
+  all(str_detect(applicant_note, fixed(identifiers$surface)))
+)
+
+knitr::kable(
+  identifiers,
+  col.names = c("Identifier ID", "Category", "Surface text"),
+  caption = "Author-marked invented identifiers",
+  row.names = FALSE
+)
+```
+
+The categories are a small teaching subset of the identifiers listed in HIPAA's
+Safe Harbor guidance. The note contains seven marked identifiers. Three are
+person names or name fragments.
+
+## Run the masking rules
+
+The rule set masks email, phone, date of birth, street address, and two full
+names. The evaluation counts exact category-and-text matches.
+
+```{r}
+rule_hits <- pmap(
+  masking_rules,
+  function(category, pattern, replacement) {
+    tibble(
+      category = category,
+      surface = str_extract_all(applicant_note, pattern)[[1]]
+    )
+  }
+) |>
+  list_rbind() |>
+  filter(!is.na(surface), surface != "")
+
+found_identifiers <- identifiers |>
+  semi_join(rule_hits, by = join_by(category, surface))
+missed_identifiers <- identifiers |>
+  anti_join(rule_hits, by = join_by(category, surface))
+wrongly_masked <- rule_hits |>
+  anti_join(identifiers, by = join_by(category, surface))
+
+replacement_map <- setNames(masking_rules$replacement, masking_rules$pattern)
+masked_note <- str_replace_all(applicant_note, replacement_map)
+leaked_identifiers <- identifiers |>
+  filter(str_detect(masked_note, fixed(surface)))
+
+found_missed_accounting <- tibble(
+  measure = c("found", "missed"),
+  identifiers = c(
+    nrow(found_identifiers),
+    nrow(missed_identifiers)
+  )
+)
+
+mask_accounting <- tibble(
+  measure = c("wrongly masked", "leaked after masking"),
+  identifiers = c(
+    nrow(wrongly_masked),
+    nrow(leaked_identifiers)
+  )
+)
+
+stopifnot(
+  identical(found_missed_accounting$identifiers, c(6L, 1L)),
+  identical(mask_accounting$identifiers, c(0L, 1L)),
+  identical(missed_identifiers$surface, "Green")
+)
+
+knitr::kable(
+  found_missed_accounting,
+  col.names = c("Measure", "Identifiers"),
+  caption = "Expected identifiers found and missed by the rules",
+  row.names = FALSE
+)
+
+knitr::kable(
+  mask_accounting,
+  col.names = c("Measure", "Identifiers"),
+  caption = "Extra masks and leaks after replacement",
+  row.names = FALSE
+)
+
+knitr::kable(
+  tibble(masked_note = masked_note),
+  col.names = "Masked note",
+  caption = "Invented note after rule-based masking",
+  row.names = FALSE
+)
+```
+
+The rules and expected identifiers share an author, so the counts do not estimate
+recall on real notes. The name rule is just a list of the two full names in this
+note. It cannot find a third name, and the leaked value is `Green`, a surname
+that the rule did not treat as a name when it appeared alone.
+
+## Compare spaCy PERSON labels
+
+spaCy can provide a second detector for person names. It does not detect phone
+numbers, email addresses, birth dates, or street addresses as `PERSON` entities,
+so this comparison is limited to the person category.
+
+```{r}
+source("R/use-spacy.R")
+
+pipeline <- use_project_spacy()
+pipeline_version <- spacy_pipeline_version()
+
+parsed <- spacy_parse(
+  c(applicant_note = applicant_note),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+)
+
+spacy_people <- entity_extract(parsed, type = "all") |>
+  filter(entity_type == "PERSON") |>
+  transmute(
+    category = "person",
+    surface = str_replace_all(entity, "_", " ")
+  )
+
+spacy_found <- identifiers |>
+  filter(category == "person") |>
+  semi_join(spacy_people, by = join_by(category, surface))
+spacy_missed <- identifiers |>
+  filter(category == "person") |>
+  anti_join(spacy_people, by = join_by(category, surface))
+
+spacy_accounting <- tibble(
+  measure = c("PERSON found", "PERSON missed"),
+  identifiers = c(nrow(spacy_found), nrow(spacy_missed))
+)
+
+spacy_finalize()
+
+stopifnot(
+  identical(pipeline_version$version, "3.8.0"),
+  identical(pipeline_version$license, "MIT"),
+  identical(pipeline_version$spacy, "3.8.7"),
+  identical(spacy_accounting$identifiers, c(2L, 1L)),
+  identical(spacy_people$surface, c("Maya Green", "Taylor Reed"))
+)
+
+knitr::kable(
+  spacy_people,
+  col.names = c("Category", "spaCy surface"),
+  caption = "spaCy PERSON detections in the invented note",
+  row.names = FALSE
+)
+
+knitr::kable(
+  spacy_accounting,
+  col.names = c("Measure", "Identifiers"),
+  caption = "spaCy PERSON accounting against the expected names",
+  row.names = FALSE
+)
+```
+
+spaCy finds the two full names and misses the standalone surname. This second
+detector changes the route to the same warning: the note still leaks a name.
+
+## What to remember
+
+- De-identification starts by marking what must not escape.
+- Found, missed, wrongly masked, and leaked are different measures.
+- The rule set missed a surname that also looks like a common word.
+- A second detector is not a safety guarantee.
+- Rule-based masking is not safe enough for real personal data.
+- Invented safe-looking values still need documented conventions.
+
+This invented note is safe enough for a lesson because the values are fake and
+reserved. The one leaked surname is enough reason to keep the rule set away from
+real applicant notes.
+
+## Sources
+
+- [NIST Privacy Framework](https://www.nist.gov/privacy-framework)
+- [HIPAA de-identification guidance](https://www.hhs.gov/hipaa/for-professionals/privacy/special-topics/de-identification/index.html)
+- [North American Numbering Plan Administrator: 555 line numbers](https://nationalnanpa.com/enas/555LineNumbersReport.do)
+- [RFC 2606: Reserved Top Level DNS Names](https://www.rfc-editor.org/rfc/rfc2606)
+- [spaCy named entity recognition documentation](https://spacy.io/usage/linguistic-features#named-entities)

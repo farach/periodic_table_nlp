@@ -1,0 +1,307 @@
+---
+title: "Cleaning raw text"
+subtitle: "Repair common damage without pretending nothing was lost"
+author: "Alex Farach"
+description: "Learn how HTML remnants, whitespace, invisible characters, and mojibake change raw text in R."
+categories: [documents, text cleaning, workforce research]
+---
+
+Saved job-board text, flyer lines, and one accented customer-service comment make
+up this cleaning set. The comment comes from an unrelated project, kept here
+because it contains an accented word.
+
+Text from the wild carries damage. Tags remain after a copy, spacing carries page
+layout, invisible characters hide inside words, and accented letters can be read
+with the wrong encoding.
+
+**Cleaning** means changing raw text so a later step can compare, count, or read
+it more consistently. Each repair needs a record of what it changed and what it
+cannot recover.
+
+::: {.callout-note}
+The Riverton sources are fictional. The customer-service comments come from a
+separate teaching fixture.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson prepares you to:
+
+- remove HTML while preserving readable text;
+- explain what whitespace squishing keeps and discards;
+- detect zero-width and control characters; and
+- describe why mojibake repair can fail.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Remove HTML remnants
+
+The HTML example starts with the comment file, display tables, text checks, and
+an HTML parser. HTML is the markup language that names page parts such as
+headings, paragraphs, and lists.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(rvest)
+
+feedback <- read_csv(
+  "data/customer_feedback.csv",
+  na = character(),
+  col_types = cols(
+    feedback_id = col_character(),
+    submitted_at = col_character(),
+    channel = col_character(),
+    rating = col_character(),
+    comment = col_character()
+  )
+)
+
+entity_html <- "<p>Training &amp; tools&nbsp;provided.</p>"
+regex_tag_stripped <- str_remove_all(entity_html, "<[^>]+>")
+html_text <- rvest::html_text2(rvest::read_html(entity_html))
+
+stopifnot(
+  identical(nrow(feedback), 5L),
+  identical(feedback$comment[2], "The café listing was easy to find."),
+  identical(regex_tag_stripped, "Training &amp; tools&nbsp;provided."),
+  identical(html_text, "Training & tools provided."),
+  str_detect(regex_tag_stripped, fixed("&amp;")),
+  str_detect(regex_tag_stripped, fixed("&nbsp;"))
+)
+
+knitr::kable(
+  tibble(
+    method = c("Remove tags with a regular expression", "Read HTML with rvest"),
+    result = c(regex_tag_stripped, html_text)
+  ),
+  col.names = c("Method", "Result"),
+  caption = "Entity handling after two HTML-cleaning approaches",
+  row.names = FALSE
+)
+```
+
+`html_text2()` turns HTML into readable text and decodes entities such as `&amp;`
+and `&nbsp;`. A regular expression can remove visible tags, but it leaves those
+entities behind. Keep the raw HTML when element boundaries still matter.
+
+## Squish whitespace
+
+Whitespace includes spaces, tabs, and line breaks. Lesson 21 covers the
+comparison side of `str_squish()`. Here the point is layout loss: the function
+collapses runs of whitespace to one ordinary space and trims the ends.
+
+```{r}
+workforce_sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+flyer_lines <- workforce_sentences |>
+  filter(document_id == "F001") |>
+  pull(text)
+
+flyer_block <- paste(flyer_lines, collapse = "\n")
+squished_flyer <- str_squish(flyer_block)
+
+stopifnot(
+  identical(nrow(workforce_sentences), 28L),
+  identical(length(flyer_lines), 6L),
+  identical(str_count(flyer_block, "\n"), 5L),
+  identical(str_count(squished_flyer, "\n"), 0L),
+  str_detect(
+    squished_flyer,
+    fixed("RIVERTON SKILLS OPEN HOUSE DATA SUPPORT CERTIFICATE")
+  )
+)
+
+knitr::kable(
+  tibble(
+    version = c("Flyer lines", "After str_squish()"),
+    text = c(flyer_block, squished_flyer)
+  ),
+  col.names = c("Version", "Text"),
+  caption = "Whitespace squishing removes the flyer line layout",
+  row.names = FALSE
+)
+```
+
+Squishing helps when accidental spaces would make two records look different. It
+also discards deliberate layout. The flyer heading, certificate heading, stipend,
+class time, requirement, and deadline become one long line.
+
+## Remove invisible characters
+
+Unicode sorts characters into categories. `Cf` is the format category, including
+zero-width spaces that can sit inside a string without appearing on screen. `Cc`
+is the control category. In a stringr pattern, `\\p{Cf}` and `\\p{Cc}` name those
+categories.
+
+```{r}
+zero_width_space <- intToUtf8(0x200B)
+clean_label <- "data support"
+damaged_label <- paste0("data", zero_width_space, " support")
+label_repaired <- str_remove_all(damaged_label, "[\\p{Cf}]")
+
+control_text <- str_c("shift", intToUtf8(0x0001), "starts soon")
+control_marked <- str_replace_all(control_text, "[\\p{Cc}]", " ")
+control_repaired <- str_squish(control_marked)
+control_squished <- str_squish(control_text)
+
+stopifnot(
+  !identical(clean_label, damaged_label),
+  identical(nchar(clean_label), 12L),
+  identical(nchar(damaged_label), 13L),
+  8203L %in% utf8ToInt(damaged_label),
+  identical(label_repaired, clean_label),
+  identical(str_count(control_text, "[\\p{Cc}]"), 1L),
+  1L %in% utf8ToInt(control_text),
+  !identical(control_squished, control_repaired),
+  identical(control_repaired, "shift starts soon")
+)
+
+knitr::kable(
+  tibble(
+    example = c(
+      "Clean label",
+      "With zero-width space",
+      "After repair",
+      "Control after whitespace squish",
+      "Control after category repair"
+    ),
+    text = c(
+      clean_label,
+      damaged_label,
+      label_repaired,
+      control_squished,
+      control_repaired
+    ),
+    characters = c(
+      nchar(clean_label),
+      nchar(damaged_label),
+      nchar(label_repaired),
+      nchar(control_squished),
+      nchar(control_repaired)
+    )
+  ),
+  col.names = c("Example", "Text", "Character count"),
+  caption = "Invisible characters change a string even when it looks familiar",
+  row.names = FALSE
+)
+```
+
+The two labels look alike to a hurried reader, but R does not treat them as
+identical. Whitespace squishing does not remove the control character in the
+second example; the category repair does. Keep an audit field if hidden
+characters help explain source damage.
+
+## Repair mojibake carefully
+
+**Mojibake** is text damage caused by reading bytes with the wrong character
+encoding. UTF-8 is a common encoding for many languages. Windows-1252 is another
+encoding often seen in older Western-language files.
+
+Lesson 21 showed `café` stored in two legal Unicode normal forms. Both forms are
+readable and both preserve the word. This section is about a separate failure:
+bytes read with the wrong decoder, or bytes replaced after a lossy read.
+
+```{r}
+accented_word <- str_extract(feedback$comment[2], fixed("café"))
+mojibake_word <- iconv(
+  accented_word,
+  from = "Windows-1252",
+  to = "UTF-8"
+)
+repaired_word <- iconv(
+  mojibake_word,
+  from = "UTF-8",
+  to = "Windows-1252"
+)
+replacement_text <- "caf\uFFFD"
+encoding_examples <- tibble(
+  version = c(
+    "Correct UTF-8",
+    "Read as Windows-1252",
+    "Repaired",
+    "Typed by hand to show a lossy read"
+  ),
+  text = c(accented_word, mojibake_word, repaired_word, replacement_text)
+) |>
+  mutate(
+    code_points = vapply(
+      text,
+      \(value) str_c(utf8ToInt(value), collapse = ", "),
+      character(1)
+    )
+  )
+
+stopifnot(
+  identical(accented_word, "café"),
+  identical(mojibake_word, "cafÃ©"),
+  identical(repaired_word, accented_word),
+  !identical(replacement_text, accented_word),
+  identical(utf8ToInt(replacement_text), c(99L, 97L, 102L, 65533L)),
+  identical(unname(encoding_examples$code_points[4]), "99, 97, 102, 65533")
+)
+
+knitr::kable(
+  encoding_examples,
+  col.names = c("Version", "Text", "Unicode code points"),
+  caption = "The word café after encoding damage and repair",
+  row.names = FALSE
+)
+```
+
+Reading UTF-8 bytes as Windows-1252 turns `café` into `cafÃ©`. Both bytes survive,
+so reversing the mistake restores the word. A different failure is lossy: when a
+read leaves `�`, the string contains U+FFFD rather than the source character. The
+repair cannot infer which letter belonged there. Mojibake and U+FFFD are separate
+problems.
+
+## Cleaning is a recorded choice
+
+Cleaning makes later comparison easier. It can also remove source structure,
+spacing, hidden characters, and evidence of encoding damage. A collection should
+record each cleaning step, keep the raw source, and make the cleaned version a
+separate field.
+
+## What to remember
+
+- HTML parsers decode entities that tag-stripping leaves behind.
+- Whitespace squishing fixes accidental spacing and erases layout.
+- Invisible characters and encoding damage can make matching strings unequal.
+- Mojibake can be reversible, while U+FFFD means information was lost.
+- Keep the raw source and record every cleaning step.
+
+Cleaned fields belong beside raw fields. Comparisons can use the cleaned copy,
+while the raw text keeps the evidence needed to explain the repair.
+
+## Sources
+
+- [rvest documentation for extracting text](https://rvest.tidyverse.org/reference/html_text.html)
+- [stringr documentation for whitespace helpers](https://stringr.tidyverse.org/reference/str_trim.html)
+- [The Unicode Standard](https://www.unicode.org/standard/standard.html)
+- [W3C Character Model for the World Wide Web](https://www.w3.org/TR/charmod/)

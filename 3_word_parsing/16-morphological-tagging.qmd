@@ -6,8 +6,8 @@ description: "Learn how morphological tagging separates stems, affixes, ambiguit
 categories: [word parsing, morphology, workforce research]
 ---
 
-The Riverton Workforce Lab has 28 reviewed sentences from a job board page and
-a training flyer. The team wants to know whether `shifts` and `shift` should
+Twenty-eight reviewed sentences come from a job board page and a training
+flyer. The team wants to know whether `shifts` and `shift` should
 count as the same word when it summarizes the vocabulary.
 
 That question matters because a worker may search for training, while a job
@@ -46,10 +46,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Read the workforce sentences
 
-The next chunk loads readr for files, dplyr and tibble for tables, purrr for
-repeated list checks, stringr for text checks, tokenizers for word splitting,
-and hunspell for dictionary analysis. It then reads the 28 reviewed workforce
-sentences.
+To read the sentences, the code brings in readr for files, dplyr and tibble for
+tables, purrr for repeated list checks, stringr for text checks, tokenizers for
+word splitting, and hunspell for dictionary analysis. It then reads the 28
+reviewed workforce sentences.
 
 ```{r}
 library(readr)

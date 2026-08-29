@@ -1,0 +1,238 @@
+---
+title: "Checking dictionary unknowns"
+subtitle: "Measure what a spell checker catches and what it cannot see"
+author: "Alex Farach"
+description: "Learn how hunspell flags unknown workforce words and how to test constructed spelling errors."
+categories: [word processing, spell checking, workforce research]
+---
+
+A vocabulary list is almost ready for review. The team wants to know whether a
+spell checker can clean obvious typing errors before a
+person reads the list.
+
+That sounds simple until the team runs into proper names and real-word typos. A
+dictionary can say which strings it does not know. It cannot know what the writer
+meant.
+
+**Spell checking** here means asking hunspell for words that are absent from its
+dictionary. The result is a list of unknown words, not a list of all errors.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. The deliberately misspelled words below are
+constructed examples made from Riverton words.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- run `hunspell()` on the Riverton vocabulary;
+- count word types the dictionary flags;
+- build a small constructed spelling test;
+- see why a test built from known non-words cannot fail; and
+- explain why real-word errors escape a dictionary.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Check the real vocabulary
+
+For the vocabulary check, readr brings in the sentences, dplyr and tibble shape
+the word list, purrr repeats the dictionary call, tidytext creates tokens, and
+hunspell supplies dictionary flags. It builds the same lowercased 96-word
+Riverton vocabulary as the stemming lesson, using the same tokenization rule.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(tidytext)
+library(hunspell)
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+vocabulary <- sentences |>
+  select(sentence_id, text) |>
+  unnest_tokens(word, text) |>
+  distinct(word) |>
+  arrange(word) |>
+  pull(word)
+
+known_to_hunspell <- \(words) map_lgl(hunspell(words), \(result) length(result) == 0L)
+
+flagged_types <- vocabulary[!known_to_hunspell(vocabulary)] |>
+  sort()
+
+flagged_table <- tibble(flagged_word_type = flagged_types)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(length(vocabulary), 96L),
+  identical(length(flagged_types), 2L),
+  identical(flagged_types, c("october", "riverton"))
+)
+
+knitr::kable(
+  flagged_table,
+  col.names = "Flagged word type",
+  caption = "Riverton word types flagged by hunspell",
+  row.names = FALSE
+)
+```
+
+Hunspell flags 2 of the 96 real word types: `october` and `riverton`. In this
+small vocabulary, the dictionary flags a month word under the lowercased form
+and a fictional place name. Those are unknown to this dictionary setting, not
+proved spelling mistakes.
+
+## Build a constructed error test
+
+The next table uses eight deliberate misspellings of real Riverton word types.
+This is a constructed test, not a claim about how often people make these
+errors.
+
+```{r}
+constructed_errors <- tribble(
+  ~correct_word, ~misspelled_word,
+  "training", "traning",
+  "provided", "provied",
+  "experience", "experiance",
+  "required", "requiered",
+  "workers", "wrokers",
+  "schedules", "scheduels",
+  "communication", "communciation",
+  "certificate", "certficate"
+)
+
+suggestions <- hunspell_suggest(constructed_errors$misspelled_word)
+
+constructed_results <- constructed_errors |>
+  mutate(
+    flagged = !known_to_hunspell(misspelled_word),
+    correct_word_wrongly_flagged = !known_to_hunspell(correct_word),
+    suggestion_count = map_int(suggestions, length),
+    suggestions = map_chr(suggestions, \(result) paste(result, collapse = ", "))
+  )
+
+spell_summary <- tibble(
+  real_errors_caught = sum(constructed_results$flagged),
+  constructed_errors = nrow(constructed_results),
+  correct_words_wrongly_flagged = sum(constructed_results$correct_word_wrongly_flagged),
+  correct_words_checked = nrow(constructed_results),
+  caught_fraction = paste0(real_errors_caught, "/", constructed_errors),
+  false_flag_fraction = paste0(correct_words_wrongly_flagged, "/", correct_words_checked)
+)
+
+stopifnot(
+  identical(constructed_results$flagged, rep(TRUE, 8)),
+  identical(constructed_results$correct_word_wrongly_flagged, rep(FALSE, 8)),
+  all(constructed_results$suggestion_count > 0L),
+  identical(spell_summary$real_errors_caught, 8L),
+  identical(spell_summary$correct_words_wrongly_flagged, 0L),
+  identical(spell_summary$caught_fraction, "8/8"),
+  identical(spell_summary$false_flag_fraction, "0/8")
+)
+
+knitr::kable(
+  constructed_results,
+  col.names = c("Correct Riverton word", "Constructed misspelling", "Flagged", "Correct word flagged", "Suggestions returned", "Suggestions"),
+  caption = "Constructed spelling errors and hunspell suggestions",
+  row.names = FALSE
+)
+
+knitr::kable(
+  spell_summary,
+  col.names = c(
+    "Errors caught",
+    "Constructed errors",
+    "Correct words wrongly flagged",
+    "Correct words checked",
+    "Caught fraction",
+    "False flag fraction"
+  ),
+  caption = "Counts from the constructed spelling test",
+  row.names = FALSE
+)
+```
+
+Hunspell flags 8 of 8. That number was settled before the test ran: all eight
+constructed misspellings are strings that are not English words, and flagging
+non-words is the dictionary's job. It falsely flags 0 of the 8 source words,
+which was also settled in advance because those words came from a vocabulary
+already shown to hold only two dictionary unknowns. This is a wiring check, not a
+measurement of spelling quality. The next section shows the case the eight left
+out.
+
+## Show the real-word limit
+
+A dictionary will not flag a typo if the typo is also a real word. `form` and
+`from` are both dictionary words.
+
+```{r}
+real_word_error <- tibble(
+  intended_word = "from",
+  typed_word = "form",
+  intended_flagged = !known_to_hunspell(intended_word),
+  typed_flagged = !known_to_hunspell(typed_word)
+)
+
+stopifnot(
+  identical(real_word_error$intended_flagged, FALSE),
+  identical(real_word_error$typed_flagged, FALSE),
+  known_to_hunspell("form"),
+  known_to_hunspell("from")
+)
+
+knitr::kable(
+  real_word_error,
+  col.names = c("Intended word", "Typed word", "Intended word flagged", "Typed word flagged"),
+  caption = "A real-word typo that dictionary lookup cannot catch",
+  row.names = FALSE
+)
+```
+
+If a writer meant `from` and typed `form`, this dictionary stays quiet. Both
+strings are familiar to it, so context has to do the work.
+
+## What to remember
+
+- `hunspell()` returns dictionary unknowns.
+- Unknown does not always mean misspelled.
+- Checking each of the 96 word types on its own flags `october` and `riverton`.
+- The constructed 8/8 check is a demonstration because it contains only non-word
+  errors.
+- Real-word errors need context as well as a dictionary.
+
+Use hunspell to make a review queue, then read the queue. A dictionary can sort
+strings into familiar and unfamiliar; people still decide whether the sentence is
+right.
+
+## Sources
+
+- [hunspell package reference](https://docs.ropensci.org/hunspell/reference/hunspell.html)
+- [Hunspell project documentation](https://hunspell.github.io/)

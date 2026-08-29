@@ -1,0 +1,9 @@
+entity_id,canonical_name,entity_type,description
+ORG-0001,Riverton Workforce Lab,organisation,Fictional research group that labels workforce text
+ORG-0002,Riverton Skills Centre,organisation,Fictional training provider in Riverton
+ORG-0003,Marrow County Transit,organisation,Fictional public transport operator
+LOC-0001,Riverton,place,"Fictional city in Marrow County, Calder"
+LOC-0002,Riverton,place,"Fictional town in Tidewater, unrelated to LOC-0001"
+LOC-0003,Bellhaven,place,Fictional city in Marrow County
+CRD-0001,Forklift Operator Licence,credential,Fictional certificate named in the job board
+CRD-0002,Data Support Certificate,credential,Fictional certificate named in the training flyer

@@ -1,0 +1,15 @@
+# Python packages needed by the spacyr lessons.
+#
+# Install into a project-local environment, which the R helper R/use-spacy.R
+# then finds automatically:
+#
+#   python -m venv .venv-spacy
+#   .venv-spacy/Scripts/python -m pip install -r requirements-spacy.txt   # Windows
+#   .venv-spacy/bin/python -m pip install -r requirements-spacy.txt       # macOS, Linux
+#
+# Versions are pinned so a rendered page does not change when upstream does.
+# spaCy and the English pipeline are both MIT licensed.
+
+spacy==3.8.7
+click>=8.0
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

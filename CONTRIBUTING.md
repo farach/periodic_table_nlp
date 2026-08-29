@@ -32,13 +32,16 @@ This project checks for visible writing habits and residue instead.
 
 1. Run `Rscript scripts/check-prose.R` for machine residue and common style
    patterns.
-2. Read the lesson aloud and remove stiff phrasing, repeated structures, and
+2. Run `Rscript scripts/check-repetition.R`, which fails when lessons start to
+   read like one template. Openings are the tell: if many lessons begin the
+   same way, rewrite them so each opens on its own moment.
+3. Read the lesson aloud and remove stiff phrasing, repeated structures, and
    unnecessary setup.
-3. Ask an independent editor to challenge the voice, narrative, and clarity.
-4. Run a separate skeptical review of every factual claim and source.
+4. Ask an independent editor to challenge the voice, narrative, and clarity.
+5. Run a separate skeptical review of every factual claim and source.
 5. Proofread the final rendered page without editing while reading.
 
-Record all five rounds in the pull request checklist. A tool passing is not a
+Record every round in the pull request checklist. A tool passing is not a
 substitute for editorial judgment.
 
 ## Run every example
@@ -59,6 +62,11 @@ Lesson code uses the tidyverse: `readr` to read files, `tibble` to build
 tables, `dplyr` to reshape them, `tidyr` to pivot, `purrr` to iterate, and
 `stringr` for strings. Use the native pipe `|>`.
 
+Use the standard text packages where they are the natural tool rather than
+hand-rolling equivalents: `tidytext::unnest_tokens()` to go from documents to
+tokens, `quanteda` where a corpus or document-feature matrix reads more
+clearly, and `ggplot2` for a chart that earns its place.
+
 - Load packages by name in a visible chunk near the top of the lesson and
   assert that they attached. Do not use `library(tidyverse)`; naming each
   package shows the reader which one does which job.
@@ -73,6 +81,31 @@ tables, `dplyr` to reshape them, `tidyr` to pivot, `purrr` to iterate, and
 - While editing, run one lesson at a time with
   `Rscript scripts/run-lesson.R <path>`. It executes every chunk in order and
   fails on any warning. The full render remains the gate before publishing.
+
+## Set up spaCy once
+
+Some lessons use spaCy through the spacyr package. spaCy is a Python library,
+so it lives outside `renv.lock` and has to be installed separately:
+
+```bash
+python -m venv .venv-spacy
+.venv-spacy/bin/python -m pip install -r requirements-spacy.txt
+```
+
+On Windows the second path is `.venv-spacy/Scripts/python`. Versions are
+pinned, and both spaCy and the English pipeline are MIT licensed.
+
+In a lesson, the entire setup is:
+
+```r
+library(spacyr)
+source("R/use-spacy.R")
+pipeline <- use_project_spacy()
+```
+
+The helper finds that environment, quiets the library's startup output, and
+stops with instructions if the environment is missing. Nothing is downloaded
+during a render. Call `spacy_finalize()` when the lesson is done with it.
 
 The project-level Quarto settings execute every R chunk and stop on errors. The
 GitHub Actions workflow restores the locked R environment and renders every

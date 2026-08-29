@@ -1,0 +1,364 @@
+---
+title: "Parsing time expressions"
+subtitle: "Resolve dates only when the reference date is explicit"
+author: "Alex Farach"
+description: "Learn how simple R rules handle dates, weekdays, times of day, and durations in workforce text."
+categories: [entity enrichment, temporal parsing, workforce research]
+---
+
+Calendar work stalls at `Apply by October 15`: the coordinator can see the
+month and day, but not the year. A deadline needs that missing context before it
+can land on a calendar.
+
+A date parser turns a time expression into a date a computer can sort. The hard
+part is knowing when the text gives a full date, when it needs a reference date,
+and when it is not a calendar date at all.
+
+::: {.callout-note}
+Riverton dates and notices in this lesson are made-up teaching examples.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- separate full dates from relative dates;
+- use an explicit reference date rather than `Sys.Date()`;
+- recognize durations and times of day as different kinds of time language;
+- compare a small temporal parser with this page's expected answers; and
+- compare the rule output with spaCy entity labels.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## State the reference date
+
+A fixed reference date anchors the examples: 2026-08-28. That date is a Friday.
+A page whose output changes each day cannot be checked, so the lesson passes the
+date as a variable and never calls `Sys.Date()`.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(spacyr)
+
+stopifnot(all(c("readr", "dplyr", "tibble", "purrr", "stringr", "spacyr") %in% loadedNamespaces()))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+reference_date <- as.Date("2026-08-28")
+
+temporal_examples <- tibble(
+  expr_id = sprintf("time-%02d", 1:11),
+  text = c(
+    sentences |>
+      filter(sentence_id == "s028") |>
+      pull(text),
+    "Evening",
+    "12-week",
+    "Monday",
+    "next Friday",
+    "next Monday",
+    "2026-10-15",
+    "starts in the fall",
+    "Classes begin on September 14",
+    sentences |>
+      filter(sentence_id == "s020") |>
+      pull(text),
+    sentences |>
+      filter(sentence_id == "s011") |>
+      pull(text)
+  ),
+  expected_category = c(
+    "reference-date needed",
+    "not resolvable",
+    "not resolvable",
+    "reference-date needed",
+    "reference-date needed",
+    "reference-date needed",
+    "fully resolved",
+    "not resolvable",
+    "reference-date needed",
+    "not resolvable",
+    "not resolvable"
+  ),
+  expected_date = as.Date(c(
+    "2026-10-15",
+    NA,
+    NA,
+    "2026-08-31",
+    "2026-09-04",
+    "2026-09-07",
+    "2026-10-15",
+    NA,
+    "2026-09-14",
+    NA,
+    NA
+  ))
+)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(nrow(temporal_examples), 11L),
+  identical(format(reference_date, "%A"), "Friday")
+)
+
+knitr::kable(
+  temporal_examples,
+  col.names = c("Expression ID", "Text", "Expected category", "Expected date"),
+  caption = "Temporal examples with expected answers",
+  row.names = FALSE
+)
+```
+
+`October 15` needs the reference year. `Evening` is a time of day without a date.
+`12-week` is a duration, not a point on the calendar.
+
+## Write a small resolver
+
+The resolver looks for a full ISO date such as `2026-10-15`, then for a month and
+day, then for weekdays. The shorthand `\(text)` means "for each text value, run
+this small function."
+
+```{r}
+resolve_temporal <- function(text, reference_date) {
+  lower_text <- str_to_lower(text)
+
+  if (str_detect(text, "\\b\\d{4}-\\d{2}-\\d{2}\\b")) {
+    return(list(
+      category = "fully resolved",
+      date = as.Date(str_extract(text, "\\b\\d{4}-\\d{2}-\\d{2}\\b"))
+    ))
+  }
+
+  month_match <- str_match(
+    text,
+    "\\b(January|February|March|April|May|June|July|August|September|October|November|December)\\s+(\\d{1,2})\\b"
+  )
+
+  if (!is.na(month_match[1, 1])) {
+    resolved <- as.Date(paste(
+      format(reference_date, "%Y"),
+      match(month_match[1, 2], month.name),
+      month_match[1, 3],
+      sep = "-"
+    ))
+    return(list(category = "reference-date needed", date = resolved))
+  }
+
+  weekday_names <- c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+
+  if (str_detect(lower_text, "next friday")) {
+    target_day <- 6L
+    current_day <- as.POSIXlt(reference_date)$wday + 1L
+    days_forward <- ((target_day - current_day) %% 7L) + 7L
+    return(list(category = "reference-date needed", date = reference_date + days_forward))
+  }
+
+  found_weekday <- weekday_names[str_detect(lower_text, str_to_lower(weekday_names))]
+
+  if (length(found_weekday) > 0L) {
+    target_day <- match(found_weekday[1], weekday_names)
+    current_day <- as.POSIXlt(reference_date)$wday + 1L
+    days_forward <- (target_day - current_day) %% 7L
+    if (days_forward == 0L) {
+      days_forward <- 7L
+    }
+    return(list(category = "reference-date needed", date = reference_date + days_forward))
+  }
+
+  list(category = "not resolvable", date = as.Date(NA))
+}
+
+parsed_temporal <- map(
+  temporal_examples$text,
+  \(text) resolve_temporal(text, reference_date)
+)
+
+temporal_results <- temporal_examples |>
+  mutate(
+    category = map_chr(parsed_temporal, "category"),
+    resolved_date = as.Date(map_chr(parsed_temporal, \(item) as.character(item$date)))
+  )
+
+stopifnot(
+  identical(temporal_results$resolved_date[1], as.Date("2026-10-15")),
+  identical(temporal_results$resolved_date[4], as.Date("2026-08-31")),
+  is.na(temporal_results$resolved_date[2])
+)
+
+knitr::kable(
+  temporal_results |>
+    select(expr_id, text, category, resolved_date),
+  col.names = c("Expression ID", "Text", "Parser category", "Resolved date"),
+  caption = "Rule-based temporal parsing results",
+  row.names = FALSE
+)
+```
+
+The resolver turns `Monday` into the next Monday after the reference date. It
+uses the same-year convention for month-day phrases, gives `next Friday` its own
+branch, and treats any bare weekday name as the next occurrence. Those are policy
+choices. A different rollover rule would be needed after October 15, and `next
+Monday` shows that the weekday branch is too blunt.
+
+## Score the examples
+
+The resolver and expected answers share an author, so the score below does not
+estimate parser accuracy. It checks whether this page still behaves as
+described.
+
+```{r}
+date_matches <- (is.na(temporal_results$resolved_date) & is.na(temporal_results$expected_date)) |
+  (!is.na(temporal_results$resolved_date) &
+    !is.na(temporal_results$expected_date) &
+    temporal_results$resolved_date == temporal_results$expected_date)
+
+category_counts <- tibble(
+  category = c("fully resolved", "reference-date needed", "not resolvable")
+) |>
+  left_join(
+    temporal_results |>
+      count(category, name = "examples"),
+    by = join_by(category)
+  ) |>
+  mutate(examples = coalesce(examples, 0L))
+
+score_summary <- tibble(
+  measure = c("category matches", "date matches"),
+  examples = c(
+    sum(temporal_results$category == temporal_results$expected_category),
+    sum(date_matches)
+  )
+)
+
+stopifnot(
+  identical(category_counts$examples, c(1L, 5L, 5L)),
+  identical(score_summary$examples, c(11L, 10L))
+)
+
+knitr::kable(
+  category_counts,
+  col.names = c("Parser category", "Examples"),
+  caption = "Temporal categories in the examples",
+  row.names = FALSE
+)
+
+knitr::kable(
+  score_summary,
+  col.names = c("Measure", "Matching examples"),
+  caption = "Agreement with this page's expected answers",
+  row.names = FALSE
+)
+```
+
+One example is fully resolved from the text alone. Five need the reference date.
+Five are not resolvable as a single date. The `next Monday` row is the date
+mismatch: the rule treats it like `Monday`, while this lesson's expected answer
+uses the following week.
+
+## Ask spaCy for a second opinion
+
+spaCy labels spans of text as entity types such as `DATE` and `TIME`. The labels
+are useful clues, not answers to the resolution problem.
+
+```{r}
+source("R/use-spacy.R")
+
+pipeline <- use_project_spacy()
+pipeline_version <- spacy_pipeline_version()
+
+spacy_parsed <- spacy_parse(
+  setNames(temporal_examples$text, temporal_examples$expr_id),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+)
+spacy_entities <- entity_extract(spacy_parsed, type = "all")
+
+spacy_checks <- spacy_entities |>
+  filter(doc_id %in% c("time-01", "time-02", "time-03")) |>
+  select(doc_id, entity, entity_type)
+
+spacy_finalize()
+
+stopifnot(
+  identical(pipeline_version$version, "3.8.0"),
+  identical(pipeline_version$license, "MIT"),
+  identical(pipeline_version$spacy, "3.8.7"),
+  identical(
+    spacy_checks$entity_type,
+    c("DATE", "TIME", "DATE")
+  )
+)
+
+knitr::kable(
+  tibble(
+    name = pipeline_version$name,
+    version = pipeline_version$version,
+    language = pipeline_version$lang,
+    license = pipeline_version$license,
+    spacy = pipeline_version$spacy
+  ),
+  col.names = c("Pipeline", "Version", "Language", "License", "spaCy"),
+  caption = "spaCy pipeline used for the second opinion",
+  row.names = FALSE
+)
+
+knitr::kable(
+  spacy_checks,
+  col.names = c("Expression ID", "Entity text", "spaCy label"),
+  caption = "spaCy DATE and TIME labels on selected examples",
+  row.names = FALSE
+)
+```
+
+spaCy labels `October 15` as `DATE`, `Evening` as `TIME`, and `12-week` as
+`DATE`. The first label helps find the span, but it still needs a year. `12-week`
+belongs in `DATE` under the scheme spaCy was trained on because that class
+includes periods. The label is right, and it is still not a calendar date.
+
+## What to remember
+
+- A temporal parser needs a stated reference date for relative expressions.
+- Month-day dates need a same-year or rollover policy.
+- Weekday phrases need more than one `next Friday` special case.
+- Entity labels can find time language without settling the date.
+
+`Apply by October 15` can be put on a 2026 calendar here because the lesson
+supplies 2026 as the reference year. `Evening` and `starts in the fall` still do
+not give this parser a day to place.
+
+## Sources
+
+- [R Date documentation](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Dates.html)
+- [stringr regular expression reference](https://stringr.tidyverse.org/articles/regular-expressions.html)
+- [spaCy linguistic features and named entities](https://spacy.io/usage/linguistic-features)

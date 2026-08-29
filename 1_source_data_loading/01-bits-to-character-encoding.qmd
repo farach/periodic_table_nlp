@@ -100,8 +100,9 @@ stopifnot(
 bytes
 ```
 
-The `stopifnot()` lines are **assertions**, checks that make R stop if an
-expected result changes. They pass here, so the output shows `41` for `A` and
+Every `stopifnot()` here is an **assertion**: a check that halts R when a
+result stops matching what the page claims. They pass, so the output shows `41`
+for `A` and
 `c3 a9` for `é`. Hexadecimal digits may appear in upper- or lowercase without
 changing the values. The bytes `c3 a9` become `é` only when software reads them
 using UTF-8.

@@ -1,0 +1,377 @@
+---
+title: "Identifying document language"
+subtitle: "Treat language guesses as fallible classifications"
+author: "Alex Farach"
+description: "Learn how two language detectors behave on short Riverton text samples and why abstention can be safer than a wrong route."
+categories: [documents, language identification, workforce research]
+---
+
+Short notes in several languages create a routing problem before content labels
+begin. The coordinator wants to route each note to the right review queue before
+anyone labels its content.
+
+`Open house.` exposes the problem. A person reads the two-word notice as English,
+while a language detector may have too little evidence to say.
+
+**Language identification** is a classification problem. A classifier assigns a
+label from a fixed set, such as `en` for English or `es` for Spanish. The risk
+has two shapes: a detector can return the wrong code, or it can decline to answer
+and leave the item unrouted. This lesson shows which shape these two detectors
+take on a tiny teaching file.
+
+::: {.callout-note}
+The Riverton inbox and the language samples are fictional teaching materials.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+Use this lesson to practice how to:
+
+- run two local language detectors on fixed samples;
+- compare detector output with recorded labels;
+- separate agreement from correctness;
+- explain why short texts are hard to classify; and
+- describe why returning `NA` can be safer than a wrong language code.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the labelled samples
+
+The sample table is small, but the setup still records detector versions,
+checks text length, runs the local CLD2 and CLD3 detectors, and fingerprints the
+file. The samples are short strings written by the author for teaching.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(cld2)
+library(cld3)
+library(digest)
+
+language_path <- "data/riverton/language-samples.csv"
+language_samples <- read_csv(
+  language_path,
+  na = character(),
+  col_types = cols(
+    sample_id = col_character(),
+    written_in = col_character(),
+    text = col_character()
+  )
+)
+
+reference_metadata <- read_csv(
+  "data/riverton/riverton-reference-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    license = col_character(),
+    created_on = col_character(),
+    fingerprint = col_character()
+  )
+)
+
+language_reference <- reference_metadata |>
+  filter(artifact == "language-samples.csv")
+
+sample_fingerprint <- digest::digest(
+  paste(read_lines(language_path), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+
+recorded_fingerprint <- reference_metadata |>
+  filter(artifact == "language-samples.csv") |>
+  pull(fingerprint)
+
+detector_versions <- tibble(
+  detector = c("cld2", "cld3"),
+  package_version = c(
+    as.character(packageVersion("cld2")),
+    as.character(packageVersion("cld3"))
+  )
+)
+
+stopifnot(
+  identical(nrow(language_samples), 8L),
+  identical(
+    names(language_samples),
+    c("sample_id", "written_in", "text")
+  ),
+  identical(language_samples$text[7], "Open house."),
+  identical(nrow(language_reference), 1L),
+  identical(sample_fingerprint, recorded_fingerprint),
+  identical(
+    sample_fingerprint,
+    "fa84ffaf608578b8dd0e4f0dbc7425049cd9d362e9d41a1773078973afeccf67"
+  ),
+  all(str_detect(detector_versions$package_version, "^\\d+\\.\\d+"))
+)
+
+knitr::kable(
+  detector_versions,
+  col.names = c("Detector package", "Version"),
+  caption = "Detector package versions for this run",
+  row.names = FALSE
+)
+
+knitr::kable(
+  tibble(
+    file = language_path,
+    sha256 = sample_fingerprint
+  ),
+  col.names = c("File", "SHA-256 fingerprint"),
+  caption = "Fingerprint for the author-written language sample file",
+  row.names = FALSE
+)
+
+knitr::kable(
+  language_samples,
+  col.names = c("Sample", "Recorded language", "Text"),
+  caption = "Eight labelled language samples used for detection",
+  row.names = FALSE
+)
+```
+
+The `written_in` column records the language the author meant to write, not a
+verified annotation. The Spanish `Casa abierta.` is grammatical, but as an event
+notice it is a calque rather than an idiomatic phrase. These results come from
+the detector versions printed above; a package change can return different codes
+for the same strings.
+
+## Run two detectors
+
+CLD2 and CLD3 are trained language detectors. `NA` means the detector returned no
+language label. They do not understand the whole situation around a note; they
+classify the characters they receive.
+
+```{r}
+detected_samples <- language_samples |>
+  mutate(
+    characters = str_length(text),
+    words = str_count(text, boundary("word")),
+    length_group = if_else(characters <= 13L, "short", "long"),
+    cld2_language = cld2::detect_language(text),
+    cld3_language = cld3::detect_language(text),
+    cld2_match = !is.na(cld2_language) & cld2_language == written_in,
+    cld3_match = !is.na(cld3_language) & cld3_language == written_in
+  )
+
+open_house <- detected_samples |>
+  filter(text == "Open house.")
+
+stopifnot(
+  identical(
+    detected_samples$cld2_language,
+    c("en", "en", "es", "fr", "de", NA, NA, NA)
+  ),
+  identical(
+    detected_samples$cld3_language,
+    c("en", "en", "es", "fr", "de", NA, NA, NA)
+  ),
+  identical(open_house$written_in, "en"),
+  is.na(open_house$cld2_language),
+  is.na(open_house$cld3_language),
+  identical(open_house$characters, 11L),
+  identical(open_house$words, 2L)
+)
+
+knitr::kable(
+  detected_samples |>
+    select(
+      sample_id,
+      written_in,
+      text,
+      characters,
+      words,
+      cld2_language,
+      cld3_language
+    ),
+  col.names = c(
+    "Sample",
+    "Recorded language",
+    "Text",
+    "Characters",
+    "Words",
+    "CLD2",
+    "CLD3"
+  ),
+  caption = "Language detector output for each sample",
+  row.names = FALSE
+)
+```
+
+For this installed version, both detectors abstain on `Open house.` by returning
+`NA`. That is a useful failure for routing, because the item can be sent to human
+review rather than silently routed by a wrong code.
+
+## Count matches, abstentions, and label differences
+
+Agreement between two detectors does not prove correctness. They can share
+training data patterns and make the same mistake. The recorded labels let the
+team count what happened on these eight examples.
+
+```{r}
+detector_counts <- tibble(
+  detector = c("CLD2", "CLD3"),
+  matched_recorded_label = c(
+    sum(detected_samples$cld2_match),
+    sum(detected_samples$cld3_match)
+  ),
+  no_label = c(
+    sum(is.na(detected_samples$cld2_language)),
+    sum(is.na(detected_samples$cld3_language))
+  )
+) |>
+  mutate(
+    differed_from_recorded_label =
+      nrow(detected_samples) - matched_recorded_label - no_label
+  )
+
+stopifnot(
+  identical(detector_counts$matched_recorded_label, c(5L, 5L)),
+  identical(detector_counts$no_label, c(3L, 3L)),
+  identical(detector_counts$differed_from_recorded_label, c(0L, 0L)),
+  identical(sum(detected_samples$cld2_match), 5L),
+  identical(sum(detected_samples$cld3_match), 5L)
+)
+
+knitr::kable(
+  detector_counts,
+  col.names = c(
+    "Detector",
+    "Matched recorded label",
+    "No label",
+    "Different from recorded label"
+  ),
+  caption = "Detector outcomes across the eight labelled samples",
+  row.names = FALSE
+)
+```
+
+Each detector matches 5 of the 8 recorded labels, returns no label for 3 of the
+8, and differs from the recorded label on 0 of the 8. Those fractions describe
+this tiny teaching file. Eight samples measure nothing about detector accuracy on
+a workforce archive.
+
+## Compare short and longer text
+
+Length changes the amount of evidence a detector sees, but this file is too
+small to estimate a length effect. There is no principled cutoff here. The
+13-character line separates the two shortest strings from the other 6 examples.
+
+```{r}
+length_summary <- detected_samples |>
+  group_by(length_group) |>
+  summarise(
+    samples = n(),
+    cld2_matches = sum(cld2_match),
+    cld2_no_label = sum(is.na(cld2_language)),
+    cld3_matches = sum(cld3_match),
+    cld3_no_label = sum(is.na(cld3_language)),
+    .groups = "drop"
+  ) |>
+  arrange(length_group)
+
+stopifnot(
+  identical(length_summary$length_group, c("long", "short")),
+  identical(length_summary$samples, c(6L, 2L)),
+  identical(length_summary$cld2_matches, c(5L, 0L)),
+  identical(length_summary$cld2_no_label, c(1L, 2L)),
+  identical(length_summary$cld3_matches, c(5L, 0L)),
+  identical(length_summary$cld3_no_label, c(1L, 2L))
+)
+
+knitr::kable(
+  length_summary,
+  col.names = c(
+    "Length group",
+    "Samples",
+    "CLD2 matches",
+    "CLD2 no label",
+    "CLD3 matches",
+    "CLD3 no label"
+  ),
+  caption = "Detector outcomes by sample length in this file",
+  row.names = FALSE
+)
+```
+
+The two shortest samples produce no matches because both detectors abstain.
+Among the six other samples, each detector matches 5 recorded labels and abstains
+on 1. The Dutch sentence is long enough to read by eye, but both detectors return
+`NA`.
+
+## A wrong code is worse than no code
+
+The eight labelled samples produced no wrong codes. That does not mean wrong
+codes are impossible. The next string was chosen because it produces one: it is a
+single hand-picked case, not a rate, and it shows what a wrong code looks like.
+It also sits just above the arbitrary 13-character cutoff.
+
+```{r}
+short_probe <- tibble(
+  text = c("Open house.", "Evening class."),
+  recorded_language = "en"
+) |>
+  mutate(
+    characters = str_length(text),
+    cld2_language = cld2::detect_language(text),
+    cld3_language = cld3::detect_language(text),
+    cld2_match = !is.na(cld2_language) & cld2_language == recorded_language,
+    cld3_match = !is.na(cld3_language) & cld3_language == recorded_language
+  )
+
+stopifnot(
+  identical(short_probe$characters, c(11L, 14L)),
+  all(is.na(short_probe$cld2_language)),
+  identical(short_probe$cld3_language, c(NA, "lb")),
+  identical(short_probe$cld2_match, c(FALSE, FALSE)),
+  identical(short_probe$cld3_match, c(FALSE, FALSE))
+)
+
+knitr::kable(
+  short_probe |>
+    select(text, recorded_language, cld2_language, cld3_language),
+  col.names = c("Text", "Recorded language", "CLD2", "CLD3"),
+  caption = "Two short English probes and their detected languages",
+  row.names = FALSE
+)
+```
+
+`Evening class.` is English in this teaching probe. CLD2 returns `NA`, while CLD3
+returns `lb`, the ISO 639-1 code for Luxembourgish. For routing, the abstention
+is safer: no queue is selected until someone checks the item.
+
+These eight samples are all written in the Latin alphabet, so this page shows
+nothing about other writing systems. That is a limit of the file, not a
+reassurance.
+
+## What to remember
+
+- Language identification may return a code or no label.
+- Agreement between detectors does not prove that a language code is correct.
+- The eight-row file is an inspection exercise: both detectors declined to label
+  the two shortest strings rather than guessing at them.
+- Returning `NA` can be safer than sending text to the wrong language queue.
+
+Items with `NA` results belong in review, and short-text language codes should
+prompt checking rather than settle a queue. The hand-picked probe demonstrates a
+possible wrong code; the eight-row file demonstrates safe abstention.
+
+## Sources
+
+- [cld2 R package documentation](https://docs.ropensci.org/cld2/)
+- [cld3 R package documentation](https://docs.ropensci.org/cld3/)
+- [Google CLD3 project](https://github.com/google/cld3)
+- [ISO 639 language codes](https://www.loc.gov/standards/iso639-2/php/code_list.php)

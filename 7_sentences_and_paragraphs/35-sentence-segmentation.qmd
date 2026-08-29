@@ -1,0 +1,309 @@
+---
+title: "Finding sentence boundaries"
+subtitle: "Compare three ways to split text into sentences"
+author: "Alex Farach"
+description: "Learn why sentence segmentation can fail on abbreviations, decimals, initials, titles, and headings."
+categories: [sentences and paragraphs, sentence segmentation, workforce research]
+---
+
+One copied page mixes a flyer line, a pay line, and a job-board note before the
+coordinator tries to count its sentences. The count has to line up with the 28
+labelled Riverton rows.
+
+The count looks simple until the page reaches `Dr.`, `a.m.`, `$18.50`, and a
+heading with no period. A sentence boundary is the place where one sentence ends
+and the next begins. The team has to choose a rule before it can trust the
+count.
+
+::: {.callout-note}
+The Riverton page and CSV rows are fictional teaching data.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- explain why sentence segmentation is harder than splitting on periods;
+- compare an author-marked sentence count with three splitters;
+- inspect the fragments each splitter creates;
+- use spaCy sentence identifiers from `spacy_parse()`; and
+- explain why the Riverton CSV already contains an upstream boundary choice.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Build a passage with traps
+
+Here, readr brings in the Riverton CSV, dplyr and tibble build tables, purrr and
+stringr run the small splitters, tokenizers supplies a package splitter, and
+spacyr calls a trained parser. A **splitter** is a rule or model that marks
+boundaries in text.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tokenizers)
+library(spacyr)
+
+stopifnot(all(c(
+  "readr", "dplyr", "tibble", "purrr", "stringr", "tokenizers", "spacyr"
+) %in% loadedNamespaces()))
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+passage <- str_c(
+  "RIVERTON SKILLS OPEN HOUSE\n",
+  "Dr. Vale said shifts start at 6 a.m.\n",
+  "Pay is $18.50 per hour.\n",
+  "J. Rivera can apply by Friday\n",
+  "Bring a photo ID."
+)
+
+expected_sentences <- c(
+  "RIVERTON SKILLS OPEN HOUSE",
+  "Dr. Vale said shifts start at 6 a.m.",
+  "Pay is $18.50 per hour.",
+  "J. Rivera can apply by Friday",
+  "Bring a photo ID."
+)
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(length(expected_sentences), 5L),
+  any(str_detect(sentences$text, fixed("Apply by October 15")))
+)
+
+knitr::kable(
+  tibble(
+    expected_number = seq_along(expected_sentences),
+    sentence = expected_sentences
+  ),
+  col.names = c("Expected sentence", "Author-marked text"),
+  caption = "The five expected sentence boundaries",
+  row.names = FALSE
+)
+```
+
+The expected-answer list has five sentences. Because that list and the examples
+share an author, agreement with it is a lesson check rather than an accuracy
+estimate. The first sentence is a flyer-style heading with no punctuation. The
+next three contain a title, an abbreviation, a decimal, and an initial.
+
+## Compare three splitters
+
+The naive rule below splits wherever it sees a full stop. `tokenizers` uses a
+sentence-splitting rule from an R package. spaCy uses a trained English pipeline;
+`spacy_parse()` returns one row per token, and its `sentence_id` column records
+the boundary spaCy chose.
+
+```{r}
+split_on_full_stop <- function(text) {
+  text |>
+    str_split(fixed(".")) |>
+    pluck(1) |>
+    str_trim() |>
+    discard(\(piece) identical(piece, ""))
+}
+
+join_spacy_tokens <- function(tokens) {
+  str_c(tokens, collapse = " ") |>
+    str_squish() |>
+    str_replace_all(fixed(" ."), ".") |>
+    str_replace_all(fixed(" ,"), ",") |>
+    str_replace_all(fixed("$ "), "$")
+}
+
+naive_pieces <- split_on_full_stop(passage)
+tokenizer_pieces <- tokenize_sentences(passage)[[1]]
+
+source("R/use-spacy.R")
+pipeline <- use_project_spacy()
+spacy_metadata <- spacy_pipeline_version()
+spacy_tokens <- spacy_parse(
+  setNames(passage, "test_passage"),
+  pos = TRUE,
+  lemma = TRUE
+)
+spacy_finalize()
+
+spacy_pieces <- spacy_tokens |>
+  as_tibble() |>
+  summarise(piece = join_spacy_tokens(token), .by = sentence_id) |>
+  pull(piece)
+
+split_results <- bind_rows(
+  tibble(splitter = "split on full stops", piece = naive_pieces),
+  tibble(splitter = "tokenizers::tokenize_sentences()", piece = tokenizer_pieces),
+  tibble(splitter = "spaCy sentence_id", piece = spacy_pieces)
+) |>
+  mutate(
+    splitter = factor(
+      splitter,
+      levels = c(
+        "split on full stops",
+        "tokenizers::tokenize_sentences()",
+        "spaCy sentence_id"
+      )
+    )
+  ) |>
+  arrange(splitter) |>
+  group_by(splitter) |>
+  mutate(
+    piece_number = row_number(),
+    exact_expected_sentence = piece %in% expected_sentences
+  ) |>
+  ungroup()
+
+splitter_scores <- split_results |>
+  summarise(
+    pieces_found = n(),
+    exact_expected_pieces = sum(exact_expected_sentence),
+    .by = splitter
+  ) |>
+  mutate(
+    expected_pieces = length(expected_sentences),
+    count_difference = pieces_found - expected_pieces,
+    matches_expected_count = pieces_found == expected_pieces
+  )
+
+stopifnot(
+  identical(spacy_metadata$version, "3.8.0"),
+  identical(spacy_metadata$license, "MIT"),
+  identical(spacy_metadata$spacy, "3.8.7"),
+  identical(length(naive_pieces), 7L),
+  identical(length(tokenizer_pieces), 5L),
+  identical(length(spacy_pieces), 2L),
+  identical(splitter_scores$pieces_found, c(7L, 5L, 2L)),
+  identical(splitter_scores$exact_expected_pieces, c(0L, 1L, 0L)),
+  identical(splitter_scores$count_difference, c(2L, 0L, -3L))
+)
+
+knitr::kable(
+  splitter_scores,
+  col.names = c(
+    "Splitter",
+    "Pieces found",
+    "Exact pieces",
+    "Expected pieces",
+    "Difference",
+    "Count matches"
+  ),
+  caption = "Splitter counts compared with the five expected sentences",
+  row.names = FALSE
+)
+
+knitr::kable(
+  split_results |>
+    mutate(exact_expected_sentence = if_else(exact_expected_sentence, "yes", "no")),
+  col.names = c("Splitter", "Piece", "Piece number", "Exact expected sentence"),
+  caption = "Where each splitter puts the boundaries",
+  row.names = FALSE
+)
+```
+
+The naive rule finds seven pieces and none is one of the five expected
+sentences. It cuts `Dr.`, `a.m.`, `$18.50`, and `J.` apart. The package splitter
+gets the count right, but only one piece exactly matches an expected sentence. It
+attaches `Dr.` to the heading and splits `J.` away from the name.
+
+spaCy returns two pieces. It keeps `Dr. Vale` and `a.m.` together, then runs the
+heading, pay line, and two closing lines into fewer sentences than the layout
+implies. The pipeline segments from syntax and does not treat a line break as a
+boundary, which is what the flyer format relies on.
+
+The spaCy pieces are rebuilt from tokens, so spaces and line breaks do not
+survive. Read the exact-match column for spaCy as a comparison against a
+reconstruction, not against the copied page. Comparing piece counts is also a
+weak test. Boundary positions matter, because a splitter can return the right
+number of pieces and put the boundaries in the wrong places.
+
+## Check the Riverton rows
+
+The 28 Riverton rows are already one sentence each by construction. That is an
+upstream boundary choice: someone made a CSV row out of each sentence or flyer
+line before this lesson reads the file.
+
+```{r}
+sentence_piece_counts <- tokenize_sentences(sentences$text) |>
+  map_int(length)
+
+row_boundary_summary <- sentences |>
+  mutate(sentence_pieces = sentence_piece_counts) |>
+  summarise(
+    rows = n(),
+    tokenizer_pieces = sum(sentence_pieces),
+    .by = document_id
+  )
+
+flyer_rows <- sentences |>
+  filter(document_id == "F001") |>
+  nrow()
+
+job_rows <- sentences |>
+  filter(document_id != "F001") |>
+  nrow()
+
+stopifnot(
+  identical(sentence_piece_counts, rep(1L, 28L)),
+  identical(sum(row_boundary_summary$rows), 28L),
+  identical(sum(row_boundary_summary$tokenizer_pieces), 28L),
+  identical(flyer_rows, 6L),
+  identical(job_rows, 22L)
+)
+
+knitr::kable(
+  row_boundary_summary,
+  col.names = c("Document ID", "Rows", "Sentence pieces"),
+  caption = "Sentence splitting agrees with the stored Riverton rows",
+  row.names = FALSE
+)
+```
+
+For these stored rows, the package splitter returns one sentence piece for every
+row. That agreement does not prove the rows are the only possible boundaries. It
+only shows that this file and this splitter line up on this small teaching set.
+
+## What to remember
+
+- Sentence segmentation marks where one sentence ends and another begins.
+- A full stop can appear inside titles, initials, abbreviations, and decimals.
+- In the test passage, the three splitters return 7, 5, and 2 pieces.
+- A correct count can still hide wrong boundaries.
+- Rebuilding model output from tokens can change the text being scored.
+- The 28 Riverton rows already contain one upstream boundary choice.
+
+For the copied page, five expected sentences are a human layout choice. For the
+CSV, 28 one-row sentence units are an upstream data choice. Both counts depend on
+the rule named beside them.
+
+## Sources
+
+- [tokenizers documentation for sentence tokenizers](https://docs.ropensci.org/tokenizers/reference/basic-tokenizers.html)
+- [spaCy documentation on linguistic features](https://spacy.io/usage/linguistic-features)
+- [spacyr package documentation](https://cran.r-project.org/package=spacyr)

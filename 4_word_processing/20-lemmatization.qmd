@@ -1,0 +1,450 @@
+---
+title: "Choosing dictionary forms"
+subtitle: "Compare teaching lemmas with a released pipeline"
+author: "Alex Farach"
+description: "Learn how lemmas differ from stems and why lemmatizers built in different ways disagree on workforce text."
+categories: [word processing, lemmatization, workforce research]
+---
+
+Stemmed forms shorten the vocabulary, but strings such as `requir` and `provid`
+give the team pause. Those strings help a computer compare
+forms, yet they look broken on a public report.
+
+The team wants a cleaner label for words such as `is`, `provided`, and
+`classes`. It needs to know when a model's dictionary form is better than a
+rule-chopped stem, and when a model can still guess badly.
+
+A **lemma** is the dictionary form of a word, the form a reader might look up.
+**Lemmatization** chooses that form in context. This lesson compares a tiny
+UDPipe teaching model with a released spaCy English pipeline.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. Both models run locally; the lesson does not
+download anything while it runs.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define a lemma in plain language;
+- compare a lemma with a Snowball stem;
+- see how tokenization changes the comparison set;
+- name what a dictionary proxy can and cannot measure; and
+- separate raw dictionary flags from broken-string counts.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load both lemmatizers
+
+Two local lemmatizers need the same sentence file and a shared set of table
+tools. The code loads the CSV reader, tokenizers, the UDPipe teaching model, the
+spaCy bridge, SnowballC stems, and hunspell dictionary checks. UDPipe receives
+one token per line; spaCy receives the raw sentences through the project helper
+`use_project_spacy()`.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(tidytext)
+library(tokenizers)
+library(udpipe)
+library(spacyr)
+library(SnowballC)
+library(hunspell)
+source("R/use-spacy.R")
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+pipeline <- use_project_spacy()
+spacy_info <- spacy_pipeline_version()
+spacy_info_table <- tibble(
+  item = names(spacy_info),
+  value = unname(unlist(spacy_info))
+)
+
+udpipe_parser <- udpipe_load_model(
+  "data/treebank/en_ewt-500-parser.udpipe"
+)
+
+vertical <- sentences$text |>
+  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  map_chr(\(tokens) paste(tokens, collapse = "\n"))
+
+udpipe_parsed <- udpipe_annotate(
+  udpipe_parser,
+  x = vertical,
+  doc_id = sentences$sentence_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "default"
+) |>
+  as.data.frame() |>
+  as_tibble()
+
+spacy_text <- sentences$text
+names(spacy_text) <- sentences$sentence_id
+
+spacy_parsed <- spacy_parse(
+  spacy_text,
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  nounphrase = TRUE
+) |>
+  as_tibble()
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(pipeline$model, "en_core_web_sm"),
+  identical(spacy_info$version, "3.8.0"),
+  identical(spacy_info$license, "MIT"),
+  identical(spacy_info$spacy, "3.8.7"),
+  identical(nrow(udpipe_parsed), 178L),
+  identical(nrow(spacy_parsed), 179L),
+  identical(udpipe_parsed$lemma[udpipe_parsed$doc_id == "s001" & udpipe_parsed$token == "provided"], "provid"),
+  identical(spacy_parsed$lemma[spacy_parsed$doc_id == "s001" & spacy_parsed$token == "provided"], "provide")
+)
+
+knitr::kable(
+  spacy_info_table,
+  col.names = c("Pipeline field", "Value"),
+  caption = "Local spaCy pipeline used by this lesson",
+  row.names = FALSE
+)
+```
+
+The spaCy table records the exact local pipeline: `core_web_sm` version 3.8.0
+under the MIT license, running with spaCy 3.8.7. The two tools return slightly
+different token counts for the same 28 sentences: 178 from UDPipe and 179 from
+spaCy. The extra comparison problem is `driver's`, which spaCy splits into
+`driver` and `'s` while the vertical tokenizer keeps it whole. That word type has
+no spaCy lemma to compare, and the tables below drop it.
+
+## Compare lemmas with stems
+
+The next table uses word types that appear in the Riverton sentences and that
+both parsers emit as tokens. A stem and a lemma can agree, but they answer
+different questions.
+
+```{r}
+known_to_hunspell <- \(words) map_lgl(hunspell(words), \(result) length(result) == 0L)
+
+vocabulary_words <- sentences |>
+  select(sentence_id, text) |>
+  unnest_tokens(word, text) |>
+  distinct(word) |>
+  arrange(word)
+
+udpipe_lookup <- udpipe_parsed |>
+  filter(upos != "PUNCT") |>
+  transmute(
+    word = str_to_lower(token),
+    udpipe_lemma = str_to_lower(lemma)
+  ) |>
+  group_by(word) |>
+  summarise(udpipe_lemma = first(udpipe_lemma), .groups = "drop")
+
+spacy_lookup <- spacy_parsed |>
+  filter(pos != "PUNCT") |>
+  transmute(
+    word = str_to_lower(token),
+    spacy_lemma = str_to_lower(lemma)
+  ) |>
+  group_by(word) |>
+  summarise(spacy_lemma = first(spacy_lemma), .groups = "drop")
+
+same_word_lemmas <- vocabulary_words |>
+  left_join(udpipe_lookup, by = "word") |>
+  left_join(spacy_lookup, by = "word")
+
+comparison_words <- c(
+  "is",
+  "provided",
+  "required",
+  "classes",
+  "shifts",
+  "applicants",
+  "training",
+  "schedules",
+  "paid",
+  "pays"
+)
+
+lemma_stem_comparison <- same_word_lemmas |>
+  filter(word %in% comparison_words) |>
+  mutate(
+    stem = wordStem(word, language = "en"),
+    udpipe_known = known_to_hunspell(udpipe_lemma),
+    spacy_known = known_to_hunspell(spacy_lemma)
+  ) |>
+  arrange(match(word, comparison_words))
+
+stopifnot(
+  identical(nrow(vocabulary_words), 96L),
+  identical(sum(is.na(same_word_lemmas$spacy_lemma)), 1L),
+  identical(same_word_lemmas$word[is.na(same_word_lemmas$spacy_lemma)], "driver's"),
+  identical(lemma_stem_comparison$udpipe_lemma[1:4], c("be", "provid", "requi", "classe")),
+  identical(lemma_stem_comparison$spacy_lemma[1:4], c("be", "provide", "require", "class")),
+  identical(lemma_stem_comparison$stem[1:4], c("is", "provid", "requir", "class")),
+  identical(nrow(lemma_stem_comparison), 10L)
+)
+
+knitr::kable(
+  lemma_stem_comparison,
+  col.names = c(
+    "Word",
+    "UDPipe lemma",
+    "spaCy lemma",
+    "Snowball stem",
+    "UDPipe lemma known",
+    "spaCy lemma known"
+  ),
+  caption = "Lemmas and stems for selected Riverton word types",
+  row.names = FALSE
+)
+```
+
+`is` shows why a lemma can be better than a stem. A stemmer leaves `is` alone,
+while both parsers choose `be`. The sharper contrast is `provided`: the UDPipe
+teaching model returns `provid`, while spaCy returns `provide`. For `classes`,
+UDPipe returns `classe`, while spaCy returns `class`.
+
+The table is deliberately simple, but it hides context. A word type can receive
+different lemmas in different sentences, which is why lemmatization is contextual
+in the first place. The next check shows the type rows where at least one tool
+gave more than one lemma.
+
+```{r}
+lemma_variation <- bind_rows(
+  udpipe_parsed |>
+    filter(upos != "PUNCT") |>
+    transmute(system = "UDPipe", word = str_to_lower(token), lemma = str_to_lower(lemma)),
+  spacy_parsed |>
+    filter(pos != "PUNCT") |>
+    transmute(system = "spaCy", word = str_to_lower(token), lemma = str_to_lower(lemma))
+) |>
+  group_by(system, word) |>
+  summarise(
+    distinct_lemmas = n_distinct(lemma),
+    lemmas = paste(sort(unique(lemma)), collapse = ", "),
+    occurrences = n(),
+    .groups = "drop"
+  ) |>
+  filter(distinct_lemmas > 1L) |>
+  arrange(system, word)
+
+stopifnot(
+  identical(lemma_variation$system, c("UDPipe", "UDPipe", "UDPipe", "spaCy")),
+  identical(lemma_variation$word, c("evening", "paid", "skills", "skills")),
+  identical(lemma_variation$distinct_lemmas, c(2L, 2L, 2L, 2L))
+)
+
+knitr::kable(
+  lemma_variation,
+  col.names = c("System", "Word type", "Distinct lemmas", "Lemmas seen", "Occurrences"),
+  caption = "Word types whose lemmas vary across Riverton occurrences",
+  row.names = FALSE
+)
+```
+
+This is not an equal contest. The UDPipe model was trained in this project on a
+500-sentence excerpt for teaching. The spaCy pipeline is a released English
+pipeline packaged for general use. The methods differ too: UDPipe learned suffix
+rules from its training sentences, while spaCy's English lemmatizer uses lookup
+tables and part-of-speech rules. This lesson cannot isolate a training-size
+effect.
+
+## Count dictionary failures
+
+A cheap screen asks whether each lemma appears in hunspell's dictionary. It
+answers one narrow question: did the model return a string that is not an English
+word? It cannot tell a correct lemma that the dictionary happens not to hold,
+such as `riverton`, from a genuine error. It is also blind to a wrong lemma that
+is a real word. If a model returned `leave` as the lemma of `left` in the phrase
+`the left column`, this check would pass it. The counts below measure broken
+strings, not correctness.
+
+```{r}
+compared_word_lemmas <- same_word_lemmas |>
+  filter(!is.na(udpipe_lemma), !is.na(spacy_lemma)) |>
+  mutate(
+    udpipe_known = known_to_hunspell(udpipe_lemma),
+    spacy_known = known_to_hunspell(spacy_lemma),
+    udpipe_flagged = !udpipe_known,
+    spacy_flagged = !spacy_known,
+    coverage_or_case_artifact = word %in% c("october", "riverton"),
+    udpipe_broken_string = udpipe_flagged & !coverage_or_case_artifact,
+    spacy_broken_string = spacy_flagged & !coverage_or_case_artifact
+  )
+
+lemma_quality <- tibble(
+  system = c("UDPipe teaching model", "spaCy released pipeline"),
+  word_types_compared = c(nrow(compared_word_lemmas), nrow(compared_word_lemmas)),
+  raw_dictionary_flags = c(
+    sum(compared_word_lemmas$udpipe_flagged),
+    sum(compared_word_lemmas$spacy_flagged)
+  ),
+  coverage_or_case_artifacts = c(
+    sum(compared_word_lemmas$udpipe_flagged & compared_word_lemmas$coverage_or_case_artifact),
+    sum(compared_word_lemmas$spacy_flagged & compared_word_lemmas$coverage_or_case_artifact)
+  ),
+  broken_string_flags = c(
+    sum(compared_word_lemmas$udpipe_broken_string),
+    sum(compared_word_lemmas$spacy_broken_string)
+  )
+)
+
+flagged_comparison <- compared_word_lemmas |>
+  filter(udpipe_flagged | spacy_flagged) |>
+  select(
+    word,
+    udpipe_lemma,
+    spacy_lemma,
+    udpipe_flagged,
+    spacy_flagged,
+    coverage_or_case_artifact,
+    udpipe_broken_string,
+    spacy_broken_string
+  )
+
+stopifnot(
+  identical(nrow(compared_word_lemmas), 95L),
+  identical(lemma_quality$raw_dictionary_flags, c(8L, 2L)),
+  identical(lemma_quality$coverage_or_case_artifacts, c(2L, 2L)),
+  identical(lemma_quality$broken_string_flags, c(6L, 0L)),
+  identical(
+    flagged_comparison$word,
+    c("classes", "diploma", "includes", "need", "october", "provided", "required", "riverton")
+  ),
+  identical(
+    flagged_comparison$udpipe_lemma,
+    c("classe", "diploman", "includ", "ne", "october", "provid", "requi", "riverton")
+  ),
+  identical(flagged_comparison$spacy_flagged, c(FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE))
+)
+
+knitr::kable(
+  lemma_quality,
+  col.names = c(
+    "System",
+    "Word types compared",
+    "Raw dictionary flags",
+    "Coverage or case artifacts",
+    "Broken-string flags"
+  ),
+  caption = "Dictionary proxy counts for lemmas on the same Riverton word types",
+  row.names = FALSE
+)
+
+knitr::kable(
+  flagged_comparison,
+  col.names = c(
+    "Word",
+    "UDPipe lemma",
+    "spaCy lemma",
+    "UDPipe flagged",
+    "spaCy flagged",
+    "Coverage or case artifact",
+    "UDPipe broken string",
+    "spaCy broken string"
+  ),
+  caption = "Where either model's lemma is flagged by hunspell",
+  row.names = FALSE
+)
+```
+
+On the 95 word types both parsers return a lemma for, hunspell flags 8 UDPipe
+lemmas and 2 spaCy lemmas. Two flags are the same on both sides and are not model
+errors: `riverton` is a made-up place name, and `october` is flagged because this
+lesson lowercases lemmas before checking. spaCy returned `October`, which
+hunspell knows. Setting those aside, UDPipe produced six broken strings:
+`classe`, `diploman`, `includ`, `ne`, `provid`, and `requi`. spaCy produced none.
+Six word types is a small count from 28 sentences of one kind of text.
+
+## Decide when the cost is justified
+
+For a public table, a checked lemma is usually safer than a Snowball stem.
+`is` and `are` can group under `be`, and `provided` can become `provide` rather
+than `provid`.
+
+Stemming is cheaper and often enough for rough private matching. It is a poor
+choice for display because strings such as `requir` and `schedul` are not reader
+words. Lemmatization is cleaner when it works, but the UDPipe `provid` example
+shows that a lemma column still needs checks.
+
+```{r}
+final_check <- tibble(
+  model = c("UDPipe", "spaCy"),
+  provided_lemma = c(
+    lemma_stem_comparison$udpipe_lemma[lemma_stem_comparison$word == "provided"],
+    lemma_stem_comparison$spacy_lemma[lemma_stem_comparison$word == "provided"]
+  )
+)
+
+stopifnot(
+  identical(final_check$provided_lemma, c("provid", "provide")),
+  identical(spacy_info$version, "3.8.0"),
+  identical(spacy_info$spacy, "3.8.7")
+)
+
+knitr::kable(
+  final_check,
+  col.names = c("Model", "Lemma for provided"),
+  caption = "A final check on the clearest contrast",
+  row.names = FALSE
+)
+
+invisible(suppressMessages(spacy_finalize()))
+```
+
+## What to remember
+
+- A lemma is a dictionary form chosen for a word in context.
+- A stem is a rule-chopped comparison string.
+- Tokenizers changed the comparison: `driver's` has no spaCy word-type match.
+- The dictionary screen flags unknown strings, not lemma correctness.
+- Raw hunspell flags are 8 for UDPipe and 2 for spaCy on 95 word types.
+- After coverage and case artifacts are set aside, the broken-string count is 6
+  for UDPipe and 0 for spaCy.
+
+Use lemmas for reader-facing grouping only after checking the rows that look
+broken or surprising. The important comparison here is six small-model suffix
+guesses to inspect, not a causal story about training size.
+
+## Sources
+
+- [spaCy models and languages](https://spacy.io/usage/models)
+- [spaCy lemmatizer documentation](https://spacy.io/api/lemmatizer)
+- [spacyr package reference](https://spacyr.quanteda.io/)
+- [UDPipe R package reference](https://bnosac.github.io/udpipe/docs/doc0.html)
+- [hunspell package reference](https://docs.ropensci.org/hunspell/reference/hunspell.html)
