@@ -1,0 +1,290 @@
+---
+title: "Sorting messages by purpose"
+subtitle: "Train a multi-class intent classifier and question the labels"
+author: "Alex Farach"
+description: "Learn how intent classification routes messages and why the label schema controls what the system can do."
+categories: [classification, intent classification, workforce research]
+---
+
+Luis is assigned the shared inbox while the front desk is closed. One message
+asks for a password reset, another asks whether a class accepts GED applicants,
+and a third reports a suspicious recruiter.
+
+Routing the message is useful only if the label matches a real next step. A
+worker can reset access, check application status, answer eligibility questions,
+record a problem, or call someone back. Anything outside those actions strains
+the label set.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+A dataset written by the same person who writes the classifier cannot measure
+whether the method works. This lesson uses the invented inbox to show mechanics;
+it does not estimate how an intake system would perform with real residents.
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define intent classification in plain language;
+- fit a small multi-class text model;
+- inspect multi-class probability output;
+- identify messages that strain one-label routing; and
+- explain why coarser taxonomies can make accuracy look better.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the intent labels
+
+An **intent** is what the sender wants the system to do. In this fixture each
+message has exactly one recorded intent, even when a person might see more than
+one. readr opens the file, dplyr and tidyr reshape results, purrr selects
+probability columns, stringr checks simple rules, and tidymodels with textrecipes
+and glmnet fits the model.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(ggplot2)
+library(tidymodels)
+library(textrecipes)
+library(glmnet)
+
+inbox <- read_csv(
+  "data/riverton/riverton-inbox.csv",
+  na = character(),
+  col_types = cols(
+    message_id = col_character(),
+    text = col_character(),
+    is_spam = col_logical(),
+    intent = col_character(),
+    author_note = col_character()
+  )
+) |>
+  mutate(intent = factor(intent))
+
+intent_counts <- inbox |>
+  count(intent, name = "messages")
+
+stopifnot(
+  all(c(
+    "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
+    "ggplot2", "tidymodels", "textrecipes", "glmnet"
+  ) %in% loadedNamespaces()),
+  identical(nrow(inbox), 60L),
+  identical(
+    as.character(intent_counts$intent),
+    c(
+      "ask_eligibility",
+      "check_status",
+      "report_problem",
+      "request_callback",
+      "reset_access"
+    )
+  ),
+  identical(intent_counts$messages, c(12L, 13L, 13L, 11L, 11L))
+)
+
+knitr::kable(
+  intent_counts,
+  col.names = c("Recorded intent", "Messages"),
+  caption = "Intent labels in the invented inbox",
+  row.names = FALSE
+)
+```
+
+The label schema is already a decision about what the Lab can act on. If no one
+can process a distinction, adding that distinction to the label list creates
+extra disagreement rather than better service.
+
+## Fit a multi-class model
+
+**Multi-class classification** chooses one label from more than two possible
+labels. The seed before this fit is 5002. The model is fitted so the reader can
+see the mechanics of a multi-class prediction.
+
+```{r}
+intent_recipe <- recipe(intent ~ text, data = inbox) |>
+  step_tokenize(text) |>
+  step_tokenfilter(text, max_tokens = 100) |>
+  step_tfidf(text)
+
+mechanics_rows <- inbox
+
+intent_model <- multinom_reg(penalty = 0.01, mixture = 1) |>
+  set_engine("glmnet") |>
+  set_mode("classification")
+
+set.seed(5002)
+intent_fit <- workflow() |>
+  add_recipe(intent_recipe) |>
+  add_model(intent_model) |>
+  # The lesson reports nothing performance-related from these rows; it shows the
+  # shape of a multi-class fit and states plainly why it scores nothing.
+  fit(data = mechanics_rows) # resubstitution-ok: no score is reported
+
+intent_predictions <- mechanics_rows |>
+  select(message_id, text, intent) |>
+  bind_cols(predict(intent_fit, mechanics_rows, type = "prob")) |>
+  bind_cols(predict(intent_fit, mechanics_rows))
+
+probability_columns <- names(intent_predictions) |>
+  keep(\(column) str_starts(column, ".pred_") & column != ".pred_class")
+
+probability_check <- intent_predictions |>
+  transmute(
+    message_id,
+    probability_sum = rowSums(pick(all_of(probability_columns)))
+  )
+
+predicted_distribution <- intent_predictions |>
+  count(.pred_class, name = "messages") |>
+  arrange(.pred_class)
+
+stopifnot(
+  identical(nrow(intent_predictions), 60L),
+  identical(length(levels(inbox$intent)), 5L),
+  identical(length(probability_columns), 5L),
+  all(abs(probability_check$probability_sum - 1) < 0.0000001),
+  identical(sum(predicted_distribution$messages), 60L),
+  identical(
+    as.character(predicted_distribution$.pred_class),
+    c(
+      "ask_eligibility",
+      "check_status",
+      "report_problem",
+      "request_callback",
+      "reset_access"
+    )
+  )
+)
+
+knitr::kable(
+  predicted_distribution,
+  col.names = c("Predicted intent", "Messages"),
+  caption = "Predicted-class distribution from the fitted multi-class model",
+  row.names = FALSE
+)
+```
+
+The fitted model has five classes. For each message it returns five
+probabilities, one for each class, and each row's probabilities sum to 1. Those
+predictions are made on the same 60 rows the model was fitted to, so the table
+above shows the shape of the output and nothing about how well the model works.
+No accuracy, recall, or F1 score is reported here. **Recall** is the share of one
+recorded class that the model sends back to that class, and **F1** combines
+precision and recall into one score. The messages were written by the same
+person who built the classifier, there are only 60 of them, and any number
+computed from them would measure this fixture rather than the method. A real
+number would require messages the author did not write, labels supplied by
+people who did not build the model, and a holdout set kept away from fitting.
+
+## Find labels that strain the taxonomy
+
+The hard part is often the label schema, not the model. A **taxonomy** is the
+allowed list of labels and the rules for choosing among them. If the taxonomy
+does not match the downstream work, the classifier can be accurate and still
+route badly.
+
+```{r}
+boundary_messages <- inbox |>
+  filter(message_id %in% c("M034", "M055", "M044")) |>
+  mutate(
+    other_plausible_action = case_when(
+      message_id == "M034" ~ "ask_eligibility or fraud review",
+      message_id == "M055" ~ "ask_eligibility or fraud review",
+      message_id == "M044" ~ "none without the missing request"
+    ),
+    why_it_strains_the_schema = case_when(
+      message_id == "M034" ~
+        "reports a suspicious listing but also mentions training and bank access",
+      message_id == "M055" ~
+        "asks whether an offer is real and reports a recruiter asking for ID",
+      message_id == "M044" ~
+        "gives call instructions without a full service request"
+    )
+  ) |>
+  select(message_id, intent, other_plausible_action, why_it_strains_the_schema, text)
+
+stopifnot(
+  identical(boundary_messages$message_id, c("M034", "M044", "M055")),
+  identical(
+    as.character(boundary_messages$intent),
+    c("report_problem", "request_callback", "report_problem")
+  ),
+  identical(
+    boundary_messages$other_plausible_action,
+    c(
+      "ask_eligibility or fraud review",
+      "none without the missing request",
+      "ask_eligibility or fraud review"
+    )
+  ),
+  all(str_length(boundary_messages$why_it_strains_the_schema) > 40L)
+)
+
+knitr::kable(
+  boundary_messages,
+  col.names = c(
+    "Message",
+    "Recorded intent",
+    "Other plausible action",
+    "Why one label is hard",
+    "Text"
+  ),
+  caption = "Boundary cases for the intent taxonomy",
+  row.names = FALSE
+)
+```
+
+Messages M034 and M055 genuinely fit two actions. A staff member may both record
+a problem and answer whether the offer is safe. If the Lab has a separate fraud
+review queue, these two messages should probably go there. If it does not, the
+taxonomy forces the worker to choose the nearest available bucket and record the
+loss.
+
+M044 fits none of the main service questions by itself; it is a call preference
+clipped away from the reason for the call. A good intake design would ask for the
+missing purpose before routing. Lesson 11, "Working with several annotators,"
+shows why multiple reviewers should inspect these boundary cases before a label
+becomes a reference answer.
+
+An `other` label absorbs what the designer did not anticipate. It is useful as a
+safety valve, but it also hides new work unless someone reads the contents.
+
+## Coarser labels can flatter a system
+
+If several intents are folded into broader queues, the same guesses can receive a
+higher score. The classifier did not get smarter; the scoring rule became easier.
+This lesson does not compute that score because a hand-fitted rule on these same
+60 messages would only create another resubstitution number. The design point is
+enough: measured accuracy can rise when the taxonomy gets coarser without the
+system getting better. That may be acceptable if the broad queue is all the
+organization can act on. It is misleading if the report implies better
+understanding.
+
+## What to remember
+
+- Intent classification routes text by what the sender wants.
+- The allowed intent list must match actions the system can take.
+- Probability output shows the shape of a multi-class prediction, not its quality.
+- Boundary cases need human adjudication and clearer instructions.
+- Coarser categories can raise measured accuracy by making the task easier.
+
+## Sources
+
+- [tidymodels classification basics](https://www.tidymodels.org/start/models/)
+- [glmnet multinomial models](https://glmnet.stanford.edu/articles/glmnet.html)
+- [Inter-Coder Agreement for Computational Linguistics](https://aclanthology.org/J08-4004/)

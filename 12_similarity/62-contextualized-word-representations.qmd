@@ -1,0 +1,362 @@
+---
+title: "Reading words in context"
+subtitle: "Compare one word vector with one token occurrence vector"
+author: "Alex Farach"
+description: "Learn how spaCy returns a context-sensitive token representation and why two uses of the same word can have different vectors."
+categories: [similarity, contextual embeddings, spaCy]
+---
+
+A student underlines `bank` twice in one sentence. The first `bank` raises
+interest rates; the second sits beside a river.
+
+The spelling is identical. The surrounding words make the two occurrences
+different.
+
+A **contextualized word representation** gives a vector to a token occurrence
+rather than to a word type. The same word can therefore receive two different
+vectors in the same document.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- start the pinned local spaCy pipeline through the project helper;
+- confirm that the small pipeline has no static word-vector table;
+- read the token tensor produced for one sentence;
+- compare token occurrence vectors with an all-pair baseline;
+- check same-sense controls; and
+- separate contextual encoding from word-sense identification.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the local spaCy pipeline
+
+spaCy is a Python library. This project reaches it through `R/use-spacy.R`, which
+pins the Python environment and prevents downloads during rendering.
+
+```{r}
+library(reticulate)
+library(spacyr)
+library(dplyr)
+library(tibble)
+library(knitr)
+
+source("R/use-spacy.R")
+
+within_tolerance <- function(observed, expected, tolerance = 1e-3) {
+  abs(observed - expected) < tolerance
+}
+
+pipeline <- use_project_spacy()
+spacy_py <- import("spacy", delay_load = FALSE)
+nlp <- spacy_py$load("en_core_web_sm")
+
+pipeline_table <- tibble(
+  item = c("pipeline", "static vector rows", "static vector columns"),
+  value = c(
+    pipeline$model,
+    as.character(nlp$vocab$vectors$shape[[1]]),
+    as.character(nlp$vocab$vectors$shape[[2]])
+  )
+)
+
+stopifnot(
+  pipeline$model == "en_core_web_sm",
+  as.integer(nlp$vocab$vectors$shape[[1]]) == 0L,
+  as.integer(nlp$vocab$vectors$shape[[2]]) == 0L
+)
+
+kable(
+  pipeline_table,
+  col.names = c("Item", "Value"),
+  caption = "The pinned small spaCy pipeline has no static word-vector table",
+  row.names = FALSE
+)
+```
+
+The zero-row vector table matters. This small pipeline does not store one
+reusable vector for every word. It still produces an internal tensor for the
+tokens it reads.
+
+## Extract token occurrence vectors
+
+A **tensor** is an array of numbers. For this sentence, spaCy returns one row per
+token and 96 columns per token.
+
+```{r}
+text <- "The bank raised interest rates. He sat on the river bank and watched."
+doc <- nlp(text)
+
+tokens <- vapply(
+  seq_len(length(doc)) - 1L,
+  function(i) doc[i]$text,
+  character(1)
+)
+
+tensor <- py_to_r(doc$tensor)
+
+bank_positions <- which(tokens == "bank")
+the_positions <- which(tokens %in% c("The", "the"))
+
+token_table <- tibble(
+  position = seq_along(tokens),
+  token = tokens,
+  target = case_when(
+    position %in% bank_positions ~ "bank occurrence",
+    position %in% the_positions ~ "the occurrence",
+    TRUE ~ "other token"
+  )
+)
+
+stopifnot(
+  identical(tokens, c("The", "bank", "raised", "interest", "rates", ".", "He", "sat", "on", "the", "river", "bank", "and", "watched", ".")),
+  identical(dim(tensor), c(15L, 96L)),
+  identical(bank_positions, c(2L, 12L)),
+  identical(the_positions, c(1L, 10L)),
+  nrow(token_table) == 15L
+)
+
+kable(
+  token_table,
+  col.names = c("Position", "Token", "Role in this lesson"),
+  caption = "Tokens in the sentence and the positions compared below",
+  row.names = FALSE
+)
+```
+
+The two `bank` tokens are at positions 2 and 12. They share spelling, but they do
+not share the same tensor row.
+
+## Compare occurrence vectors with a baseline
+
+Cosine similarity compares vector direction. A score of 1 would mean the two rows
+point in exactly the same direction. The two `bank` occurrence vectors score
+about 0.3466.
+
+```{r}
+cosine <- function(first, second) {
+  sum(first * second) / sqrt(sum(first^2) * sum(second^2))
+}
+
+all_pair_index <- which(
+  upper.tri(matrix(NA_real_, nrow = length(tokens), ncol = length(tokens))),
+  arr.ind = TRUE
+)
+
+all_pair_cosines <- apply(
+  all_pair_index,
+  1,
+  function(pair) cosine(tensor[pair[1], ], tensor[pair[2], ])
+)
+
+bank_cosine <- cosine(tensor[bank_positions[1], ], tensor[bank_positions[2], ])
+the_cosine <- cosine(tensor[the_positions[1], ], tensor[the_positions[2], ])
+bank_percentile <- mean(all_pair_cosines <= bank_cosine)
+the_percentile <- mean(all_pair_cosines <= the_cosine)
+
+all_pair_summary <- tibble(
+  statistic = c("mean", "median", "5th percentile", "95th percentile"),
+  cosine = c(
+    mean(all_pair_cosines),
+    median(all_pair_cosines),
+    as.numeric(quantile(all_pair_cosines, 0.05)),
+    as.numeric(quantile(all_pair_cosines, 0.95))
+  )
+)
+
+comparison_table <- tibble(
+  comparison = c("bank / bank", "the / the"),
+  first_position = c(bank_positions[1], the_positions[1]),
+  second_position = c(bank_positions[2], the_positions[2]),
+  cosine_similarity = c(bank_cosine, the_cosine),
+  percentile_of_all_pairs = c(bank_percentile, the_percentile)
+)
+
+stopifnot(
+  length(all_pair_cosines) == 105L,
+  within_tolerance(bank_cosine, 0.3466, tolerance = 1e-3),
+  within_tolerance(the_cosine, 0.5322, tolerance = 1e-3),
+  within_tolerance(mean(all_pair_cosines), 0.0476, tolerance = 1e-3),
+  within_tolerance(median(all_pair_cosines), -0.0074, tolerance = 1e-3),
+  within_tolerance(as.numeric(quantile(all_pair_cosines, 0.95)), 0.4475, tolerance = 1e-3),
+  bank_percentile > 0.9,
+  the_percentile > bank_percentile
+)
+
+kable(
+  all_pair_summary |>
+    mutate(cosine = round(cosine, 4)),
+  col.names = c("All-pair baseline", "Cosine"),
+  caption = "Cosine similarities across all 105 token pairs in the example sentence",
+  row.names = FALSE
+)
+
+kable(
+  comparison_table |>
+    mutate(
+      cosine_similarity = round(cosine_similarity, 4),
+      percentile_of_all_pairs = round(percentile_of_all_pairs, 3)
+    ),
+  col.names = c("Comparison", "First position", "Second position", "Cosine similarity", "Percentile of all token pairs"),
+  caption = "Repeated word strings compared with the all-pair baseline",
+  row.names = FALSE
+)
+```
+
+The `bank` pair is higher than an arbitrary token pair from the same sentence:
+it sits around the 91st percentile of the all-pair baseline. That supports a
+modest claim. The encoder gives different vectors to occurrences, and the two
+`bank` rows are still closer than most random token pairs in this short text.
+
+## Check same-sense controls
+
+The stronger claim would be that the distance isolates word sense. The controls
+below test that claim by changing sense and grammatical role separately.
+
+```{r}
+tensor_for_text <- function(text) {
+  doc <- nlp(text)
+  tokens <- vapply(
+    seq_len(length(doc)) - 1L,
+    function(i) doc[i]$text,
+    character(1)
+  )
+
+  list(tokens = tokens, tensor = py_to_r(doc$tensor))
+}
+
+bank_pair_cosine <- function(text) {
+  parsed <- tensor_for_text(text)
+  positions <- which(parsed$tokens == "bank")
+
+  if (length(positions) != 2L) {
+    stop("Expected exactly two bank tokens.", call. = FALSE)
+  }
+
+  cosine(parsed$tensor[positions[1], ], parsed$tensor[positions[2], ])
+}
+
+bank_control_sentences <- tibble(
+  comparison = c(
+    "different senses, different roles",
+    "same financial sense, same role",
+    "same river sense",
+    "same financial sense, different roles"
+  ),
+  text = c(
+    "The bank raised interest rates. He sat on the river bank and watched.",
+    "The bank raised interest rates. The bank approved the loan.",
+    "He sat on the river bank and watched. She walked along the muddy bank.",
+    "The bank approved the loan. She walked into the bank."
+  ),
+  cosine_similarity = c(
+    bank_pair_cosine(text[1]),
+    bank_pair_cosine(text[2]),
+    bank_pair_cosine(text[3]),
+    bank_pair_cosine(text[4])
+  )
+)
+
+role_gap <- abs(
+  bank_control_sentences$cosine_similarity[bank_control_sentences$comparison == "different senses, different roles"] -
+    bank_control_sentences$cosine_similarity[bank_control_sentences$comparison == "same financial sense, different roles"]
+)
+
+stopifnot(
+  nrow(bank_control_sentences) == 4L,
+  all(within_tolerance(
+    bank_control_sentences$cosine_similarity,
+    c(0.3466, 0.9422, 0.5900, 0.3447),
+    tolerance = 1e-3
+  )),
+  role_gap < 0.01,
+  bank_control_sentences$cosine_similarity[2] > 0.9,
+  bank_control_sentences$cosine_similarity[2] > bank_control_sentences$cosine_similarity[1]
+)
+
+kable(
+  bank_control_sentences |>
+    mutate(cosine_similarity = round(cosine_similarity, 4)),
+  col.names = c("Comparison", "Sentences", "Cosine similarity"),
+  caption = "Same-sense controls for two occurrences of bank",
+  row.names = FALSE
+)
+```
+
+The reversal is the lesson. Same financial sense in different grammatical roles
+scores about 0.3447, almost the same as different senses in different roles at
+about 0.3466. Same financial sense in the same role scores about 0.9422. In this
+small pipeline, syntactic role moves the vectors more than the dictionary sense
+of `bank`.
+
+## Contrast with one vector per word
+
+The word2vec lesson trains one vector for each kept word type. A
+one-vector-per-word model cannot give river `bank` and finance `bank` two rows in
+the same sentence. A contextual pipeline can.
+
+That does not mean the vector knows which dictionary sense is meant. The
+`en_core_web_sm` tok2vec layer, short for token-to-vector, is the part of the
+pipeline that turns each token into numbers, and it is a shared encoder trained
+for tagging, parsing, and named-entity recognition. It has no word-sense
+objective, so it carries the information useful for those tasks. A representation
+that changes with context is not the same thing as a model that knows which sense
+you meant. This is a small pipeline's encoder, not a large language model.
+
+```{r}
+final_checks <- tibble(
+  check = c("token rows", "tensor dimensions", "bank cosine rounded", "same-role financial cosine rounded", "static vector rows"),
+  value = c(
+    as.character(nrow(tensor)),
+    paste(ncol(tensor), "columns"),
+    sprintf("%.4f", bank_cosine),
+    sprintf("%.4f", bank_control_sentences$cosine_similarity[2]),
+    as.character(nlp$vocab$vectors$shape[[1]])
+  )
+)
+
+stopifnot(
+  nrow(tensor) == 15L,
+  ncol(tensor) == 96L,
+  within_tolerance(bank_cosine, 0.3466, tolerance = 1e-3),
+  within_tolerance(bank_control_sentences$cosine_similarity[2], 0.9422, tolerance = 1e-3),
+  as.integer(nlp$vocab$vectors$shape[[1]]) == 0L,
+  identical(tokens[bank_positions], c("bank", "bank")),
+  identical(tokens[the_positions], c("The", "the"))
+)
+
+kable(
+  final_checks,
+  col.names = c("Check", "Value"),
+  caption = "Final checks for the contextual representation example",
+  row.names = FALSE
+)
+```
+
+## What to remember
+
+- A contextualized representation gives one vector to each token occurrence.
+- The pinned small spaCy pipeline has 0 rows in its static vector table.
+- The sentence produces a 15 by 96 tensor.
+- The two `bank` occurrence vectors score about 0.3466, above most token pairs in
+  that sentence.
+- In this model, same-sense controls point to grammatical role rather than word
+  sense.
+
+The student keeps both underlines and adds a note: same spelling, different
+occurrence vectors, not a sense label.
+
+## Sources
+
+- [spaCy model documentation](https://spacy.io/models/en)
+- [spaCy Doc tensor attribute](https://spacy.io/api/doc#attributes)
+- [spaCy tok2vec architecture documentation](https://spacy.io/api/tok2vec)
+- [reticulate package documentation](https://rstudio.github.io/reticulate/)
+- [spacyr package reference](https://spacyr.quanteda.io/)

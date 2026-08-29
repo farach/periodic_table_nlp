@@ -1,0 +1,18 @@
+field,value
+source,"quanteda data_corpus_inaugural, reshaped by R/inaugural-corpus.R"
+licence,Speeches are US government works in the public domain
+generator,data-raw/build-word2vec-model.R
+built_on,2026-08-29
+algorithm,skip-gram
+dimensions,50
+window,5
+iterations,5
+minimum_count,5
+threads,1
+training_documents,1377
+training_tokens,134419
+vocabulary_rows,2709
+punctuation_rows,1
+unique_pairs,3667986
+reproducibility,"word2vec is not bitwise reproducible on this package version. Across five fits with the same seed the neighbour order changed every time, so this model is trained once here and committed."
+sha256_model,b182100ecb33cb339f16fdf5df5cea783dd113843a3a89e7e65393b921e448dd

@@ -1,0 +1,4 @@
+task,outcome,rows,speeches,people,largest_class,baseline_accuracy
+era,era,1377,60,40,1900 or later,0.6478
+era_party_rows,era,1197,47,31,1900 or later,0.7452
+party,party,1197,47,31,Republican,0.6065

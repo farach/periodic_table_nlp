@@ -1,6 +1,6 @@
 # Project status
 
-**Last updated:** 2026-08-28
+**Last updated:** 2026-08-29
 
 ## GitHub checkpoints
 
@@ -17,10 +17,14 @@
 - [Pull request 4](https://github.com/farach/periodic_table_nlp/pull/4)
   added the word-parsing stage, tasks 14 to 17, in commit
   [`f0cae28`](https://github.com/farach/periodic_table_nlp/commit/f0cae28).
+- [Pull request 5](https://github.com/farach/periodic_table_nlp/pull/5)
+  completed tasks 18 to 42, finishing the source-and-training-data stage and
+  the whole language-structure stage, in commit
+  [`ec542f0`](https://github.com/farach/periodic_table_nlp/commit/ec542f0).
 
 ## Reader-facing work
 
-The Quarto site has 42 linked lessons:
+The Quarto site has 62 linked lessons:
 
 - Source data loading, tasks 1-7
 - Training data generation, tasks 8-13
@@ -30,14 +34,28 @@ The Quarto site has 42 linked lessons:
 - Entity enrichment, tasks 29-34
 - Sentences and paragraphs, tasks 35-38
 - Documents, tasks 39-42
+- Model development, tasks 43-47
+- Classification, tasks 48-52
+- Signals and discovery, tasks 53-57
+- Similarity, tasks 58-62
 
-That completes the source-and-training-data stage and the whole
-language-structure stage. Tasks 6-42 share a fictional workforce-research
-story: Riverton Workforce Lab collects a saved job board, extracts a training
-flyer, builds a versioned annotation codebook, compares annotators, then works
-down through words, phrases, entities, sentences and whole documents.
+That completes the source-and-training-data stage, the whole language-structure
+stage, and the models-and-analysis stage. Tasks 6-42 share a fictional
+workforce-research story: Riverton Workforce Lab collects a saved job board,
+extracts a training flyer, builds a versioned annotation codebook, compares
+annotators, then works down through words, phrases, entities, sentences and
+whole documents.
 
-The 39 remaining map tiles are visible and marked as planned.
+Tasks 43-62 change corpus, and say so. Twenty-eight hand-labelled sentences
+were the right size for learning to label and the wrong size for learning to
+predict, so the modeling lessons move to the 60 US presidential inaugural
+addresses that quanteda ships, reshaped into 1,377 paragraphs. The section is
+built on one contrast: the same model, features and code predict the era of a
+paragraph well above baseline and fail completely at predicting party. Riverton
+still appears where invented data is honest, in the spam and intent lessons,
+which report no performance number for exactly that reason.
+
+The 19 remaining map tiles are visible and marked as planned.
 
 ## Models in use
 

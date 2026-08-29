@@ -1,0 +1,317 @@
+---
+title: "Reading topic-model output carefully"
+subtitle: "Fit LDA and test random starts"
+author: "Alex Farach"
+description: "Learn how LDA groups co-occurring words while treating topic labels and model choices with care."
+categories: [signals and discovery, topic modeling, inaugural addresses]
+---
+
+Priya receives a table with five numbered topics and a request to name them before lunch. The table looks tidy enough: each row has a few common words and a number.
+
+The risk is that the neat table invites a stronger story than the model earned. A topic model will always produce topics when asked, so the analyst has to check whether the same answer appears under different random starts.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- define Latent Dirichlet Allocation in everyday language;
+- build a paragraph-level document-feature matrix;
+- fit a five-topic LDA model with explicit seeds;
+- match topics across runs by their top terms; and
+- compare observed agreement with a random-label null.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Build the matrix
+
+**Latent Dirichlet Allocation**, usually shortened to **LDA**, groups words that tend to appear in the same documents. Here each document is one paragraph. A **document-feature matrix** stores document rows and word columns. The value `k` is the number of topics the analyst asks the model to find.
+
+```{r}
+library(dplyr)
+library(tibble)
+library(stringr)
+library(purrr)
+library(quanteda)
+library(topicmodels)
+library(knitr)
+
+source("R/inaugural-corpus.R")
+source("R/permutation-null.R")
+
+paragraphs <- inaugural_paragraphs()
+
+paragraph_tokens <- tokens(
+  paragraphs$paragraph,
+  remove_punct = TRUE,
+  remove_numbers = TRUE
+) |>
+  tokens_tolower() |>
+  tokens_remove(stopwords("en"))
+
+paragraph_dfm <- dfm(paragraph_tokens)
+trimmed_dfm <- dfm_trim(paragraph_dfm, min_termfreq = 5)
+lda_input <- convert(trimmed_dfm, to = "topicmodels")
+
+matrix_summary <- tibble(
+  measure = c("documents", "features", "nonzero term counts"),
+  value = c(ndoc(trimmed_dfm), nfeat(trimmed_dfm), sum(trimmed_dfm))
+)
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  identical(ndoc(trimmed_dfm), 1377L),
+  identical(nfeat(trimmed_dfm), 2587L),
+  identical(sum(trimmed_dfm), 52934),
+  identical(nrow(lda_input), 1377L),
+  identical(ncol(lda_input), 2587L)
+)
+
+kable(
+  matrix_summary,
+  col.names = c("Measure", "Value"),
+  caption = "The trimmed paragraph matrix for LDA",
+  row.names = FALSE
+)
+```
+
+Trimming keeps words that appear at least five times in the paragraph corpus. The matrix has 1,377 paragraph documents and 2,587 word features.
+
+## Fit five topics three times
+
+The analyst chooses `k = 5`. The seed in `control = list(seed = ...)` fixes the random starting values used by the LDA fitting algorithm. It does not choose `k`, and it does not prove that the fitted topics are the only possible solution.
+
+```{r}
+top_terms <- function(model, n = 10L) {
+  beta <- posterior(model)$terms
+  bind_rows(lapply(seq_len(nrow(beta)), function(topic) {
+    ordered <- sort(beta[topic, ], decreasing = TRUE)
+    tibble(
+      topic = topic,
+      term = names(ordered)[seq_len(n)],
+      beta = as.numeric(ordered[seq_len(n)])
+    )
+  }))
+}
+
+set.seed(42)
+lda_a <- LDA(lda_input, k = 5, control = list(seed = 42))
+
+set.seed(7)
+lda_b <- LDA(lda_input, k = 5, control = list(seed = 7))
+
+set.seed(2024)
+lda_c <- LDA(lda_input, k = 5, control = list(seed = 2024))
+
+terms_a <- top_terms(lda_a, n = 10L)
+terms_b <- top_terms(lda_b, n = 10L)
+terms_c <- top_terms(lda_c, n = 10L)
+
+topics_a <- terms_a |>
+  slice_head(n = 8, by = topic) |>
+  summarise(top_terms = paste(term, collapse = ", "), .by = topic)
+
+stopifnot(
+  identical(nrow(topics_a), 5L),
+  identical(
+    topics_a$top_terms[1],
+    "country, power, can, us, must, government, people, new"
+  ),
+  identical(
+    terms_a$term[terms_a$topic == 5][1:3],
+    c("must", "government", "people")
+  )
+)
+
+kable(
+  topics_a,
+  col.names = c("Topic number", "Top terms"),
+  caption = "Top terms from a five-topic LDA model with seed 42",
+  row.names = FALSE
+)
+```
+
+The table is the most tempting output in topic modeling. It is also easy to overread. The row names are just topic numbers, and the words are high-probability terms under this fitted model.
+
+## Match topics across random starts
+
+Topic numbers are arbitrary. Topic 1 in one run does not have to be topic 1 in another run. The comparison below matches topics by the largest total overlap in their top-10 term sets.
+
+A **permutation null** reruns the comparison after breaking the term labels. The **p-value** reports how often those shuffled runs match or beat the observed overlap.
+
+```{r}
+permutations <- function(x) {
+  if (length(x) == 1L) {
+    return(list(x))
+  }
+
+  seq_along(x) |>
+    map(\(i) {
+      permutations(x[-i]) |>
+        map(\(p) c(x[i], p))
+    }) |>
+    list_flatten()
+}
+
+best_topic_match <- function(terms_first, terms_second) {
+  topics <- sort(unique(terms_first$topic))
+  first_sets <- topics |>
+    map(\(topic_id) terms_first$term[terms_first$topic == topic_id])
+  second_sets <- topics |>
+    map(\(topic_id) terms_second$term[terms_second$topic == topic_id])
+
+  candidate_orders <- permutations(seq_along(topics))
+  candidate_scores <- candidate_orders |>
+    map_int(\(order) {
+      seq_along(topics) |>
+        map_int(\(i) length(intersect(first_sets[[i]], second_sets[[order[i]]]))) |>
+        sum()
+    })
+
+  best_order <- candidate_orders[[which.max(candidate_scores)]]
+
+  tibble(
+    topic_first = topics,
+    topic_second = topics[best_order],
+    shared_top_10_terms = seq_along(topics) |>
+      map_int(\(i) length(intersect(first_sets[[i]], second_sets[[best_order[i]]])))
+  )
+}
+
+seed_matches <- bind_rows(
+  best_topic_match(terms_a, terms_b) |>
+    mutate(comparison = "seed 42 vs 7", .before = 1),
+  best_topic_match(terms_a, terms_c) |>
+    mutate(comparison = "seed 42 vs 2024", .before = 1),
+  best_topic_match(terms_b, terms_c) |>
+    mutate(comparison = "seed 7 vs 2024", .before = 1)
+)
+
+seed_summary <- seed_matches |>
+  summarise(
+    mean_shared_terms = round(mean(shared_top_10_terms), 2),
+    minimum_shared_terms = min(shared_top_10_terms),
+    maximum_shared_terms = max(shared_top_10_terms),
+    total_shared_terms = sum(shared_top_10_terms),
+    .by = comparison
+  )
+
+seed_null <- permutation_null(
+  observed = mean(seed_matches$shared_top_10_terms[seed_matches$comparison == "seed 42 vs 7"]),
+  replicate_fn = function() {
+    shuffled_terms <- terms_b |>
+      mutate(term = sample(colnames(lda_input), n(), replace = FALSE))
+
+    mean(best_topic_match(terms_a, shuffled_terms)$shared_top_10_terms)
+  },
+  replicates = 500L,
+  seed = 5501L,
+  alternative = "greater"
+)
+
+seed_null_display <- seed_null |>
+  mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
+
+stopifnot(
+  identical(seed_summary$mean_shared_terms, c(5.6, 5.4, 5.0)),
+  identical(seed_summary$minimum_shared_terms, c(4L, 4L, 3L)),
+  identical(seed_summary$maximum_shared_terms, c(7L, 7L, 6L)),
+  identical(seed_summary$total_shared_terms, c(28L, 27L, 25L)),
+  identical(as.numeric(seed_null_display$observed), 5.6),
+  identical(as.numeric(seed_null_display$null_mean), 0.098),
+  identical(as.numeric(seed_null_display$p_value), 0.002)
+)
+
+kable(
+  seed_matches,
+  col.names = c("Comparison", "Topic in first run", "Matched topic in second run", "Shared top-10 terms"),
+  caption = "Best-matched topic overlaps across three five-topic runs",
+  row.names = FALSE
+)
+
+kable(
+  seed_summary,
+  col.names = c("Comparison", "Mean shared top-10 terms", "Minimum", "Maximum", "Total shared terms"),
+  caption = "Topic overlap after matching arbitrary topic numbers",
+  row.names = FALSE
+)
+
+kable(
+  seed_null_display,
+  col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
+  caption = "Random-term null for seed 42 vs seed 7 overlap",
+  row.names = FALSE
+)
+```
+
+The five-topic fits are more stable across seeds than the warning at the start might lead you to expect. Matched topics share 5.6, 5.4, and 5.0 of their top 10 terms on average across the three pairwise comparisons. For the seed 42 versus seed 7 comparison, random term labels produce only 0.098 shared terms on average, with 90% of shuffles between 0 and 0.4. The observed mean overlap is 5.6 (p = 0.002).
+
+Topic models always return topics, even for randomized term labels. The null here keeps the fitted topic sizes and vocabulary but breaks the term identities in one run. That makes the seed comparison a claim about repeatability rather than a claim based on tidy-looking rows.
+
+## Changing k changes the question
+
+A four-topic fit is useful as a sensitivity check, but it is not the same object as a five-topic fit. Once `k` changes, topics are not identified across models.
+
+```{r}
+set.seed(42)
+lda_4 <- LDA(lda_input, k = 4, control = list(seed = 42))
+
+topics_4 <- top_terms(lda_4, n = 8L) |>
+  summarise(
+    top_terms = paste(term, collapse = ", "),
+    top_term = first(term),
+    .by = topic
+  )
+
+shared_first_terms <- length(intersect(topics_a$top_terms |> str_extract("^[^,]+"), topics_4$top_term))
+
+stopifnot(
+  identical(nrow(topics_4), 4L),
+  identical(
+    topics_4$top_term,
+    c("must", "people", "government", "public")
+  ),
+  identical(shared_first_terms, 2L),
+  identical(topics_4$top_terms[1], "must, government, people, can, us, power, country, now")
+)
+
+kable(
+  topics_4 |>
+    select(topic, top_terms),
+  col.names = c("Topic number", "Top terms"),
+  caption = "Top terms from a four-topic LDA model with seed 42",
+  row.names = FALSE
+)
+
+kable(
+  tibble(shared_first_terms = shared_first_terms),
+  col.names = "Shared first terms with the seed-42 five-topic fit",
+  caption = "A small comparison after changing k",
+  row.names = FALSE
+)
+```
+
+The first terms for the four-topic model are `must`, `people`, `government`, and `public`. Two of those are also first terms in the five-topic seed-42 fit. That number is a warning about interpretation, not a stability estimate, because changing `k` changes the model's target.
+
+## What to remember
+
+- LDA groups words that co-occur across paragraph documents.
+- This lesson used 1,377 paragraph documents and 2,587 features.
+- The same `k = 5` fit was fairly repeatable across seeds in this corpus.
+- Changing `k` changes the question, so topic labels start over.
+- A topic name is a reading aid, not a finding produced by the model.
+
+Keep the topic numbers attached to their model settings. If the setting changes, the interpretation starts over.
+
+## Sources
+
+- [topicmodels package documentation](https://cran.r-project.org/package=topicmodels)
+- [Blei, Ng, and Jordan paper on Latent Dirichlet Allocation](https://www.jmlr.org/papers/v3/blei03a.html)
+- [Chang et al. on human interpretation of topic models](https://papers.nips.cc/paper_files/paper/2009/hash/f92586a25bb3145facd64ab20fd554ff-Abstract.html)
+- [quanteda document-feature matrix documentation](https://quanteda.io/reference/dfm.html)

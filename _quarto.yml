@@ -13,6 +13,10 @@ project:
     - 6_entity_enrichment/*.qmd
     - 7_sentences_and_paragraphs/*.qmd
     - 8_documents/*.qmd
+    - 9_model_development/*.qmd
+    - 10_classification/*.qmd
+    - 11_signals_and_discovery/*.qmd
+    - 12_similarity/*.qmd
 
 website:
   title: "Periodic Table of NLP Tasks in R"
@@ -114,6 +118,46 @@ website:
         text: Extracting document metadata
       - href: 8_documents/42-language-identification.qmd
         text: Identifying document language
+      - href: 9_model_development/43-training-models.qmd
+        text: Training models
+      - href: 9_model_development/44-evaluating-models.qmd
+        text: Evaluating models
+      - href: 9_model_development/45-explaining-models.qmd
+        text: Explaining models
+      - href: 9_model_development/46-deploying-models.qmd
+        text: Deploying models
+      - href: 9_model_development/47-monitoring-models.qmd
+        text: Monitoring models
+      - href: 10_classification/48-spam-detection.qmd
+        text: Catching scam messages
+      - href: 10_classification/49-sentiment-and-emotion-analysis.qmd
+        text: Scoring customer feeling
+      - href: 10_classification/50-intent-classification.qmd
+        text: Sorting messages by purpose
+      - href: 10_classification/51-text-classification.qmd
+        text: Turning documents into categories
+      - href: 10_classification/52-multi-label-and-multi-class-classification.qmd
+        text: One label or several labels
+      - href: 11_signals_and_discovery/53-keyword-extraction.qmd
+        text: Finding distinctive words and phrases
+      - href: 11_signals_and_discovery/54-extractive-summarization.qmd
+        text: Selecting sentences as a summary
+      - href: 11_signals_and_discovery/55-topic-modeling.qmd
+        text: Reading topic-model output carefully
+      - href: 11_signals_and_discovery/56-trend-detection.qmd
+        text: Checking word trends over time
+      - href: 11_signals_and_discovery/57-outlier-detection.qmd
+        text: Finding speeches unlike the rest
+      - href: 12_similarity/58-wordnet-synsets.qmd
+        text: Reading WordNet synsets
+      - href: 12_similarity/59-distance-measures.qmd
+        text: Measuring distance between texts
+      - href: 12_similarity/60-document-similarity.qmd
+        text: Finding similar documents
+      - href: 12_similarity/61-distributed-word-representations.qmd
+        text: Training word vectors
+      - href: 12_similarity/62-contextualized-word-representations.qmd
+        text: Reading words in context
       - href: accessibility.qmd
         text: Accessibility
   page-footer:

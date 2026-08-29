@@ -7,5 +7,6 @@
 *.R text eol=lf
 *.css text eol=lf
 *.udpipe binary
+*.bin binary
 *.png binary
 renv/activate.R -whitespace

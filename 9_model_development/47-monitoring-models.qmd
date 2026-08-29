@@ -1,0 +1,451 @@
+---
+title: "Monitoring models"
+subtitle: "Watch a deployed text model after the first score"
+author: "Alex Farach"
+description: "Learn how to check model performance across time slices and why changing labels can make an old score misleading."
+categories: [model development, monitoring, model drift]
+---
+
+A dashboard turns green on launch day. The model passed its test, the API is
+ready, and a queue of paragraphs can finally be scored.
+
+Three months later, the queue is different. The words are familiar, the file
+format still works, and the old test score is still printed in the deployment
+record. None of that proves the model is doing the same job.
+
+Monitoring asks what changed after deployment. It can watch the text arriving,
+and when checked labels arrive, it can watch the score.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- score a fitted text model across time slices;
+- read held-out slice scores without treating them as a new train/test study;
+- check input drift when labels are late or missing;
+- define concept drift in plain language;
+- explain why a fixed party text model needs fresh evidence; and
+- name what monitoring can and cannot see.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Refit the era model
+
+For a monitoring lesson, we replay the corpus as if labeled paragraphs arrived
+from different periods. The model is the same penalized logistic regression with
+tf-idf features. The split seed is `4301`, and the fit seed is `4302`.
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tibble)
+  library(stringr)
+  library(tidyr)
+  library(tidytext)
+  library(ggplot2)
+  library(rsample)
+  library(recipes)
+  library(textrecipes)
+  library(parsnip)
+  library(workflows)
+  library(yardstick)
+  library(broom)
+  library(glmnet)
+})
+
+source("R/inaugural-corpus.R")
+paragraphs <- inaugural_paragraphs()
+
+set.seed(4301)
+era_split <- group_initial_split(paragraphs, group = speech_id, prop = 0.75)
+era_training <- training(era_split)
+era_testing <- testing(era_split)
+
+era_recipe <- recipe(era ~ paragraph, data = era_training) |>
+  step_tokenize(paragraph) |>
+  step_stopwords(paragraph) |>
+  step_tokenfilter(paragraph, max_tokens = 500) |>
+  step_tfidf(paragraph)
+
+era_model <- logistic_reg(penalty = 0.01, mixture = 0) |>
+  set_engine("glmnet")
+
+era_workflow <- workflow() |>
+  add_recipe(era_recipe) |>
+  add_model(era_model)
+
+set.seed(4302)
+era_fitted <- fit(era_workflow, data = era_training)
+
+held_out_predictions <- predict(era_fitted, era_testing) |>
+  bind_cols(era_testing |> select(era))
+
+held_out_accuracy <- accuracy(
+  held_out_predictions,
+  truth = era,
+  estimate = .pred_class
+) |>
+  pull(.estimate)
+
+era_length_summary <- paragraphs |>
+  group_by(era) |>
+  summarise(
+    paragraphs = n(),
+    median_words = median(paragraph_words),
+    .groups = "drop"
+  )
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  identical(n_distinct(paragraphs$president), 40L),
+  identical(nrow(era_testing), 335L),
+  identical(round(held_out_accuracy, 4), 0.8209),
+  identical(as.integer(era_length_summary$paragraphs), c(485L, 892L)),
+  identical(as.numeric(era_length_summary$median_words), c(112, 54))
+)
+
+knitr::kable(
+  tibble(
+    item = c("paragraphs", "held-out paragraphs", "held-out accuracy"),
+    value = c(nrow(paragraphs), nrow(era_testing), round(held_out_accuracy, 4))
+  ),
+  col.names = c("Item", "Value"),
+  caption = "Model and corpus size for the monitoring replay",
+  row.names = FALSE
+)
+```
+
+The held-out score is still the evaluation score. Any slice score below uses
+only those `r nrow(era_testing)` held-out paragraphs, never rows from the
+training side.
+
+## Score held-out time slices
+
+A **monitoring slice** is a subset watched on its own, such as a month, region,
+source, or time period. Here the slices are half-centuries. This is already a
+trap, because the label `era` is derived from the year. A time slice contains
+almost only one label, so its score is one-class recall rather than overall
+performance.
+
+```{r}
+period_breaks <- c(1780, 1849, 1899, 1949, 1999, 2030)
+period_levels <- c(
+  "1789-1849",
+  "1850-1899",
+  "1900-1949",
+  "1950-1999",
+  "2000-2025"
+)
+
+held_out_by_period <- held_out_predictions |>
+  bind_cols(era_testing |> select(paragraph_id, year, paragraph)) |>
+  mutate(
+    period = cut(
+      year,
+      breaks = period_breaks,
+      labels = period_levels,
+      right = TRUE
+    )
+  )
+
+label_counts <- held_out_by_period |>
+  count(period, era, name = "labels") |>
+  complete(
+    period = factor(period_levels, levels = period_levels),
+    era = levels(paragraphs$era),
+    fill = list(labels = 0L)
+  )
+
+period_accuracy <- label_counts |>
+  group_by(period) |>
+  summarise(
+    held_out_paragraphs = sum(labels),
+    before_1900 = sum(labels[era == "before 1900"]),
+    later_1900 = sum(labels[era == "1900 or later"]),
+    .groups = "drop"
+  ) |>
+  left_join(
+    held_out_by_period |>
+      group_by(period) |>
+      summarise(
+        correct = sum(.pred_class == era),
+        accuracy = mean(.pred_class == era),
+        .groups = "drop"
+      ),
+    by = join_by(period)
+  ) |>
+  mutate(
+    correct = if_else(is.na(correct), 0L, as.integer(correct)),
+    score_kind = case_when(
+      held_out_paragraphs == 0L ~ "no held-out rows",
+      before_1900 == 0L | later_1900 == 0L ~ "one-class recall",
+      TRUE ~ "two-class accuracy"
+    )
+  )
+
+lowest_slice <- period_accuracy |>
+  filter(held_out_paragraphs > 0L) |>
+  slice_min(accuracy, n = 1, with_ties = FALSE)
+
+stopifnot(
+  identical(nrow(period_accuracy), 5L),
+  identical(period_accuracy$held_out_paragraphs, c(67L, 128L, 23L, 117L, 0L)),
+  identical(period_accuracy$before_1900, c(67L, 128L, 0L, 0L, 0L)),
+  identical(period_accuracy$later_1900, c(0L, 0L, 23L, 117L, 0L)),
+  identical(period_accuracy$correct, c(58L, 87L, 17L, 113L, 0L)),
+  identical(
+    round(period_accuracy$accuracy[!is.na(period_accuracy$accuracy)], 3),
+    c(0.866, 0.680, 0.739, 0.966)
+  ),
+  identical(sum(period_accuracy$held_out_paragraphs), 335L),
+  identical(as.character(lowest_slice$period), "1850-1899"),
+  identical(lowest_slice$held_out_paragraphs, 128L)
+)
+
+knitr::kable(
+  period_accuracy |>
+    select(
+      period,
+      held_out_paragraphs,
+      before_1900,
+      later_1900,
+      correct,
+      score_kind,
+      accuracy
+    ) |>
+    mutate(accuracy = round(accuracy, 3)),
+  col.names = c(
+    "Period", "Held-out paragraphs", "Before 1900 labels",
+    "1900 or later labels", "Correct", "Score type", "Accuracy"
+  ),
+  caption = "Held-out era scores by period with class composition",
+  row.names = FALSE
+)
+```
+
+The lowest held-out slice is
+`r as.character(lowest_slice$period)`, with `r lowest_slice$held_out_paragraphs`
+paragraphs and accuracy `r round(lowest_slice$accuracy, 3)`. It is not the slice
+around 1900. The deeper problem is the same in every nonempty row: each slice has
+one class. The table is a warning about circular monitoring, not a clean accuracy
+report.
+
+## Watch input drift without waiting for labels
+
+Labels often arrive late, and sometimes they never arrive. One thing a team can
+watch without labels is whether the incoming text is moving away from the text
+the model saw during fitting. The code below uses the 500 model features as the
+training vocabulary, then asks what share of non-stopword tokens in each period
+falls outside that vocabulary. It also reports median paragraph length.
+
+```{r}
+training_vocabulary <- tidy(extract_fit_parsnip(era_fitted)) |>
+  filter(term != "(Intercept)") |>
+  transmute(token = str_remove(term, "^tfidf_paragraph_")) |>
+  pull(token)
+
+period_paragraphs <- paragraphs |>
+  mutate(
+    period = cut(
+      year,
+      breaks = period_breaks,
+      labels = period_levels,
+      right = TRUE
+    )
+  )
+
+period_lengths <- period_paragraphs |>
+  group_by(period) |>
+  summarise(
+    paragraphs = n(),
+    median_words = median(paragraph_words),
+    .groups = "drop"
+  )
+
+drift_table <- period_paragraphs |>
+  select(paragraph_id, period, paragraph) |>
+  unnest_tokens(token, paragraph) |>
+  anti_join(tidytext::stop_words, by = join_by(token == word)) |>
+  group_by(period) |>
+  summarise(
+    tokens = n(),
+    absent_tokens = sum(!(token %in% training_vocabulary)),
+    absent_share = absent_tokens / tokens,
+    .groups = "drop"
+  ) |>
+  left_join(period_lengths, by = join_by(period)) |>
+  select(period, paragraphs, median_words, tokens, absent_tokens, absent_share)
+
+stopifnot(
+  identical(length(training_vocabulary), 500L),
+  identical(nrow(drift_table), 5L),
+  identical(drift_table$paragraphs, c(220L, 265L, 317L, 371L, 204L)),
+  identical(drift_table$median_words, c(149.5, 92, 67, 53, 43)),
+  identical(drift_table$tokens, c(15265L, 11366L, 11170L, 7769L, 4324L)),
+  identical(drift_table$absent_tokens, c(9347L, 6893L, 6615L, 4594L, 2631L)),
+  identical(round(drift_table$absent_share, 3), c(0.612, 0.606, 0.592, 0.591, 0.608)),
+  max(drift_table$median_words) - min(drift_table$median_words) > 100
+)
+
+knitr::kable(
+  drift_table |>
+    mutate(absent_share = round(absent_share, 3)),
+  col.names = c(
+    "Period", "Paragraphs", "Median words",
+    "Non-stopword tokens", "Tokens outside 500 features",
+    "Share outside 500 features"
+  ),
+  caption = "Input drift checks by period using the training vocabulary",
+  row.names = FALSE
+)
+```
+
+The vocabulary drift measure is close to flat partly by construction. It counts
+tokens outside a fixed 500-token vocabulary, and most non-stopword tokens always
+fall outside that short list. The share ranges from
+`r round(min(drift_table$absent_share), 3)` to
+`r round(max(drift_table$absent_share), 3)` across
+`r max(paragraphs$year) - min(paragraphs$year)` years.
+
+Median paragraph length is the clearer signal. It falls from
+`r max(drift_table$median_words)` words in the earliest period to
+`r min(drift_table$median_words)` in the latest. The same variable carried part
+of the era result in the evaluation lesson: before-1900 paragraphs have median
+length `r era_length_summary$median_words[era_length_summary$era == "before 1900"]`,
+while later paragraphs have median length
+`r era_length_summary$median_words[era_length_summary$era == "1900 or later"]`.
+A team watching only the vocabulary check would have missed that shift.
+
+Neither check requires labels, which is why they can run while a team waits for
+review samples. Neither one tells you the model is still correct. They tell you
+whether the incoming text still looks like the text the model was fitted to, and
+a model can be badly wrong on inputs that look perfectly familiar.
+
+```{r}
+#| label: fig-input-drift
+#| fig-cap: "Input drift checks by period."
+#| fig-alt: "Two small line charts by period. One shows the share of non-stopword tokens outside the training features. The other shows median paragraph length falling over time."
+
+drift_plot <- drift_table |>
+  transmute(
+    period,
+    `share outside training features` = absent_share,
+    `median paragraph words` = median_words
+  ) |>
+  pivot_longer(
+    cols = -period,
+    names_to = "measure",
+    values_to = "value"
+  )
+
+stopifnot(
+  identical(nrow(drift_plot), 10L),
+  identical(
+    sort(unique(drift_plot$measure)),
+    c("median paragraph words", "share outside training features")
+  ),
+  max(drift_table$median_words) - min(drift_table$median_words) > 100
+)
+
+ggplot(drift_plot, aes(x = period, y = value, group = measure)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 3) +
+  facet_wrap(~measure, scales = "free_y", ncol = 1) +
+  labs(
+    x = "Period",
+    y = NULL
+  ) +
+  theme_minimal()
+```
+
+The length pattern is much stronger than the absent-token pattern here. In a live
+system, either could trigger review. Neither says the model is wrong by itself.
+It says the input no longer looks the same in a way a person should inspect.
+
+## Watch labels as well as words
+
+**Concept drift** means the relationship between inputs and labels changes over
+time. Text changes when writers choose new words. Labels can change too.
+
+The party column in this corpus spans the full address range. A label such as
+`Democratic` appears across many decades. That span is not evidence that one
+fixed paragraph model can predict party across the collection. The evaluation
+result for this recipe and penalty is a measurement warning, not a political
+finding.
+
+```{r}
+party_range <- paragraphs |>
+  summarise(
+    first_year = min(year),
+    last_year = max(year),
+    years_spanned = last_year - first_year,
+    parties = n_distinct(party),
+    .groups = "drop"
+  )
+
+democratic_range <- paragraphs |>
+  filter(party == "Democratic") |>
+  summarise(
+    first_year = min(year),
+    last_year = max(year),
+    paragraphs = n(),
+    speeches = n_distinct(speech_id),
+    .groups = "drop"
+  )
+
+party_rows <- paragraphs |>
+  filter(party %in% c("Democratic", "Republican"))
+
+stopifnot(
+  identical(party_range$first_year, 1789L),
+  identical(party_range$last_year, 2025L),
+  identical(party_range$years_spanned, 236L),
+  identical(party_range$parties, 6L),
+  identical(democratic_range$first_year, 1829L),
+  identical(democratic_range$last_year, 2021L),
+  identical(democratic_range$paragraphs, 471L),
+  identical(democratic_range$speeches, 22L),
+  identical(nrow(party_rows), 1197L),
+  identical(n_distinct(party_rows$president), 31L)
+)
+
+knitr::kable(
+  bind_rows(
+    party_range |>
+      transmute(label = "all party labels", first_year, last_year, paragraphs = nrow(paragraphs)),
+    democratic_range |>
+      transmute(label = "Democratic", first_year, last_year, paragraphs)
+  ),
+  col.names = c("Label scope", "First year", "Last year", "Paragraphs"),
+  caption = "Long time spans in the party labels",
+  row.names = FALSE
+)
+```
+
+Monitoring can see the input distribution moving. With checked labels, it can
+see a score fall. It cannot see confident errors on questions nobody checks.
+That blind spot is why monitoring needs sampled review, not only dashboards.
+
+## What to remember
+
+- Monitoring starts after a model is packaged or put into routine use.
+- Slice scores can show where performance changes.
+- A slice score is not the same as a new held-out evaluation.
+- Concept drift can affect words, labels, or the relationship between them.
+- Monitoring cannot find errors in rows that no one checks.
+
+A green dashboard is a prompt to keep looking, not a permanent certificate.
+
+## Sources
+
+- [yardstick metrics reference](https://yardstick.tidymodels.org/)
+- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework)
+- [quanteda inaugural corpus documentation](https://quanteda.io/reference/data_corpus_inaugural.html)
+- [Evidently guide to data drift](https://www.evidentlyai.com/ml-system-design/data-drift)

@@ -1,0 +1,547 @@
+---
+title: "Scoring customer feeling"
+subtitle: "Compare a word list with labels from the domain"
+author: "Alex Farach"
+description: "Learn why sentiment scores from word lists and trained labels can disagree, especially with short feedback."
+categories: [classification, sentiment analysis, emotion analysis]
+---
+
+At the end of the week, Nia receives five customer comments and one blank rating
+cell. The dashboard wants a quick mood score, but the comments are too short to
+hide the weak spots.
+
+One row thanks the service. Another says a parcel arrived late. A third says the
+sender could not reset a password. The same column holds praise, complaint, and
+language the English word list will miss.
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- score comments with the Bing sentiment lexicon;
+- count how many comments receive no lexicon match;
+- identify context failures such as negation and domain wording;
+- contrast a lexicon score with labels from the same domain; and
+- explain why a word score is not a claim about a person's inner state.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the feedback file
+
+The feedback file is fictional. It was written for teaching and contains no real
+customers, parcels, accounts, or service records.
+
+readr opens the CSV, dplyr and tibble shape the rows, tidyr handles missing
+cells, purrr repeats scoring, stringr checks words, tidytext supplies the
+lexicon, ggplot2 gives a small plot, and quanteda supplies the bundled inaugural
+corpus through the shared helper. The file keeps the blank rating as a string
+first because the project does not let `read_csv()` guess missing values.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(tidytext)
+library(ggplot2)
+library(quanteda)
+
+feedback <- read_csv(
+  "data/customer_feedback.csv",
+  na = character(),
+  col_types = cols(
+    feedback_id = col_integer(),
+    submitted_at = col_date(),
+    channel = col_character(),
+    rating = col_character(),
+    comment = col_character()
+  )
+) |>
+  mutate(
+    rating = if_else(rating == "", NA_integer_, as.integer(rating))
+  )
+
+stopifnot(
+  all(c(
+    "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
+    "tidytext", "ggplot2", "quanteda"
+  ) %in% loadedNamespaces()),
+  identical(nrow(feedback), 5L),
+  identical(feedback$feedback_id, 1001:1005),
+  identical(feedback$rating, c(5L, 4L, NA_integer_, 2L, 5L))
+)
+
+knitr::kable(
+  feedback,
+  col.names = c("ID", "Submitted", "Channel", "Rating", "Comment"),
+  caption = "Customer feedback used in this lesson",
+  row.names = FALSE
+)
+```
+
+The blank rating stays visible. Turning it into a zero would invent a rating the
+customer did not give.
+
+## Count sentiment words
+
+A **sentiment lexicon** is a word list with labels attached. The Bing Liu
+opinion lexicon in tidytext comes from product-review research by Minqing Hu and
+Bing Liu. It has 6,786 English words, each marked positive or negative. The
+source page asks users to cite the work and states research-use terms rather than
+an open-data licence. A lexicon score counts matches and gives positive words +1
+and negative words -1.
+
+```{r}
+bing <- tidytext::get_sentiments("bing")
+
+token_scores <- feedback |>
+  tidytext::unnest_tokens(word, comment) |>
+  left_join(
+    bing,
+    by = join_by(word),
+    multiple = "all"
+  ) |>
+  mutate(
+    token_score = case_when(
+      sentiment == "positive" ~ 1L,
+      sentiment == "negative" ~ -1L,
+      TRUE ~ 0L
+    )
+  )
+
+lexicon_scores <- token_scores |>
+  summarise(
+    matched_words = sum(token_score != 0L),
+    lexicon_score = sum(token_score),
+    .by = feedback_id
+  ) |>
+  right_join(feedback, by = join_by(feedback_id)) |>
+  mutate(
+    matched_words = replace_na(matched_words, 0L),
+    lexicon_score = replace_na(lexicon_score, 0L)
+  ) |>
+  arrange(feedback_id)
+
+zero_match_feedback_ids <- lexicon_scores |>
+  filter(matched_words == 0L) |>
+  pull(feedback_id)
+
+stopifnot(
+  identical(nrow(bing), 6786L),
+  identical(
+    as.integer(count(bing, sentiment) |> arrange(sentiment) |> pull(n)),
+    c(4781L, 2005L)
+  ),
+  identical(lexicon_scores$matched_words, c(1L, 1L, 0L, 0L, 0L)),
+  identical(lexicon_scores$lexicon_score, c(1L, 1L, 0L, 0L, 0L)),
+  identical(zero_match_feedback_ids, c(1003L, 1004L, 1005L))
+)
+
+knitr::kable(
+  lexicon_scores |>
+    select(feedback_id, rating, matched_words, lexicon_score, comment),
+  col.names = c(
+    "ID",
+    "Rating",
+    "Matched sentiment words",
+    "Lexicon score",
+    "Comment"
+  ),
+  caption = "Bing lexicon scores for the feedback rows",
+  row.names = FALSE
+)
+```
+
+In this five-row walkthrough, rows 1003, 1004, and 1005 contain no Bing word at
+all. Treat those as inspectable examples, not as a rate. The English lexicon
+misses the Spanish praise in row 1005. It also gives the late parcel complaint no
+negative word.
+
+## Measure lexicon silence on a larger corpus
+
+To ask how often the lexicon has nothing to say, use a larger text source. The
+shared inaugural helper returns 1,377 public-domain paragraphs after a 25-word
+minimum-length filter. That filter matters because longer documents have more
+chances to contain a word from any lexicon. The same Bing word list is applied to
+each paragraph, and the code counts paragraphs with no positive or negative
+match. This is also a domain-mismatch example: a product-review lexicon is being
+applied to political oratory, so any score must be read as a warning sign, not as
+validated sentiment.
+
+```{r}
+source("R/inaugural-corpus.R")
+paragraphs <- inaugural_paragraphs() |>
+  mutate(word_count = str_count(paragraph, "\\S+"))
+
+inaugural_lexicon <- paragraphs |>
+  select(paragraph_id, paragraph, word_count) |>
+  tidytext::unnest_tokens(word, paragraph) |>
+  semi_join(bing, by = join_by(word)) |>
+  count(paragraph_id, name = "matched_words") |>
+  right_join(
+    paragraphs |> select(paragraph_id, word_count),
+    by = join_by(paragraph_id)
+  ) |>
+  mutate(matched_words = replace_na(matched_words, 0L))
+
+inaugural_silence <- inaugural_lexicon |>
+  summarise(
+    paragraphs = n(),
+    zero_match_paragraphs = sum(matched_words == 0L),
+    zero_match_share = mean(matched_words == 0L),
+    median_matched_words = median(matched_words),
+    .groups = "drop"
+  )
+
+coverage_by_length <- inaugural_lexicon |>
+  mutate(
+    length_bin = cut(
+      word_count,
+      breaks = c(0, 24, 49, 99, Inf),
+      labels = c("1-24 words", "25-49 words", "50-99 words", "100+ words"),
+      right = TRUE
+    )
+  ) |>
+  summarise(
+    paragraphs = n(),
+    zero_match_paragraphs = sum(matched_words == 0L),
+    zero_match_share = mean(matched_words == 0L),
+    median_words = median(word_count),
+    .by = length_bin
+  ) |>
+  arrange(length_bin)
+
+stopifnot(
+  identical(inaugural_silence$paragraphs, 1377L),
+  identical(inaugural_silence$zero_match_paragraphs, 41L),
+  identical(round(inaugural_silence$zero_match_share, 4), 0.0298),
+  isTRUE(all.equal(as.numeric(inaugural_silence$median_matched_words), 6)),
+  min(paragraphs$word_count) >= 25L,
+  identical(as.character(coverage_by_length$length_bin), c("25-49 words", "50-99 words", "100+ words")),
+  identical(coverage_by_length$paragraphs, c(441L, 497L, 439L)),
+  identical(coverage_by_length$zero_match_paragraphs, c(33L, 8L, 0L)),
+  identical(round(coverage_by_length$zero_match_share, 4), c(0.0748, 0.0161, 0))
+)
+
+knitr::kable(
+  inaugural_silence |>
+    mutate(zero_match_share = round(zero_match_share, 4)),
+  col.names = c(
+    "Paragraphs",
+    "Paragraphs with no Bing match",
+    "Share with no Bing match",
+    "Median matched words"
+  ),
+  caption = "Bing lexicon coverage on inaugural paragraphs",
+  row.names = FALSE
+)
+
+knitr::kable(
+  coverage_by_length |>
+    mutate(zero_match_share = round(zero_match_share, 4)),
+  col.names = c(
+    "Paragraph length bin",
+    "Paragraphs",
+    "Paragraphs with no Bing match",
+    "Share with no Bing match",
+    "Median words"
+  ),
+  caption = "Bing lexicon silence falls as paragraph length rises",
+  row.names = FALSE
+)
+```
+
+On the larger corpus, 41 of 1,377 paragraphs have no Bing match, a share of
+0.0298 after the 25-word filter. The median paragraph has 6 matched words. The
+length table gives the more honest finding: 7.48 percent of 25-49 word paragraphs
+are silent, 1.61 percent of 50-99 word paragraphs are silent, and none of the 439
+paragraphs with at least 100 words are silent. That explains why 3 of the 5 short
+feedback comments are silent while long paragraphs almost never are.
+
+## Read the failures before trusting the score
+
+The lexicon sees words, not the situation around them. Negation means a word such
+as `helpful` can be flipped by nearby `not`. Domain wording means a plain
+customer-service problem, such as a password reset, may carry no sentiment word.
+Sarcasm is harder still because the same surface words can be sincere or barbed.
+
+```{r}
+failure_cases <- lexicon_scores |>
+  mutate(
+    issue = case_when(
+      feedback_id == 1003L ~ "account wording with no matched sentiment word",
+      feedback_id == 1004L ~ "domain complaint with no matched word",
+      feedback_id == 1005L ~ "non-English praise",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  filter(!is.na(issue)) |>
+  select(feedback_id, rating, lexicon_score, issue, comment)
+
+thank_tokens <- token_scores |>
+  filter(feedback_id == 1001L, word == "thank") |>
+  select(word, sentiment, token_score)
+
+negation_examples <- tibble(
+  phrase = c("helpful", "not helpful")
+) |>
+  tidytext::unnest_tokens(word, phrase, drop = FALSE) |>
+  left_join(bing, by = join_by(word), multiple = "all") |>
+  mutate(
+    token_score = case_when(
+      sentiment == "positive" ~ 1L,
+      sentiment == "negative" ~ -1L,
+      TRUE ~ 0L
+    )
+  ) |>
+  summarise(
+    matched_words = sum(token_score != 0L),
+    lexicon_score = sum(token_score),
+    .by = phrase
+  )
+
+stopifnot(
+  identical(failure_cases$feedback_id, c(1003L, 1004L, 1005L)),
+  identical(failure_cases$lexicon_score, c(0L, 0L, 0L)),
+  identical(thank_tokens$sentiment, "positive"),
+  identical(thank_tokens$token_score, 1L),
+  identical(negation_examples$phrase, c("helpful", "not helpful")),
+  identical(negation_examples$lexicon_score, c(1L, 1L))
+)
+
+knitr::kable(
+  failure_cases,
+  col.names = c("ID", "Rating", "Lexicon score", "Failure type", "Comment"),
+  caption = "Rows where the word list misses the practical reading",
+  row.names = FALSE
+)
+
+knitr::kable(
+  negation_examples,
+  col.names = c("Phrase", "Matched sentiment words", "Lexicon score"),
+  caption = "A bag-of-words lexicon does not flip the score for negation",
+  row.names = FALSE
+)
+```
+
+Row 1003 is an account-access sentence with no matched sentiment word. The
+separate `not helpful` example shows a real negation failure: it scores the same
+as `helpful` because `helpful` is positive and `not` has no flipping rule here.
+Row 1001 shows the opposite risk: `thank` is positive, but a word list cannot
+tell from the word alone whether thanks are warm, routine, or sarcastic.
+
+## Train on labels from the setting
+
+A trained approach starts with labels from the setting that matters. Here the
+rating field supplies three tiny labels for demonstration: ratings of 5 become
+`satisfied`, rating 2 becomes `frustrated`, and rating 4 is left out because it
+is mild. The seed before this deterministic fit is 4901.
+
+```{r}
+set.seed(4901)
+labeled_feedback <- feedback |>
+  filter(!is.na(rating), rating != 4L) |>
+  mutate(
+    sentiment_label = factor(
+      if_else(rating >= 5L, "satisfied", "frustrated"),
+      levels = c("frustrated", "satisfied")
+    )
+  )
+
+training_tokens <- labeled_feedback |>
+  select(feedback_id, sentiment_label, comment) |>
+  tidytext::unnest_tokens(word, comment) |>
+  count(sentiment_label, word, name = "label_word_count")
+
+vocabulary <- training_tokens |>
+  distinct(word) |>
+  arrange(word)
+
+label_totals <- training_tokens |>
+  summarise(total_words = sum(label_word_count), .by = sentiment_label)
+
+word_rates <- expand_grid(
+  sentiment_label = levels(labeled_feedback$sentiment_label),
+  word = vocabulary$word
+) |>
+  left_join(training_tokens, by = join_by(sentiment_label, word)) |>
+  mutate(label_word_count = replace_na(label_word_count, 0L)) |>
+  left_join(label_totals, by = join_by(sentiment_label)) |>
+  mutate(
+    word_rate = (label_word_count + 1) /
+      (total_words + nrow(vocabulary))
+  )
+
+score_with_labels <- function(comment) {
+  words <- tibble(comment = comment) |>
+    tidytext::unnest_tokens(word, comment) |>
+    semi_join(vocabulary, by = join_by(word))
+
+  if (nrow(words) == 0L) {
+    return(0)
+  }
+
+  joined <- words |>
+    count(word, name = "n") |>
+    left_join(word_rates, by = join_by(word), multiple = "all")
+
+  totals <- joined |>
+    summarise(
+      log_score = sum(n * log(word_rate)),
+      .by = sentiment_label
+    )
+
+  satisfied <- totals |>
+    filter(sentiment_label == "satisfied") |>
+    pull(log_score)
+  frustrated <- totals |>
+    filter(sentiment_label == "frustrated") |>
+    pull(log_score)
+
+  satisfied - frustrated
+}
+
+trained_scores <- feedback |>
+  mutate(
+    training_role = case_when(
+      feedback_id %in% labeled_feedback$feedback_id ~ "fitting row",
+      feedback_id == 1002L ~ "held-out rated row",
+      TRUE ~ "unrated row"
+    ),
+    trained_score = map_dbl(comment, score_with_labels),
+    trained_label = case_when(
+      trained_score > 0 ~ "satisfied",
+      trained_score < 0 ~ "frustrated",
+      TRUE ~ "no seen training words"
+    )
+  ) |>
+  select(feedback_id, rating, training_role, comment, trained_score, trained_label) |>
+  left_join(
+    lexicon_scores |> select(feedback_id, lexicon_score),
+    by = join_by(feedback_id)
+  ) |>
+  relocate(lexicon_score, .before = trained_score)
+
+stopifnot(
+  identical(nrow(labeled_feedback), 3L),
+  identical(
+    as.character(labeled_feedback$sentiment_label),
+    c("satisfied", "frustrated", "satisfied")
+  ),
+  identical(nrow(vocabulary), 15L),
+  identical(
+    trained_scores$training_role,
+    c("fitting row", "held-out rated row", "unrated row", "fitting row", "fitting row")
+  ),
+  identical(
+    trained_scores$trained_label,
+    c(
+      "satisfied",
+      "frustrated",
+      "no seen training words",
+      "frustrated",
+      "satisfied"
+    )
+  )
+)
+
+knitr::kable(
+  trained_scores |>
+    mutate(trained_score = round(trained_score, 3)),
+  col.names = c(
+    "ID",
+    "Rating",
+    "Training role",
+    "Comment",
+    "Lexicon score",
+    "Rating-trained score",
+    "Rating-trained label"
+  ),
+  caption = "A tiny rating-trained scorer compared with the lexicon",
+  row.names = FALSE
+)
+```
+
+This trained scorer learns from only three labelled rows, so it is a mechanics
+example rather than an evaluation. Rows 1001, 1004, and 1005 are fitting rows,
+and reporting success on them would be resubstitution. Row 1002 is the only rated
+row held away from fitting, and this scorer sends it to `frustrated`. The table
+therefore shows inspection output, not accuracy. A larger trained model can use
+context if the training labels record the domain you care about. Its cost is that
+labels must be collected, checked, and kept in step with the way people write.
+
+## Emotion needs stronger evidence
+
+Sentiment is usually a coarse positive-negative score. **Emotion analysis** asks
+for labels such as anger, fear, sadness, joy, or surprise. That claim is much
+stronger.
+
+```{r}
+#| label: fig-feedback-score-counts
+#| fig-cap: "Only two Bing lexicon scores appear in the five fictional feedback comments."
+#| fig-alt: "Bar chart showing three comments with lexicon score 0 and two comments with lexicon score 1."
+
+score_range <- lexicon_scores |>
+  summarise(
+    lowest = min(lexicon_score),
+    highest = max(lexicon_score),
+    distinct_scores = n_distinct(lexicon_score),
+    .groups = "drop"
+  )
+
+score_plot <- lexicon_scores |>
+  count(lexicon_score, name = "comments")
+
+stopifnot(
+  identical(score_range$lowest, 0L),
+  identical(score_range$highest, 1L),
+  identical(score_range$distinct_scores, 2L),
+  identical(score_plot$comments, c(3L, 2L))
+)
+
+knitr::kable(
+  score_plot,
+  col.names = c("Lexicon score", "Comments"),
+  caption = "Only two lexicon scores appear in the feedback file",
+  row.names = FALSE
+)
+
+ggplot(score_plot, aes(x = factor(lexicon_score), y = comments)) +
+  geom_col(fill = "#4C78A8") +
+  labs(
+    x = "Lexicon score",
+    y = "Comments"
+  ) +
+  theme_minimal()
+```
+
+A positive-word count is not an emotion. Self-reported emotion and observed
+emotion can differ, and neither appears in this file. A score such as 0.62 would
+be a number about words or a model output, not a claim about a person's inner
+state.
+
+## What to remember
+
+- A sentiment lexicon counts words it recognizes.
+- On the 25-word-filtered inaugural corpus, 41 of 1,377 paragraphs have no Bing
+  match, and silence falls as paragraph length rises.
+- Negation, language, domain wording, and sarcasm can break a word-count score.
+- A trained approach needs labels from the setting it will serve.
+- Emotion claims require evidence beyond positive and negative words.
+
+## Sources
+
+- [tidytext sentiment lexicons](https://juliasilge.github.io/tidytext/reference/sentiments.html)
+- [Bing Liu opinion lexicon](https://www.cs.uic.edu/~liub/FBS/sentiment-analysis.html),
+  created for product-review sentiment research by Minqing Hu and Bing Liu; the
+  source page requests citation and states research-use terms.
+- [tidytext text mining book](https://www.tidytextmining.com/sentiment.html)

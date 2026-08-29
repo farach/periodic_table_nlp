@@ -41,26 +41,26 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 40,Raw,Raw text cleaning,practice,8,Documents,language,8_documents/40-raw-text-cleaning.html,available,2026-08-29
 41,Met,Metadata extraction,task,8,Documents,language,8_documents/41-metadata-extraction.html,available,2026-08-29
 42,Lng,Language identification,task,8,Documents,language,8_documents/42-language-identification.html,available,2026-08-29
-43,Trn,Training models,lifecycle,9,Model development,model,,planned,
-44,Tst,Evaluating models,lifecycle,9,Model development,model,,planned,
-45,Exp,Explaining models,lifecycle,9,Model development,model,,planned,
-46,Dpl,Deploying models,lifecycle,9,Model development,model,,planned,
-47,Mon,Monitoring models,lifecycle,9,Model development,model,,planned,
-48,Spa,Spam detection,task,10,Classification,model,,planned,
-49,Sed,Sentiment and emotion analysis,task,10,Classification,model,,planned,
-50,Int,Intent classification,task,10,Classification,model,,planned,
-51,Cls,Text classification,task,10,Classification,model,,planned,
-52,Mlc,Multi-label and multi-class classification,task,10,Classification,model,,planned,
-53,Key,Keyword extraction,task,11,Signals and discovery,model,,planned,
-54,Esu,Extractive summarization,task,11,Signals and discovery,model,,planned,
-55,Top,Topic modeling,method,11,Signals and discovery,model,,planned,
-56,Tre,Trend detection,task,11,Signals and discovery,model,,planned,
-57,Out,Outlier detection,task,11,Signals and discovery,model,,planned,
-58,Syn,WordNet synsets,resource,12,Similarity,model,,planned,
-59,Dst,Distance measures,method,12,Similarity,model,,planned,
-60,Sim,Document similarity,task,12,Similarity,model,,planned,
-61,Dis,Distributed word representations,concept,12,Similarity,model,,planned,
-62,Con,Contextualized word representations,concept,12,Similarity,model,,planned,
+43,Trn,Training models,lifecycle,9,Model development,model,9_model_development/43-training-models.html,available,2026-08-29
+44,Tst,Evaluating models,lifecycle,9,Model development,model,9_model_development/44-evaluating-models.html,available,2026-08-29
+45,Exp,Explaining models,lifecycle,9,Model development,model,9_model_development/45-explaining-models.html,available,2026-08-29
+46,Dpl,Deploying models,lifecycle,9,Model development,model,9_model_development/46-deploying-models.html,available,2026-08-29
+47,Mon,Monitoring models,lifecycle,9,Model development,model,9_model_development/47-monitoring-models.html,available,2026-08-29
+48,Spa,Spam detection,task,10,Classification,model,10_classification/48-spam-detection.html,available,2026-08-29
+49,Sed,Sentiment and emotion analysis,task,10,Classification,model,10_classification/49-sentiment-and-emotion-analysis.html,available,2026-08-29
+50,Int,Intent classification,task,10,Classification,model,10_classification/50-intent-classification.html,available,2026-08-29
+51,Cls,Text classification,task,10,Classification,model,10_classification/51-text-classification.html,available,2026-08-29
+52,Mlc,Multi-label and multi-class classification,task,10,Classification,model,10_classification/52-multi-label-and-multi-class-classification.html,available,2026-08-29
+53,Key,Keyword extraction,task,11,Signals and discovery,model,11_signals_and_discovery/53-keyword-extraction.html,available,2026-08-29
+54,Esu,Extractive summarization,task,11,Signals and discovery,model,11_signals_and_discovery/54-extractive-summarization.html,available,2026-08-29
+55,Top,Topic modeling,method,11,Signals and discovery,model,11_signals_and_discovery/55-topic-modeling.html,available,2026-08-29
+56,Tre,Trend detection,task,11,Signals and discovery,model,11_signals_and_discovery/56-trend-detection.html,available,2026-08-29
+57,Out,Outlier detection,task,11,Signals and discovery,model,11_signals_and_discovery/57-outlier-detection.html,available,2026-08-29
+58,Syn,WordNet synsets,resource,12,Similarity,model,12_similarity/58-wordnet-synsets.html,available,2026-08-29
+59,Dst,Distance measures,method,12,Similarity,model,12_similarity/59-distance-measures.html,available,2026-08-29
+60,Sim,Document similarity,task,12,Similarity,model,12_similarity/60-document-similarity.html,available,2026-08-29
+61,Dis,Distributed word representations,concept,12,Similarity,model,12_similarity/61-distributed-word-representations.html,available,2026-08-29
+62,Con,Contextualized word representations,concept,12,Similarity,model,12_similarity/62-contextualized-word-representations.html,available,2026-08-29
 63,Nex,Next-token prediction,objective,13,Natural language generation,generation,,planned,
 64,Rep,Report writing,application,13,Natural language generation,generation,,planned,
 65,Tra,Machine translation,task,13,Natural language generation,generation,,planned,

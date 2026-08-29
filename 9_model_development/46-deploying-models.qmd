@@ -1,0 +1,326 @@
+---
+title: "Deploying models"
+subtitle: "Turn a fitted workflow into a callable service file"
+author: "Alex Farach"
+description: "Learn how vetiver records a fitted text model, writes an API file, and keeps evaluation details attached before deployment."
+categories: [model development, deployment, vetiver]
+---
+
+A data team has a model that scores well enough for review. The next request is
+practical: can another system send it a paragraph and get back a label?
+
+That request is about deployment. Deployment does not make a model smarter. It
+packages the fitted object, the expected input shape, and the code needed to call
+it later.
+
+The safest deployment record also carries the evaluation that justified the
+model. Without that record, an API can make a weak answer look official.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- wrap a fitted tidymodels workflow with vetiver;
+- pin the model to a local board;
+- inspect the prototype input saved with the model;
+- write the Plumber API file without starting a server; and
+- name the evaluation details that must travel with a deployed model.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Fit the model to be packaged
+
+A deployment needs the same fitted object that evaluation approved. Here the
+object is the era classifier from a speech-held-out split with seed `4301` and
+fit seed `4302`.
+
+```{r}
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+  library(tibble)
+  library(stringr)
+  library(rsample)
+  library(recipes)
+  library(textrecipes)
+  library(parsnip)
+  library(workflows)
+  library(yardstick)
+  library(vetiver)
+  library(pins)
+  library(glmnet)
+})
+
+source("R/inaugural-corpus.R")
+paragraphs <- inaugural_paragraphs()
+
+study <- read_csv(
+  "data/inaugural/split-study.csv",
+  na = c("", "NA"),
+  col_types = cols(
+    task = col_character(),
+    split_scheme = col_character(),
+    replicate = col_integer(),
+    accuracy = col_double(),
+    bal_accuracy = col_double(),
+    train_majority_accuracy = col_double(),
+    test_majority_rate = col_double(),
+    length_rule_accuracy = col_double(),
+    test_rows = col_integer(),
+    test_speeches = col_integer()
+  )
+)
+
+set.seed(4301)
+era_split <- group_initial_split(paragraphs, group = speech_id, prop = 0.75)
+era_training <- training(era_split)
+era_testing <- testing(era_split)
+
+era_recipe <- recipe(era ~ paragraph, data = era_training) |>
+  step_tokenize(paragraph) |>
+  step_stopwords(paragraph) |>
+  step_tokenfilter(paragraph, max_tokens = 500) |>
+  step_tfidf(paragraph)
+
+era_model <- logistic_reg(penalty = 0.01, mixture = 0) |>
+  set_engine("glmnet")
+
+era_workflow <- workflow() |>
+  add_recipe(era_recipe) |>
+  add_model(era_model)
+
+set.seed(4302)
+era_fitted <- fit(era_workflow, data = era_training)
+
+era_predictions <- predict(era_fitted, era_testing) |>
+  bind_cols(era_testing |> select(era))
+
+live_accuracy <- accuracy(
+  era_predictions,
+  truth = era,
+  estimate = .pred_class
+) |>
+  pull(.estimate)
+
+training_majority <- era_training |>
+  count(era, sort = TRUE) |>
+  slice(1) |>
+  pull(era)
+live_majority_accuracy <- mean(era_testing$era == training_majority)
+
+speech_summary <- study |>
+  filter(task == "era", split_scheme == "speech") |>
+  summarise(
+    model_accuracy = mean(accuracy),
+    train_majority_accuracy = mean(train_majority_accuracy),
+    length_rule_accuracy = mean(length_rule_accuracy),
+    .groups = "drop"
+  )
+
+evaluation_date <- as.Date("2026-08-29")
+deployment_record <- tibble(
+  record = c(
+    "data source",
+    "split scheme",
+    "training paragraphs",
+    "test paragraphs",
+    "live test accuracy",
+    "live train-majority baseline",
+    "speech-split mean accuracy",
+    "speech-split mean train-majority baseline",
+    "speech-split mean length baseline",
+    "evaluation date"
+  ),
+  value = c(
+    "inaugural paragraphs",
+    "speech_id group split",
+    as.character(nrow(era_training)),
+    as.character(nrow(era_testing)),
+    as.character(round(live_accuracy, 4)),
+    as.character(round(live_majority_accuracy, 4)),
+    as.character(round(speech_summary$model_accuracy, 4)),
+    as.character(round(speech_summary$train_majority_accuracy, 4)),
+    as.character(round(speech_summary$length_rule_accuracy, 4)),
+    as.character(evaluation_date)
+  )
+)
+
+stopifnot(
+  identical(nrow(era_training), 1042L),
+  identical(nrow(era_testing), 335L),
+  identical(round(live_accuracy, 4), 0.8209),
+  identical(round(live_majority_accuracy, 4), 0.4179),
+  identical(round(speech_summary$model_accuracy, 4), 0.8457),
+  identical(round(speech_summary$train_majority_accuracy, 4), 0.6282),
+  identical(round(speech_summary$length_rule_accuracy, 4), 0.6827),
+  identical(evaluation_date, as.Date("2026-08-29")),
+  identical(nrow(deployment_record), 10L)
+)
+
+knitr::kable(
+  deployment_record,
+  col.names = c("Record item", "Value"),
+  caption = "Evaluation details kept beside the deployable model",
+  row.names = FALSE
+)
+```
+
+Deployment freezes a model at one point in its life. The record above says which
+data split and score go with the object, and it records the baseline that makes
+the score interpretable. The repeated speech-split study matters because one live
+split can have an unusual class mix.
+
+## Pin the fitted workflow
+
+`vetiver_model()` wraps the fitted workflow with metadata. A **prototype** is the
+empty input table the model expects. The local **pins board** is a storage place
+for versioned objects; this lesson writes to a project-local scratch board and
+removes it after reading the generated files.
+
+```{r}
+make_api_artifacts <- function(fitted_model) {
+  board_dir <- file.path("9_model_development", ".lesson-46-board")
+  api_file <- file.path("9_model_development", ".lesson-46-api.R")
+  unlink(c(board_dir, api_file), recursive = TRUE, force = TRUE)
+  dir.create(board_dir, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(c(board_dir, api_file), recursive = TRUE, force = TRUE), add = TRUE)
+
+  vetiver_object <- suppressMessages(
+    vetiver_model(fitted_model, "inaugural-era-workflow")
+  )
+  board <- board_folder(board_dir, versioned = TRUE)
+  capture.output(
+    suppressMessages(vetiver_pin_write(board, vetiver_object))
+  )
+  versions <- pin_versions(board, "inaugural-era-workflow")
+  pinned_model <- vetiver_pin_read(
+    board,
+    "inaugural-era-workflow",
+    version = versions$version[[1]]
+  )
+
+  suppressMessages(
+    vetiver_write_plumber(
+      board,
+      "inaugural-era-workflow",
+      version = versions$version[[1]],
+      file = api_file
+    )
+  )
+  api_lines <- read_lines(api_file)
+  board_path <- str_match(api_lines[str_detect(api_lines, "board_folder")], 'path = "([^"]+)"')[, 2]
+  if (length(board_path) == 0L || is.na(board_path[[1]])) {
+    board_path <- ""
+  }
+  display_lines <- api_lines
+  if (nzchar(board_path)) {
+    display_lines <- display_lines |>
+      str_replace_all(stringr::fixed(board_path), "<local board path>")
+  }
+  display_lines <- display_lines |>
+    str_replace_all(stringr::fixed(versions$version[[1]]), "<pinned version>")
+
+  list(
+    vetiver_object = vetiver_object,
+    versions = versions,
+    pinned_model = pinned_model,
+    api_lines = api_lines,
+    display_lines = display_lines
+  )
+}
+
+api_artifacts <- make_api_artifacts(era_fitted)
+vetiver_object <- api_artifacts$vetiver_object
+versions <- api_artifacts$versions
+pinned_model <- api_artifacts$pinned_model
+prototype_table <- tibble(
+  columns = paste(names(vetiver_object$prototype), collapse = ", "),
+  rows = nrow(vetiver_object$prototype)
+)
+
+stopifnot(
+  identical(vetiver_object$model_name, "inaugural-era-workflow"),
+  identical(names(vetiver_object$prototype), "paragraph"),
+  identical(nrow(vetiver_object$prototype), 0L),
+  identical(prototype_table$columns, "paragraph"),
+  identical(prototype_table$rows, 0L),
+  identical(nrow(versions), 1L),
+  identical(pinned_model$model_name, vetiver_object$model_name)
+)
+
+knitr::kable(
+  prototype_table,
+  col.names = c("Prototype columns", "Prototype rows"),
+  caption = "Input shape stored with the vetiver model",
+  row.names = FALSE
+)
+```
+
+The version lets a later system ask for this exact object. The prototype says the
+API expects a table with a `paragraph` column. The pinned board is the place the
+API reads from when it starts.
+
+## Write the API file without starting it
+
+`vetiver_write_plumber()` writes an R file for a Plumber API. This lesson only
+writes and reads that file. It does not start a server and it makes no network
+request.
+
+```{r}
+#| output: asis
+
+api_lines <- api_artifacts$api_lines
+display_lines <- api_artifacts$display_lines
+
+stopifnot(
+  length(api_lines) >= 20L,
+  any(str_detect(api_lines, stringr::fixed("vetiver_api(v)"))),
+  any(str_detect(api_lines, stringr::fixed("vetiver_pin_read"))),
+  any(str_detect(api_lines, stringr::fixed("inaugural-era-workflow"))),
+  any(str_detect(api_lines, stringr::fixed("@plumber"))),
+  any(str_detect(api_lines, stringr::fixed("library(plumber)"))),
+  !any(str_detect(display_lines, stringr::fixed(versions$version[[1]]))),
+  any(str_detect(display_lines, stringr::fixed("<pinned version>")))
+)
+
+cat("```r\n", paste(display_lines, collapse = "\n"), "\n```\n", sep = "")
+```
+
+The file shown above was generated by vetiver. The local board path and version
+string are masked in the display so the rendered lesson stays stable, but the
+assertions read the generated file before masking it.
+
+A deployment record must carry the data source, split scheme, score, baseline,
+and date. For this model, the live record is: inaugural paragraphs,
+speech-held-out split, accuracy `r round(live_accuracy, 4)`, same-split
+training-majority baseline `r round(live_majority_accuracy, 4)`, evaluation date
+`r as.character(evaluation_date)`, and fixed seeds `4301` and `4302`.
+
+The party model with this recipe and penalty did not pass evaluation. It should
+not be deployed by wrapping it in an API. Packaging makes access easier; it does
+not repair a failed measurement.
+
+## What to remember
+
+- Deployment packages a fitted object so another system can call it.
+- A vetiver prototype records the input columns the model expects.
+- A pins board stores model versions.
+- Do not deploy a model that did not pass evaluation.
+- Keep the data, split, score, baseline, and date with the deployed object.
+
+An API turns a model into an answer people can request. It should also make the
+limits hard to lose.
+
+## Sources
+
+- [vetiver documentation](https://vetiver.co/)
+- [pins documentation](https://pins.rstudio.com/)
+- [Plumber documentation](https://www.rplumber.io/)
+- [Model cards paper](https://doi.org/10.1145/3287560.3287596)

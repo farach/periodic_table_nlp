@@ -1,0 +1,386 @@
+---
+title: "Finding distinctive words and phrases"
+subtitle: "Compare tf-idf with tagged phrase keywords"
+author: "Alex Farach"
+description: "Learn how keyword extraction can surface distinctive words and tagged phrases while keeping importance claims separate."
+categories: [signals and discovery, keyword extraction, inaugural addresses]
+---
+
+Mara has a folder of 60 inaugural addresses and a blank label card for a small library display. The card has room for a few words, so a full reading is too much for the first pass.
+
+A word list feels tempting. If the list rewards the wrong thing, though, the label may feature a rare name or odd phrase rather than a useful clue about the speech.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- define tf-idf in plain language;
+- compute distinctive words for speeches;
+- run a tagged phrase keyword method with UDPipe;
+- compare word and phrase outputs on the same word form; and
+- test whether the observed overlap is larger than a random baseline.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the speeches
+
+The helper returns one row per paragraph. A paragraph here is a block of at least 25 words. The corpus has 1,377 paragraphs from 60 speeches by 40 presidents. quanteda records only a surname for each speech, and four surnames cover two people each, so counting surnames would give 36 and merge John Adams with John Quincy Adams. The shared helper builds a full name to avoid that.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(stringr)
+library(tidytext)
+library(tokenizers)
+library(udpipe)
+library(purrr)
+library(knitr)
+
+source("R/inaugural-corpus.R")
+source("R/permutation-null.R")
+
+paragraphs <- inaugural_paragraphs()
+
+speeches <- paragraphs |>
+  summarise(
+    text = paste(paragraph, collapse = "\n"),
+    paragraph_count = n(),
+    .by = c(speech_id, year, president, party)
+  )
+
+corpus_summary <- tibble(
+  measure = c("paragraphs", "speeches", "presidents"),
+  value = c(
+    nrow(paragraphs),
+    n_distinct(paragraphs$speech_id),
+    n_distinct(paragraphs$president)
+  )
+)
+
+stopifnot(
+  identical(corpus_summary$value, c(1377L, 60L, 40L)),
+  identical(range(paragraphs$year), c(1789L, 2025L)),
+  identical(speeches$speech_id[1], "1789-Washington"),
+  identical(speeches$speech_id[nrow(speeches)], "2025-Trump")
+)
+
+kable(
+  corpus_summary,
+  col.names = c("Measure", "Value"),
+  caption = "The inaugural-address corpus used in this lesson",
+  row.names = FALSE
+)
+```
+
+The next sections use three speeches as inspection cases: 1789-Washington, 1865-Lincoln, and 2021-Biden. The code still computes tf-idf against all 60 speeches, because a word can be distinctive only relative to a comparison set.
+
+## Score distinctive words with tf-idf
+
+**Tf-idf** combines two quantities. Term frequency is a word's share of tokens in one speech. Inverse document frequency is the log of all documents divided by the number of documents containing that word, so words found in many speeches are downweighted. A high score means the word is common in one speech and uncommon in the corpus.
+
+```{r}
+speech_words <- paragraphs |>
+  select(speech_id, year, president, paragraph) |>
+  unnest_tokens(word, paragraph) |>
+  filter(str_detect(word, "^[a-z]+$"), !word %in% stop_words$word)
+
+word_counts <- speech_words |>
+  count(speech_id, year, president, word, name = "n")
+
+tfidf_scores <- word_counts |>
+  bind_tf_idf(word, speech_id, n) |>
+  arrange(speech_id, desc(tf_idf), word)
+
+selected_ids <- c("1789-Washington", "1865-Lincoln", "2021-Biden")
+
+tfidf_top <- tfidf_scores |>
+  filter(speech_id %in% selected_ids) |>
+  arrange(desc(tf_idf), word, .by_group = TRUE) |>
+  slice_head(n = 5, by = c(speech_id, year, president)) |>
+  mutate(tf_idf = round(tf_idf, 4)) |>
+  select(speech_id, word, n, tf_idf)
+
+stopifnot(
+  identical(n_distinct(word_counts$speech_id), 60L),
+  identical(nrow(tfidf_top), 15L),
+  identical(
+    tfidf_top$word[tfidf_top$speech_id == "1789-Washington"],
+    c("immutable", "impressions", "providential", "qualifications", "peculiarly")
+  ),
+  identical(
+    tfidf_top$word[tfidf_top$speech_id == "1865-Lincoln"],
+    c("offenses", "woe", "offense", "wills", "answered")
+  ),
+  identical(tfidf_top$tf_idf[tfidf_top$word == "offenses"], 0.0551)
+)
+
+kable(
+  tfidf_top,
+  col.names = c("Speech", "Word", "Count", "tf-idf"),
+  caption = "Top tf-idf words in three selected speeches",
+  row.names = FALSE
+)
+```
+
+The 2021 list includes `augustine`, `block`, `demonization`, and `distrusting`, each counted once. That is the warning built into the score. A once-only word can rank high when it is rare across the comparison set.
+
+## Score tagged phrases with RAKE
+
+The second approach starts with the UDPipe tagger from the part-of-speech lesson. A **lemma** is a dictionary form such as `answer` for `answered`. **RAKE**, short for Rapid Automatic Keyword Extraction, looks for runs of relevant lemmas. Here relevant means adjectives, common nouns, and proper nouns after stopwords are removed. This linguistic rule can return phrases such as `actual expenditure` or `capitol dome`.
+
+```{r}
+tagger <- udpipe_load_model("data/treebank/en_ewt-500-tagger.udpipe")
+
+vertical <- speeches$text |>
+  tokenize_words(lowercase = FALSE, strip_punct = FALSE) |>
+  vapply(\(tokens) paste(tokens, collapse = "\n"), character(1))
+
+annotated_all <- udpipe_annotate(
+  tagger,
+  x = vertical,
+  doc_id = speeches$speech_id,
+  tokenizer = "vertical",
+  tagger = "default",
+  parser = "none"
+) |>
+  as.data.frame() |>
+  as_tibble() |>
+  mutate(
+    lemma_clean = str_to_lower(lemma),
+    relevant = upos %in% c("ADJ", "NOUN", "PROPN") &
+      str_detect(lemma_clean, "^[a-z]+$") &
+      !lemma_clean %in% stop_words$word
+  )
+
+rake_top_20 <- speeches$speech_id |>
+  map(\(id) {
+    one_speech <- annotated_all |>
+      filter(doc_id == id)
+
+    keywords_rake(
+      one_speech,
+      term = "lemma_clean",
+      group = "doc_id",
+      relevant = one_speech$relevant,
+      ngram_max = 3,
+      n_min = 1
+    ) |>
+      as_tibble() |>
+      arrange(desc(rake), keyword) |>
+      slice_head(n = 20) |>
+      mutate(speech_id = id, .before = 1)
+  }) |>
+  list_rbind()
+
+rake_top <- rake_top_20 |>
+  filter(speech_id %in% selected_ids) |>
+  slice_head(n = 5, by = speech_id) |>
+  mutate(rake = round(rake, 2)) |>
+  select(speech_id, keyword, ngram, freq, rake)
+
+tagger_error <- annotated_all |>
+  filter(doc_id == "1789-Washington", str_to_lower(token) %in% c("auspiciously", "commence")) |>
+  select(token, lemma, upos)
+
+stopifnot(
+  identical(nrow(annotated_all), 148427L),
+  identical(sum(annotated_all$relevant), 36407L),
+  identical(nrow(rake_top_20), 1200L),
+  identical(nrow(rake_top), 15L),
+  identical(
+    rake_top$keyword[rake_top$speech_id == "1789-Washington"],
+    c(
+      "actual expenditure", "affectionate sensibility", "ardent love",
+      "arduous struggle", "auspiciously commence"
+    )
+  ),
+  identical(tagger_error$upos, c("ADJ", "NOUN")),
+  identical(rake_top$keyword[rake_top$speech_id == "1865-Lincoln"][1], "impending civil war"),
+  identical(rake_top$rake[rake_top$keyword == "impending civil war"], 4.25)
+)
+
+kable(
+  rake_top,
+  col.names = c("Speech", "Tagged phrase", "Words", "Frequency", "RAKE score"),
+  caption = "Top RAKE phrase keywords in the same three speeches",
+  row.names = FALSE
+)
+```
+
+RAKE favors phrases made from tagged content words. The table also shows a tagger error: `auspiciously commence` appears because UDPipe labels `auspiciously` as an adjective and `commence` as a noun. The list is a prompt for inspection, not a final label.
+
+## Put both methods on the same word form
+
+The two methods ask different questions. Tf-idf scores individual words across speeches. RAKE scores tagged word runs inside a speech. Before comparing them, the word forms also have to match. Raw surface forms such as `offenses`, `wills`, and `answered` do not match RAKE lemmas such as `offense`, `will`, and `answer`.
+
+A **permutation null** is a benchmark made by shuffling the part of the data that carries the claim. The **p-value** is the share of shuffled results at least as large as the observed result.
+
+```{r}
+comparison <- tfidf_top |>
+  summarise(tfidf_words = list(word), .by = speech_id) |>
+  left_join(
+    rake_top |>
+      summarise(
+        rake_phrases = paste(keyword, collapse = " | "),
+        rake_words = list(unique(unlist(str_split(keyword, " ")))),
+        .by = speech_id
+      ),
+    by = join_by(speech_id)
+  ) |>
+  rowwise() |>
+  mutate(overlap_count = sum(tfidf_words %in% rake_words)) |>
+  ungroup() |>
+  transmute(
+    speech_id,
+    tfidf_words = vapply(tfidf_words, paste, collapse = ", ", FUN.VALUE = character(1)),
+    rake_phrases,
+    overlap_count
+  ) |>
+  arrange(match(speech_id, selected_ids))
+
+stopifnot(
+  identical(comparison$overlap_count, c(0L, 0L, 0L)),
+  identical(comparison$speech_id, selected_ids),
+  str_detect(comparison$rake_phrases[comparison$speech_id == "2021-Biden"], "capitol dome")
+)
+
+kable(
+  comparison,
+  col.names = c("Speech", "Top tf-idf words", "Top RAKE phrases", "Shared raw words"),
+  caption = "Top-5 overlap before normalizing word forms",
+  row.names = FALSE
+)
+
+raw_tfidf_top_20 <- tfidf_scores |>
+  arrange(desc(tf_idf), word, .by_group = TRUE) |>
+  slice_head(n = 20, by = speech_id) |>
+  summarise(tfidf_words = list(word), .by = speech_id)
+
+rake_words_20 <- rake_top_20 |>
+  summarise(
+    rake_words = list(unique(unlist(str_split(keyword, " ")))),
+    .by = speech_id
+  )
+
+raw_overlap_20 <- raw_tfidf_top_20 |>
+  left_join(rake_words_20, by = join_by(speech_id)) |>
+  rowwise() |>
+  mutate(shared_words = sum(tfidf_words %in% rake_words)) |>
+  ungroup()
+
+lemma_counts <- annotated_all |>
+  filter(str_detect(lemma_clean, "^[a-z]+$"), !lemma_clean %in% stop_words$word) |>
+  count(doc_id, lemma_clean, name = "n") |>
+  rename(speech_id = doc_id, word = lemma_clean)
+
+lemma_tfidf_top_20 <- lemma_counts |>
+  bind_tf_idf(word, speech_id, n) |>
+  arrange(speech_id, desc(tf_idf), word) |>
+  slice_head(n = 20, by = speech_id) |>
+  summarise(tfidf_words = list(word), .by = speech_id)
+
+normalized_overlap_20 <- lemma_tfidf_top_20 |>
+  left_join(rake_words_20, by = join_by(speech_id)) |>
+  rowwise() |>
+  mutate(shared_words = sum(tfidf_words %in% rake_words)) |>
+  ungroup()
+
+overlap_summary <- bind_rows(
+  raw_overlap_20 |>
+    summarise(
+      match_basis = "Raw word forms",
+      speeches = n(),
+      mean_shared_words = round(mean(shared_words), 2),
+      median_shared_words = median(shared_words),
+      speeches_with_zero = sum(shared_words == 0L),
+      maximum_shared_words = max(shared_words)
+    ),
+  normalized_overlap_20 |>
+    summarise(
+      match_basis = "Common lemmas",
+      speeches = n(),
+      mean_shared_words = round(mean(shared_words), 2),
+      median_shared_words = median(shared_words),
+      speeches_with_zero = sum(shared_words == 0L),
+      maximum_shared_words = max(shared_words)
+    )
+)
+
+frequency_lists <- lemma_counts |>
+  summarise(words = list(word), weights = list(n), .by = speech_id)
+
+random_overlap_stat <- function() {
+  map2_dbl(frequency_lists$words, frequency_lists$weights, \(words, weights) {
+    draw_size <- min(20L, length(words))
+    first_draw <- sample(words, size = draw_size, replace = FALSE, prob = weights)
+    second_draw <- sample(words, size = draw_size, replace = FALSE, prob = weights)
+    sum(first_draw %in% second_draw)
+  }) |>
+    mean()
+}
+
+overlap_null <- permutation_null(
+  observed = mean(normalized_overlap_20$shared_words),
+  replicate_fn = random_overlap_stat,
+  replicates = 500L,
+  seed = 5301L,
+  alternative = "greater"
+)
+
+overlap_null_display <- overlap_null |>
+  mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
+
+stopifnot(
+  identical(overlap_summary$mean_shared_words, c(1.80, 2.27)),
+  identical(overlap_summary$speeches_with_zero, c(14L, 9L)),
+  identical(overlap_summary$maximum_shared_words, c(9L, 10L)),
+  identical(sum(normalized_overlap_20$shared_words), 136L),
+  identical(as.numeric(overlap_null_display$observed), 2.267),
+  identical(as.numeric(round(overlap_null$null_mean, 2)), 1.62),
+  identical(as.numeric(overlap_null_display$p_value), 0.002)
+)
+
+kable(
+  overlap_summary,
+  col.names = c("Match basis", "Speeches", "Mean shared words", "Median shared words", "Zero-overlap speeches", "Maximum shared words"),
+  caption = "Overlap after widening both keyword lists to 20 items across all speeches",
+  row.names = FALSE
+)
+
+kable(
+  overlap_null_display,
+  col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
+  caption = "Permutation null for normalized top-20 overlap",
+  row.names = FALSE
+)
+```
+
+At a depth of 20 items, raw forms share 1.80 words on average. Lemmas share 2.27. The raw number understated agreement because it counted `offenses` and `offense` as different strings. A random frequency-weighted pair of depth-20 lists from the same speech averaged 1.62 shared words, with 90% of shuffles between 1.38 and 1.85. The observed normalized overlap is above that null (p = 0.002), but it is still small in practical terms.
+
+Keyword extractors always return a list. The check above removes one source of accidental disagreement, then asks what overlap appears when the same speech's word frequencies are kept but the two lists are random. That comparison is the difference between a plausible reading lead and a bare algorithmic output.
+
+## What to remember
+
+- Tf-idf scores words that are distinctive within a comparison set.
+- A high tf-idf score is not proof that a word is central to a speech.
+- RAKE uses tagged lemma sequences, so its phrase candidates still need reading.
+- Across all 60 speeches, raw top-20 overlap is 1.80 words on average; lemma overlap is 2.27.
+- The normalized overlap beats the frequency-weighted random baseline, but the methods still mostly point to different words.
+
+Treat keyword lists as leads. A label card, index, or exhibit note still needs a person to decide which leads matter.
+
+## Sources
+
+- [tidytext reference for `bind_tf_idf()`](https://juliasilge.github.io/tidytext/reference/bind_tf_idf.html)
+- [UDPipe R package keyword extraction documentation](https://bnosac.github.io/udpipe/docs/doc6.html)
+- [Rose et al. on Rapid Automatic Keyword Extraction](https://doi.org/10.1002/9780470689646.ch1)
+- [Manning, Raghavan, and Schutze on tf-idf weighting](https://nlp.stanford.edu/IR-book/html/htmledition/tf-idf-weighting-1.html)
+- [quanteda inaugural address corpus documentation](https://quanteda.io/reference/data_corpus_inaugural.html)

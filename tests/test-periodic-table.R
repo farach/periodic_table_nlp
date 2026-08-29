@@ -39,8 +39,8 @@ stopifnot(
     as.integer(table(task_map$group_id)),
     expected_group_sizes
   ),
-  identical(which(has_lesson), 1:42),
-  identical(sum(has_lesson), 42L),
+  identical(which(has_lesson), 1:62),
+  identical(sum(has_lesson), 62L),
   all(task_map$status %in% c("available", "planned")),
   all(nzchar(task_map$item_type)),
   all(nzchar(task_map$lesson_path[has_lesson])),
@@ -100,11 +100,11 @@ stopifnot(
   identical(rendered_task_numbers, 1:81),
   identical(
     count_matches('data-status="available"', html),
-    42L
+    62L
   ),
   identical(
     count_matches('data-status="planned"', html),
-    39L
+    19L
   ),
   identical(
     count_matches('data-item-type="[^"]+"', html),
@@ -200,9 +200,15 @@ stopifnot(
 )
 
 cat(
-  paste0(
-    "Periodic table passed: 81 ordered tasks, 15 groups, ",
-    "42 lesson links, 39 planned tiles, visible item types, ",
-    "stage labels, and responsive structural checks.\n"
+  sprintf(
+    paste0(
+      "Periodic table passed: %d ordered tasks, %d groups, ",
+      "%d lesson links, %d planned tiles, visible item types, ",
+      "stage labels, and responsive structural checks.\n"
+    ),
+    nrow(task_map),
+    length(unique(task_map$group_id)),
+    sum(has_lesson),
+    sum(!has_lesson)
   )
 )

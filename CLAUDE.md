@@ -18,6 +18,8 @@ python -m venv .venv-spacy
 npm ci
 Rscript scripts/check-prose.R
 Rscript scripts/check-repetition.R
+Rscript scripts/check-resubstitution.R
+Rscript scripts/check-data-fingerprints.R
 quarto render
 Rscript scripts/check-lessons.R
 Rscript tests/test-periodic-table.R
@@ -59,6 +61,56 @@ environment is needed once; on macOS and Linux the pip path is
 - `scripts/check-lessons.R` and `tests/accessibility.spec.mjs` discover lessons
   from any `N_*` directory rather than a hard-coded list. Adding a stage does
   not require editing them.
+- `R/inaugural-corpus.R` is the canonical corpus for tasks 43-62.
+  `inaugural_paragraphs()` returns 1,377 paragraphs of at least 25 words from
+  the 60 US presidential inaugural addresses quanteda ships, with
+  `paragraph_id`, `speech_id`, `year`, `president`, `party`, and `era`. Every
+  lesson in that range sources it so they agree on what a paragraph is. The
+  speeches are US government works in the public domain. The Riverton corpus of
+  28 sentences stays in place for tasks 1-42; it is too small to train or
+  evaluate anything, which task 43 explains rather than hides.
+- `data/inaugural/` holds the 60-model split study behind tasks 43, 44, 45 and
+  51. `data-raw/build-inaugural-study.R` rebuilds it by hand. Lessons read the
+  committed CSVs and fit at most one model live.
+- `data/wordnet/` holds a 38-lemma extract of Open English WordNet 2024 for
+  task 58, built by `data-raw/build-wordnet-extract.R`. The source is CC BY 4.0
+  and the attribution is recorded in `wordnet-metadata.csv` and
+  `DATA_SOURCES.md`. The 103 MB source XML is cached in `data-raw/.cache/`,
+  which is gitignored; never download it at render time.
+- `R/permutation-null.R` supplies the shared null for tasks 53-57. Those methods
+  return a confident answer for any input, so a number from them means nothing
+  until you know what the same procedure returns on shuffled data. Use
+  `permutation_null()` rather than writing a bespoke null per lesson.
+- `data/word2vec/` holds the pinned embedding for task 61, built by
+  `data-raw/build-word2vec-model.R`. `word2vec::word2vec()` is not bitwise
+  reproducible on this package version: across five fits with the same seed and
+  `threads = 1L`, similarity values moved by about 0.03 but the neighbour
+  ORDER changed every time. A lesson printing neighbour words would print
+  different words on every render, so the model is trained once and committed.
+  `.gitattributes` marks `*.bin` binary so the fingerprint stays valid.
+- CI needs system libraries that are easy to forget: `libgsl-dev` for
+  topicmodels, `libxml2-dev` for xml2, `libsodium-dev` for sodium via
+  plumber and pins, and `libprotobuf-dev` plus `protobuf-compiler` for cld3.
+  A package added to `renv.lock` is installed on CI whether or not a lesson
+  renders it, so its system dependencies must be present.
+- Run `renv::snapshot()` after installing anything. `dependencies.R` only tells
+  renv what to look for; it does not update the lockfile. Twenty-four modeling
+  packages were once added to `dependencies.R` without a snapshot, which would
+  have failed CI at the first `renv::restore()`.
+- `scripts/check-resubstitution.R` fails the build when a lesson hands the same
+  data frame to `fit()` and to `predict()`. Two lessons shipped that mistake in
+  a first draft and both produced numbers that looked like results. A lesson
+  that shows resubstitution deliberately must mark the line
+  `# resubstitution-ok: <reason>` and say so to the reader.
+- `scripts/check-data-fingerprints.R` verifies every committed artifact against
+  the hash its builder recorded. Two hash methods are in use and the difference
+  matters: most builders record
+  `digest(paste(read_lines(p), collapse = "\n"))`, which survives a CRLF
+  checkout, while a few record `digest(file = p)`, which is only stable because
+  `.gitattributes` pins `eol=lf`. The gate accepts either and reports which
+  matched. Comparing the wrong method produces a convincing false alarm; an
+  audit once reported twelve stale fingerprints that way and every one was
+  wrong.
 
 ## Code style
 
@@ -132,6 +184,18 @@ environment is needed once; on macOS and Linux the pip path is
 - Do not describe model scores as calibrated probabilities without evidence.
 - Do not report only usable weak labels; account for errors, abstentions, and
   conflicts across every row.
+- Never score a model on the rows it was fitted to. `scripts/check-resubstitution.R`
+  catches the obvious shape, but it is a textual heuristic and will miss a data
+  frame aliased under a new name. A score that beats its own baseline by a
+  surprising margin deserves suspicion before celebration.
+- Do not slice a monitoring report by a variable the label is derived from.
+  `era` comes from `year`, so a per-decade accuracy is a one-class recall and
+  is near-perfect by construction.
+- Do not present a score from author-written data as evidence about the world.
+  It can show that code runs and that a metric responds to a change; it cannot
+  show that a method works.
+- Do not treat a difference between two results as real when it is smaller than
+  the spread across replicates of the same experiment.
 - Do not add summary-number pills, gradients, floating cards, glossy shadows,
   hover lift, or decorative motion to the periodic table.
 - Planned tiles are static `<div>` elements. Do not give them button semantics,

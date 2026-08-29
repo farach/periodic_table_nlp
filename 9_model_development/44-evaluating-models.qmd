@@ -1,0 +1,487 @@
+---
+title: "Evaluating models"
+subtitle: "Read a score only after asking what it was compared with"
+author: "Alex Farach"
+description: "Learn why model evaluation needs a baseline, repeated splits, and a split scheme that matches the claim."
+categories: [model development, evaluation, text classification]
+---
+
+A program manager sees one number on a slide: 61 percent accurate. It sounds
+better than guessing, so the room starts to relax.
+
+Then she asks what the model would have scored if it had always chosen the
+larger class. The answer changes the meeting. The score was not evidence of a
+working model after all.
+
+This lesson reads a committed split study for three related text models. The era
+model is useful against cheap alternatives. The party model, with these features
+and this fixed penalty, does not learn a reliable party signal.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- compare every score with a deployable largest-class baseline;
+- read the spread across repeated train/test splits;
+- explain what paragraph, speech, and person splits measure;
+- use a confusion matrix and balanced accuracy; and
+- say when a specific model did not learn the target.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Start with the baseline
+
+A **baseline** is the simple rule a model has to beat. The largest-class baseline
+always predicts the most common label in training data. It is crude, which is
+exactly why it is a useful check. If a model cannot beat that rule, its score
+should not be sold as success.
+
+```{r}
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+  library(tidyr)
+  library(tibble)
+  library(stringr)
+  library(ggplot2)
+  library(rsample)
+  library(recipes)
+  library(textrecipes)
+  library(parsnip)
+  library(workflows)
+  library(yardstick)
+  library(broom)
+  library(glmnet)
+})
+
+study <- read_csv(
+  "data/inaugural/split-study.csv",
+  na = c("", "NA"),
+  col_types = cols(
+    task = col_character(),
+    split_scheme = col_character(),
+    replicate = col_integer(),
+    accuracy = col_double(),
+    bal_accuracy = col_double(),
+    train_majority_accuracy = col_double(),
+    test_majority_rate = col_double(),
+    length_rule_accuracy = col_double(),
+    test_rows = col_integer(),
+    test_speeches = col_integer()
+  )
+)
+
+baselines <- read_csv(
+  "data/inaugural/baselines.csv",
+  na = character(),
+  col_types = cols(
+    task = col_character(),
+    outcome = col_character(),
+    rows = col_integer(),
+    speeches = col_integer(),
+    people = col_integer(),
+    largest_class = col_character(),
+    baseline_accuracy = col_double()
+  )
+)
+
+split_levels <- c("paragraph", "speech", "president")
+task_levels <- c("era", "era_party_rows", "party")
+
+task_labels <- c(
+  era = "era",
+  era_party_rows = "era on party rows",
+  party = "party"
+)
+
+split_summary <- study |>
+  mutate(
+    task = factor(task, levels = task_levels),
+    split_scheme = factor(split_scheme, levels = split_levels)
+  ) |>
+  group_by(task, split_scheme) |>
+  summarise(
+    replicates = n(),
+    mean_accuracy = mean(accuracy),
+    mean_bal_accuracy = mean(bal_accuracy, na.rm = TRUE),
+    bal_accuracy_missing = sum(is.na(bal_accuracy)),
+    mean_train_majority = mean(train_majority_accuracy),
+    mean_test_majority = mean(test_majority_rate),
+    mean_length_rule = mean(length_rule_accuracy),
+    low_accuracy = min(accuracy),
+    high_accuracy = max(accuracy),
+    low_train_majority = min(train_majority_accuracy),
+    high_train_majority = max(train_majority_accuracy),
+    low_length_rule = min(length_rule_accuracy),
+    high_length_rule = max(length_rule_accuracy),
+    mean_test_speeches = mean(test_speeches),
+    .groups = "drop"
+  ) |>
+  arrange(task, split_scheme)
+
+baseline_display <- baselines |>
+  mutate(task = factor(task, levels = task_levels)) |>
+  arrange(task) |>
+  transmute(
+    task = recode(as.character(task), !!!task_labels),
+    rows,
+    speeches,
+    people,
+    largest_class,
+    baseline_accuracy
+  )
+
+stopifnot(
+  identical(nrow(study), 90L),
+  identical(nrow(baselines), 3L),
+  identical(sort(unique(study$replicate)), 1:10),
+  all(split_summary$replicates == 10L),
+  identical(round(baseline_display$baseline_accuracy, 4), c(0.6478, 0.7452, 0.6065)),
+  identical(baseline_display$people, c(40L, 31L, 31L)),
+  identical(baseline_display$speeches, c(60L, 47L, 47L)),
+  identical(baseline_display$largest_class, c("1900 or later", "1900 or later", "Republican"))
+)
+
+knitr::kable(
+  baseline_display |>
+    mutate(baseline_accuracy = round(baseline_accuracy, 4)),
+  col.names = c("Task", "Rows", "Speeches", "People", "Largest class", "Corpus baseline"),
+  caption = "Corpus-level baselines and task sizes",
+  row.names = FALSE
+)
+```
+
+The era task has `r baseline_display$rows[baseline_display$task == "era"]` rows,
+`r baseline_display$speeches[baseline_display$task == "era"]` speeches, and
+`r baseline_display$people[baseline_display$task == "era"]` people. The party
+model can train only on rows with a Democratic or Republican label, so it uses
+`r baseline_display$rows[baseline_display$task == "party"]` rows from
+`r baseline_display$speeches[baseline_display$task == "party"]` speeches by
+`r baseline_display$people[baseline_display$task == "party"]` people. The
+remaining rows come from other party labels. Each task also selects its own 500
+tokens from its own training data.
+
+## Repeated splits change the answer
+
+The study runs 10 replicates for each task and split scheme. A **replicate** is a
+fresh split made by the same rule. The mean tells the center of the results, and
+the low and high values show how much the score moved across the 10 runs.
+
+```{r}
+score_table <- split_summary |>
+  transmute(
+    task = recode(as.character(task), !!!task_labels),
+    split_scheme = as.character(split_scheme),
+    mean_accuracy = round(mean_accuracy, 4),
+    mean_bal_accuracy = round(mean_bal_accuracy, 4),
+    train_majority_accuracy = round(mean_train_majority, 4),
+    test_majority_rate = round(mean_test_majority, 4),
+    length_rule_accuracy = round(mean_length_rule, 4),
+    low_accuracy = round(low_accuracy, 4),
+    high_accuracy = round(high_accuracy, 4),
+    missing_bal_accuracy = bal_accuracy_missing
+  )
+
+get_summary <- function(task_name, scheme_name) {
+  split_summary |>
+    filter(task == task_name, split_scheme == scheme_name)
+}
+
+era_speech <- get_summary("era", "speech")
+era_president <- get_summary("era", "president")
+era_party_speech <- get_summary("era_party_rows", "speech")
+era_party_president <- get_summary("era_party_rows", "president")
+party_paragraph <- get_summary("party", "paragraph")
+party_speech <- get_summary("party", "speech")
+party_president <- get_summary("party", "president")
+
+na_replicate <- study |>
+  filter(task == "era_party_rows", split_scheme == "president", is.na(bal_accuracy))
+
+era_speech_range_width <- era_speech$high_accuracy - era_speech$low_accuracy
+
+era_speech_length_gap <- era_speech$mean_accuracy - era_speech$mean_length_rule
+
+era_party_speech_gap <- era_party_speech$mean_accuracy - era_party_speech$mean_train_majority
+
+stopifnot(
+  identical(score_table$missing_bal_accuracy, c(rep(0L, 5L), 1L, rep(0L, 3L))),
+  identical(round(era_speech$mean_accuracy, 4), 0.8457),
+  identical(round(era_speech$mean_bal_accuracy, 4), 0.8516),
+  identical(round(era_speech$mean_train_majority, 4), 0.6282),
+  identical(round(era_speech$mean_length_rule, 4), 0.6827),
+  identical(round(era_speech$low_accuracy, 4), 0.7970),
+  identical(round(era_speech$high_accuracy, 4), 0.9039),
+  identical(round(era_speech$low_train_majority, 4), 0.3576),
+  identical(round(era_speech$high_train_majority, 4), 0.8318),
+  identical(round(era_speech$low_length_rule, 4), 0.5255),
+  identical(round(era_speech$high_length_rule, 4), 0.8498),
+  identical(round(era_party_speech$mean_accuracy, 4), 0.8240),
+  identical(round(era_party_speech$mean_train_majority, 4), 0.8086),
+  identical(round(party_paragraph$mean_accuracy, 4), 0.6060),
+  identical(round(party_paragraph$mean_train_majority, 4), 0.6067),
+  identical(round(party_speech$mean_accuracy, 4), 0.5514),
+  identical(round(party_speech$mean_train_majority, 4), 0.6563),
+  identical(round(party_president$mean_accuracy, 4), 0.4997),
+  identical(round(party_president$mean_bal_accuracy, 4), 0.5090),
+  identical(nrow(na_replicate), 1L),
+  identical(na_replicate$replicate, 3L),
+  identical(na_replicate$test_majority_rate, 1)
+)
+
+knitr::kable(
+  score_table,
+  col.names = c(
+    "Task", "Split", "Model accuracy", "Balanced accuracy",
+    "Training-majority rule", "Test-majority rate", "Length rule",
+    "Model low", "Model high", "Missing balanced accuracy"
+  ),
+  caption = "Ten split replicates for each task and split scheme",
+  row.names = FALSE
+)
+```
+
+The speech split is the main era test. The model averages
+`r round(era_speech$mean_accuracy, 4)`, while the deployable majority rule
+averages `r round(era_speech$mean_train_majority, 4)` and the paragraph-length
+rule averages `r round(era_speech$mean_length_rule, 4)`. The model's lowest
+speech-split replicate is `r round(era_speech$low_accuracy, 4)`, which is still
+higher than the best mean reached by either cheap rule. Across the 10 speech
+replicates, the model ranges from `r round(era_speech$low_accuracy, 4)` to
+`r round(era_speech$high_accuracy, 4)`. The deployable rule ranges from
+`r round(era_speech$low_train_majority, 4)` to
+`r round(era_speech$high_train_majority, 4)`, and the length rule ranges from
+`r round(era_speech$low_length_rule, 4)` to
+`r round(era_speech$high_length_rule, 4)`.
+
+A score is meaningful only against the best cheap alternative you bothered to
+try. Here the length rule matters because paragraph length is confounded with
+era. The model still beats that one-number rule by about
+`r round(100 * era_speech_length_gap, 1)` points at the speech split, so the text
+features are doing real work.
+
+```{r}
+#| label: fig-split-study
+#| fig-cap: "Accuracy over 10 replicates for the model and cheap rules."
+#| fig-alt: "A dot and line chart faceted by task. In the era panel, model accuracy stays above both the training-majority rule and the paragraph-length rule at all three split schemes: paragraph, speech, and president. In the party panel, model accuracy sits near or below the training-majority rule at all three split schemes."
+
+plot_data <- study |>
+  filter(task %in% c("era", "party")) |>
+  mutate(
+    task = recode(task, !!!task_labels),
+    split_scheme = factor(split_scheme, levels = split_levels)
+  ) |>
+  select(task, split_scheme, replicate, accuracy, train_majority_accuracy, length_rule_accuracy) |>
+  pivot_longer(
+    cols = c(accuracy, train_majority_accuracy, length_rule_accuracy),
+    names_to = "measure",
+    values_to = "score"
+  ) |>
+  mutate(
+    measure = recode(
+      measure,
+      accuracy = "model",
+      train_majority_accuracy = "training-majority rule",
+      length_rule_accuracy = "paragraph-length rule"
+    )
+  )
+
+stopifnot(
+  identical(nrow(plot_data), 180L),
+  identical(
+    plot_data |>
+      count(task, split_scheme, measure) |>
+      pull(n),
+    rep(10L, 18L)
+  ),
+  all(plot_data$score >= 0 & plot_data$score <= 1),
+  identical(round(min(plot_data$score), 4), 0.2749)
+)
+
+# The y scale is left to the data. Fixing the lower bound at 0.3 would silently
+# drop the two replicates where the training-majority rule scores 0.27, and those
+# are exactly the cases worth seeing: the rule collapses when the class that was
+# largest in training is the smaller one in test.
+ggplot(plot_data, aes(x = split_scheme, y = score, color = measure)) +
+  geom_point(alpha = 0.55, position = position_jitter(width = 0.08, height = 0)) +
+  stat_summary(fun = mean, geom = "line", aes(group = measure), linewidth = 0.8) +
+  stat_summary(fun = mean, geom = "point", size = 2.4) +
+  facet_wrap(~task) +
+  scale_y_continuous(labels = scales::label_number(accuracy = 0.01)) +
+  labs(
+    x = "Split scheme",
+    y = "Accuracy",
+    color = "Measure"
+  ) +
+  theme_minimal()
+```
+
+The party model never beats its deployable majority rule at the paragraph split:
+`r round(party_paragraph$mean_accuracy, 4)` for the model against
+`r round(party_paragraph$mean_train_majority, 4)` for the rule. At the speech
+split, the model averages `r round(party_speech$mean_accuracy, 4)` against
+`r round(party_speech$mean_train_majority, 4)`. Under the person split, accuracy
+is `r round(party_president$mean_accuracy, 4)` and balanced accuracy is
+`r round(party_president$mean_bal_accuracy, 4)`, which is chance for this setup.
+The conclusion is model-level: this penalty, recipe, and row set did not learn
+party.
+
+## The controlled comparison is smaller
+
+The era and party tasks are not a clean pair by default. Party keeps only the
+Democratic and Republican speeches, which leaves
+`r baseline_display$rows[baseline_display$task == "party"]` of the full
+`r baseline_display$rows[baseline_display$task == "era"]` paragraphs. The dropped
+rows are from other party labels, and those rows are concentrated in the earliest
+speeches with longer paragraphs.
+
+The controlled comparison is `era_party_rows`, which runs the era label on the
+same rows as the party model. On those rows, era still beats its deployable
+baseline at the speech split: `r round(era_party_speech$mean_accuracy, 4)` for
+the model against `r round(era_party_speech$mean_train_majority, 4)` for the
+training-majority rule. The gap is only
+`r round(100 * era_party_speech_gap, 1)` points because this subset is much more
+imbalanced. A clean wording is: era is learnable here and party is not learned by
+this model, but the size of the era result depends heavily on which rows enter
+the study.
+
+For `era_party_rows` under the person split, replicate
+`r na_replicate$replicate[[1]]` has undefined balanced accuracy because the test
+set has only one class. Its test-majority rate is
+`r round(na_replicate$test_majority_rate[[1]], 4)`, so the accuracy for that one
+replicate is not a two-class result. The summary table uses `na.rm = TRUE` for
+balanced accuracy and reports the missing count so the case stays visible.
+
+## Accuracy misses some failures
+
+**Accuracy** is the share of rows with the right label. When classes are uneven,
+a model can get many rows right by favoring the larger class. A **confusion
+matrix** shows which labels were confused, and **balanced accuracy** averages the
+accuracy within each class so the smaller class still counts.
+
+```{r}
+source("R/inaugural-corpus.R")
+paragraphs <- inaugural_paragraphs()
+
+set.seed(4301)
+era_split <- group_initial_split(paragraphs, group = speech_id, prop = 0.75)
+era_training <- training(era_split)
+era_testing <- testing(era_split)
+
+era_recipe <- recipe(era ~ paragraph, data = era_training) |>
+  step_tokenize(paragraph) |>
+  step_stopwords(paragraph) |>
+  step_tokenfilter(paragraph, max_tokens = 500) |>
+  step_tfidf(paragraph)
+
+era_model <- logistic_reg(penalty = 0.01, mixture = 0) |>
+  set_engine("glmnet")
+
+era_workflow <- workflow() |>
+  add_recipe(era_recipe) |>
+  add_model(era_model)
+
+set.seed(4302)
+era_fitted <- fit(era_workflow, data = era_training)
+
+era_predictions <- predict(era_fitted, era_testing) |>
+  bind_cols(era_testing |> select(era))
+
+confusion <- conf_mat(
+  era_predictions,
+  truth = era,
+  estimate = .pred_class
+)
+confusion_table <- as.data.frame(confusion$table) |>
+  as_tibble()
+
+metric_table <- metric_set(accuracy, bal_accuracy, sens, spec)(
+  era_predictions,
+  truth = era,
+  estimate = .pred_class
+) |>
+  select(.metric, .estimate)
+
+stopifnot(
+  identical(nrow(era_testing), 335L),
+  identical(confusion_table$Freq, c(145, 50, 10, 130)),
+  identical(round(metric_table$.estimate, 4), c(0.8209, 0.8361, 0.7436, 0.9286))
+)
+
+knitr::kable(
+  confusion_table,
+  col.names = c("Prediction", "Reference label", "Paragraphs"),
+  caption = "Confusion matrix for one speech-held-out era model",
+  row.names = FALSE
+)
+
+knitr::kable(
+  metric_table |>
+    mutate(.estimate = round(.estimate, 4)),
+  col.names = c("Measure", "Value"),
+  caption = "Accuracy and class-aware measures for the same predictions",
+  row.names = FALSE
+)
+```
+
+The model gets `r confusion_table$Freq[[1]]` early-era paragraphs right and
+misses `r confusion_table$Freq[[2]]` of them. It gets
+`r confusion_table$Freq[[4]]` later-era paragraphs right and misses
+`r confusion_table$Freq[[3]]` of them. Balanced accuracy is
+`r round(metric_table$.estimate[metric_table$.metric == "bal_accuracy"], 4)`,
+which tells a little more than accuracy alone.
+
+## What else could produce this score
+
+Era is a deterministic function of `year`, and `year` is constant within a
+speech. The era study has `r baseline_display$speeches[baseline_display$task == "era"]`
+independent speech units, not `r baseline_display$rows[baseline_display$task == "era"]`
+independent paragraphs. The speech split averages about
+`r round(era_speech$mean_test_speeches, 1)` speeches per test set. That is why the
+model range across speech splits is `r round(era_speech_range_width, 4)`, not the
+narrow range one might expect from hundreds of independent rows. The 10
+replicates describe resampling variability inside one corpus; they are not a
+confidence interval for political speech beyond this collection.
+
+The next lesson prints this model's largest coefficients. Read them when you get
+there, because they cut both ways. The terms pushing toward the earlier label are
+mostly formal-register words, the vocabulary of a certain kind of nineteenth-
+century public address rather than a certain kind of subject. The terms pushing
+the other way include words like `industrial`, `economic`, `international`, and
+`federal`, which are closer to genuine changes in what the speeches are about.
+So part of this score is a style detector and part of it is a subject detector,
+and nothing here separates the two. Nineteenth- and twenty-first-century texts
+can also differ because of transcription and typesetting conventions, which no
+measurement on this page would distinguish from either.
+
+This lesson supports the narrow claim that era is learnable from this text. It
+does not show that the model learned what a period was about. A features-only
+stylometric model, or a subsample matched on paragraph length, would be needed to
+pull period vocabulary apart from period register.
+
+## What to remember
+
+- A score with no baseline is hard to interpret.
+- Group splits need same-split baselines, not only corpus-wide baselines.
+- One split gives one number; repeated splits show the spread.
+- The split scheme decides what the score is measuring.
+- This text model learned era well. This model, with this penalty and these
+  features, did not learn party, which is a smaller claim than saying the task
+  is impossible.
+
+A useful evaluation does not flatter the model. It tells you which answer you are
+allowed to trust.
+
+## Sources
+
+- [yardstick metrics reference](https://yardstick.tidymodels.org/)
+- [rsample initial splits](https://rsample.tidymodels.org/reference/initial_split.html)
+- [rsample grouped splits](https://rsample.tidymodels.org/reference/group_initial_split.html)
+- [tidymodels workflows](https://workflows.tidymodels.org/)

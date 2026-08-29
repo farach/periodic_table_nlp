@@ -1,0 +1,528 @@
+---
+title: "Finding similar documents"
+subtitle: "Nearest neighbours depend on the representation"
+author: "Alex Farach"
+description: "Learn how speech-level document similarity changes under raw counts, tf-idf, and stopword removal."
+categories: [similarity, document similarity, inaugural addresses]
+---
+
+A reading group wants one companion speech for a long weekend assignment. They
+ask for the nearest neighbour to a selected address.
+
+The request sounds simple until the group asks what "nearest" means. A method can
+compare word counts, rare-word weights, or a version with common words removed.
+
+**Document similarity** is a score that compares two documents after they have
+been turned into features. The score is only as meaningful as that representation
+for the question at hand.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- build speech-level document-feature matrices;
+- compute cosine similarity across 60 speeches;
+- list the most and least similar pairs under tf-idf;
+- show that nearest neighbours change when features change;
+- test an authorship pattern against shuffled labels; and
+- notice when document length is part of the signal.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Build speech vectors
+
+**Tf-idf** stands for term frequency times inverse document frequency. It keeps
+words from each speech, then gives more weight to words that are less common
+across the full set of speeches.
+
+```{r}
+library(dplyr)
+library(tibble)
+library(purrr)
+library(stringr)
+library(quanteda)
+library(quanteda.textstats)
+library(knitr)
+
+source("R/inaugural-corpus.R")
+source("R/permutation-null.R")
+
+within_tolerance <- function(observed, expected, tolerance = 1e-3) {
+  abs(observed - expected) < tolerance
+}
+
+paragraphs <- inaugural_paragraphs()
+
+original_speeches <- tibble(
+  speech_id = names(quanteda::data_corpus_inaugural),
+  year = as.integer(quanteda::data_corpus_inaugural$Year),
+  surname = as.character(quanteda::data_corpus_inaugural$President),
+  first_name = as.character(quanteda::data_corpus_inaugural$FirstName),
+  party = as.character(quanteda::data_corpus_inaugural$Party),
+  text = as.character(quanteda::data_corpus_inaugural)
+) |>
+  mutate(
+    president = str_squish(paste(first_name, surname)),
+    era = factor(
+      if_else(year < 1900, "before 1900", "1900 or later"),
+      levels = c("before 1900", "1900 or later")
+    ),
+    original_words = str_count(text, "\\S+")
+  )
+
+retained_by_speech <- paragraphs |>
+  group_by(speech_id) |>
+  summarise(retained_words = sum(paragraph_words), .groups = "drop")
+
+paragraph_era_summary <- paragraphs |>
+  group_by(era) |>
+  summarise(median_kept_paragraph_words = median(paragraph_words), .groups = "drop")
+
+retention_by_era <- original_speeches |>
+  select(speech_id, era, original_words) |>
+  left_join(retained_by_speech, by = "speech_id") |>
+  mutate(retained_words = coalesce(retained_words, 0L)) |>
+  group_by(era) |>
+  summarise(
+    speeches = n(),
+    original_words = sum(original_words),
+    retained_words = sum(retained_words),
+    share_retained = retained_words / original_words,
+    .groups = "drop"
+  ) |>
+  left_join(paragraph_era_summary, by = "era")
+
+speeches <- paragraphs |>
+  group_by(speech_id, year, president, surname, party, era) |>
+  summarise(
+    text = paste(paragraph, collapse = "\n"),
+    speech_tokens = sum(paragraph_words),
+    .groups = "drop"
+  )
+
+make_speech_dfm <- function(remove_stops = FALSE, tfidf = FALSE) {
+  speech_tokens <- tokens(
+    speeches$text,
+    remove_punct = TRUE,
+    remove_numbers = TRUE
+  ) |>
+    tokens_tolower()
+
+  if (remove_stops) {
+    speech_tokens <- tokens_remove(speech_tokens, stopwords("en"))
+  }
+
+  speech_dfm <- dfm(speech_tokens)
+  docnames(speech_dfm) <- speeches$speech_id
+
+  if (tfidf) {
+    speech_dfm <- dfm_tfidf(speech_dfm)
+  }
+
+  speech_dfm
+}
+
+raw_dfm <- make_speech_dfm(remove_stops = FALSE, tfidf = FALSE)
+tfidf_dfm <- make_speech_dfm(remove_stops = FALSE, tfidf = TRUE)
+tfidf_no_stop_dfm <- make_speech_dfm(remove_stops = TRUE, tfidf = TRUE)
+
+representation_table <- tibble(
+  representation = c("raw counts", "tf-idf", "tf-idf with stopwords removed"),
+  documents = c(ndoc(raw_dfm), ndoc(tfidf_dfm), ndoc(tfidf_no_stop_dfm)),
+  features = c(nfeat(raw_dfm), nfeat(tfidf_dfm), nfeat(tfidf_no_stop_dfm))
+)
+
+surname_collisions <- speeches |>
+  distinct(president, surname) |>
+  count(surname, name = "people") |>
+  filter(people > 1L) |>
+  arrange(surname)
+
+identity_table <- tibble(
+  item = c("speeches", "people", "surnames", "surnames used by two people"),
+  value = c(nrow(speeches), n_distinct(speeches$president), n_distinct(speeches$surname), nrow(surname_collisions))
+)
+
+stopifnot(
+  nrow(paragraphs) == 1377L,
+  nrow(speeches) == 60L,
+  n_distinct(speeches$president) == 40L,
+  n_distinct(speeches$surname) == 36L,
+  identical(surname_collisions$surname, c("Adams", "Bush", "Harrison", "Roosevelt")),
+  identical(representation_table$documents, c(60L, 60L, 60L)),
+  identical(representation_table$features, c(9327L, 9327L, 9193L)),
+  all(within_tolerance(retention_by_era$share_retained, c(0.998, 0.914), tolerance = 0.001)),
+  identical(retention_by_era$median_kept_paragraph_words, c(112, 54))
+)
+
+kable(
+  representation_table,
+  col.names = c("Representation", "Documents", "Features"),
+  caption = "Three speech representations used for similarity comparisons",
+  row.names = FALSE
+)
+
+kable(
+  retention_by_era |>
+    mutate(share_retained = round(share_retained, 3)),
+  col.names = c("Era", "Speeches", "Original words", "Retained words", "Share retained", "Median kept paragraph words"),
+  caption = "Words retained after rebuilding speeches from paragraphs of at least 25 words",
+  row.names = FALSE
+)
+
+kable(
+  identity_table,
+  col.names = c("Item", "Count"),
+  caption = "The corpus has 60 speeches by 40 people but only 36 surnames",
+  row.names = FALSE
+)
+```
+
+The helper rebuilds each speech by joining only paragraphs with at least 25
+words, so the "speeches" below are retained-paragraph versions of the addresses.
+The filter keeps nearly all words before 1900 and a smaller share from 1900 or
+later. The `president` field is the full name: 60 speeches come from 40 people,
+while four surnames each refer to two people.
+
+Comparing every speech with every other speech gives 1,770 pairs, because
+`60 * 59 / 2 = 1,770`.
+
+## Rank all speech pairs
+
+Cosine similarity ranges from 0 to 1 for these nonnegative vectors. Larger values
+mean the two speeches point in more similar vocabulary directions.
+
+```{r}
+cosine_matrix <- function(speech_dfm) {
+  similarity_matrix <- as.matrix(
+    textstat_simil(speech_dfm, method = "cosine", margin = "documents")
+  )
+  diag(similarity_matrix) <- NA_real_
+  similarity_matrix
+}
+
+cosine_pairs <- function(speech_dfm) {
+  similarity_matrix <- cosine_matrix(speech_dfm)
+  pair_index <- which(upper.tri(similarity_matrix), arr.ind = TRUE)
+
+  tibble(
+    first = rownames(similarity_matrix)[pair_index[, 1]],
+    second = colnames(similarity_matrix)[pair_index[, 2]],
+    similarity = similarity_matrix[pair_index]
+  ) |>
+    left_join(
+      speeches |> select(first = speech_id, first_year = year, first_president = president, first_tokens = speech_tokens),
+      by = "first"
+    ) |>
+    left_join(
+      speeches |> select(second = speech_id, second_year = year, second_president = president, second_tokens = speech_tokens),
+      by = "second"
+    )
+}
+
+tfidf_pairs <- cosine_pairs(tfidf_dfm) |>
+  arrange(desc(similarity), first, second)
+
+most_similar_pairs <- tfidf_pairs |>
+  slice_head(n = 5) |>
+  mutate(group = "Most similar")
+
+least_similar_pairs <- tfidf_pairs |>
+  arrange(similarity, first, second) |>
+  slice_head(n = 5) |>
+  mutate(group = "Least similar")
+
+pair_table <- bind_rows(most_similar_pairs, least_similar_pairs) |>
+  transmute(
+    group,
+    first,
+    second,
+    first_president,
+    second_president,
+    first_tokens,
+    second_tokens,
+    similarity = round(similarity, 4)
+  )
+
+least_with_short_washington <- least_similar_pairs |>
+  filter(first == "1793-Washington" | second == "1793-Washington") |>
+  nrow()
+
+stopifnot(
+  nrow(tfidf_pairs) == 1770L,
+  tfidf_pairs$first[1] == "1817-Monroe",
+  tfidf_pairs$second[1] == "1821-Monroe",
+  within_tolerance(pair_table$similarity[1], 0.2903, tolerance = 1e-4),
+  pair_table$first[6] == "1793-Washington",
+  pair_table$second[6] == "1905-Roosevelt",
+  within_tolerance(pair_table$similarity[6], 0.0066, tolerance = 1e-4),
+  least_with_short_washington >= 4L
+)
+
+kable(
+  pair_table,
+  col.names = c("Group", "First speech", "Second speech", "First president", "Second president", "First tokens", "Second tokens", "Cosine similarity"),
+  caption = "Most and least similar speech pairs under speech-level tf-idf",
+  row.names = FALSE
+)
+```
+
+The strongest pair under this representation is the two Monroe speeches, with
+cosine similarity about 0.2903. Four of the five weakest rows include the short
+1793 Washington speech, which has 135 retained tokens. Shortness, not a reading
+of subject matter, puts that speech at the bottom of the ranking.
+
+```{r}
+tfidf_similarity_matrix <- cosine_matrix(tfidf_dfm)
+
+mean_tfidf_similarity <- tibble(
+  speech_id = rownames(tfidf_similarity_matrix),
+  mean_similarity = rowMeans(tfidf_similarity_matrix, na.rm = TRUE)
+) |>
+  left_join(speeches |> select(speech_id, speech_tokens), by = "speech_id")
+
+length_similarity_table <- mean_tfidf_similarity |>
+  summarise(
+    measure = "Mean tf-idf similarity and speech token count",
+    correlation = cor(mean_similarity, speech_tokens)
+  )
+
+stopifnot(
+  within_tolerance(length_similarity_table$correlation, 0.861, tolerance = 0.001),
+  length_similarity_table$correlation > 0.8
+)
+
+kable(
+  length_similarity_table |>
+    mutate(correlation = round(correlation, 3)),
+  col.names = c("Measure", "Correlation"),
+  caption = "Mean tf-idf similarity compared with speech token count",
+  row.names = FALSE
+)
+```
+
+Mean tf-idf similarity still correlates strongly with speech length. Tf-idf
+changes the representation, but it does not remove the length gradient from this
+corpus.
+
+## Change the representation
+
+A nearest neighbour is the highest-scoring other document. The code below asks
+for the nearest neighbour of the 1793 Washington speech three ways: raw counts,
+tf-idf, and tf-idf after removing stopwords.
+
+```{r}
+nearest_for <- function(speech_dfm, target) {
+  similarity_matrix <- cosine_matrix(speech_dfm)
+  target_scores <- similarity_matrix[target, ]
+  target_scores[target] <- NA_real_
+
+  tibble(
+    neighbour = names(target_scores),
+    similarity = as.numeric(target_scores)
+  ) |>
+    arrange(desc(similarity), neighbour) |>
+    slice_head(n = 1)
+}
+
+target_speech <- "1793-Washington"
+nearest_table <- bind_rows(
+  nearest_for(raw_dfm, target_speech) |>
+    mutate(representation = "raw counts"),
+  nearest_for(tfidf_dfm, target_speech) |>
+    mutate(representation = "tf-idf"),
+  nearest_for(tfidf_no_stop_dfm, target_speech) |>
+    mutate(representation = "tf-idf, stopwords removed")
+) |>
+  left_join(
+    speeches |> select(neighbour = speech_id, year, president, speech_tokens),
+    by = "neighbour"
+  ) |>
+  transmute(
+    target = target_speech,
+    representation,
+    neighbour,
+    year,
+    president,
+    speech_tokens,
+    similarity = round(similarity, 4)
+  )
+
+stopifnot(
+  identical(nearest_table$target, rep("1793-Washington", 3L)),
+  identical(nearest_table$neighbour, c("1841-Harrison", "1861-Lincoln", "1885-Cleveland")),
+  all(within_tolerance(nearest_table$similarity, c(0.8474, 0.0552, 0.0512), tolerance = 1e-4)),
+  n_distinct(nearest_table$neighbour) == 3L
+)
+
+kable(
+  nearest_table,
+  col.names = c("Target", "Representation", "Nearest neighbour", "Year", "President", "Neighbour tokens", "Cosine similarity"),
+  caption = "One target speech gets three nearest neighbours under three representations",
+  row.names = FALSE
+)
+```
+
+The three answers differ. The raw-count neighbour for the shortest speech is the
+longest retained speech, and the score is about 0.8474. That column is dominated
+by shared high-frequency words and length, so it should not be read as a topical
+match.
+```{r}
+nearest_all <- function(speech_dfm) {
+  similarity_matrix <- cosine_matrix(speech_dfm)
+
+  map_dfr(
+    rownames(similarity_matrix),
+    function(target) {
+      scores <- similarity_matrix[target, ]
+      tibble(
+        target,
+        neighbour = names(scores)[which.max(scores)],
+        similarity = max(scores, na.rm = TRUE)
+      )
+    }
+  ) |>
+    left_join(
+      speeches |> select(target = speech_id, target_president = president, target_surname = surname),
+      by = "target"
+    ) |>
+    left_join(
+      speeches |> select(neighbour = speech_id, neighbour_president = president, neighbour_surname = surname),
+      by = "neighbour"
+    ) |>
+    mutate(
+      same_president = target_president == neighbour_president,
+      same_surname = target_surname == neighbour_surname
+    )
+}
+
+raw_neighbours <- nearest_all(raw_dfm)
+raw_hub_table <- raw_neighbours |>
+  count(neighbour, name = "nearest_neighbour_count", sort = TRUE) |>
+  slice_head(n = 10)
+
+harrison_hub_count <- raw_neighbours |>
+  filter(neighbour == "1841-Harrison") |>
+  nrow()
+
+stopifnot(
+  nrow(raw_neighbours) == 60L,
+  max(raw_hub_table$nearest_neighbour_count) == 7L,
+  harrison_hub_count == 2L,
+  raw_hub_table$neighbour[1] == "1985-Reagan"
+)
+
+kable(
+  raw_hub_table,
+  col.names = c("Raw-count nearest neighbour", "Number of target speeches"),
+  caption = "How often each speech is the nearest neighbour under raw counts",
+  row.names = FALSE
+)
+```
+
+The raw-count hub check does not make `1841-Harrison` a corpus-wide hub; it is
+the nearest neighbour for two speeches. The broader warning is still clear.
+Several speeches become nearest neighbours for many targets under raw counts,
+which is another sign that the column measures common-word mass more than a
+careful vocabulary match.
+
+## Separate vocabulary signal from authorship signal
+
+When one person has more than one address in the corpus, repeated phrasing can
+make those speeches neighbours. That can be useful for authorship or style
+questions and distracting for topic questions.
+
+```{r}
+tfidf_neighbours <- nearest_all(tfidf_dfm)
+same_president_count <- sum(tfidf_neighbours$same_president)
+
+authorship_examples <- tfidf_neighbours |>
+  filter(same_president) |>
+  arrange(desc(similarity), target) |>
+  slice_head(n = 6) |>
+  transmute(
+    target,
+    neighbour,
+    president = target_president,
+    similarity = round(similarity, 4)
+  )
+
+same_president_observed <- tfidf_pairs |>
+  filter(first_president == second_president) |>
+  summarise(mean_similarity = mean(similarity)) |>
+  pull(mean_similarity)
+
+author_labels <- speeches$president
+names(author_labels) <- speeches$speech_id
+
+same_president_null <- permutation_null(
+  observed = same_president_observed,
+  replicate_fn = function() {
+    shuffled_labels <- sample(author_labels)
+    names(shuffled_labels) <- names(author_labels)
+    tfidf_pairs |>
+      filter(shuffled_labels[first] == shuffled_labels[second]) |>
+      summarise(mean_similarity = mean(similarity)) |>
+      pull(mean_similarity)
+  },
+  replicates = 1000L,
+  seed = 6002L,
+  alternative = "greater"
+)
+
+stopifnot(
+  nrow(tfidf_neighbours) == 60L,
+  same_president_count == 19L,
+  authorship_examples$target[1] == "1817-Monroe",
+  authorship_examples$neighbour[1] == "1821-Monroe",
+  within_tolerance(authorship_examples$similarity[1], 0.2903, tolerance = 1e-4),
+  same_president_null$observed > same_president_null$null_high,
+  same_president_null$p_value < 0.01
+)
+
+kable(
+  authorship_examples,
+  col.names = c("Target", "Nearest neighbour", "President", "Cosine similarity"),
+  caption = "Examples where a speech's nearest tf-idf neighbour has the same president",
+  row.names = FALSE
+)
+
+kable(
+  same_president_null |>
+    mutate(across(where(is.numeric), ~ round(.x, 3))),
+  col.names = c("Observed", "Null mean", "Null 5th pct", "Null 95th pct", "p-value", "Replicates", "Alternative"),
+  caption = "Same-president tf-idf similarity compared with shuffled author labels",
+  row.names = FALSE
+)
+```
+
+Under tf-idf, 19 of the 60 speeches have a nearest neighbour by the same person.
+The label-shuffle null says same-person pairs are more similar than chance in
+this corpus. That is evidence of repeated wording or style, not proof that the
+speeches discuss the same subjects.
+
+## What to remember
+
+- Document similarity compares representations, not documents in the abstract.
+- Speech-level tf-idf gives 1,770 pairwise comparisons for 60 speeches.
+- The nearest neighbour of one speech changed across raw counts, tf-idf, and
+  stopword removal.
+- Same-person neighbours can show authorship or style rather than subject matter.
+- Similarity functions return a ranking even when length or labels explain it.
+
+The reading group chooses a companion speech only after naming what kind of
+similarity it wants.
+
+## Sources
+
+- [quanteda document-feature matrix documentation](https://quanteda.io/reference/dfm.html)
+- [quanteda.textstats similarity documentation](https://quanteda.io/reference/textstat_simil.html)
+- [quanteda inaugural corpus documentation](https://quanteda.io/reference/data_corpus_inaugural.html)
+- [United States copyright guidance for government works](https://www.usa.gov/government-copyright)

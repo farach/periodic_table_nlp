@@ -1,0 +1,390 @@
+---
+title: "One label or several labels"
+subtitle: "Separate multi-class choices from multi-label tags"
+author: "Alex Farach"
+description: "Learn the difference between multi-class and multi-label text classification using inaugural paragraphs."
+categories: [classification, multi-class classification, multi-label classification]
+---
+
+Ravi is building filters for an archive search page. One control asks for a time
+period, where each paragraph can belong to only one period. Another asks for
+themes, where a paragraph can mention work, time, people, all three, or none.
+
+Those two controls look similar on the screen, but they ask different questions.
+One forces a single choice. The other lets several tags sit on the same
+paragraph.
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- distinguish multi-class from multi-label classification;
+- build a four-way period label from years;
+- read a confusion matrix for a multi-class model;
+- create theme labels with a small quanteda dictionary; and
+- explain why label-level accuracy can mislead in multi-label work.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load paragraphs and build periods
+
+**Multi-class classification** means one document receives one label from several
+mutually exclusive choices. The four periods below are equal-width year bins:
+1789-1847, 1848-1906, 1907-1965, and 1966-2025. They are technical bins for this
+lesson, not claims about political history.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(ggplot2)
+library(tidymodels)
+library(textrecipes)
+library(glmnet)
+library(quanteda)
+
+source("R/inaugural-corpus.R")
+paragraphs <- inaugural_paragraphs()
+
+periods <- paragraphs |>
+  mutate(
+    period = factor(
+      cut(
+        year,
+        breaks = c(1788, 1847, 1906, 1965, 2025),
+        labels = c("1789-1847", "1848-1906", "1907-1965", "1966-2025"),
+        right = TRUE
+      ),
+      levels = c("1789-1847", "1848-1906", "1907-1965", "1966-2025")
+    )
+  )
+
+period_counts <- periods |>
+  count(period, name = "paragraphs")
+
+stopifnot(
+  all(c(
+    "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
+    "ggplot2", "tidymodels", "textrecipes", "glmnet", "quanteda"
+  ) %in% loadedNamespaces()),
+  identical(nrow(periods), 1377L),
+  identical(as.character(period_counts$period), levels(periods$period)),
+  identical(period_counts$paragraphs, c(210L, 291L, 423L, 453L)),
+  identical(sum(period_counts$paragraphs), 1377L)
+)
+
+knitr::kable(
+  period_counts,
+  col.names = c("Period label", "Paragraphs"),
+  caption = "Four mutually exclusive period labels",
+  row.names = FALSE
+)
+```
+
+Each paragraph receives exactly one period label. That single-label structure is
+what makes the task multi-class rather than multi-label.
+
+## Fit the four-way classifier
+
+The split keeps whole speeches together. The seed for the split is 5201, and the
+seed before fitting is 5202. The model uses tf-idf features and a multinomial
+glmnet classifier.
+
+```{r}
+set.seed(5201)
+period_split <- group_initial_split(
+  periods,
+  group = speech_id,
+  prop = 0.75,
+  strata = period
+)
+period_train <- training(period_split)
+period_test <- testing(period_split)
+
+period_recipe <- recipe(period ~ paragraph, data = period_train) |>
+  step_tokenize(paragraph) |>
+  step_tokenfilter(paragraph, max_tokens = 600) |>
+  step_tfidf(paragraph)
+
+period_model <- multinom_reg(penalty = 0.01, mixture = 1) |>
+  set_engine("glmnet") |>
+  set_mode("classification")
+
+set.seed(5202)
+period_fit <- workflow() |>
+  add_recipe(period_recipe) |>
+  add_model(period_model) |>
+  fit(data = period_train)
+
+period_predictions <- period_test |>
+  select(paragraph_id, period) |>
+  bind_cols(predict(period_fit, period_test))
+
+period_accuracy <- yardstick::accuracy(
+  period_predictions,
+  truth = period,
+  estimate = .pred_class
+) |>
+  pull(.estimate)
+
+period_confusion <- yardstick::conf_mat(
+  period_predictions,
+  truth = period,
+  estimate = .pred_class
+)
+period_matrix <- as.matrix(period_confusion$table)
+
+test_period_counts <- period_test |>
+  count(period, name = "paragraphs")
+
+period_baseline <- max(test_period_counts$paragraphs) / nrow(period_test)
+
+period_scores <- tibble(
+  measure = c("Model accuracy", "Largest-class baseline"),
+  value = c(period_accuracy, period_baseline)
+)
+
+stopifnot(
+  identical(nrow(period_train), 1025L),
+  identical(nrow(period_test), 352L),
+  identical(test_period_counts$paragraphs, c(48L, 88L, 99L, 117L)),
+  identical(round(period_accuracy, 4), 0.5938),
+  identical(round(period_baseline, 4), 0.3324),
+  all(
+    period_matrix ==
+    matrix(
+      c(
+        19L, 13L, 14L, 3L,
+        23L, 63L, 30L, 2L,
+        5L, 9L, 47L, 32L,
+        1L, 3L, 8L, 80L
+      ),
+      nrow = 4,
+      byrow = TRUE,
+      dimnames = dimnames(period_matrix)
+    )
+  )
+)
+
+knitr::kable(
+  period_scores |>
+    mutate(value = round(value, 4)),
+  col.names = c("Measure", "Value"),
+  caption = "Four-way model accuracy beside the largest-class baseline",
+  row.names = FALSE
+)
+
+knitr::kable(
+  as.data.frame(period_confusion$table),
+  col.names = c("Model prediction", "Recorded period", "Paragraphs"),
+  caption = "Confusion matrix for the four-way period classifier",
+  row.names = FALSE
+)
+```
+
+The overall accuracy is 0.5938 on this speech-level split, compared with a
+0.3324 largest-class baseline from always predicting the most common test period.
+That single model number still hides which periods are hard. The confusion
+matrix shows, for example, that many 1907-1965 test paragraphs are sent to the
+1966-2025 label.
+
+## Check recall by class
+
+**Recall** asks, within one recorded class, how many rows returned to that class.
+For a multi-class task, recall by class is often more useful than one accuracy
+number.
+
+```{r}
+period_recall <- period_predictions |>
+  summarise(
+    support = n(),
+    correct = sum(.pred_class == period),
+    recall = correct / support,
+    .by = period
+  ) |>
+  arrange(period)
+
+stopifnot(
+  identical(period_recall$support, c(48L, 88L, 99L, 117L)),
+  identical(period_recall$correct, c(19L, 63L, 47L, 80L)),
+  identical(round(period_recall$recall, 3), c(0.396, 0.716, 0.475, 0.684))
+)
+
+knitr::kable(
+  period_recall |>
+    mutate(recall = round(recall, 3)),
+  col.names = c("Recorded period", "Test paragraphs", "Correct", "Recall"),
+  caption = "Recall varies by period label",
+  row.names = FALSE
+)
+```
+
+The 1789-1847 period has recall of 0.396, while the 1848-1906 period has recall
+of 0.716. The model's mistakes are uneven, so the confusion matrix is required.
+
+## Build several theme labels
+
+**Multi-label classification** means a document may receive zero, one, or several
+labels at the same time. A small quanteda dictionary marks three vocabulary
+themes. These labels are the dictionary's own output. Agreement with them
+measures agreement with the dictionary, not agreement with human themes or with
+the corpus itself.
+
+```{r}
+theme_dictionary <- dictionary(list(
+  work = c("work*", "labor", "employment", "industry", "business"),
+  time = c("year*", "day*", "time*", "today", "future"),
+  people = c("people", "citizen*", "family", "families", "children")
+))
+
+theme_dfm <- corpus(paragraphs, text_field = "paragraph") |>
+  tokens(remove_punct = TRUE) |>
+  tokens_tolower() |>
+  dfm() |>
+  dfm_lookup(dictionary = theme_dictionary)
+
+theme_counts <- convert(theme_dfm, to = "data.frame") |>
+  as_tibble() |>
+  select(-doc_id)
+
+theme_labels <- bind_cols(
+  paragraphs |> select(paragraph_id),
+  theme_counts > 0
+)
+
+label_count_table <- theme_labels |>
+  mutate(label_count = rowSums(across(-paragraph_id))) |>
+  count(label_count, name = "paragraphs")
+
+stopifnot(
+  identical(as.integer(colSums(theme_counts > 0)), c(219L, 501L, 581L)),
+  identical(label_count_table$label_count, c(0, 1, 2, 3)),
+  identical(label_count_table$paragraphs, c(449L, 605L, 273L, 50L)),
+  identical(sum(label_count_table$paragraphs), 1377L)
+)
+
+knitr::kable(
+  label_count_table,
+  col.names = c("Theme labels on a paragraph", "Paragraphs"),
+  caption = "Paragraphs can carry zero, one, or several dictionary labels",
+  row.names = FALSE
+)
+```
+
+The memorable distinction is this: multi-class chooses one box from several;
+multi-label lets the same document carry several tags.
+
+## Accuracy can reward saying no
+
+Most possible theme labels are absent. A do-nothing system that predicts every
+label as absent therefore gets many cells right while finding no present labels.
+That is why multi-label reporting needs per-label precision and recall.
+
+```{r}
+label_long <- theme_labels |>
+  pivot_longer(
+    cols = -paragraph_id,
+    names_to = "label",
+    values_to = "present"
+  )
+
+always_absent <- label_long |>
+  mutate(predicted = FALSE)
+
+per_label_metrics <- always_absent |>
+  summarise(
+    true_present = sum(present),
+    true_absent = sum(!present),
+    prevalence = mean(present),
+    predicted_present = sum(predicted),
+    true_positive = sum(present & predicted),
+    false_positive = sum(!present & predicted),
+    false_negative = sum(present & !predicted),
+    accuracy = mean(predicted == present),
+    precision = if_else(
+      true_positive + false_positive == 0L,
+      NA_real_,
+      true_positive / (true_positive + false_positive)
+    ),
+    recall = if_else(
+      true_positive + false_negative == 0L,
+      NA_real_,
+      true_positive / (true_positive + false_negative)
+    ),
+    .by = label
+  ) |>
+  arrange(label)
+
+overall_label_accuracy <- mean(always_absent$predicted == always_absent$present)
+exact_empty_accuracy <- theme_labels |>
+  mutate(
+    label_count = rowSums(across(-paragraph_id)),
+    predicted_empty_matches = label_count == 0L
+  ) |>
+  summarise(value = mean(predicted_empty_matches), .groups = "drop") |>
+  pull(value)
+
+stopifnot(
+  identical(per_label_metrics$true_present, c(581L, 501L, 219L)),
+  identical(per_label_metrics$true_absent, c(796L, 876L, 1158L)),
+  identical(round(per_label_metrics$prevalence, 3), c(0.422, 0.364, 0.159)),
+  identical(per_label_metrics$predicted_present, c(0L, 0L, 0L)),
+  all(is.na(per_label_metrics$precision)),
+  identical(per_label_metrics$recall, c(0, 0, 0)),
+  identical(round(overall_label_accuracy, 4), 0.6851),
+  identical(round(exact_empty_accuracy, 4), 0.3261)
+)
+
+knitr::kable(
+  per_label_metrics |>
+    mutate(
+      accuracy = round(accuracy, 3),
+      prevalence = round(prevalence, 3),
+      precision = if_else(is.na(precision), NA_real_, round(precision, 3)),
+      recall = round(recall, 3)
+    ) |>
+    select(label, true_present, true_absent, prevalence, accuracy, precision, recall),
+  col.names = c(
+    "Label",
+    "Present",
+    "Absent",
+    "Prevalence",
+    "Accuracy if always absent",
+    "Precision",
+    "Recall"
+  ),
+  caption = "Per-label metrics expose the no-label baseline",
+  row.names = FALSE
+)
+```
+
+The always-absent baseline gets 0.6851 label-cell accuracy because absent labels
+are common. The label prevalences are 0.422 for people, 0.364 for time, and 0.159
+for work. Its recall is 0 for every label, so it finds none of the 219 work, 501
+time, or 581 people dictionary labels. Exact empty-set accuracy is 0.3261, the
+share of paragraphs with no dictionary theme at all.
+
+## What to remember
+
+- Multi-class means one label from more than two choices.
+- Multi-label means zero, one, or several labels can apply at once.
+- Multi-class accuracy can hide weak classes.
+- Multi-label accuracy can be high when absent labels dominate.
+- Per-class or per-label precision and recall tell the reader where the errors
+  are.
+
+## Sources
+
+- [quanteda dictionary documentation](https://quanteda.io/reference/dictionary.html)
+- [yardstick multiclass metrics](https://yardstick.tidymodels.org/reference/accuracy.html)
+- [glmnet multinomial models](https://glmnet.stanford.edu/articles/glmnet.html)
