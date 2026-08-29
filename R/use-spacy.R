@@ -9,13 +9,7 @@
 
 use_project_spacy <- function(model = "en_core_web_sm",
                               venv = ".venv-spacy") {
-  candidates <- c(
-    file.path(venv, "bin", "python"),
-    file.path(venv, "Scripts", "python.exe")
-  )
-  found <- candidates[file.exists(candidates)]
-
-  if (length(found) == 0L) {
+  if (!dir.exists(venv)) {
     stop(
       paste0(
         "No Python environment found at '", venv, "'.\n",
@@ -36,18 +30,29 @@ use_project_spacy <- function(model = "en_core_web_sm",
     stop("The spacyr package is not installed.", call. = FALSE)
   }
 
-  python <- normalizePath(found[[1]], winslash = "/")
+  # Resolve the environment directory but NOT the interpreter itself. On Linux
+  # the venv's bin/python is a symlink to the base interpreter, so following it
+  # would hand reticulate the very Python the environment was created to avoid.
+  venv_dir <- normalizePath(venv, winslash = "/", mustWork = TRUE)
+  python <- file.path(
+    venv_dir,
+    if (.Platform$OS.type == "windows") "Scripts/python.exe" else "bin/python"
+  )
 
-  # Bind reticulate explicitly. Setting RETICULATE_PYTHON alone is not enough,
-  # because it is ignored once Python has been initialised, and reticulate may
-  # otherwise pick an interpreter that has no spaCy in it.
+  if (!file.exists(python)) {
+    stop(
+      paste0("No interpreter at '", python, "'."),
+      call. = FALSE
+    )
+  }
+
   Sys.setenv(RETICULATE_PYTHON = python)
-  reticulate::use_python(python, required = TRUE)
+  reticulate::use_virtualenv(venv_dir, required = TRUE)
 
   if (!reticulate::py_module_available("spacy")) {
     stop(
       paste0(
-        "The Python at '", python, "' has no spaCy module.\n",
+        "The environment at '", venv_dir, "' has no spaCy module.\n",
         "Install it with:\n",
         "  ", venv, "/bin/python -m pip install -r requirements-spacy.txt"
       ),
