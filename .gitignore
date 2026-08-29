@@ -10,11 +10,7 @@ node_modules/
 playwright-report/
 test-results/
 .venv-spacy/
+data-raw/.cache/
 
 /.quarto/
 **/*.quarto_ipynb
-
-# Private project-management records are archived outside the repository.
-/PINBOARD.md
-/PROJECT_STATUS.md
-/sessions/

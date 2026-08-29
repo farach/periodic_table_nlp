@@ -1,0 +1,290 @@
+---
+title: "Explaining models"
+subtitle: "Inspect the words a fitted text model learned to weight"
+author: "Alex Farach"
+description: "Learn how to read linear model coefficients and why a plausible explanation can still belong to a weak model."
+categories: [model development, explanation, text classification]
+---
+
+A reviewer asks why the model called a paragraph modern. The answer cannot be
+"because the computer said so." She needs to see which words pulled the score.
+
+That request is reasonable. It is also dangerous if the score has not been
+checked. A weak model can still hand back a tidy list of words that looks like an
+explanation.
+
+This lesson fits the same kind of text model twice. The era model has useful
+evaluation evidence. The party model, with these features and this fixed penalty,
+does not.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- extract coefficients from a fitted workflow;
+- read positive and negative coefficients in plain language;
+- inspect terms weighted by an era classifier;
+- mask terms from a weak political classifier; and
+- keep explanation separate from evidence that a model is right.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Fit the era model for inspection
+
+A **coefficient** is a learned weight. In this linear model, a positive
+coefficient pushes a paragraph toward the second class, `1900 or later`. A
+negative coefficient pushes it toward the first class, `before 1900`. The size of
+the coefficient shows the fitted weight after the recipe has created tf-idf
+columns.
+
+Ranking coefficients by raw magnitude does not prove exactly what the model
+relied on. The features are correlated, and ridge regression spreads weight
+across related words. A different penalty could change the ranking. Read the
+list as terms this fitted model weighted heavily, not as a stable dictionary of
+historical meaning.
+
+There is a second gap worth naming before any table appears. The model examined
+below is fitted on every paragraph in the corpus, because an explanation is
+usually wanted for the model a team would actually ship, and that model is
+trained on everything available. It therefore has no score. The 0.8457 reported
+in the evaluation lesson belongs to models fitted on three quarters of the
+speeches and tested on the rest. Those are different fits. Nothing on this page
+measures how well the model explained here performs, and the coefficients would
+look broadly similar whether it performed well or not.
+
+```{r}
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+  library(tibble)
+  library(stringr)
+  library(recipes)
+  library(textrecipes)
+  library(parsnip)
+  library(workflows)
+  library(broom)
+  library(glmnet)
+})
+
+source("R/inaugural-corpus.R")
+paragraphs <- inaugural_paragraphs()
+
+make_text_workflow <- function(formula, training_data) {
+  recipe(formula, data = training_data) |>
+    step_tokenize(paragraph) |>
+    step_stopwords(paragraph) |>
+    step_tokenfilter(paragraph, max_tokens = 500) |>
+    step_tfidf(paragraph) |>
+    workflow() |>
+    add_model(
+      logistic_reg(penalty = 0.01, mixture = 0) |>
+        set_engine("glmnet")
+    )
+}
+
+set.seed(4500)
+era_fitted <- make_text_workflow(era ~ paragraph, paragraphs) |>
+  fit(data = paragraphs)
+
+era_coefficients <- tidy(extract_fit_parsnip(era_fitted)) |>
+  mutate(
+    word = str_remove(term, "^tfidf_paragraph_"),
+    direction = if_else(estimate >= 0, "1900 or later", "before 1900")
+  )
+
+check_words <- c("attention", "object", "effect", "placed", "parts", "opinion")
+checked_coefficients <- era_coefficients |>
+  filter(word %in% check_words) |>
+  arrange(word)
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  identical(n_distinct(paragraphs$president), 40L),
+  identical(nrow(era_coefficients), 501L),
+  identical(sort(checked_coefficients$word), sort(check_words)),
+  all(abs(checked_coefficients$estimate) > 7),
+  identical(
+    checked_coefficients$direction,
+    rep("before 1900", length(check_words))
+  )
+)
+
+knitr::kable(
+  checked_coefficients |>
+    select(word, estimate, direction) |>
+    mutate(estimate = round(estimate, 2)),
+  col.names = c("Term", "Coefficient", "Pushes toward"),
+  caption = "Selected large era-model coefficients",
+  row.names = FALSE
+)
+```
+
+The fitted era model has `r nrow(era_coefficients)` terms, including the
+intercept. The listed words push toward `before 1900` in this fit. They are
+formal-register signals in this corpus, not summaries of what any period was
+about.
+
+## Read both directions
+
+The largest positive coefficients push toward `1900 or later`; the largest
+negative coefficients push toward `before 1900`. This table is a map of the
+model's fitted weights, not a dictionary of what the words mean.
+
+```{r}
+era_extremes <- bind_rows(
+  era_coefficients |>
+    filter(term != "(Intercept)") |>
+    slice_max(estimate, n = 8) |>
+    arrange(desc(estimate)),
+  era_coefficients |>
+    filter(term != "(Intercept)") |>
+    slice_min(estimate, n = 8) |>
+    arrange(estimate)
+) |>
+  mutate(estimate = round(estimate, 2)) |>
+  select(word, direction, estimate)
+
+sensitive_terms <- c("slavery", "slave", "race", "war")
+
+stopifnot(
+  identical(nrow(era_extremes), 16L),
+  max(era_extremes$estimate) > 8,
+  min(era_extremes$estimate) < -15,
+  all(era_extremes$direction %in% levels(paragraphs$era)),
+  !any(str_to_lower(era_extremes$word) %in% sensitive_terms)
+)
+
+knitr::kable(
+  era_extremes,
+  col.names = c("Term", "Pushes toward", "Coefficient"),
+  caption = "Strongest positive and negative coefficients in the era model",
+  row.names = FALSE
+)
+```
+
+For a paragraph with the same other terms, a larger tf-idf value on a positive
+term increases the model's pull toward `1900 or later`. A larger value on a
+negative term increases the pull toward `before 1900`. The model is linear, so it
+adds these pushes together.
+
+## Explain the weak model too
+
+The evaluation study found that the party model did not beat the deployable
+largest-class rule at the paragraph or speech split, and its balanced accuracy
+sat near chance. Still, the same extraction code produces coefficients. That is
+the trap: explanation output can be neat even when the model is not useful.
+
+```{r}
+study <- read_csv(
+  "data/inaugural/split-study.csv",
+  na = c("", "NA"),
+  col_types = cols(
+    task = col_character(),
+    split_scheme = col_character(),
+    replicate = col_integer(),
+    accuracy = col_double(),
+    bal_accuracy = col_double(),
+    train_majority_accuracy = col_double(),
+    test_majority_rate = col_double(),
+    length_rule_accuracy = col_double(),
+    test_rows = col_integer(),
+    test_speeches = col_integer()
+  )
+)
+
+party_rows <- paragraphs |>
+  filter(party %in% c("Democratic", "Republican")) |>
+  mutate(party = factor(party))
+
+set.seed(4503)
+party_fitted <- make_text_workflow(party ~ paragraph, party_rows) |>
+  fit(data = party_rows)
+
+party_coefficients <- tidy(extract_fit_parsnip(party_fitted)) |>
+  mutate(
+    word = str_remove(term, "^tfidf_paragraph_"),
+    direction = if_else(estimate >= 0, levels(party_rows$party)[2], levels(party_rows$party)[1])
+  )
+
+party_extremes <- party_coefficients |>
+  filter(term != "(Intercept)") |>
+  slice_max(abs(estimate), n = 10) |>
+  arrange(desc(abs(estimate))) |>
+  mutate(
+    term = paste("term", row_number()),
+    estimate = round(estimate, 2)
+  ) |>
+  select(term, direction, estimate)
+
+party_summary <- study |>
+  filter(task == "party") |>
+  summarise(
+    mean_accuracy = mean(accuracy),
+    mean_bal_accuracy = mean(bal_accuracy),
+    mean_train_majority = mean(train_majority_accuracy),
+    .by = split_scheme
+  )
+
+party_paragraph <- party_summary |>
+  filter(split_scheme == "paragraph")
+party_speech <- party_summary |>
+  filter(split_scheme == "speech")
+party_president <- party_summary |>
+  filter(split_scheme == "president")
+
+stopifnot(
+  identical(nrow(party_rows), 1197L),
+  identical(n_distinct(party_rows$president), 31L),
+  identical(nrow(party_coefficients), 501L),
+  identical(nrow(party_extremes), 10L),
+  identical(party_extremes$term, paste("term", 1:10)),
+  !any(party_extremes$term %in% party_coefficients$word),
+  identical(round(party_paragraph$mean_accuracy, 4), 0.6060),
+  identical(round(party_paragraph$mean_train_majority, 4), 0.6067),
+  identical(round(party_speech$mean_accuracy, 4), 0.5514),
+  identical(round(party_speech$mean_train_majority, 4), 0.6563),
+  identical(round(party_president$mean_accuracy, 4), 0.4997),
+  identical(round(party_president$mean_bal_accuracy, 4), 0.5090),
+  max(abs(party_coefficients$estimate)) > 13
+)
+
+knitr::kable(
+  party_extremes,
+  col.names = c("Masked term", "Pushes toward", "Coefficient"),
+  caption = "Large coefficients from the party model that did not pass evaluation",
+  row.names = FALSE
+)
+```
+
+The party terms are withheld deliberately. The model scores
+`r round(party_speech$mean_accuracy, 4)` at the speech split against a deployable
+baseline of `r round(party_speech$mean_train_majority, 4)`, and its person-split
+balanced accuracy is `r round(party_president$mean_bal_accuracy, 4)`. Showing the
+words would give a screenshottable political story from a model that did not earn
+one. Masking costs nothing because the teaching point is the table's shape: the
+output looks convincing regardless of whether the model works.
+
+## What to remember
+
+- A coefficient is a learned push toward one class or another.
+- Coefficients show fitted weights after preprocessing, not proof of causation.
+- A coefficient is not proof that the model is right.
+- The era explanation matters because the era model beat cheap baselines.
+- The party explanation is a warning because this model did not learn party.
+
+If the score fails, the explanation should make you more cautious, not more
+comfortable.
+
+## Sources
+
+- [broom documentation](https://broom.tidymodels.org/)
+- [glmnet vignette](https://glmnet.stanford.edu/articles/glmnet.html)
+- [tidymodels model fitting](https://www.tidymodels.org/start/models/)
+- [textrecipes tf-idf step](https://textrecipes.tidymodels.org/reference/step_tfidf.html)

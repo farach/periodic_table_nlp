@@ -1,0 +1,281 @@
+---
+title: "Selecting sentences as a summary"
+subtitle: "Test TextRank against simple nulls"
+author: "Alex Farach"
+description: "Learn how extractive summarization ranks existing sentences and why chance baselines still matter."
+categories: [signals and discovery, extractive summarization, inaugural addresses]
+---
+
+Jon has ten minutes before a reading-group meeting and one speech still open on his laptop. He does not need a new paragraph written for him. He needs to know which existing sentences deserve a first look.
+
+That task has a name. **Extractive summarization** selects sentences already present in a text. It does not write new sentences, so its output can be checked against the source line by line.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- define extractive summarization;
+- build the two input tables required by `textrank_sentences()`;
+- rank sentences from one speech;
+- compare the result with random-position baselines; and
+- state what cannot be measured without a reference summary.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Build the sentence and term tables
+
+**TextRank** is a graph-ranking algorithm. It treats sentences as **nodes**, the items in a graph that can be connected to other items. Sentences connect when they share terms. The function needs a `data` table with `textrank_id` and `sentence`, plus a `terminology` table with `textrank_id` and `term`.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(stringr)
+library(tidytext)
+library(tokenizers)
+library(textrank)
+library(knitr)
+
+source("R/inaugural-corpus.R")
+source("R/permutation-null.R")
+
+paragraphs <- inaugural_paragraphs()
+
+speeches <- paragraphs |>
+  summarise(text = paste(paragraph, collapse = "\n"), .by = c(speech_id, year, president, party))
+
+speech <- speeches |>
+  filter(speech_id == "1933-Roosevelt")
+
+sentence_vec <- tokenize_sentences(
+  speech$text,
+  strip_punct = FALSE,
+  simplify = TRUE
+)
+
+sentence_data <- tibble(
+  sentence_position = seq_along(sentence_vec),
+  textrank_id = sprintf("s%02d", sentence_position),
+  sentence = sentence_vec
+) |>
+  mutate(sentence_words = str_count(sentence, "[A-Za-z]+"))
+
+terminology <- sentence_data |>
+  select(textrank_id, sentence) |>
+  unnest_tokens(term, sentence) |>
+  filter(str_detect(term, "^[a-z]+$"), !term %in% stop_words$word)
+
+input_summary <- tibble(
+  table = c("data", "terminology", "distinct terms"),
+  rows = c(nrow(sentence_data), nrow(terminology), n_distinct(terminology$term))
+)
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  identical(nrow(speech), 1L),
+  identical(nrow(sentence_data), 81L),
+  identical(nrow(terminology), 700L),
+  identical(n_distinct(terminology$term), 511L),
+  identical(range(sentence_data$sentence_position), c(1L, 81L))
+)
+
+kable(
+  input_summary,
+  col.names = c("Input", "Rows"),
+  caption = "Sentence and term inputs for TextRank",
+  row.names = FALSE
+)
+```
+
+The `data` table has 81 sentences. The terminology table has 700 sentence-term rows and 511 distinct terms after stopwords are removed.
+
+## Rank the sentences
+
+The algorithm gives each sentence a score based on its connections to other sentences. A sentence can rank high because it shares terms with many other sentences, or because it connects to other sentences that also rank high.
+
+```{r}
+textrank_result <- textrank_sentences(
+  data = sentence_data |>
+    select(textrank_id, sentence),
+  terminology = terminology |>
+    select(textrank_id, term)
+)
+
+ranked_sentences <- textrank_result$sentences |>
+  as_tibble() |>
+  left_join(
+    sentence_data |>
+      select(textrank_id, sentence_position, sentence_words),
+    by = join_by(textrank_id)
+  ) |>
+  arrange(desc(textrank), sentence_position)
+
+textrank_summary <- ranked_sentences |>
+  slice_head(n = 3) |>
+  transmute(
+    rank = row_number(),
+    sentence_position,
+    sentence_words,
+    score = round(textrank, 4),
+    sentence
+  )
+
+stopifnot(
+  identical(names(textrank_result), c("sentences", "sentences_dist", "pagerank")),
+  identical(textrank_summary$sentence_position, c(6L, 67L, 60L)),
+  identical(textrank_summary$sentence_words, c(30L, 24L, 25L)),
+  identical(textrank_summary$score, c(0.0328, 0.0270, 0.0239)),
+  identical(textrank_summary$rank, 1:3)
+)
+
+kable(
+  textrank_summary,
+  col.names = c("Rank", "Sentence position", "Sentence words", "TextRank score", "Selected sentence"),
+  caption = "The three highest-ranked sentences in the 1933 speech",
+  row.names = FALSE
+)
+```
+
+The selected sentences come from positions 6, 67, and 60. That spread looks different from the opening of the speech, but a visible difference is not yet evidence that the algorithm found something rare.
+
+## Ask what random positions do
+
+There is no reference summary for this speech in the corpus. That means this page cannot report accuracy. It can test checkable behavior: which sentences were selected, where they appear, and whether those positions look unusual compared with random sentence choices.
+
+A **lead baseline** takes the first sentences. This baseline is often hard to beat in news writing because opening paragraphs often carry the main facts. Here it is only a comparison point.
+
+A **permutation null** gives the same statistic after random shuffling. The **p-value** is the share of shuffled selections at least as extreme as the observed selection.
+
+```{r}
+lead_baseline <- sentence_data |>
+  slice_head(n = 3) |>
+  transmute(
+    baseline_rank = row_number(),
+    sentence_position,
+    sentence
+  )
+
+position_check <- tibble(
+  method = c("TextRank", "Lead baseline"),
+  selected_positions = c(
+    paste(textrank_summary$sentence_position, collapse = ", "),
+    paste(lead_baseline$sentence_position, collapse = ", ")
+  ),
+  earliest_position = c(
+    min(textrank_summary$sentence_position),
+    min(lead_baseline$sentence_position)
+  ),
+  latest_position = c(
+    max(textrank_summary$sentence_position),
+    max(lead_baseline$sentence_position)
+  )
+)
+
+overlap_count <- sum(
+  textrank_summary$sentence_position %in% lead_baseline$sentence_position
+)
+
+lead_overlap_null <- permutation_null(
+  observed = overlap_count,
+  replicate_fn = function() sum(sample(sentence_data$sentence_position, 3) %in% lead_baseline$sentence_position),
+  replicates = 1000L,
+  seed = 5401L,
+  alternative = "less"
+)
+
+spread_observed <- max(textrank_summary$sentence_position) - min(textrank_summary$sentence_position)
+
+spread_null <- permutation_null(
+  observed = spread_observed,
+  replicate_fn = function() {
+    random_positions <- sample(sentence_data$sentence_position, 3)
+    max(random_positions) - min(random_positions)
+  },
+  replicates = 1000L,
+  seed = 5402L,
+  alternative = "greater"
+)
+
+mean_length_observed <- mean(textrank_summary$sentence_words)
+
+length_null <- permutation_null(
+  observed = mean_length_observed,
+  replicate_fn = function() mean(sentence_data$sentence_words[sample(sentence_data$sentence_position, 3)]),
+  replicates = 1000L,
+  seed = 5403L,
+  alternative = "greater"
+)
+
+null_checks <- bind_rows(
+  lead_overlap_null |> mutate(statistic = "Overlap with lead-3"),
+  spread_null |> mutate(statistic = "Position range"),
+  length_null |> mutate(statistic = "Mean selected sentence words")
+) |>
+  select(statistic, observed, null_mean, null_low, null_high, p_value, replicates, alternative) |>
+  mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
+
+stopifnot(
+  identical(lead_baseline$sentence_position, 1:3),
+  identical(overlap_count, 0L),
+  identical(spread_observed, 61L),
+  identical(as.numeric(round(mean_length_observed, 2)), 26.33),
+  identical(
+    as.numeric(round(c(lead_overlap_null$null_mean, spread_null$null_mean, length_null$null_mean), 1)),
+    c(0.1, 41.3, 22.8)
+  ),
+  identical(as.numeric(null_checks$p_value), c(0.889, 0.189, 0.297))
+)
+
+kable(
+  lead_baseline,
+  col.names = c("Lead rank", "Sentence position", "Selected sentence"),
+  caption = "The first three sentences as a lead baseline",
+  row.names = FALSE
+)
+
+kable(
+  position_check,
+  col.names = c("Method", "Selected positions", "Earliest", "Latest"),
+  caption = "A position check for the extracted sentences",
+  row.names = FALSE
+)
+
+kable(
+  null_checks,
+  col.names = c("Statistic", "Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
+  caption = "Random-position checks for the TextRank selection",
+  row.names = FALSE
+)
+```
+
+The two selections share 0 sentence positions. That says almost nothing by itself: random three-sentence selections from an 81-sentence speech usually share no positions with sentences 1 to 3. In 1,000 shuffles, the null mean was 0.113 and the p-value for unusually low overlap was 0.889.
+
+The more useful checks ask whether TextRank spread its picks through the speech or chose longer sentences. The observed range was 61 sentence positions, against a random mean of 41.346 (p = 0.189). The selected sentences averaged 26.33 words, against a random mean of 22.771 (p = 0.297). Neither check clears a chance baseline, so the honest conclusion is modest: TextRank gives a reading list, not evidence that these three sentences are better.
+
+Summarizers always return sentences. A null check asks what the same selection statistic looks like after document position is stripped away. Without that comparison, a neat list can look more meaningful than it is.
+
+Nothing here cleared a baseline, and that is still a result worth having. The method ran, the output is readable, and three separate checks told you how much weight it will carry. Knowing that before you put a summary in front of someone is worth more than a number that flatters the tool. Extractive summarization earns its place when a person is going to read the selected sentences and judge them; these checks say it has not earned the right to run unattended on this material.
+
+## What to remember
+
+- Extractive summarization selects sentences already in the text.
+- `textrank_sentences()` needs a sentence table and a term table.
+- The 1933 speech produced 81 sentence rows and 700 sentence-term rows.
+- Zero overlap with the lead-3 baseline is what random selection usually produces here.
+- Without a reference summary, accuracy is not available.
+
+Use the ranked sentences as a reading aid. Do not turn them into a score for what the speech means.
+
+## Sources
+
+- [textrank R package documentation](https://bnosac.github.io/textrank/)
+- [TextRank paper by Mihalcea and Tarau](https://aclanthology.org/W04-3252/)
+- [Nenkova and McKeown survey on automatic summarization](https://doi.org/10.1561/1500000015)
+- [tokenizers sentence tokenizer documentation](https://docs.ropensci.org/tokenizers/reference/basic-tokenizers.html)

@@ -6,21 +6,36 @@ lesson_directories <- sort(
 
 stopifnot(length(lesson_directories) > 0)
 
-lesson_files <- sort(
-  unlist(
-    lapply(
-      lesson_directories,
-      function(directory) {
-        list.files(
-          directory,
-          pattern = "[.]qmd$",
-          full.names = TRUE
-        )
-      }
-    ),
-    use.names = FALSE
-  )
+# Order by the task number in each filename, never by sorting the paths as
+# strings. String collation is locale-dependent: under a C locale "10_" sorts
+# before "1_" because "0" precedes "_", while an English locale gives the
+# opposite. Sorting paths would therefore demand one manifest order on a Linux
+# runner and a different one on Windows.
+lesson_files <- unlist(
+  lapply(
+    lesson_directories,
+    function(directory) {
+      list.files(
+        directory,
+        pattern = "[.]qmd$",
+        full.names = TRUE
+      )
+    }
+  ),
+  use.names = FALSE
 )
+
+lesson_numbers <- as.integer(
+  sub("^.*[/\\\\]([0-9]+)-.*$", "\\1", lesson_files)
+)
+
+stopifnot(
+  !anyNA(lesson_numbers),
+  !anyDuplicated(lesson_numbers)
+)
+
+lesson_files <- lesson_files[order(lesson_numbers)]
+lesson_numbers <- sort(lesson_numbers)
 
 failures <- character()
 source_chunk_total <- 0L
@@ -61,7 +76,7 @@ if (
   ) ||
   !identical(
     as.integer(review_manifest$task_number),
-    seq_along(lesson_files)
+    lesson_numbers
   ) ||
   !all(
     review_manifest$editorial_status ==
@@ -182,9 +197,14 @@ for (lesson_file in lesson_files) {
     )
   } else {
     source_chunk_total <- source_chunk_total + length(chunks)
+    # A chunk counts toward the rendered total only when Quarto wraps it in a
+    # cell div. `include: false` chunks emit nothing, and `output: asis` chunks
+    # write raw markdown straight into the page with no wrapper, so neither one
+    # produces a `<div class="cell">`. Counting them would make this check fail
+    # on a page that rendered perfectly well.
     visible_source_chunk_total <- visible_source_chunk_total +
       sum(!grepl(
-        "#\\|\\s*include:\\s*false",
+        "#\\|\\s*(include:\\s*false|output:\\s*asis|results:\\s*asis)",
         chunks,
         ignore.case = TRUE,
         perl = TRUE

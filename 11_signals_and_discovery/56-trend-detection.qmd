@@ -1,0 +1,257 @@
+---
+title: "Checking word trends over time"
+subtitle: "Normalize counts and test the peak"
+author: "Alex Farach"
+description: "Learn how to track word frequency across speeches while separating durable patterns from one-document spikes."
+categories: [signals and discovery, trend detection, inaugural addresses]
+---
+
+Nia is preparing a timeline for a classroom wall. She can fit four word paths on the chart, and every path has to be fair to speeches of different lengths.
+
+A raw count would reward long speeches. A rate per thousand words gives each speech a comparable scale, but a clean-looking line can still be carried by one short document.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- count selected words by speech year;
+- normalize word counts per thousand words;
+- flag rates from very short speeches;
+- recompute each peak after removing its peak speech; and
+- compare one trajectory with a permutation null.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Count words by speech
+
+A **trend** is a pattern over time. Counting alone does not prove one. The first step is still useful: put every speech on the same rate scale so length is not the only driver.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(stringr)
+library(tidytext)
+library(ggplot2)
+library(knitr)
+
+source("R/inaugural-corpus.R")
+source("R/permutation-null.R")
+
+paragraphs <- inaugural_paragraphs()
+
+speeches <- paragraphs |>
+  summarise(text = paste(paragraph, collapse = "\n"), .by = c(speech_id, year, president, party))
+
+speech_tokens <- speeches |>
+  select(speech_id, year, president, text) |>
+  unnest_tokens(word, text) |>
+  filter(str_detect(word, "^[a-z]+$"))
+
+speech_lengths <- speech_tokens |>
+  count(speech_id, year, president, name = "total_words")
+
+target_words <- c("america", "freedom", "constitution", "children")
+min_words_for_rate <- 500L
+
+length_context <- speech_lengths |>
+  summarise(median_words = median(total_words), minimum_words = min(total_words))
+
+trend_counts <- speech_tokens |>
+  count(speech_id, year, president, word, name = "count") |>
+  filter(word %in% target_words) |>
+  right_join(
+    expand_grid(speech_lengths, word = target_words),
+    by = join_by(speech_id, year, president, word)
+  ) |>
+  mutate(
+    count = coalesce(count, 0L),
+    per_thousand = count / total_words * 1000,
+    below_min_words = total_words < min_words_for_rate,
+    word = factor(word, levels = target_words)
+  ) |>
+  arrange(word, year)
+
+trend_summary <- trend_counts |>
+  group_by(word) |>
+  arrange(desc(per_thousand), year, .by_group = TRUE) |>
+  reframe(
+    total = sum(count),
+    speeches_with_word = sum(count > 0),
+    max_rate = round(first(per_thousand), 2),
+    max_year = first(year),
+    max_count = first(count),
+    words_at_max = first(total_words),
+    max_rate_flag = if_else(first(below_min_words), "under 500 words", "ok"),
+    rate_excluding_largest = round(max(per_thousand[-1]), 2),
+    year_excluding_largest = year[-1][which.max(per_thousand[-1])],
+    guarded_rate_excluding_largest = round(max(per_thousand[-1][total_words[-1] >= min_words_for_rate]), 2),
+    guarded_year_excluding_largest = year[-1][total_words[-1] >= min_words_for_rate][
+      which.max(per_thousand[-1][total_words[-1] >= min_words_for_rate])
+    ],
+    survives_guard = max_rate_flag == "ok" & guarded_rate_excluding_largest >= max_rate * 0.5
+  ) |>
+  ungroup()
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  identical(nrow(speech_lengths), 60L),
+  identical(nrow(trend_counts), 240L),
+  identical(as.character(trend_summary$word), target_words),
+  identical(trend_summary$total, c(166L, 175L, 207L, 49L)),
+  identical(trend_summary$speeches_with_word, c(31L, 36L, 39L, 22L)),
+  identical(trend_summary$max_year, c(1993L, 2005L, 1793L, 2001L)),
+  identical(trend_summary$max_rate_flag, c("ok", "ok", "under 500 words", "ok")),
+  identical(trend_summary$survives_guard, c(TRUE, TRUE, FALSE, TRUE)),
+  identical(as.numeric(length_context$median_words), 1958.5)
+)
+
+kable(
+  trend_summary,
+  col.names = c(
+    "Word", "Total count", "Speeches with word", "Max per 1,000", "Max year",
+    "Count in max year", "Words at max", "Max-rate flag", "Rate excluding largest",
+    "Year excluding largest", "Guarded rate excluding largest", "Guarded year", "Survives guard"
+  ),
+  caption = "Summary of four tracked words across 60 speeches",
+  row.names = FALSE
+)
+```
+
+The table says how often each word appears and how many speeches contain it. The rate column asks a narrower question: where was the word densest after adjusting for speech length? Rates from speeches under 500 words are flagged because one occurrence in such a document is at least 2 uses per thousand words. The median speech here has about 1,959 words, so a 500-word cutoff catches the smallest denominators without removing most speeches.
+
+## Plot the trajectories
+
+A line chart earns its place here because the corpus spans 236 years. Each dot is one speech, and each line connects speeches for one word. Open circles mark rates from speeches under 500 words.
+
+```{r}
+#| label: fig-word-trends
+#| fig-cap: "Uses per thousand words for four selected words across 60 inaugural addresses."
+#| fig-alt: "Line chart showing word rates over time for america, freedom, constitution, and children. Rates from speeches under 500 words are marked with open circles."
+
+plot_data <- trend_counts |>
+  mutate(word = factor(word, levels = target_words))
+
+stopifnot(
+  identical(nrow(plot_data), 240L),
+  identical(levels(plot_data$word), target_words),
+  identical(as.numeric(round(max(plot_data$per_thousand), 2)), 12.35),
+  identical(
+    as.integer(plot_data$year[which.max(plot_data$per_thousand)]),
+    2005L
+  ),
+  identical(sum(plot_data$below_min_words), 8L)
+)
+
+ggplot(plot_data, aes(x = year, y = per_thousand, color = word)) +
+  geom_line(linewidth = 0.7) +
+  geom_point(aes(shape = below_min_words), size = 1.6) +
+  scale_shape_manual(
+    values = c(`FALSE` = 16, `TRUE` = 1),
+    labels = c(`FALSE` = "500+ words", `TRUE` = "under 500 words")
+  ) +
+  labs(
+    x = "Speech year",
+    y = "Uses per 1,000 words",
+    color = "Word",
+    shape = "Denominator"
+  ) +
+  theme_minimal()
+```
+
+The chart shows word-rate paths, not causes. A rise can reflect changing word choice, changing subject matter, transcription conventions, speech length, or some mix of those. Counts do not split those explanations by themselves.
+
+## Test the peak and a null
+
+The largest-contributor check has to use the statistic being reported. Here that statistic is the peak rate, so each word is checked after removing the speech that created its maximum per-thousand value.
+
+A **permutation null** asks what peak appears after the word occurrences are randomly reassigned. The **p-value** is the fraction of those shuffled peaks that are at least as high as the observed peak.
+
+```{r}
+constitution_counts <- trend_counts |>
+  filter(word == "constitution")
+
+constitution_peak_null <- permutation_null(
+  observed = max(constitution_counts$per_thousand),
+  replicate_fn = function() {
+    assigned_speeches <- sample(
+      seq_along(constitution_counts$total_words),
+      size = sum(constitution_counts$count),
+      replace = TRUE,
+      prob = constitution_counts$total_words
+    )
+    random_counts <- tabulate(assigned_speeches, nbins = length(constitution_counts$total_words))
+    max(random_counts / constitution_counts$total_words * 1000)
+  },
+  replicates = 1000L,
+  seed = 5601L,
+  alternative = "greater"
+)
+
+constitution_peak_null_display <- constitution_peak_null |>
+  mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
+
+constitution_top_rates <- constitution_counts |>
+  arrange(desc(per_thousand), year) |>
+  slice_head(n = 5) |>
+  transmute(
+    speech_id,
+    year,
+    president,
+    count,
+    total_words,
+    per_thousand = round(per_thousand, 2),
+    denominator_flag = if_else(below_min_words, "under 500 words", "ok")
+  )
+
+stopifnot(
+  identical(constitution_top_rates$speech_id[1], "1793-Washington"),
+  identical(as.integer(constitution_top_rates$total_words[1]), 135L),
+  identical(as.numeric(constitution_top_rates$per_thousand[1]), 7.41),
+  identical(as.numeric(constitution_peak_null_display$observed), 7.407),
+  identical(as.numeric(round(constitution_peak_null$null_mean, 2)), 5.31),
+  identical(as.numeric(round(constitution_peak_null$p_value, 3)), 0.233)
+)
+
+kable(
+  constitution_top_rates,
+  col.names = c("Speech", "Year", "President", "Count", "Total words", "Per 1,000", "Denominator flag"),
+  caption = "The highest constitution rates and their denominators",
+  row.names = FALSE
+)
+
+kable(
+  constitution_peak_null_display,
+  col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
+  caption = "Permutation null for the constitution peak rate",
+  row.names = FALSE
+)
+```
+
+The headline problem is visible for `constitution`. Its maximum rate is 7.41 per thousand in 1793, but that speech has only 135 words. One occurrence creates the peak. After removing that peak speech, the next rate is 6.65 in 1861; with the denominator guard applied, the peak does not survive because the reported maximum came from an under-500-word document. Shuffling the 207 occurrences across fixed speech lengths gives a null mean of 5.31, a 90% interval from 3.42 to 7.43, and p = 0.233. The observed 1793 peak is well within what this shuffle can produce.
+
+Trend methods always draw a line once the analyst picks words and dates. The null asks what peak would appear if the same number of word occurrences landed in speeches according to speech length, with time labels no longer carrying the pattern.
+
+## What to remember
+
+- Normalize word counts per thousand words before comparing speeches.
+- Flag rates from very short documents; this lesson uses a 500-word cutoff.
+- The four tracked words have different coverage across the 60 speeches.
+- `constitution` peaks in 1793 only because 1 occurrence sits in a 135-word speech.
+- Word-rate change can mix word choice, subject matter, transcription, and length.
+
+Use trend charts to ask better reading questions, then test whether the pattern survives the obvious stress check.
+
+## Sources
+
+- [tidytext reference for tokenizing text](https://juliasilge.github.io/tidytext/reference/unnest_tokens.html)
+- [Pechenick, Danforth, and Dodds on limits of word-frequency inference](https://doi.org/10.1371/journal.pone.0137041)
+- [ggplot2 documentation](https://ggplot2.tidyverse.org/)
+- [quanteda inaugural address corpus documentation](https://quanteda.io/reference/data_corpus_inaugural.html)

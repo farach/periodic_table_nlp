@@ -1,0 +1,20 @@
+field,value
+source_name,Open English WordNet
+source_url,https://en-word.net/static/english-wordnet-2024.xml.gz
+source_version,Open English Wordnet 2024
+source_licence,https://creativecommons.org/licenses/by/4.0
+licence_url,https://creativecommons.org/licenses/by/4.0/
+attribution,"Open English WordNet, used under CC BY 4.0. Sense content is unchanged; this file is a subset."
+generated_on,2026-08-29
+generator,data-raw/build-wordnet-extract.R
+target_lemmas,bank bird cat chair city computer doctor dog engineer hammer job language letter light machine market match meaning model oak office plant record report river rose run school sentence skill spring table teacher train wage word work worker
+n_lemmas_requested,38
+n_lemmas_found,38
+n_senses,419
+n_synsets,417
+n_membership_rows,1050
+n_relation_rows,2432
+sha256_senses,49be43af0ab65b16b4c8f6bca5c8d4e04ee1563dfbc17a089243d5436037be8d
+sha256_synsets,41b1b58587d72571393b5ca628cf6440f45dfe3e6c17a861af9e2d7c4a0add53
+sha256_members,5c4d9905817d21f380dd0c8dc2924e2da5b27517b9a384fc583733ffd89b0df2
+sha256_relations,e673372e80e535d82a140e99fb7d0060aec0313bece173022933c11ef6420a3a

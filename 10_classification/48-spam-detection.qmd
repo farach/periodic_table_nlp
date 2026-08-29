@@ -1,0 +1,629 @@
+---
+title: "Catching scam messages"
+subtitle: "Read a spam rule, train a small filter, and choose which mistake costs more"
+author: "Alex Farach"
+description: "Learn how spam detection turns text into decisions while keeping false alarms and missed scams separate."
+categories: [classification, spam detection, workforce research]
+---
+
+Maya opens the Riverton Workforce Lab inbox before the morning appointments.
+Most messages ask ordinary questions about applications, passwords, and classes.
+Mixed into the same list are offers that ask jobseekers to send money.
+
+If the Lab blocks too much, a real request can disappear. If it blocks too
+little, a scam can reach someone who is looking for work. A spam filter is a
+text classifier, a tool that assigns a label to a piece of writing.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+A dataset written by the same person who writes the classifier cannot measure
+whether the method works. This invented inbox checks that the code runs and
+makes the trade-off visible; it does not estimate performance for real spam
+filters.
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- read a transparent spam rule;
+- train a small text classifier;
+- compare the rule and model where they disagree;
+- read a confusion matrix; and
+- explain how a decision threshold trades false alarms against missed scams.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the invented inbox
+
+The inbox file was generated once by `data-raw/build-riverton-inbox.R` and then
+committed. The lesson reads that file; it does not write examples while the page
+renders. readr opens the CSV files, dplyr and tidyr shape tables, stringr reads
+patterns, ggplot2 draws the chart, tidymodels fits the classifier, textrecipes
+turns words into features, glmnet fits the model, and digest checks the file.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(ggplot2)
+library(tidymodels)
+library(textrecipes)
+library(glmnet)
+library(digest)
+
+inbox_path <- "data/riverton/riverton-inbox.csv"
+inbox <- read_csv(
+  inbox_path,
+  na = character(),
+  col_types = cols(
+    message_id = col_character(),
+    text = col_character(),
+    is_spam = col_logical(),
+    intent = col_character(),
+    author_note = col_character()
+  )
+)
+
+inbox_metadata <- read_csv(
+  "data/riverton/riverton-inbox-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    license = col_character(),
+    created_on = col_character(),
+    purpose = col_character(),
+    rows = col_integer(),
+    spam_class_counts = col_character(),
+    intent_class_counts = col_character(),
+    fingerprint = col_character()
+  )
+)
+
+spam_counts <- inbox |>
+  count(is_spam, name = "messages") |>
+  mutate(class = if_else(is_spam, "job scam", "genuine message"))
+
+inbox_hash <- digest(
+  paste(read_lines(inbox_path), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+
+stopifnot(
+  all(c(
+    "readr", "dplyr", "tibble", "tidyr", "purrr", "stringr",
+    "ggplot2", "tidymodels", "textrecipes", "glmnet", "digest"
+  ) %in% loadedNamespaces()),
+  identical(nrow(inbox), 60L),
+  identical(spam_counts$messages, c(44L, 16L)),
+  identical(inbox_metadata$rows, 60L),
+  identical(
+    inbox_hash,
+    "b71b06e353918e7a421327883950c7409ea149c34b6ba26396fc5bc8c27df216"
+  ),
+  identical(inbox_hash, inbox_metadata$fingerprint)
+)
+
+knitr::kable(
+  spam_counts |>
+    select(class, messages),
+  col.names = c("Recorded class", "Messages"),
+  caption = "Invented Riverton inbox labels",
+  row.names = FALSE
+)
+```
+
+The file has 60 invented messages: 44 genuine messages and 16 job scams. Those
+counts describe the fixture only. They do not say how much scam traffic reaches
+a workforce office.
+
+Hand-written fixtures can fail before any model runs. The classes may separate
+on grammar rather than on the intended idea. A **superficial feature** is a cue
+such as punctuation or pronoun use that can predict a label without reading the
+substance of the message. The check below tests a bad shortcut: mark a message as
+spam when it has no first-person pronoun and does not end with a question mark.
+
+```{r}
+first_person_pattern <- regex(
+  "\\b(I|I'm|I’ve|I’d|I’ll|me|my|mine|we|we're|we’ve|us|our|ours)\\b",
+  ignore_case = TRUE
+)
+
+surface_rule <- inbox |>
+  mutate(
+    first_person_pronoun = str_detect(text, first_person_pattern),
+    terminal_question_mark = str_detect(text, "\\?\\s*$"),
+    surface_spam = !first_person_pronoun & !terminal_question_mark,
+    truth = factor(if_else(is_spam, "spam", "genuine"), levels = c("spam", "genuine")),
+    estimate = factor(
+      if_else(surface_spam, "spam", "genuine"),
+      levels = c("spam", "genuine")
+    )
+  )
+
+surface_confusion <- yardstick::conf_mat(
+  surface_rule,
+  truth = truth,
+  estimate = estimate
+)
+surface_matrix <- as.matrix(surface_confusion$table)
+
+surface_scores <- tibble(
+  shortcut = "No first-person pronoun and no terminal question mark",
+  accuracy = yardstick::accuracy(surface_rule, truth = truth, estimate = estimate) |>
+    pull(.estimate),
+  scam_recall = yardstick::sens(
+    surface_rule,
+    truth = truth,
+    estimate = estimate,
+    event_level = "first"
+  ) |>
+    pull(.estimate),
+  genuine_recall = yardstick::spec(
+    surface_rule,
+    truth = truth,
+    estimate = estimate,
+    event_level = "first"
+  ) |>
+    pull(.estimate)
+)
+
+stopifnot(
+  all(
+    surface_matrix ==
+      matrix(
+        c(5L, 9L, 11L, 35L),
+        nrow = 2,
+        byrow = TRUE,
+        dimnames = dimnames(surface_matrix)
+      )
+  ),
+  identical(round(surface_scores$accuracy, 4), 0.6667),
+  identical(round(surface_scores$scam_recall, 4), 0.3125),
+  identical(round(surface_scores$genuine_recall, 4), 0.7955)
+)
+
+knitr::kable(
+  surface_scores |>
+    mutate(across(c(accuracy, scam_recall, genuine_recall), \(value) round(value, 4))),
+  col.names = c("Shortcut", "Accuracy", "Scam recall", "Genuine recall"),
+  caption = "A grammar-only shortcut no longer solves the invented inbox",
+  row.names = FALSE
+)
+```
+
+This shortcut scores 0.6667 accuracy and 0.3125 scam recall. That weak result is
+the point. When you write examples yourself, the two classes can separate on a
+pattern you did not mean to teach. The first check on any hand-built dataset is
+whether a stupid feature already solves it.
+
+One shortcut is not the whole audit, so the next chunk sweeps several. For each
+feature it tries both orientations, marking a message as a scam when the feature
+is present and again when it is absent, and keeps whichever scores better. That
+is deliberately generous to the shortcut, because the question is whether any
+cheap cue could substitute for reading.
+
+```{r}
+superficial_features <- inbox |>
+  transmute(
+    is_spam,
+    `first-person pronoun` = str_detect(text, regex("\\b(i|my|me)\\b", ignore_case = TRUE)),
+    `ends with a question mark` = str_detect(text, "\\?\\s*$"),
+    `longer than the median` = str_count(text, "\\S+") >= median(str_count(text, "\\S+")),
+    `exclamation mark` = str_detect(text, "!"),
+    `contains a digit` = str_detect(text, "[0-9]")
+  ) |>
+  pivot_longer(-is_spam, names_to = "feature", values_to = "present")
+
+shortcut_sweep <- superficial_features |>
+  summarise(
+    accuracy = max(mean(present == is_spam), mean(present != is_spam)),
+    scam_recall = max(
+      mean(present[is_spam]),
+      mean(!present[is_spam])
+    ),
+    .by = feature
+  ) |>
+  arrange(desc(accuracy))
+
+stopifnot(
+  identical(nrow(shortcut_sweep), 5L),
+  max(shortcut_sweep$accuracy) < 0.80,
+  max(shortcut_sweep$scam_recall) < 0.95,
+  identical(shortcut_sweep$feature[[1]], "exclamation mark")
+)
+
+knitr::kable(
+  shortcut_sweep |>
+    mutate(across(where(is.numeric), \(value) round(value, 4))),
+  col.names = c("Superficial feature", "Best accuracy", "Best scam recall"),
+  caption = "No single superficial feature solves the rebuilt inbox, but two come close",
+  row.names = FALSE
+)
+```
+
+Two cues still carry real weight. An exclamation mark and the presence of a digit
+each reach about 0.75 accuracy on their own. That is worth separating from the
+pronoun problem rather than lumping it in, because the two are different kinds of
+thing. Grammatical person was an accident of authorship: the messages happened to
+be written in different voices, and nothing about real scams makes them avoid the
+word "my". Exclamation marks and dollar figures are different. Real scam messages
+do lean on urgency and numbers, so a filter that keys on them is picking up
+something that exists outside this file.
+
+That distinction is the one to carry away. A shortcut that reflects how the data
+was made is a defect. A shortcut that reflects how the world works is a shallow
+but real signal, and the way to tell them apart is to ask whether the cue would
+still hold for text you did not write. The build script for this file enforces
+the first kind: it recomputes this sweep before writing the CSV and refuses to
+write if any single feature reaches 0.80 accuracy or 0.95 scam recall.
+
+## Start with a rule a person can read
+
+A rule-based spam filter searches for known warning signs. This one marks a
+message when it mentions fees, gift cards, crypto payments, bank details,
+guaranteed placement, deposits, or similar language. The rule is easy to inspect,
+which also means it is easy for a scammer to route around.
+
+```{r}
+spam_terms <- c(
+  "fee", "payment", "gift card", "gift cards", "crypto",
+  "wire transfer", "deposit", "bank", "card number",
+  "guarantee", "guaranteed", "starter kit", "activation fee",
+  "Social Security", "secret shopper", "premium number",
+  "pay now", "\\$[0-9]+"
+)
+
+spam_pattern <- regex(
+  paste(spam_terms, collapse = "|"),
+  ignore_case = TRUE
+)
+
+term_hits <- tibble(term = spam_terms) |>
+  mutate(
+    messages_matched = map_int(
+      term,
+      \(term_text) sum(str_detect(inbox$text, regex(term_text, ignore_case = TRUE)))
+    )
+  )
+
+rule_results <- inbox |>
+  mutate(
+    truth = factor(
+      if_else(is_spam, "spam", "genuine"),
+      levels = c("spam", "genuine")
+    ),
+    estimate = factor(
+      if_else(str_detect(text, spam_pattern), "spam", "genuine"),
+      levels = c("spam", "genuine")
+    )
+  )
+
+rule_confusion <- yardstick::conf_mat(
+  rule_results,
+  truth = truth,
+  estimate = estimate
+)
+
+rule_matrix <- as.matrix(rule_confusion$table)
+
+stopifnot(
+  identical(sum(term_hits$messages_matched == 1L), 11L),
+  all(
+    rule_matrix ==
+    matrix(
+      c(14L, 2L, 2L, 42L),
+      nrow = 2,
+      byrow = TRUE,
+      dimnames = dimnames(rule_matrix)
+    )
+  )
+)
+
+knitr::kable(
+  as.data.frame(rule_confusion$table),
+  col.names = c("Rule prediction", "Recorded label", "Messages"),
+  caption = "Rule-based spam filter on the full invented inbox",
+  row.names = FALSE
+)
+```
+
+The rule marks 14 of the 16 invented scams and also blocks two genuine messages.
+It misses two scams. In this fixture, the easy cases are the ones that say
+`fee`, `deposit`, or `crypto` plainly.
+
+The word list was written after reading these messages. Eleven of its 18 terms
+match exactly one message, so the full 60-row table is a lookup table scored on
+the same rows that shaped it. The two blocked genuine messages were written with
+scam vocabulary on purpose to show that a readable rule can fail on reports about
+scams. The comparison below uses the same 19-row test split for both the rule and
+the trained model.
+
+## Train a small filter
+
+A trained model learns word weights from labelled examples. The seed for the
+train-test split is 4801, and the seed before fitting is 4802. The split is
+stratified, meaning each side keeps both recorded classes.
+
+```{r}
+set.seed(4801)
+spam_data <- inbox |>
+  mutate(
+    spam_label = factor(
+      if_else(is_spam, "spam", "genuine"),
+      levels = c("spam", "genuine")
+    )
+  )
+
+spam_split <- initial_split(
+  spam_data,
+  prop = 0.7,
+  strata = spam_label
+)
+spam_train <- training(spam_split)
+spam_test <- testing(spam_split)
+
+spam_recipe <- recipe(spam_label ~ text, data = spam_train) |>
+  step_tokenize(text) |>
+  step_tokenfilter(text, max_tokens = 80) |>
+  step_tfidf(text)
+
+spam_model <- logistic_reg(penalty = 0.01, mixture = 1) |>
+  set_engine("glmnet") |>
+  set_mode("classification")
+
+set.seed(4802)
+spam_fit <- workflow() |>
+  add_recipe(spam_recipe) |>
+  add_model(spam_model) |>
+  fit(data = spam_train)
+
+probability_column <- predict(spam_fit, spam_test, type = "prob") |>
+  names() |>
+  keep(\(column) str_detect(column, "spam$"))
+
+spam_scored <- spam_test |>
+  select(message_id, text, is_spam, spam_label) |>
+  bind_cols(predict(spam_fit, spam_test, type = "prob")) |>
+  mutate(
+    spam_probability = .data[[probability_column]],
+    model_spam = spam_probability >= 0.5,
+    rule_spam = str_detect(text, spam_pattern),
+    model_label = factor(
+      if_else(model_spam, "spam", "genuine"),
+      levels = c("spam", "genuine")
+    )
+  )
+
+model_confusion <- yardstick::conf_mat(
+  spam_scored,
+  truth = spam_label,
+  estimate = model_label
+)
+model_matrix <- as.matrix(model_confusion$table)
+
+test_rule_confusion <- yardstick::conf_mat(
+  spam_scored |>
+    mutate(
+      rule_label = factor(
+        if_else(rule_spam, "spam", "genuine"),
+        levels = c("spam", "genuine")
+      )
+    ),
+  truth = spam_label,
+  estimate = rule_label
+)
+test_rule_matrix <- as.matrix(test_rule_confusion$table)
+
+stopifnot(
+  identical(nrow(spam_train), 41L),
+  identical(nrow(spam_test), 19L),
+  identical(as.integer(count(spam_test, spam_label)$n), c(5L, 14L)),
+  all(
+    test_rule_matrix ==
+    matrix(
+      c(3L, 1L, 2L, 13L),
+      nrow = 2,
+      byrow = TRUE,
+      dimnames = dimnames(test_rule_matrix)
+    )
+  ),
+  all(
+    model_matrix ==
+    matrix(
+      c(3L, 3L, 2L, 11L),
+      nrow = 2,
+      byrow = TRUE,
+      dimnames = dimnames(model_matrix)
+    )
+  ),
+  identical(
+    round(
+      spam_scored |>
+        filter(message_id == "M004") |>
+        pull(spam_probability),
+      3
+    ),
+    0.972
+  )
+)
+
+knitr::kable(
+  as.data.frame(test_rule_confusion$table),
+  col.names = c("Rule prediction", "Recorded label", "Messages"),
+  caption = "Rule-based spam filter on the same invented test split",
+  row.names = FALSE
+)
+
+knitr::kable(
+  as.data.frame(model_confusion$table),
+  col.names = c("Model prediction", "Recorded label", "Messages"),
+  caption = "Model confusion matrix on the invented test split",
+  row.names = FALSE
+)
+```
+
+On the same 19 test rows, the rule labels 3 of the 5 invented scams as spam and
+blocks one genuine message. The model labels 3 of the 5 invented test scams as
+spam and sends three genuine messages to the spam side. These numbers establish
+only that the code path found the recorded labels in this made-up test split.
+They are not evidence about a real filter.
+
+## Look at the disagreements
+
+The rule and the model do not mark the same messages. Disagreements are useful
+because a person can inspect a short list and ask which tool failed in a way that
+matters.
+
+```{r}
+disagreements <- spam_scored |>
+  filter(rule_spam != model_spam) |>
+  arrange(message_id) |>
+  mutate(
+    recorded_label = if_else(is_spam, "spam", "genuine"),
+    spam_probability = round(spam_probability, 3)
+  ) |>
+  select(
+    message_id,
+    recorded_label,
+    spam_probability,
+    rule_spam,
+    model_spam,
+    text
+  )
+
+stopifnot(
+  identical(disagreements$message_id, c("M004", "M030", "M034", "M046")),
+  identical(disagreements$recorded_label, c("genuine", "genuine", "genuine", "genuine")),
+  identical(disagreements$spam_probability, c(0.972, 0.869, 0.010, 0.998))
+)
+
+knitr::kable(
+  disagreements,
+  col.names = c(
+    "Message",
+    "Recorded label",
+    "Model spam score",
+    "Rule says spam",
+    "Model says spam",
+    "Text"
+  ),
+  caption = "Where the readable rule and the trained model disagree",
+  row.names = FALSE
+)
+```
+
+The message about documents reaching the office looks genuine to the recorded
+label but receives a high model score. The message about a bank password is
+genuine because it reports a suspicious listing, yet the rule catches the word
+`bank`. The two callback and eligibility messages show the model's own false
+alarms. Those are different kinds of errors.
+
+## Move the cut point
+
+The model produces a score between 0 and 1. The cut point turns that score into a
+decision. A lower cut point catches more possible scams and risks blocking more
+genuine messages. A higher cut point does the reverse.
+
+```{r}
+#| label: fig-spam-threshold
+#| fig-cap: "The spam cut point shifts false alarms first, then missed scams, on the invented test split."
+#| fig-alt: "Line chart with thresholds from 0.05 to 0.95. Genuine messages blocked drops from four to two. Scams missed rises from one to three."
+
+threshold_table <- tibble(threshold = seq(0.05, 0.95, by = 0.05)) |>
+  mutate(
+    results = map(threshold, \(cut_point) {
+      spam_scored |>
+        summarise(
+          genuine_blocked = sum(spam_probability >= cut_point & !is_spam),
+          scams_missed = sum(spam_probability < cut_point & is_spam),
+          sent_to_review = sum(spam_probability >= cut_point),
+          .groups = "drop"
+        )
+    })
+  ) |>
+  unnest(results)
+
+threshold_plot <- threshold_table |>
+  select(threshold, genuine_blocked, scams_missed) |>
+  pivot_longer(
+    cols = c(genuine_blocked, scams_missed),
+    names_to = "error_type",
+    values_to = "messages"
+  ) |>
+  mutate(
+    error_type = recode(
+      error_type,
+      genuine_blocked = "Genuine messages blocked",
+      scams_missed = "Scams missed"
+    )
+  )
+
+stopifnot(
+  identical(threshold_table$genuine_blocked, c(4L, rep(3L, 16), 2L, 2L)),
+  identical(threshold_table$scams_missed, c(rep(1L, 5), rep(2L, 13), 3L)),
+  identical(threshold_table$sent_to_review, c(8L, rep(7L, 4), rep(6L, 12), 5L, 4L))
+)
+
+knitr::kable(
+  threshold_table,
+  col.names = c(
+    "Spam score cut point",
+    "Genuine messages blocked",
+    "Scams missed",
+    "Messages sent to spam review"
+  ),
+  caption = "Threshold trade-off on the invented test split",
+  row.names = FALSE
+)
+
+ggplot(threshold_plot, aes(x = threshold, y = messages, color = error_type)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = threshold_table$threshold) +
+  labs(
+    x = "Decision threshold",
+    y = "Messages",
+    color = "Error type"
+  ) +
+  theme_minimal()
+```
+
+For this invented split, thresholds from 0.30 through 0.85 have the same error
+counts: three genuine messages blocked and two scams missed. Only the low and
+high ends move the counts. That is a number about this fixture, not about the
+world. A company inbox might prefer to block anything suspicious. A workforce
+inbox serving jobseekers may need a review queue because deleting a genuine
+posting can cost someone an opportunity, while letting a scam through can cost
+money or personal information.
+
+Real spam also adapts. A static test set cannot measure what happens after
+senders learn the filter's habits and change their wording.
+
+## What to remember
+
+- Spam detection is text classification with unequal errors.
+- A readable rule helps inspection, but it is brittle.
+- A trained model still needs a human-chosen threshold.
+- Every score needs a baseline and a named test set.
+- The Riverton inbox proves only that the lesson code runs on an invented file.
+
+## Sources
+
+- [glmnet package documentation](https://glmnet.stanford.edu/articles/glmnet.html)
+- [tidymodels textrecipes reference](https://textrecipes.tidymodels.org/)
+- [yardstick confusion matrix reference](https://yardstick.tidymodels.org/reference/conf_mat.html)

@@ -1,0 +1,377 @@
+---
+title: "Training word vectors"
+subtitle: "Check whether neighbours carry information"
+author: "Alex Farach"
+description: "Learn how distributed word representations are trained from local context and why a small corpus can make neighbour lists look better than they are."
+categories: [similarity, word embeddings, inaugural addresses]
+---
+
+A curator wants to tag a speech archive without reading every paragraph. She
+asks which words sit near `freedom`, `union`, and `peace` in the language of the
+collection.
+
+A table of neighbours appears quickly. It looks meaningful, but every
+word-vector model can return a nearest neighbour for any word it kept.
+
+A **distributed word representation** is one numeric vector per word, learned
+from the words that appear near it. This lesson loads one saved local model, then
+checks whether an easy related pair separates from arbitrary pairs.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- read a pinned word2vec skip-gram model;
+- inspect the preprocessing and training settings stored with it;
+- explain why the fitted model is saved rather than trained during render;
+- compare an expected related pair with random pairs; and
+- summarize the full distribution of cosine similarities.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load one saved word2vec model
+
+Word2vec comes from work by Mikolov and colleagues on learning word vectors from
+nearby words. The **skip-gram** version uses the current word to predict words in
+its window. The R package splits input on whitespace, so the training strings
+should already be lowercased with punctuation and numbers removed.
+
+```{r}
+library(dplyr)
+library(tibble)
+library(stringr)
+library(readr)
+library(quanteda)
+library(word2vec)
+library(ggplot2)
+library(knitr)
+
+source("R/inaugural-corpus.R")
+
+within_tolerance <- function(observed, expected, tolerance = 1e-4) {
+  abs(observed - expected) < tolerance
+}
+
+metadata <- read_csv(
+  "data/word2vec/word2vec-metadata.csv",
+  na = character(),
+  col_types = cols(
+    field = col_character(),
+    value = col_character()
+  )
+)
+metadata_values <- setNames(metadata$value, metadata$field)
+
+paragraphs <- inaugural_paragraphs()
+training_tokens <- tokens(
+  paragraphs$paragraph,
+  remove_punct = TRUE,
+  remove_numbers = TRUE
+) |>
+  tokens_tolower()
+
+model <- word2vec::read.word2vec("data/word2vec/inaugural-word2vec.bin")
+embedding_matrix <- as.matrix(model)
+punctuation_rows <- rownames(embedding_matrix)[grepl("[[:punct:]]", rownames(embedding_matrix))]
+
+training_summary <- tibble(
+  item = c(
+    "training documents",
+    "tokens after cleanup",
+    "vocabulary rows",
+    "dimensions",
+    "punctuation rows",
+    "unique word pairs"
+  ),
+  value = c(
+    metadata_values[["training_documents"]],
+    metadata_values[["training_tokens"]],
+    metadata_values[["vocabulary_rows"]],
+    metadata_values[["dimensions"]],
+    metadata_values[["punctuation_rows"]],
+    metadata_values[["unique_pairs"]]
+  )
+)
+
+hyperparameter_table <- tibble(
+  setting = c("algorithm", "dimensions", "window", "iterations", "minimum count", "threads"),
+  value = metadata_values[c("algorithm", "dimensions", "window", "iterations", "minimum_count", "threads")]
+)
+
+model_fingerprint <- tibble(
+  field = c("generator", "model SHA-256", "reproducibility note"),
+  value = metadata_values[c("generator", "sha256_model", "reproducibility")]
+)
+
+stopifnot(
+  nrow(paragraphs) == as.integer(metadata_values[["training_documents"]]),
+  as.integer(sum(ntoken(training_tokens))) == as.integer(metadata_values[["training_tokens"]]),
+  nrow(embedding_matrix) == as.integer(metadata_values[["vocabulary_rows"]]),
+  ncol(embedding_matrix) == as.integer(metadata_values[["dimensions"]]),
+  identical(punctuation_rows, "</s>"),
+  length(punctuation_rows) == as.integer(metadata_values[["punctuation_rows"]]),
+  as.integer(metadata_values[["unique_pairs"]]) == choose(nrow(embedding_matrix), 2),
+  hyperparameter_table$value[hyperparameter_table$setting == "threads"] == "1",
+  hyperparameter_table$value[hyperparameter_table$setting == "window"] == "5",
+  nchar(metadata_values[["sha256_model"]]) == 64L,
+  file.exists("data/word2vec/inaugural-word2vec.bin"),
+  all(c("freedom", "liberty", "duties", "union", "government", "peace", "war") %in% rownames(embedding_matrix))
+)
+
+kable(
+  training_summary,
+  col.names = c("Item", "Value"),
+  caption = "Training text and vocabulary checks stored with the saved word2vec model",
+  row.names = FALSE
+)
+
+kable(
+  hyperparameter_table,
+  col.names = c("Setting", "Value"),
+  caption = "Hyperparameters for the pinned local word2vec skip-gram model",
+  row.names = FALSE
+)
+
+kable(
+  model_fingerprint,
+  col.names = c("Field", "Value"),
+  caption = "Provenance for the committed word2vec model",
+  row.names = FALSE
+)
+```
+
+The metadata records 1,377 training documents, 134,419 cleaned tokens, 2,709
+vocabulary rows, and 3,667,986 unique word pairs. It also records one punctuation
+row, the trainer's `</s>` marker. Punctuation was removed before training, so
+forms such as `peace.` and `peace,` do not compete with `peace`.
+
+The same training code with the same seed and `threads = 1L` produced neighbour
+lists in a different order on each fit. The similarity values moved only slightly,
+about 0.03 here, but the ranking changed. This page loads one saved fit, and the
+metadata records its SHA-256 fingerprint. A result you cannot reproduce is a
+result you cannot check; pinning the artefact is the normal fix when exact words
+will be printed.
+
+## Print neighbours, then distrust the glow
+
+A nearest-neighbour list returns the words with highest cosine similarity to a
+query word. Cosine similarity compares vector direction; larger values mean
+closer under the trained representation.
+
+```{r}
+nearest_words <- function(word, n = 6L) {
+  predict(model, newdata = word, type = "nearest", top_n = n)[[1]] |>
+    as_tibble() |>
+    mutate(
+      similarity_band = case_when(
+        similarity >= 0.8 ~ "0.80 or higher",
+        similarity >= 0.7 ~ "0.70 to 0.79",
+        TRUE ~ "below 0.70"
+      )
+    )
+}
+
+neighbour_table <- bind_rows(
+  nearest_words("union") |>
+    mutate(query = "union"),
+  nearest_words("freedom") |>
+    mutate(query = "freedom"),
+  nearest_words("peace") |>
+    mutate(query = "peace")
+) |>
+  select(query, neighbour = term2, similarity, similarity_band, rank)
+
+expected_neighbours <- c(
+  "texas", "attachment", "system", "jurisdiction", "confederation", "communities",
+  "human", "evil", "mankind", "dignity", "civilization", "ancient",
+  "friendship", "lasting", "world", "cultivate", "amity", "prosperity"
+)
+
+stopifnot(
+  nrow(neighbour_table) == 18L,
+  identical(sort(unique(neighbour_table$query)), c("freedom", "peace", "union")),
+  identical(sort(unique(neighbour_table$rank)), 1:6),
+  identical(neighbour_table$neighbour, expected_neighbours),
+  all(neighbour_table$similarity > 0.85),
+  all(neighbour_table$similarity_band == "0.80 or higher")
+)
+
+kable(
+  neighbour_table |>
+    mutate(similarity = round(similarity, 3)),
+  col.names = c("Query", "Nearest word", "Cosine similarity", "Cosine similarity band", "Rank"),
+  caption = "Nearest neighbours from the pinned local word2vec model",
+  row.names = FALSE
+)
+```
+
+Some neighbours look plausible. That is not enough. A neighbour list always
+returns something, and a fluent label can make a weak signal feel stronger than
+it is. Pinning the file makes the printed words checkable; it does not make the
+small model trustworthy by itself.
+
+## Compare a related pair with random pairs
+
+The useful question is not whether the top neighbour list looks nice. The useful
+question is whether a pair chosen to be easy, `freedom / liberty`, clearly
+separates from arbitrary pairs. Using an easy pair is conservative: if this pair
+barely separates, harder related pairs should not be trusted without more data.
+
+```{r}
+cosine_between_words <- function(first, second) {
+  first_vector <- embedding_matrix[first, ]
+  second_vector <- embedding_matrix[second, ]
+  sum(first_vector * second_vector) /
+    sqrt(sum(first_vector^2) * sum(second_vector^2))
+}
+
+freedom_liberty_cosine <- cosine_between_words("freedom", "liberty")
+
+set.seed(6101)
+vocabulary <- rownames(embedding_matrix)
+random_pair_indices <- replicate(
+  1000L,
+  sample.int(length(vocabulary), 2L),
+  simplify = FALSE
+)
+
+random_pair_cosines <- vapply(
+  random_pair_indices,
+  function(pair) cosine_between_words(vocabulary[pair[1]], vocabulary[pair[2]]),
+  numeric(1)
+)
+
+random_pair_summary <- tibble(
+  statistic = c("mean", "median", "5th percentile", "95th percentile"),
+  cosine_similarity = c(
+    mean(random_pair_cosines),
+    median(random_pair_cosines),
+    as.numeric(quantile(random_pair_cosines, 0.05)),
+    as.numeric(quantile(random_pair_cosines, 0.95))
+  )
+)
+
+stopifnot(
+  length(random_pair_cosines) == 1000L,
+  within_tolerance(freedom_liberty_cosine, 0.7722, tolerance = 1e-4),
+  within_tolerance(mean(random_pair_cosines), 0.7522, tolerance = 1e-4),
+  median(random_pair_cosines) > freedom_liberty_cosine,
+  as.numeric(quantile(random_pair_cosines, 0.95)) > freedom_liberty_cosine
+)
+
+kable(
+  bind_rows(
+    tibble(statistic = "freedom / liberty", cosine_similarity = freedom_liberty_cosine),
+    random_pair_summary
+  ) |>
+    mutate(cosine_similarity = round(cosine_similarity, 3)),
+  col.names = c("Statistic", "Cosine similarity"),
+  caption = "An expected related pair compared with 1,000 random word pairs",
+  row.names = FALSE
+)
+```
+
+The random-pair distribution reaches into the same range as `freedom / liberty`.
+In this saved fit the pair scores about 0.772, while random pairs average about
+0.752. The model can still be useful for prompting inspection, but a high cosine
+score is not enough by itself.
+
+## Show the similarity distribution
+
+The distribution below uses every unique word pair in the cleaned vocabulary. It
+also marks the `freedom / liberty` pair with a vertical line.
+
+```{r}
+normalized_embeddings <- embedding_matrix / sqrt(rowSums(embedding_matrix^2))
+word_similarity_matrix <- tcrossprod(normalized_embeddings)
+diag(word_similarity_matrix) <- NA_real_
+word_similarities <- word_similarity_matrix[upper.tri(word_similarity_matrix)]
+freedom_liberty_percentile <- mean(word_similarities <= freedom_liberty_cosine)
+
+similarity_summary <- tibble(
+  statistic = c("word pairs", "median", "95th percentile", "freedom / liberty percentile"),
+  value = c(
+    length(word_similarities),
+    median(word_similarities),
+    as.numeric(quantile(word_similarities, 0.95)),
+    freedom_liberty_percentile
+  )
+)
+
+stopifnot(
+  length(word_similarities) == as.integer(metadata_values[["unique_pairs"]]),
+  within_tolerance(freedom_liberty_percentile, 0.4442, tolerance = 1e-4),
+  within_tolerance(median(word_similarities), 0.7938, tolerance = 1e-4),
+  within_tolerance(as.numeric(quantile(word_similarities, 0.95)), 0.9354, tolerance = 1e-4),
+  freedom_liberty_percentile < 0.5
+)
+
+kable(
+  similarity_summary |>
+    mutate(value = if_else(statistic == "word pairs", as.character(as.integer(value)), sprintf("%.3f", value))),
+  col.names = c("Statistic", "Value"),
+  caption = "Distribution of all pairwise word-vector cosine similarities",
+  row.names = FALSE
+)
+```
+
+`freedom / liberty` sits at the `r round(freedom_liberty_percentile * 100)`th
+percentile of the full pairwise distribution in this saved model. The pair was
+chosen to be easy, yet it lands below the median pair.
+
+```{r}
+#| label: fig-word2vec-cosines
+#| fig-cap: "Pairwise cosine similarities among words kept by the pinned local word2vec model."
+#| fig-alt: "A histogram concentrated toward high positive cosine values. A vertical line for freedom slash liberty falls left of the median rather than near the far right edge."
+
+plot_similarities <- tibble(cosine_similarity = word_similarities)
+
+stopifnot(
+  nrow(plot_similarities) == as.integer(metadata_values[["unique_pairs"]]),
+  within_tolerance(median(plot_similarities$cosine_similarity), 0.7938, tolerance = 1e-4),
+  freedom_liberty_cosine < median(plot_similarities$cosine_similarity)
+)
+
+ggplot(plot_similarities, aes(x = cosine_similarity)) +
+  geom_histogram(bins = 40, boundary = 0, color = "white") +
+  geom_vline(xintercept = freedom_liberty_cosine, linewidth = 1, linetype = "dashed") +
+  labs(
+    x = "Cosine similarity",
+    y = "Word pairs",
+    title = "Many arbitrary word pairs sit above an easy related pair"
+  ) +
+  theme_minimal()
+```
+
+Published embeddings are trained on billions of tokens. Large training text gives
+the model many more contexts for separating near neighbours from accidental
+neighbours.
+
+## What to remember
+
+- A word2vec model gives one vector to each kept word.
+- The pinned model used skip-gram, 50 dimensions, window 5, 5 iterations,
+  minimum count 5, and one thread.
+- The word2vec package expects text that is already cleaned before whitespace
+  splitting.
+- Neighbour lists need a pinned artefact when exact words are printed.
+- In this saved fit, even `freedom / liberty` lands below the median of all
+  pairwise similarities.
+
+The curator keeps the neighbour table as a prompt for reading, not as evidence
+that the archive has revealed its themes.
+
+## Sources
+
+- [word2vec R package reference](https://cran.r-project.org/package=word2vec)
+- [Original word2vec paper](https://arxiv.org/abs/1301.3781)
+- [quanteda tokens documentation](https://quanteda.io/reference/tokens.html)
+- [quanteda inaugural corpus documentation](https://quanteda.io/reference/data_corpus_inaugural.html)
+- [United States copyright guidance for government works](https://www.usa.gov/government-copyright)

@@ -1,0 +1,414 @@
+---
+title: "Reading WordNet synsets"
+subtitle: "Treat word meaning as a set, not a spelling"
+author: "Alex Farach"
+description: "Learn how WordNet groups words into synsets, why one word can cover many senses, and where a curated lexical resource helps or fails."
+categories: [similarity, WordNet, word senses]
+---
+
+A museum cataloguer labels a drawer `bank` and then hesitates. The drawer might
+hold river photographs, money records, or a toy building with a coin slot.
+
+The label is a single string. The meaning depends on the sense attached to it.
+
+A **synset** is a set of words that share one sense. WordNet is a hand-built
+lexical database that records those sets and links them to broader meanings such
+as **hypernyms**, the "is-a" parents in a hierarchy.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- define a synset in plain language;
+- count senses for a word string;
+- compare a sense count with a simple chance baseline;
+- list synonyms inside one synset;
+- walk hypernym links up an is-a hierarchy; and
+- name what WordNet can and cannot support.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the WordNet extract
+
+The lesson reads four local CSV files made from Open English WordNet 2024. No
+code downloads WordNet while the page renders. The metadata file records the
+source, licence, and SHA-256 fingerprints.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(stringr)
+library(knitr)
+
+source("R/permutation-null.R")
+
+senses <- read_csv(
+  "data/wordnet/wordnet-senses.csv",
+  na = character(),
+  col_types = cols(
+    lemma = col_character(),
+    part_of_speech = col_character(),
+    sense_id = col_character(),
+    synset_id = col_character(),
+    sense_order = col_integer()
+  )
+)
+
+synsets <- read_csv(
+  "data/wordnet/wordnet-synsets.csv",
+  na = character(),
+  col_types = cols(
+    synset_id = col_character(),
+    part_of_speech = col_character(),
+    definition = col_character(),
+    example = col_character()
+  )
+)
+
+members <- read_csv(
+  "data/wordnet/wordnet-members.csv",
+  na = character(),
+  col_types = cols(
+    synset_id = col_character(),
+    lemma = col_character()
+  )
+)
+
+relations <- read_csv(
+  "data/wordnet/wordnet-relations.csv",
+  na = character(),
+  col_types = cols(
+    synset_id = col_character(),
+    relation = col_character(),
+    target_synset_id = col_character(),
+    target_definition = col_character(),
+    target_members = col_character()
+  )
+)
+
+metadata <- read_csv(
+  "data/wordnet/wordnet-metadata.csv",
+  na = character(),
+  col_types = cols(
+    field = col_character(),
+    value = col_character()
+  )
+)
+
+metadata_summary <- tibble(
+  item = c("lemmas", "senses", "synsets", "synset membership rows", "relations"),
+  value = c(
+    n_distinct(senses$lemma),
+    nrow(senses),
+    nrow(synsets),
+    nrow(members),
+    nrow(relations)
+  )
+)
+
+stopifnot(
+  nrow(senses) > 400L,
+  n_distinct(senses$lemma) == 38L,
+  nrow(synsets) > 400L,
+  nrow(members) > nrow(synsets),
+  sum(relations$relation == "hypernym") > 300L,
+  sum(relations$relation == "hyponym") > sum(relations$relation == "hypernym"),
+  metadata$value[metadata$field == "source_version"] == "Open English Wordnet 2024"
+)
+
+kable(
+  metadata_summary,
+  col.names = c("Item", "Count"),
+  caption = "Size of the local WordNet extract used in this lesson",
+  row.names = FALSE
+)
+```
+
+This slice covers 38 lemmas, not all of English. It is enough to show how a
+lexical database separates spelling from meaning.
+
+## Read the senses of one word
+
+A **sense** is one listed meaning of a word. The string `bank` has 18 senses in
+this extract: 10 noun senses and 8 verb senses. The first noun senses split
+river land, finance, piles, rows, reserves, and gambling funds.
+
+```{r}
+bank_senses <- senses |>
+  filter(lemma == "bank") |>
+  count(part_of_speech, name = "senses") |>
+  arrange(part_of_speech)
+
+bank_noun_senses <- senses |>
+  filter(lemma == "bank", part_of_speech == "noun") |>
+  arrange(sense_order) |>
+  left_join(synsets, by = c("synset_id", "part_of_speech")) |>
+  slice_head(n = 6) |>
+  transmute(
+    sense = sense_order,
+    definition
+  )
+
+lemma_sense_counts <- senses |>
+  count(lemma, name = "sense_count")
+
+bank_sense_null <- permutation_null(
+  observed = sum(senses$lemma == "bank"),
+  replicate_fn = function() {
+    lemma_sense_counts$sense_count[
+      match(sample(lemma_sense_counts$lemma, 1L), lemma_sense_counts$lemma)
+    ]
+  },
+  replicates = 1000L,
+  seed = 5801L,
+  alternative = "greater"
+)
+
+stopifnot(
+  sum(bank_senses$senses) == 18L,
+  identical(bank_senses$part_of_speech, c("noun", "verb")),
+  identical(bank_senses$senses, c(10L, 8L)),
+  nrow(bank_noun_senses) == 6L,
+  any(str_detect(bank_noun_senses$definition, "financial institution")),
+  any(str_detect(bank_noun_senses$definition, "body of water")),
+  bank_sense_null$observed == 18,
+  bank_sense_null$null_high > bank_sense_null$observed,
+  bank_sense_null$p_value > 0.05
+)
+
+kable(
+  bank_noun_senses,
+  col.names = c("Noun sense", "Definition"),
+  caption = "The first six noun senses of bank in the local WordNet extract",
+  row.names = FALSE
+)
+
+kable(
+  bank_sense_null |>
+    mutate(across(where(is.numeric), ~ round(.x, 3))),
+  col.names = c("Observed", "Null mean", "Null 5th pct", "Null 95th pct", "p-value", "Replicates", "Alternative"),
+  caption = "Sense count for bank compared with random lemmas in the extract",
+  row.names = FALSE
+)
+```
+
+A word string is not a unit of meaning. If a search, model, or count treats every
+`bank` as the same thing, it has made a simplifying choice. The null table adds a
+second caution: this extract was built from ambiguous teaching examples, so 18
+senses for `bank` is not unusual inside this small file.
+
+Any lexical method will return an answer for a known word. The safer habit is to
+ask what answer appears after the target word is compared with other words drawn
+from the same source.
+
+## Look inside a synset
+
+For the financial-institution sense, the synset contains four member lemmas.
+These are four names WordNet links to the same sense.
+
+```{r}
+financial_bank_synset <- senses |>
+  filter(lemma == "bank", part_of_speech == "noun", sense_order == 2L) |>
+  pull(synset_id)
+
+financial_bank_members <- members |>
+  filter(synset_id == financial_bank_synset) |>
+  arrange(lemma) |>
+  mutate(role = if_else(lemma == "bank", "queried word", "other member"))
+
+stopifnot(
+  length(financial_bank_synset) == 1L,
+  nrow(financial_bank_members) == 4L,
+  "bank" %in% financial_bank_members$lemma,
+  "depository financial institution" %in% financial_bank_members$lemma,
+  sum(financial_bank_members$role == "other member") == 3L
+)
+
+kable(
+  financial_bank_members,
+  col.names = c("Synset ID", "Lemma", "Role"),
+  caption = "Members of the financial-institution synset for bank",
+  row.names = FALSE
+)
+```
+
+Synonymy here is local to one sense. `bank` and `banking company` share the
+finance sense; `river bank` belongs elsewhere.
+
+## Walk an is-a chain
+
+A hypernym says that one meaning is a kind of another meaning. In this extract,
+the professor-position sense of `chair` walks upward through a position synset,
+then through a work synset, then to `activity`.
+
+```{r}
+first_hypernym <- function(synset) {
+  next_row <- relations |>
+    filter(synset_id == synset, relation == "hypernym") |>
+    arrange(target_synset_id) |>
+    slice_head(n = 1)
+
+  if (nrow(next_row) != 1L) {
+    stop("No hypernym recorded for synset: ", synset, call. = FALSE)
+  }
+
+  next_row
+}
+
+select_chair_synset <- function() {
+  candidates <- senses |>
+    filter(lemma == "chair", part_of_speech == "noun") |>
+    left_join(synsets, by = c("synset_id", "part_of_speech")) |>
+    filter(str_detect(definition, regex("professorship|professor", ignore_case = TRUE))) |>
+    arrange(sense_order)
+
+  if (nrow(candidates) != 1L) {
+    stop("Expected one professor-position chair sense in this extract.", call. = FALSE)
+  }
+
+  candidates$synset_id[[1]]
+}
+
+walk_hypernyms <- function(start_synset, steps) {
+  path <- start_synset
+
+  for (step in seq_len(steps)) {
+    path <- c(path, first_hypernym(path[length(path)])$target_synset_id)
+  }
+
+  path
+}
+
+lookup_definition <- function(id) {
+  local_definition <- synsets$definition[synsets$synset_id == id]
+  if (length(local_definition) > 0L) {
+    return(local_definition[[1]])
+  }
+
+  external_definition <- relations$target_definition[match(id, relations$target_synset_id)]
+  if (is.na(external_definition)) {
+    stop("No definition available for synset: ", id, call. = FALSE)
+  }
+
+  external_definition
+}
+
+lookup_members <- function(id) {
+  local_members <- members |>
+    filter(synset_id == id) |>
+    arrange(lemma) |>
+    pull(lemma)
+
+  if (length(local_members) > 0L) {
+    return(paste(local_members, collapse = ", "))
+  }
+
+  external_members <- relations$target_members[match(id, relations$target_synset_id)]
+  if (is.na(external_members)) {
+    stop("No members available for synset: ", id, call. = FALSE)
+  }
+
+  external_members
+}
+
+chair_synset <- select_chair_synset()
+path_ids <- walk_hypernyms(chair_synset, steps = 3L)
+
+hypernym_path <- tibble(
+  level = seq_along(path_ids) - 1L,
+  synset_id = path_ids,
+  members = vapply(path_ids, lookup_members, character(1)),
+  definition = vapply(path_ids, lookup_definition, character(1))
+)
+
+stopifnot(
+  chair_synset == "oewn-00599171-n",
+  identical(
+    hypernym_path$synset_id,
+    c("oewn-00599171-n", "oewn-00587299-n", "oewn-00583425-n", "oewn-00408356-n")
+  ),
+  all(c("chair, professorship", "activity") %in% unname(hypernym_path$members)),
+  nrow(hypernym_path) == 4L
+)
+
+kable(
+  hypernym_path,
+  col.names = c("Level", "Synset ID", "Members", "Definition"),
+  caption = "A four-step hypernym path from chair to activity",
+  row.names = FALSE
+)
+```
+
+The walk assumes this extract contains the chosen `chair` sense and three
+hypernym links above it. The functions stop when that assumption is false, so a
+missing lemma cannot produce a half-empty path that looks valid.
+
+The hierarchy is useful for broadening a search. A reader looking for occupations
+might want `chair`, `office`, and `job` to meet at a broader node. The same
+hierarchy can be too coarse for a task that needs the academic rank, the
+furniture sense, or a named committee role.
+
+## Keep the limits attached
+
+WordNet is a curated snapshot with a version and a licence. It is not a direct
+measurement of English. It covers much common vocabulary, while domain terms,
+slang, new coinages, and local uses can be missing.
+
+Sense inventories also draw boundaries. A fine split that helps one annotation
+task can be too fine for another, so a WordNet sense should be treated as a
+chosen inventory entry rather than a final answer about meaning.
+
+WordNet is still good for teaching the difference between words and meanings,
+expanding a controlled search, checking whether two labels share a listed sense,
+and building small rule-based features where coverage can be inspected.
+
+```{r}
+limit_check <- tibble(
+  check = c("version recorded", "licence recorded", "target lemmas recorded"),
+  value = c(
+    metadata$value[metadata$field == "source_version"],
+    metadata$value[metadata$field == "source_licence"],
+    metadata$value[metadata$field == "n_lemmas_found"]
+  )
+)
+
+stopifnot(
+  limit_check$value[limit_check$check == "version recorded"] == "Open English Wordnet 2024",
+  limit_check$value[limit_check$check == "licence recorded"] == "https://creativecommons.org/licenses/by/4.0",
+  as.integer(limit_check$value[limit_check$check == "target lemmas recorded"]) == n_distinct(senses$lemma)
+)
+
+kable(
+  limit_check,
+  col.names = c("Check", "Value"),
+  caption = "Provenance fields carried with the WordNet extract",
+  row.names = FALSE
+)
+```
+
+## What to remember
+
+- A synset is a set of words sharing one sense.
+- `bank` has 18 senses in this extract, so one spelling is not one meaning.
+- A simple null check keeps the sense count from sounding stronger than it is.
+- Hypernym links make an is-a hierarchy that can broaden a search.
+- WordNet is useful when a curated inventory is acceptable and limited coverage
+  can be inspected.
+
+The cataloguer keeps the `bank` drawer only after adding sense labels to the
+folders inside it.
+
+## Sources
+
+- [Open English WordNet](https://en-word.net/)
+- [Open English WordNet GitHub repository](https://github.com/globalwordnet/english-wordnet)
+- [Creative Commons Attribution 4.0 International licence](https://creativecommons.org/licenses/by/4.0/)
+- [Princeton WordNet project](https://wordnet.princeton.edu/)

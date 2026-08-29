@@ -1,0 +1,373 @@
+---
+title: "Training models"
+subtitle: "Fit a text model only after the example set is large enough"
+author: "Alex Farach"
+description: "Learn what model training means for text, why a 28-sentence pilot set is too small, and how a penalized logistic model learns from inaugural paragraphs."
+categories: [model development, training models, text classification]
+---
+
+Maya has a folder of sentence labels that did its first job well. It helped a
+small team agree on what counted as training, scheduling, skills, requirements,
+and other workforce details.
+
+Then someone asks for a predictor. The folder has the same labels, the same
+care, and a new problem: the material that is useful for learning a codebook can
+be far too small for measuring a model.
+
+This lesson makes that break visible. The Riverton teaching set stops at a pilot
+check. The modeling work moves to a larger public corpus, presidential inaugural
+paragraphs bundled with quanteda.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+and were created for teaching. The inaugural addresses are works of the United
+States government and are treated here as public domain text packaged by
+quanteda.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- tell when a labeled set is too small for model testing;
+- move from a labeling pilot to a larger teaching corpus;
+- build a text classification workflow with tokens, stop words, and tf-idf;
+- fit a penalized logistic regression model; and
+- report a live score with a baseline and limits attached.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Stop at the pilot set
+
+A **training set** is the labeled material a model learns from. A **test set** is
+labeled material held back until scoring. If the test set is tiny, one right or
+wrong row can swing the score by a large amount.
+
+```{r}
+suppressPackageStartupMessages({
+  library(readr)
+  library(dplyr)
+  library(tibble)
+  library(rsample)
+  library(recipes)
+  library(textrecipes)
+  library(parsnip)
+  library(workflows)
+  library(yardstick)
+  library(glmnet)
+})
+
+riverton_sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+set.seed(4300)
+riverton_split <- initial_split(
+  riverton_sentences,
+  prop = 0.75
+)
+riverton_training <- training(riverton_split)
+riverton_testing <- testing(riverton_split)
+
+riverton_label_counts <- riverton_sentences |>
+  count(reference_label, name = "sentences") |>
+  arrange(desc(sentences), reference_label)
+
+split_size <- tibble(
+  part = c("training", "test"),
+  rows = c(nrow(riverton_training), nrow(riverton_testing))
+)
+
+stopifnot(
+  identical(nrow(riverton_sentences), 28L),
+  identical(n_distinct(riverton_sentences$reference_label), 5L),
+  identical(nrow(riverton_training), 21L),
+  identical(nrow(riverton_testing), 7L),
+  identical(sum(riverton_label_counts$sentences), 28L)
+)
+
+knitr::kable(
+  riverton_label_counts,
+  col.names = c("Label", "Sentences"),
+  caption = "The Riverton pilot labels are too few for a model score",
+  row.names = FALSE
+)
+
+knitr::kable(
+  split_size,
+  col.names = c("Split part", "Rows"),
+  caption = "A 75 percent split leaves only seven test sentences",
+  row.names = FALSE
+)
+```
+
+The split is deterministic because the seed is `4300`. It leaves
+`r nrow(riverton_testing)` test sentences across `r n_distinct(riverton_sentences$reference_label)` labels.
+A single changed answer would move accuracy by about
+`r round(100 / nrow(riverton_testing), 1)` percentage points. That is not enough
+room to learn how far off an automatic answer might be.
+
+## Change the material
+
+The larger corpus comes from `quanteda::data_corpus_inaugural`, reached through
+the shared helper. Each row is one paragraph of at least 25 words. The outcome
+for this lesson is **era**, which asks whether a paragraph came from an address
+before 1900 or from 1900 or later.
+
+```{r}
+source("R/inaugural-corpus.R")
+
+paragraphs <- inaugural_paragraphs()
+
+corpus_summary <- tibble(
+  measure = c("paragraphs", "speeches", "people", "surnames"),
+  value = c(
+    nrow(paragraphs),
+    n_distinct(paragraphs$speech_id),
+    n_distinct(paragraphs$president),
+    n_distinct(paragraphs$surname)
+  )
+)
+
+era_counts <- paragraphs |>
+  group_by(era) |>
+  summarise(
+    paragraphs = n(),
+    median_words = median(paragraph_words),
+    .groups = "drop"
+  )
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  identical(n_distinct(paragraphs$speech_id), 60L),
+  identical(n_distinct(paragraphs$president), 40L),
+  identical(n_distinct(paragraphs$surname), 36L),
+  "paragraph_words" %in% names(paragraphs),
+  identical(as.integer(era_counts$paragraphs), c(485L, 892L)),
+  identical(as.numeric(era_counts$median_words), c(112, 54)),
+  identical(levels(paragraphs$era), c("before 1900", "1900 or later"))
+)
+
+knitr::kable(
+  corpus_summary,
+  col.names = c("Measure", "Value"),
+  caption = "The inaugural paragraph corpus used for model training",
+  row.names = FALSE
+)
+
+knitr::kable(
+  era_counts,
+  col.names = c("Era", "Paragraphs", "Median paragraph words"),
+  caption = "Paragraphs by era",
+  row.names = FALSE
+)
+```
+
+The material has `r format(nrow(paragraphs), big.mark = ",")` paragraphs from
+`r n_distinct(paragraphs$speech_id)` speeches by `r n_distinct(paragraphs$president)` people.
+The helper keeps `president` as the full name and also keeps `surname`, because a
+surname-only grouping would merge separate people who share a family name. The
+word-count column matters too: paragraphs before 1900 have median length
+`r era_counts$median_words[era_counts$era == "before 1900"]`, while later
+paragraphs have median length
+`r era_counts$median_words[era_counts$era == "1900 or later"]`.
+
+That size does not make the task general to all political speech or all
+historical writing. It does give the lesson enough held-out paragraphs to test a
+specific claim on this corpus.
+
+## Fit one speech-held-out model
+
+The split keeps each speech whole. A paragraph from one inaugural address cannot
+sit in training while another paragraph from the same address sits in testing.
+The seed is `4301` for the split and `4302` for the fit.
+
+The recipe turns text into model columns. **Tf-idf** means term frequency times
+inverse document frequency. In plain language, a word counts for more in a
+paragraph when it is common there and rare elsewhere. Stop words such as `the`
+and `of` are removed first, and the recipe keeps the 500 most frequent remaining
+tokens.
+
+The model is **logistic regression**, a linear classifier for categories. The
+penalty pulls large coefficients toward zero so the model does not chase every
+small accident in the training text. Here the penalty is fixed at `0.01` so the
+page can run quickly and exactly.
+
+```{r}
+baselines <- read_csv(
+  "data/inaugural/baselines.csv",
+  na = character(),
+  col_types = cols(
+    task = col_character(),
+    outcome = col_character(),
+    rows = col_integer(),
+    speeches = col_integer(),
+    people = col_integer(),
+    largest_class = col_character(),
+    baseline_accuracy = col_double()
+  )
+)
+
+set.seed(4301)
+era_split <- group_initial_split(
+  paragraphs,
+  group = speech_id,
+  prop = 0.75
+)
+era_training <- training(era_split)
+era_testing <- testing(era_split)
+
+text_recipe <- recipe(era ~ paragraph, data = era_training) |>
+  step_tokenize(paragraph) |>
+  step_stopwords(paragraph) |>
+  step_tokenfilter(paragraph, max_tokens = 500) |>
+  step_tfidf(paragraph)
+
+text_model <- logistic_reg(penalty = 0.01, mixture = 0) |>
+  set_engine("glmnet")
+
+era_workflow <- workflow() |>
+  add_recipe(text_recipe) |>
+  add_model(text_model)
+
+set.seed(4302)
+era_fitted <- fit(era_workflow, data = era_training)
+
+era_predictions <- predict(era_fitted, era_testing) |>
+  bind_cols(era_testing |> select(era))
+
+live_accuracy <- accuracy(
+  era_predictions,
+  truth = era,
+  estimate = .pred_class
+) |>
+  pull(.estimate)
+
+corpus_baseline <- baselines |>
+  filter(task == "era") |>
+  pull(baseline_accuracy)
+
+training_majority <- era_training |>
+  count(era, sort = TRUE) |>
+  slice(1) |>
+  pull(era)
+
+split_baseline_accuracy <- mean(era_testing$era == training_majority)
+
+length_cut <- median(era_training$paragraph_words)
+length_levels <- levels(era_training$era)
+best_length_accuracy <- -Inf
+for (flip in c(FALSE, TRUE)) {
+  low_label <- if (flip) length_levels[2] else length_levels[1]
+  high_label <- if (flip) length_levels[1] else length_levels[2]
+  training_length_pred <- if_else(
+    era_training$paragraph_words <= length_cut,
+    low_label,
+    high_label
+  )
+  training_length_accuracy <- mean(training_length_pred == as.character(era_training$era))
+  if (training_length_accuracy > best_length_accuracy) {
+    best_length_accuracy <- training_length_accuracy
+    best_length_direction <- c(low = low_label, high = high_label)
+  }
+}
+length_predictions <- factor(
+  if_else(
+    era_testing$paragraph_words <= length_cut,
+    best_length_direction[["low"]],
+    best_length_direction[["high"]]
+  ),
+  levels = length_levels
+)
+length_rule_accuracy <- mean(length_predictions == era_testing$era)
+
+score_table <- tibble(
+  measure = c(
+    "Live speech-held-out model",
+    "Same-split training-majority rule",
+    "Same-split paragraph-length rule",
+    "Corpus largest-class baseline"
+  ),
+  accuracy = c(
+    live_accuracy,
+    split_baseline_accuracy,
+    length_rule_accuracy,
+    corpus_baseline
+  )
+)
+
+stopifnot(
+  identical(nrow(era_training), 1042L),
+  identical(nrow(era_testing), 335L),
+  identical(n_distinct(era_training$speech_id), 46L),
+  identical(n_distinct(era_testing$speech_id), 14L),
+  identical(round(live_accuracy, 4), 0.8209),
+  identical(round(split_baseline_accuracy, 4), 0.4179),
+  identical(round(length_rule_accuracy, 4), 0.6388),
+  identical(round(corpus_baseline, 4), 0.6478),
+  all(era_predictions$.pred_class %in% levels(paragraphs$era))
+)
+
+knitr::kable(
+  score_table |>
+    mutate(accuracy = round(accuracy, 4)),
+  col.names = c("Measure", "Accuracy"),
+  caption = "One live model score with same-split baselines",
+  row.names = FALSE
+)
+```
+
+The live model scores `r round(live_accuracy, 4)` on this speech-held-out test
+set. The majority label learned from training would score
+`r round(split_baseline_accuracy, 4)` on this exact test set, and a one-number
+rule based only on paragraph length would score `r round(length_rule_accuracy, 4)`.
+The corpus-wide largest-class baseline is `r round(corpus_baseline, 4)`, but the
+same-split comparisons are the ones a deployable rule could use.
+
+## What the fit did not prove
+
+A fitted model is a frozen recipe plus learned weights. It can label new rows in
+the same shape as the training rows. It cannot prove that the label is well
+chosen, that the corpus stands for other text, or that the score will hold under
+a harder split. The next lesson tests those questions with repeated splits.
+
+## What to remember
+
+- A pilot corpus can teach labeling without being large enough for testing.
+- A test set with seven rows cannot measure much.
+- A speech-held-out split keeps one address from leaking across both sides.
+- Tf-idf gives more weight to words that are common in one paragraph and rare in
+  the rest.
+- A model score needs a baseline beside it.
+
+A trained classifier is only the start of the measurement. The useful question is
+whether its score survives a fairer test.
+
+## Sources
+
+- [quanteda inaugural corpus documentation](https://quanteda.io/reference/data_corpus_inaugural.html)
+- [textrecipes reference](https://textrecipes.tidymodels.org/)
+- [glmnet documentation](https://glmnet.stanford.edu/)
+- [rsample group splits](https://rsample.tidymodels.org/reference/group_initial_split.html)

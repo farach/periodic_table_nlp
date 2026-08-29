@@ -37,6 +37,13 @@ jobs:
             libleptonica-dev \
             libprotobuf-dev \
             protobuf-compiler \
+            libgsl-dev \
+            libxml2-dev \
+            libsodium-dev \
+            libglpk-dev \
+            libpng-dev \
+            libx11-dev \
+            cmake \
             poppler-data \
             tesseract-ocr \
             tesseract-ocr-eng
@@ -69,6 +76,12 @@ jobs:
 
       - name: Check repetition across lessons
         run: Rscript scripts/check-repetition.R
+
+      - name: Check for models scored on their training data
+        run: Rscript scripts/check-resubstitution.R
+
+      - name: Check committed data against recorded fingerprints
+        run: Rscript scripts/check-data-fingerprints.R
 
       - name: Render site
         run: quarto render

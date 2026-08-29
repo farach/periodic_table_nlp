@@ -38,6 +38,15 @@ if (!any(nzchar(trimws(code_lines)))) {
 
 lesson_env <- new.env(parent = globalenv())
 
+# Plot objects only emit their warnings when they are printed, and ggplot does a
+# lot of its work at print time: dropped rows, missing values, and out-of-range
+# scale limits all surface there. Sourcing with `print.eval = TRUE` against a
+# null device makes this fast check see the same warnings `quarto render` would,
+# without writing any files. Lesson 44 once passed this script and then failed
+# the render because a scale limit silently dropped two points.
+grDevices::pdf(NULL)
+on.exit(grDevices::dev.off(), add = TRUE)
+
 result <- withCallingHandlers(
   tryCatch(
     {
@@ -45,6 +54,7 @@ result <- withCallingHandlers(
         code_file,
         local = lesson_env,
         echo = FALSE,
+        print.eval = TRUE,
         encoding = "UTF-8"
       )
       "ok"

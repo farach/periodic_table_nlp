@@ -1,0 +1,2 @@
+artifact,description,source,license,created_on,purpose,rows,spam_class_counts,intent_class_counts,fingerprint
+riverton-inbox.csv,Invented short inbox messages with spam and intent labels,Created for this project,"MIT, same as this repository",2026-08-29,Mechanics only. A dataset written by the same person who writes the classifier cannot measure whether the method works.,60,genuine message=44; job scam=16,ask_eligibility=12; check_status=13; report_problem=13; request_callback=11; reset_access=11,b71b06e353918e7a421327883950c7409ea149c34b6ba26396fc5bc8c27df216

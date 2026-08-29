@@ -1,0 +1,61 @@
+message_id,text,is_spam,intent,author_note
+M001,I applied for the forklift trainee posting last Tuesday and want to check my status.,FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M002,Can you tell me whether my Riverton Works application is still under review?,FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M003,I completed the form for the night warehouse role; has anyone looked at it yet?,FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M004,Please confirm that my documents for the youth internship reached your office.,FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M005,"The portal says submitted, but I need to know if the caregiver aide opening is closed.",FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M006,I interviewed on Friday for the bus cleaner job and need an update.,FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M007,I can approve your work from home payroll file once you send the release fee.,TRUE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M008,I'm a recruiter and I can guarantee placement after your $79 verification payment.,TRUE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M009,I lost the confirmation email for the food service class and want to check enrollment.,FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M010,Is my name still on the callback list for the construction helper program?,FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M011,My account will not accept my password after the browser update.,FALSE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M012,Please reset access for the training portal; the link expired this morning.,FALSE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M013,I changed phones and cannot receive the sign-in code.,FALSE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M014,The system locked me out after three tries.,FALSE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M015,Can someone reopen my account before tonight's orientation?,FALSE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M016,"My email was typed wrong on the job board profile, so I cannot log in.",FALSE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M017,I froze your applicant wallet for security; send gift cards and I will restore login.,TRUE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M018,Can I reset your Riverton password after you enter your bank code at this outside link?,TRUE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M019,I need a new temporary password for the resume workshop registration.,FALSE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M020,The reset message never arrived for my account.,FALSE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M021,Am I eligible for the welding class if I finished high school outside the state?,FALSE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M022,Do I need a driver's license before applying for the delivery helper listing?,FALSE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M023,Can parents in the evening program still receive transit vouchers?,FALSE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M024,I am 17 now and turn 18 next month; can I join the summer bridge program?,FALSE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M025,Does the medical billing course accept people who are still learning English?,FALSE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M026,I live in Bellhaven but work in Riverton; can I use the lab?,FALSE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M027,I have a no-experience shipping job for you if you pay the starter kit deposit today.,TRUE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M028,Do you want me to qualify you for a private grant after a small processing charge?,TRUE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M029,Do weekend classes count for people receiving unemployment benefits?,FALSE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M030,Can I apply to the data support certificate with a GED?,FALSE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M031,Choose childcare support and the job board shows a blank page.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M032,Upload a resume and the file name changes to random letters.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M033,The appointment calendar keeps showing times that are already taken.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M034,"A listing says paid training, but the attachment asks for my bank password.",FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M035,The phone number on the bakery posting is disconnected.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M036,"I tried to report a suspicious offer, but the report button failed.",FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M037,"I'm from tech support, and I found an infection; buy this cleanup card before applying!",TRUE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M038,I represent a recruiter who requires crypto payment for the Lab background check.,TRUE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M039,The Spanish version of the page cuts off the final question.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M040,The map sends me to the old training entrance.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M041,Please call after 3 p.m. about the healthcare aide class.,FALSE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M042,Schedule a callback because the online session is not possible to attend.,FALSE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M043,Can a counselor phone me about which certificate fits warehouse work?,FALSE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M044,Please leave a voicemail if I miss the call.,FALSE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M045,I need someone to call my case manager about required paperwork.,FALSE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M046,Could you call with bus directions to the skills centre?,FALSE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M047,Call this premium number now to claim your guaranteed job interview.,TRUE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M048,Should I call back with a remote job offer after you text your card number?,TRUE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M049,"I work mornings, so please call me during lunch about the class waitlist.",FALSE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M050,Can the intake worker call my parent to explain the program?,FALSE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M051,"Congratulations, you were selected for a secret shopper job; deposit this check today.",TRUE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M052,I need your Social Security number by text to finish your hiring file.,TRUE,reset_access,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M053,A company using your logo offered a remote packing job and asked for a wire transfer.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M054,Earn $900 weekly mailing packages from home with no interview.,TRUE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M055,I am not sure whether this offer is real; the recruiter wants a photo of my ID.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M056,Limited slots for city jobs! Pay now in crypto to reserve your badge.,TRUE,request_callback,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M057,The childcare stipend form says pending. Do I need to send another copy?,FALSE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M058,My office will release your training certificate after the activation fee.,TRUE,check_status,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M059,I cannot open the document that lists class materials.,FALSE,report_problem,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
+M060,Send a deposit for tools and start tomorrow as a warehouse supervisor.,TRUE,ask_eligibility,Invented by the site author for a teaching fixture; not a real message or validated benchmark.
