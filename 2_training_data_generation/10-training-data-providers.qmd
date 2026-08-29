@@ -1,5 +1,5 @@
 ---
-title: "Inspecting an outside data provider"
+title: "Inspecting provider schemas and provenance"
 subtitle: "Check schema, units, provenance, and rights before combining records"
 author: "Alex Farach"
 description: "Use onet2r, cmapr, and huggingfaceR fixtures to inspect what an outside source records and what it cannot establish."
@@ -453,12 +453,13 @@ No column name is shared and no title matches exactly. One pair survives a
 loosened comparison: the O*NET fixture's `Registered Nurses` and the CMap
 fixture's `Registered Nurse`.
 
-That single match is the trap, not the solution. On the O*NET side the row is an
-occupation, identified by the code `29-1141.00`, and its unit is a task
-performed in that occupation. On the CMap side the row is a job title someone
-held, and the table carries no occupation code at all. Making the strings equal
-does not make the units equal, and a join on the loosened string would attach
-task statements to title transitions on the strength of a dropped letter.
+That single match is the trap, not the solution. On the O*NET side each row is
+an occupation-task statement: `29-1141.00` identifies the occupation and the
+task field identifies one activity associated with it. On the CMap side each
+row is a transition between job titles, and the table carries no occupation
+code. Making the strings equal does not make the units equal, and a join on the
+loosened string would attach task statements to title transitions on the
+strength of a dropped letter.
 
 A real link needs a crosswalk: a documented mapping from titles to occupation
 codes, with rules for the many-to-many cases, published by whoever is

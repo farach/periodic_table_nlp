@@ -2,7 +2,7 @@
 title: "Turning reading decisions into labels"
 subtitle: "Create a manual annotation codebook for workforce text"
 author: "Alex Farach"
-description: "Learn how people label workforce sentences without pretending that judgment is automatic or neutral."
+description: "Learn how people label workforce text units without pretending that judgment is automatic or neutral."
 categories: [training data, annotation, workforce research]
 ---
 
@@ -17,7 +17,7 @@ A computer cannot learn these categories until people define them. **Manual
 annotation** is the work of reading an item and assigning a label according to
 written instructions. The hard part is not typing the label. It is deciding
 what the label means and applying that meaning consistently. The task records
-what a sentence explicitly says; it does not decide whether a worker qualifies
+what a text unit explicitly says; it does not decide whether a worker qualifies
 or whether a program is a good option.
 
 ::: {.callout-note}
@@ -56,7 +56,7 @@ supplied the text.
 Calling those lines sentences would be convenient and wrong. Two of them are
 headings in capital letters, and four are noun phrases with no verb. The
 distinction matters because a rule written for sentences, such as "label the
-main claim of the sentence," has to say what it does with a heading that makes
+main claim of the text unit," has to say what it does with a heading that makes
 no claim at all.
 
 The next chunk loads readr for files, dplyr and tibble for tables,
@@ -96,7 +96,7 @@ allowed_labels <- c(
   "other"
 )
 
-first_sentences <- workforce_sentences |>
+first_units <- workforce_sentences |>
   select(
     sentence_id,
     document_id,
@@ -119,9 +119,9 @@ stopifnot(
 )
 
 knitr::kable(
-  first_sentences,
+  first_units,
   col.names = c(
-    "Sentence ID",
+    "Unit ID",
     "Document ID",
     "Text",
     "Reference label",
@@ -138,19 +138,19 @@ codebook could divide the concepts differently.
 
 ### Count what the units actually are
 
-The claim that these are not all sentences is checkable. Two properties are
-enough: whether a unit ends in a full stop, question mark, or exclamation mark,
-and whether it is written entirely in capital letters.
+The claim that these are not all sentences is checkable, but punctuation alone
+cannot classify grammar. `Apply by October 15` is an imperative clause even
+without a full stop. The six flyer lines are therefore classified explicitly
+rather than inferred from their last character.
 
 ```{r}
 unit_shapes <- workforce_sentences |>
   mutate(
-    ends_with_terminal_mark = str_detect(text, "[.!?]$"),
-    written_in_capitals = text == str_to_upper(text),
     shape = case_when(
-      written_in_capitals ~ "heading in capitals",
-      ends_with_terminal_mark ~ "complete sentence",
-      TRUE ~ "phrase without a verb ending"
+      sentence_id %in% c("s023", "s024") ~ "heading in capitals",
+      sentence_id %in% c("s025", "s026", "s027") ~ "phrase without a verb",
+      sentence_id == "s028" ~ "imperative clause",
+      TRUE ~ "complete sentence"
     )
   )
 
@@ -160,33 +160,36 @@ shape_counts <- unit_shapes |>
 stopifnot(
   identical(sum(shape_counts$units), 28L),
   identical(
-    sum(unit_shapes$ends_with_terminal_mark),
-    22L
+    unit_shapes$shape[unit_shapes$sentence_id == "s028"],
+    "imperative clause"
   ),
   identical(
-    sum(unit_shapes$written_in_capitals),
+    sum(unit_shapes$shape == "heading in capitals"),
     2L
   ),
   identical(
-    unit_shapes$shape[unit_shapes$sentence_id == "s025"],
-    "phrase without a verb ending"
+    sum(unit_shapes$shape == "phrase without a verb"),
+    3L
   ),
   all(
-    unit_shapes$document_id[!unit_shapes$ends_with_terminal_mark] == "F001"
+    unit_shapes$document_id[
+      unit_shapes$shape != "complete sentence"
+    ] == "F001"
   )
 )
 
 knitr::kable(
   shape_counts,
   col.names = c("Shape of the unit", "Units"),
-  caption = "Twenty-two sentences, two headings, four phrases",
+  caption = "Twenty-two sentences, two headings, three phrases, one imperative clause",
   row.names = FALSE
 )
 ```
 
-Six of the 28 units are not sentences, and all six come from the flyer, whose
-lines were laid out for a reader walking past a noticeboard. `Paid training
-stipend` has no verb; `RIVERTON SKILLS OPEN HOUSE` announces an event.
+Five of the 28 units are not sentences. A sixth, `Apply by October 15`, is an
+imperative clause whose flyer typography omits terminal punctuation. All six
+come from a notice laid out for a reader walking past a noticeboard. `Paid
+training stipend` has no verb; `RIVERTON SKILLS OPEN HOUSE` announces an event.
 
 Both still receive a label, and the codebook has to say how. That is the reason
 the rules below talk about the unit's main explicit claim rather than the
@@ -218,7 +221,7 @@ knitr::kable(
       reference_label
     ),
   col.names = c(
-    "Sentence ID",
+    "Unit ID",
     "Flyer line",
     "Verbatim text",
     "Reference label"
@@ -234,17 +237,17 @@ A **codebook** records the label definitions, instructions, examples, and
 version. The complete instrument lives in `R/workforce-codebook.R`. Its rules
 are:
 
-- `training`: the sentence offers or describes learning, mentoring,
+- `training`: the text unit offers or describes learning, mentoring,
   certification training, or an apprenticeship;
-- `requirement`: the sentence states or prefers experience, education,
+- `requirement`: the text unit states or prefers experience, education,
   credentials, a license, a portfolio, or a physical condition;
-- `schedule`: the sentence describes when work or classes occur;
-- `skill`: the sentence names an ability used in the work; and
+- `schedule`: the text unit describes when work or classes occur;
+- `skill`: the text unit names an ability used in the work; and
 - `other`: none of the four definitions applies; headings, deadlines,
-  location, work setting, and travel belong here unless the sentence
+  location, work setting, and travel belong here unless the text unit
   explicitly states another category.
 
-The sentence's main explicit claim receives one label. Reviewers do not infer a
+The text unit's main explicit claim receives one label. Reviewers do not infer a
 training offer from a job title or assume that a preferred credential is
 mandatory. A required shift receives `schedule` because timing is the main
 claim. Reviewers mark `needs_review` when more than one label remains
@@ -256,6 +259,7 @@ schema and a content hash.
 ```{r}
 source("R/workforce-codebook.R")
 annotation_codebook <- workforce_codebook()
+recorded_codebook <- workforce_codebook("1.0.0")
 
 stopifnot(
   inherits(
@@ -264,8 +268,10 @@ stopifnot(
   ),
   identical(
     annotation_codebook$version,
-    "1.0.0"
+    "1.1.0"
   ),
+  identical(recorded_codebook$version, "1.0.0"),
+  !identical(annotation_codebook$hash, recorded_codebook$hash),
   identical(
     str_length(annotation_codebook$hash),
     64L
@@ -288,8 +294,8 @@ stopifnot(
     length(annotation_codebook$examples),
     7L
   ),
-  all(workforce_sentences$codebook_version == annotation_codebook$version),
-  all(workforce_sentences$codebook_hash == annotation_codebook$hash),
+  all(workforce_sentences$codebook_version == recorded_codebook$version),
+  all(workforce_sentences$codebook_hash == recorded_codebook$hash),
   all(str_length(workforce_sentences$rationale) > 0),
   all(workforce_sentences$uncertainty %in% c("certain", "needs_review"))
 )
@@ -298,9 +304,11 @@ annotation_codebook
 ```
 
 The printed hash changes when the instructions, schema, examples, or version
-changes. This makes two annotation runs easier to compare. The code above does
-not call an AI service; foundryR defines and fingerprints the measurement
-instrument.
+changes. Version 1.1.0 corrects the unit name. The archived labels keep their
+original 1.0.0 fingerprint because changing an instrument does not retroactively
+change which instrument produced earlier records. A new annotation run should
+use 1.1.0. The code above does not call an AI service; foundryR defines and
+fingerprints the measurement instrument.
 
 ## Count labels without interpreting the count
 
@@ -315,23 +323,23 @@ label_counts <- workforce_sentences |>
       levels = allowed_labels
     )
   ) |>
-  count(reference_label, name = "sentences", .drop = FALSE) |>
+  count(reference_label, name = "units", .drop = FALSE) |>
   transmute(
     label = as.character(reference_label),
-    sentences
+    units
   )
 
 stopifnot(
-  identical(sum(label_counts$sentences), 28L),
+  identical(sum(label_counts$units), 28L),
   identical(
-    as.integer(label_counts$sentences),
+    as.integer(label_counts$units),
     c(7L, 9L, 5L, 2L, 5L)
   )
 )
 
 knitr::kable(
   label_counts,
-  col.names = c("Reference label", "Sentences"),
+  col.names = c("Reference label", "Text units"),
   caption = "Label counts in the teaching dataset",
   row.names = FALSE
 )
@@ -342,8 +350,8 @@ jobs in Riverton or from any real population.
 
 ## Keep ambiguity visible
 
-Sentence `s013` mentions a certificate, a word that also appears in training
-offers. Its main claim is that a certificate is preferred, so version 1.0.0 of
+Unit `s013` mentions a certificate, a word that also appears in training
+offers. Its main claim is that a certificate is preferred, so version 1.1.0 of
 the codebook labels it as a requirement.
 
 ```{r}
@@ -367,14 +375,14 @@ knitr::kable(
       rationale
     ),
   col.names = c(
-    "Sentence ID",
+    "Unit ID",
     "Document ID",
     "Text",
     "Reference label",
     "Uncertainty",
     "Rationale"
   ),
-  caption = "A sentence that needs the codebook rule",
+  caption = "A text unit that needs the codebook rule",
   row.names = FALSE
 )
 ```
@@ -445,10 +453,9 @@ knitr::kable(
 )
 ```
 
-Two of six matched. That rate would be alarming as a final result and is
-ordinary for a first pass, because the four disagreements are not carelessness.
-Each one is a place where two readings of the same words were both defensible
-under the instructions as they stood.
+Two of six matched in this designed pilot. Six items cannot establish a typical
+first-pass agreement rate. Here, the four disagreements identify wording that
+the initial instructions did not settle.
 
 ### Turn each disagreement into a rule
 
@@ -504,7 +511,7 @@ stopifnot(
   identical(nrow(adjudication_check), 4L),
   all(adjudication_check$matches_file),
   all(adjudication_check$clause_in_codebook),
-  identical(annotation_codebook$version, "1.0.0")
+  identical(annotation_codebook$version, "1.1.0")
 )
 
 knitr::kable(
@@ -522,22 +529,22 @@ knitr::kable(
 )
 ```
 
-Every rule in that table is present in the instructions the codebook carries,
-and the check above reads them back out of the instrument rather than trusting
-the description. Every adjudicated decision matches the label the annotation
-file holds today. The cycle is therefore closed: disagreement, rule, decision,
-and a version and hash that identify which instrument produced the labels.
+Every rule in that table is present in the current instructions, and the check
+above reads them back out of the instrument rather than trusting the
+description. Every adjudicated decision matches the archived label. Version
+1.0.0 remains on those rows; version 1.1.0 records the corrected unit wording
+for future work.
 
-Two details are worth keeping visible. The `uncertainty` column stays at
-`needs_review` for the units that started the argument, so a later reader can
-find the hard cases without re-running the pilot. And the codebook's own
-instruction line still calls the unit a sentence, which the flyer lines show is
-not exact; a later version should say line. That mismatch is recorded here
-rather than quietly corrected.
+Two details stay visible. Three of the four disputed units retain
+`needs_review`; `s010` is marked `certain`, so the file does not pretend every
+disagreement remained unresolved. Version 1.1.0 of the codebook now names one
+source-text line as the annotation unit. The historical `sentence_id` column
+remains a stable identifier, not a claim that every row is a grammatical
+sentence.
 
-Pilots are cheap and the instinct to skip them is strong. Six units and one
-afternoon produced four rules that would otherwise have been decided
-inconsistently across 28 units by whoever happened to read them.
+This pilot shows how disagreement can produce explicit rules. Its designed six
+items do not estimate how much a pilot would change a larger annotation job or
+how long that work would take.
 
 ## Protect the people doing the work
 
@@ -552,7 +559,7 @@ Before assigning work:
 6. record which languages and lived experience the task requires.
 
 Expertise depends on the question. A worker, career counselor, employer, and
-labor researcher may interpret the same sentence differently. Those
+labor researcher may interpret the same text unit differently. Those
 perspectives should be designed into the study rather than treated as noise.
 
 ## What to remember

@@ -114,7 +114,7 @@ allowed_labels <- c(
   "other"
 )
 source("R/workforce-codebook.R")
-crowd_codebook <- workforce_codebook()
+crowd_codebook <- workforce_codebook("1.0.0")
 
 stopifnot(
   identical(nrow(crowd_labels), 11L),
