@@ -1,7 +1,6 @@
 ---
 title: "Choosing which examples to label next"
 subtitle: "Use active learning without confusing uncertainty with truth"
-author: "Alex Farach"
 description: "Learn how a small model can rank unlabeled workforce sentences for human review."
 categories: [training data, active learning, workforce research]
 ---

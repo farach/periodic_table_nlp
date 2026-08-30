@@ -1,7 +1,6 @@
 ---
 title: "Finding abbreviations without trusting capitals"
 subtitle: "Compare all-capital tokens with parenthetical definitions"
-author: "Alex Farach"
 description: "Learn why capital letters create false abbreviation hits and how parenthetical long-form rules behave on constructed examples."
 categories: [phrases and entities, abbreviations, workforce research]
 ---

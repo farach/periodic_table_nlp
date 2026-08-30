@@ -1,7 +1,6 @@
 ---
 title: "Explaining models"
 subtitle: "Inspect the words a fitted text model learned to weight"
-author: "Alex Farach"
 description: "Learn how to read linear model coefficients and why a plausible explanation can still belong to a weak model."
 categories: [model development, explanation, text classification]
 ---

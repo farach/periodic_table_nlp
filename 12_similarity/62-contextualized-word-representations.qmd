@@ -1,7 +1,6 @@
 ---
 title: "Reading words in context"
 subtitle: "Compare one word vector with one token occurrence vector"
-author: "Alex Farach"
 description: "Learn how spaCy returns a context-sensitive token representation and why two uses of the same word can have different vectors."
 categories: [similarity, contextual embeddings, spaCy]
 ---

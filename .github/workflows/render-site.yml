@@ -77,6 +77,9 @@ jobs:
       - name: Check repetition across lessons
         run: Rscript scripts/check-repetition.R
 
+      - name: Check R code style
+        run: Rscript scripts/check-r-style.R
+
       - name: Check for models scored on their training data
         run: Rscript scripts/check-resubstitution.R
 

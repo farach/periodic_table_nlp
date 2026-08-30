@@ -1,7 +1,6 @@
 ---
 title: "Selecting sentences as a summary"
 subtitle: "Test TextRank against simple nulls"
-author: "Alex Farach"
 description: "Learn how extractive summarization ranks existing sentences and why chance baselines still matter."
 categories: [signals and discovery, extractive summarization, inaugural addresses]
 ---

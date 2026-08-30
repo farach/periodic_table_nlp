@@ -1,7 +1,6 @@
 ---
 title: "Scoring readability formulas"
 subtitle: "Compute Flesch scores and measure the syllable shortcut"
-author: "Alex Farach"
 description: "Learn how readability formulas use sentence, word, and syllable counts, and why their limits are severe."
 categories: [sentences and paragraphs, readability scoring, workforce research]
 ---

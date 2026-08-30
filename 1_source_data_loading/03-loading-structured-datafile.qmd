@@ -1,7 +1,6 @@
 ---
 title: "Loading a structured data file"
 subtitle: "Open a CSV file and check what R received"
-author: "Alex Farach"
 description: "Learn how rows, columns, missing values, and text encodings affect a CSV file in R."
 categories: [source data loading, CSV, data quality]
 ---

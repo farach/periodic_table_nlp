@@ -1,7 +1,6 @@
 ---
 title: "Deciding what counts as a word"
 subtitle: "Compare word, sentence, and subword tokenization"
-author: "Alex Farach"
 description: "Learn why tokenization is a rule-based decision before any word count can begin."
 categories: [word parsing, tokenization, workforce research]
 ---

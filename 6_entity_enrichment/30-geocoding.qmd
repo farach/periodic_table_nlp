@@ -1,7 +1,6 @@
 ---
 title: "Geocoding place names"
 subtitle: "Join text mentions to an offline gazetteer"
-author: "Alex Farach"
 description: "Learn how a gazetteer turns place names into coordinates while preserving ambiguous and not-found results."
 categories: [entity enrichment, geocoding, workforce research]
 ---

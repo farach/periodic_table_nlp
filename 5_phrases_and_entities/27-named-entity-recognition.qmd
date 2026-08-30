@@ -1,7 +1,6 @@
 ---
 title: "Checking named entities against domain text"
 subtitle: "See what a trained NER model gets right and wrong"
-author: "Alex Farach"
 description: "Learn how spaCy labels named entities in the Riverton sentences and why invented local names are hard."
 categories: [phrases and entities, named entity recognition, workforce research]
 ---

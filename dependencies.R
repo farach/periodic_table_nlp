@@ -41,6 +41,7 @@ if (FALSE) {
   library(tesseract)
   library(textrank)
   library(textrecipes)
+  library(styler)
   library(tibble)
   library(tidyr)
   library(tidytext)

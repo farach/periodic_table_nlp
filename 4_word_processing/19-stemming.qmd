@@ -1,7 +1,6 @@
 ---
 title: "Chopping word endings"
 subtitle: "Use Snowball stems without mistaking them for words"
-author: "Alex Farach"
 description: "Learn how stemming groups some workforce word forms and creates non-word stems."
 categories: [word processing, stemming, workforce research]
 ---

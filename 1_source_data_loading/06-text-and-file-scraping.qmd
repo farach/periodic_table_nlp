@@ -1,7 +1,6 @@
 ---
 title: "Collecting text from a web page"
 subtitle: "Scrape a saved job board without losing its source"
-author: "Alex Farach"
 description: "Learn how to extract job titles and training details from structured HTML with R."
 categories: [source data loading, scraping, workforce research]
 ---

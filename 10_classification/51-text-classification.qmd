@@ -1,7 +1,6 @@
 ---
 title: "Turning documents into categories"
 subtitle: "Follow the text-classification recipe on inaugural paragraphs"
-author: "Alex Farach"
 description: "Learn how a text classifier represents documents, fits a model, returns probabilities, and needs a cut point."
 categories: [classification, text classification, inaugural corpus]
 ---

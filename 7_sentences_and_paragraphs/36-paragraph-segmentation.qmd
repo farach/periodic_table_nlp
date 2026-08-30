@@ -1,7 +1,6 @@
 ---
 title: "Finding paragraph boundaries"
 subtitle: "Keep layout units before text conversion removes them"
-author: "Alex Farach"
 description: "Learn how blank lines and HTML block elements define paragraphs in different file formats."
 categories: [sentences and paragraphs, paragraph segmentation, workforce research]
 ---

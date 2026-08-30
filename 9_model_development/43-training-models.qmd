@@ -1,7 +1,6 @@
 ---
 title: "Training models"
 subtitle: "Fit a text model only after the example set is large enough"
-author: "Alex Farach"
 description: "Learn what model training means for text, why a 28-sentence pilot set is too small, and how a penalized logistic model learns from inaugural paragraphs."
 categories: [model development, training models, text classification]
 ---

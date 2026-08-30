@@ -1,7 +1,6 @@
 ---
 title: "Linking named entities"
 subtitle: "Turn mentions into stable identifiers"
-author: "Alex Farach"
 description: "Learn how alias tables generate entity candidates and why resolution and NIL handling remain separate decisions."
 categories: [entity enrichment, entity linking, workforce research]
 ---

@@ -1,7 +1,6 @@
 ---
 title: "Extracting text from an image"
 subtitle: "Run OCR and compare the result with a known transcript"
-author: "Alex Farach"
 description: "Learn what optical character recognition can recover from a training flyer and how to check its errors."
 categories: [source data loading, OCR, workforce research]
 ---
@@ -289,7 +288,7 @@ normalized_edit_distance <- as.integer(
 )
 normalized_distance_share <-
   normalized_edit_distance /
-  str_length(reference_text)
+    str_length(reference_text)
 
 tibble(
   normalized_edit_distance =
@@ -337,8 +336,7 @@ row_positions <- seq(1L, dim(image_array)[1], by = keep_every)
 column_positions <- seq(1L, dim(image_array)[2], by = keep_every)
 degraded_array <- image_array[
   row_positions,
-  column_positions,
-  ,
+  column_positions, ,
   drop = FALSE
 ]
 banded_rows <- seq(1L, dim(degraded_array)[1], by = 3L)

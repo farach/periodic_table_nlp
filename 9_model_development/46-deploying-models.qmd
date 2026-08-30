@@ -1,7 +1,6 @@
 ---
 title: "Deploying models"
 subtitle: "Turn a fitted workflow into a callable service file"
-author: "Alex Farach"
 description: "Learn how vetiver records a fitted text model, writes an API file, and keeps evaluation details attached before deployment."
 categories: [model development, deployment, vetiver]
 ---

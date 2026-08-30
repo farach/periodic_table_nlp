@@ -1,7 +1,6 @@
 ---
 title: "Finding noun chunks from grammar links"
 subtitle: "Compare spaCy phrases with small dependency chunks"
-author: "Alex Farach"
 description: "Learn how noun chunks group nouns with attached words, using spaCy and a local UDPipe dependency parse."
 categories: [phrases and entities, noun chunks, workforce research]
 ---

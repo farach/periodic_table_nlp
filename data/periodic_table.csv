@@ -1,5 +1,5 @@
 task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,last_reviewed
-1,Bit,Bits to character encoding,concept,1,Source data loading,source,1_source_data_loading/01-bits-to-character-encoding.html,available,2026-08-29
+1,Bit,Bits to character encoding,concept,1,Source data loading,source,1_source_data_loading/01-bits-to-character-encoding.html,available,2026-08-30
 2,Typ,Manual examples and pattern matching,practice,1,Source data loading,source,1_source_data_loading/02-manual-typewriting.html,available,2026-08-29
 3,Str,Loading a structured data file,practice,1,Source data loading,source,1_source_data_loading/03-loading-structured-datafile.html,available,2026-08-29
 4,Cor,Generating a corpus,practice,1,Source data loading,source,1_source_data_loading/04-generating-a-corpus.html,available,2026-08-29

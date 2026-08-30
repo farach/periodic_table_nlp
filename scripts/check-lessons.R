@@ -150,6 +150,16 @@ for (lesson_file in lesson_files) {
     )
   }
 
+  if (any(grepl("^author\\s*:", lines))) {
+    failures <- c(
+      failures,
+      sprintf(
+        "%s repeats the site author in its front matter",
+        lesson_file
+      )
+    )
+  }
+
   if (!grepl("options(warn = 2)", text, fixed = TRUE)) {
     failures <- c(
       failures,

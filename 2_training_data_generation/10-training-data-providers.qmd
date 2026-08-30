@@ -1,7 +1,6 @@
 ---
 title: "Inspecting provider schemas and provenance"
 subtitle: "Check schema, units, provenance, and rights before combining records"
-author: "Alex Farach"
 description: "Use onet2r, cmapr, and huggingfaceR fixtures to inspect what an outside source records and what it cannot establish."
 categories: [training data, data providers, workforce research]
 ---

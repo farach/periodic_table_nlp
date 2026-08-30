@@ -1,7 +1,6 @@
 ---
 title: "Training word vectors"
 subtitle: "Check whether neighbours carry information"
-author: "Alex Farach"
 description: "Learn how distributed word representations are trained from local context and why a small corpus can make neighbour lists look better than they are."
 categories: [similarity, word embeddings, inaugural addresses]
 ---

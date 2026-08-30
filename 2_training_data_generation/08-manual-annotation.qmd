@@ -1,7 +1,6 @@
 ---
 title: "Turning reading decisions into labels"
 subtitle: "Create a manual annotation codebook for workforce text"
-author: "Alex Farach"
 description: "Learn how people label workforce text units without pretending that judgment is automatic or neutral."
 categories: [training data, annotation, workforce research]
 ---

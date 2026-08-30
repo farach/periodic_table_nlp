@@ -1,7 +1,6 @@
 ---
 title: "Reading topic-model output carefully"
 subtitle: "Fit LDA and test random starts"
-author: "Alex Farach"
 description: "Learn how LDA groups co-occurring words while treating topic labels and model choices with care."
 categories: [signals and discovery, topic modeling, inaugural addresses]
 ---

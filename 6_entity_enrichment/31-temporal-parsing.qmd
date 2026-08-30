@@ -1,7 +1,6 @@
 ---
 title: "Parsing time expressions"
 subtitle: "Resolve dates only when the reference date is explicit"
-author: "Alex Farach"
 description: "Learn how simple R rules handle dates, weekdays, times of day, and durations in workforce text."
 categories: [entity enrichment, temporal parsing, workforce research]
 ---
