@@ -1,7 +1,6 @@
 ---
 title: "Extracting document metadata"
 subtitle: "Describe a source before analyzing its text"
-author: "Alex Farach"
 description: "Learn how to extract HTML metadata and compute provenance fields for a Riverton source file."
 categories: [documents, metadata, workforce research]
 ---

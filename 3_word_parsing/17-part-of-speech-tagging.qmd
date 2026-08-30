@@ -1,7 +1,6 @@
 ---
 title: "Tagging words by their job"
 subtitle: "Read part-of-speech tags from a small trained model"
-author: "Alex Farach"
 description: "Learn how a part-of-speech tagger labels workforce text and why held-out accuracy has limits."
 categories: [word parsing, part-of-speech tagging, workforce research]
 ---

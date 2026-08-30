@@ -1,7 +1,6 @@
 ---
 title: "Making text comparable"
 subtitle: "Normalize carefully and keep the display text intact"
-author: "Alex Farach"
 description: "Learn how case, spacing, punctuation, and Unicode normalization change workforce text."
 categories: [word processing, normalization, workforce research]
 ---

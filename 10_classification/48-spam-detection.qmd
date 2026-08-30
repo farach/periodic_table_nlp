@@ -1,7 +1,6 @@
 ---
 title: "Catching scam messages"
 subtitle: "Read a spam rule, train a small filter, and choose which mistake costs more"
-author: "Alex Farach"
 description: "Learn how spam detection turns text into decisions while keeping false alarms and missed scams separate."
 categories: [classification, spam detection, workforce research]
 ---
@@ -348,12 +347,12 @@ stopifnot(
   identical(sum(term_hits$messages_matched == 1L), 11L),
   all(
     rule_matrix ==
-    matrix(
-      c(14L, 2L, 2L, 42L),
-      nrow = 2,
-      byrow = TRUE,
-      dimnames = dimnames(rule_matrix)
-    )
+      matrix(
+        c(14L, 2L, 2L, 42L),
+        nrow = 2,
+        byrow = TRUE,
+        dimnames = dimnames(rule_matrix)
+      )
   )
 )
 ```
@@ -469,21 +468,21 @@ stopifnot(
   identical(as.integer(count(spam_test, spam_label)$n), c(5L, 14L)),
   all(
     test_rule_matrix ==
-    matrix(
-      c(3L, 1L, 2L, 13L),
-      nrow = 2,
-      byrow = TRUE,
-      dimnames = dimnames(test_rule_matrix)
-    )
+      matrix(
+        c(3L, 1L, 2L, 13L),
+        nrow = 2,
+        byrow = TRUE,
+        dimnames = dimnames(test_rule_matrix)
+      )
   ),
   all(
     model_matrix ==
-    matrix(
-      c(3L, 3L, 2L, 11L),
-      nrow = 2,
-      byrow = TRUE,
-      dimnames = dimnames(model_matrix)
-    )
+      matrix(
+        c(3L, 3L, 2L, 11L),
+        nrow = 2,
+        byrow = TRUE,
+        dimnames = dimnames(model_matrix)
+      )
   ),
   identical(
     round(

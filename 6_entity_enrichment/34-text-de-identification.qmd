@@ -1,7 +1,6 @@
 ---
 title: "De-identifying text"
 subtitle: "Mask personal identifiers and measure what leaks"
-author: "Alex Farach"
 description: "Learn how simple masking rules find invented personal identifiers and why de-identification is judged by leaks."
 categories: [entity enrichment, de-identification, workforce research]
 ---

@@ -1,7 +1,6 @@
 ---
 title: "Loading data from an API"
 subtitle: "Ask an online service for information and check its reply"
-author: "Alex Farach"
 description: "Learn how an API request becomes a checked data table in R."
 categories: [source data loading, API, JSON]
 ---
@@ -314,8 +313,8 @@ stopifnot(
   all(str_length(books$title) > 0),
   all(
     str_detect(
-     books$catalog_url,
-     fixed("https://openlibrary.org/works/")
+      books$catalog_url,
+      fixed("https://openlibrary.org/works/")
     )
   )
 )
@@ -360,10 +359,11 @@ built inside the lesson with `httr2::response()`. No request leaves the machine.
 
 ```{r}
 saved_response <- function(
-    status,
-    body,
-    url = book_request$url,
-    extra_headers = list()) {
+  status,
+  body,
+  url = book_request$url,
+  extra_headers = list()
+) {
   httr2::response(
     status_code = status,
     url = url,
@@ -415,7 +415,7 @@ page_one <- saved_response(
       sprintf("/works/OL%d", 1:5),
       sprintf("Candidate title %d", 1:5)
     ),
-    ']}'
+    "]}"
   ),
   url = page_one_request$url
 )
@@ -428,7 +428,7 @@ page_two <- saved_response(
       c("/works/OL5", "/works/OL6"),
       c("Candidate title 5", "Candidate title 6")
     ),
-    ']}'
+    "]}"
   ),
   url = page_two_request$url
 )
@@ -438,7 +438,7 @@ field_renamed <- saved_response(
   str_c(
     '{"numFound": 1, "start": 0, "docs": [',
     '{"key": "/works/OL7", "name": "Title moved to a new field"}',
-    ']}'
+    "]}"
   ),
   url = page_one_request$url
 )
@@ -503,9 +503,10 @@ parse_retry_after <- function(value, now) {
 }
 
 read_saved_page <- function(
-    response,
-    page_size,
-    retry_now = retry_reference_time) {
+  response,
+  page_size,
+  retry_now = retry_reference_time
+) {
   status <- httr2::resp_status(response)
 
   if (identical(status, 429L)) {
@@ -558,10 +559,10 @@ read_saved_page <- function(
 
   top_level_types_valid <-
     is.numeric(body$numFound) &&
-    length(body$numFound) == 1L &&
-    is.numeric(body$start) &&
-    length(body$start) == 1L &&
-    is.list(body$docs)
+      length(body$numFound) == 1L &&
+      is.numeric(body$start) &&
+      length(body$start) == 1L &&
+      is.list(body$docs)
   if (!top_level_types_valid) {
     return(list(
       outcome = "schema failure: invalid top-level types",

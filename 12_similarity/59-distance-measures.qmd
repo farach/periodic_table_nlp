@@ -1,7 +1,6 @@
 ---
 title: "Measuring distance between texts"
 subtitle: "Compare string distance with vector distance"
-author: "Alex Farach"
 description: "Learn how string and vector distances answer different similarity questions, and why raw-count Euclidean distance tracks document length."
 categories: [similarity, distance measures, inaugural addresses]
 ---
@@ -318,7 +317,7 @@ plot_pairs <- pair_distances |>
 
 ggplot(plot_pairs, aes(x = length_difference, y = value)) +
   geom_point(alpha = 0.18, size = 0.7) +
-  facet_wrap(~ distance, scales = "free_y") +
+  facet_wrap(~distance, scales = "free_y") +
   labs(
     x = "Difference in paragraph length, in tokens",
     y = "Distance",

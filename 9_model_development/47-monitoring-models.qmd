@@ -1,7 +1,6 @@
 ---
 title: "Monitoring models"
 subtitle: "Watch a deployed text model after the first score"
-author: "Alex Farach"
 description: "Learn how to check model performance across time slices and why changing labels can make an old score misleading."
 categories: [model development, monitoring, model drift]
 ---

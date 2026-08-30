@@ -1,7 +1,6 @@
 ---
 title: "Cleaning raw text"
 subtitle: "Repair common damage without pretending nothing was lost"
-author: "Alex Farach"
 description: "Learn how HTML remnants, whitespace, invisible characters, and mojibake change raw text in R."
 categories: [documents, text cleaning, workforce research]
 ---

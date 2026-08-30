@@ -1,7 +1,6 @@
 ---
 title: "Manual examples and pattern matching"
 subtitle: "Type a handful of messages by hand, then build a pattern you can test"
-author: "Alex Farach"
 description: "Type small examples by hand and use them to find dates, email addresses, and order numbers in R."
 categories: [source data loading, regular expressions, testing]
 ---

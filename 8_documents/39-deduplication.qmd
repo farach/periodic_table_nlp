@@ -1,7 +1,6 @@
 ---
 title: "Deduplicating documents"
 subtitle: "Find repeated records before they distort a collection"
-author: "Alex Farach"
 description: "Learn how exact, normalized, and near-duplicate checks behave on Riverton workforce documents."
 categories: [documents, deduplication, workforce research]
 ---

@@ -69,6 +69,18 @@ Lesson code uses the tidyverse: `readr` to read files, `tibble` to build
 tables, `dplyr` to reshape them, `tidyr` to pivot, `purrr` to iterate, and
 `stringr` for strings. Use the native pipe `|>`.
 
+Follow the [tidyverse style guide](https://style.tidyverse.org/). Before
+committing, run:
+
+```powershell
+Rscript scripts/check-r-style.R
+```
+
+That command uses `styler` in dry-run mode and fails when any lesson would be
+changed. In RStudio, use the **Style active file** add-in or run
+`styler::style_file("path/to/lesson.qmd")` to apply the same rules. Review the
+diff afterwards; formatting should never change what the code computes.
+
 Use the standard text packages where they are the natural tool rather than
 hand-rolling equivalents: `tidytext::unnest_tokens()` to go from documents to
 tokens, `quanteda` where a corpus or document-feature matrix reads more

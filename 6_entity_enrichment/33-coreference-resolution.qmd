@@ -1,7 +1,6 @@
 ---
 title: "Resolving coreference"
 subtitle: "Link pronouns to the noun phrases they may refer to"
-author: "Alex Farach"
 description: "Learn how a nearest-noun baseline handles pronouns in a constructed Riverton passage and where it fails."
 categories: [entity enrichment, coreference resolution, workforce research]
 ---

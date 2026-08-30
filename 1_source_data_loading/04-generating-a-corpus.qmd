@@ -1,7 +1,6 @@
 ---
 title: "Building a text corpus"
 subtitle: "Turn separate documents into an organized collection"
-author: "Alex Farach"
 description: "Learn how to collect text, attach useful labels, and check a corpus before analysis."
 categories: [source data loading, corpus, data quality]
 ---

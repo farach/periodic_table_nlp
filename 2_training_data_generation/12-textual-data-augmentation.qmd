@@ -1,7 +1,6 @@
 ---
 title: "Creating additional training examples"
 subtitle: "Augment text without assuming the label survived"
-author: "Alex Farach"
 description: "Learn how to create workforce text variants and test whether they still support the intended label."
 categories: [training data, augmentation, workforce research]
 ---

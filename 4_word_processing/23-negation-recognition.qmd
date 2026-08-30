@@ -1,7 +1,6 @@
 ---
 title: "Finding what a sentence denies"
 subtitle: "Use parser links to test a simple negation rule"
-author: "Alex Farach"
 description: "Learn why negation breaks keyword matching and how a small parser-based rule performs on workforce text."
 categories: [word processing, negation recognition, workforce research]
 ---

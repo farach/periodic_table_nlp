@@ -1,7 +1,6 @@
 ---
 title: "Counting nearby words with n-grams"
 subtitle: "See why phrase counts get sparse fast"
-author: "Alex Farach"
 description: "Learn how bigrams and trigrams count adjacent tokens in the Riverton sentences and why most of them appear only once."
 categories: [phrases and entities, n-grams, workforce research]
 ---

@@ -1,7 +1,6 @@
 ---
 title: "Finding sentence boundaries"
 subtitle: "Compare three ways to split text into sentences"
-author: "Alex Farach"
 description: "Learn why sentence segmentation can fail on abbreviations, decimals, initials, titles, and headings."
 categories: [sentences and paragraphs, sentence segmentation, workforce research]
 ---

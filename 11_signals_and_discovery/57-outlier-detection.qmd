@@ -1,7 +1,6 @@
 ---
 title: "Finding speeches unlike the rest"
 subtitle: "Rank cosine distance and test length"
-author: "Alex Farach"
 description: "Learn how outlier detection depends on the text representation and why length belongs beside distance."
 categories: [signals and discovery, outlier detection, inaugural addresses]
 ---

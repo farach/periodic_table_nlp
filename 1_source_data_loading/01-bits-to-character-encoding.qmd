@@ -1,7 +1,6 @@
 ---
 title: "How computers store text"
 subtitle: "A friendly guide to bits, bytes, Unicode, and UTF-8 in R"
-author: "Alex Farach"
 description: "Learn why text sometimes becomes garbled and how to protect it when working in R."
 categories: [source data loading, encoding, Unicode]
 ---
@@ -37,7 +36,12 @@ By the end of this lesson, you will be able to:
 #| include: false
 
 options(warn = 2)
-stopifnot(identical(getOption("warn"), 2L))
+r_version <- getRversion()
+
+stopifnot(
+  "`warn` must be 2" = identical(getOption("warn"), 2L),
+  "This lesson requires R 4.5.0 or newer" = r_version >= "4.5.0"
+)
 ```
 
 The first code chunk loads the lesson's helper packages before checking the bytes for two small text values.
@@ -75,6 +79,29 @@ no need to memorize them. For now, notice that `A` needs one UTF-8 byte while
 A **bit** records one binary choice, 0 or 1. Eight bits make one **byte**, which
 has 256 possible combinations numbered from 0 through 255.
 
+::: {.callout-note}
+## Why eight bits make a byte
+
+A byte did not always have a fixed size. Early computers grouped bits according
+to the characters and numbers each machine needed, so a byte could mean
+different things on different systems.
+
+Two standards helped settle the size:
+
+1. ASCII defined 128 text and control values, which fit in seven bits. RFC 20,
+   written for early network interchange in 1969, put each seven-bit ASCII value
+   inside an eight-bit byte and set the extra high bit to zero.
+2. IBM's System/360 family, announced in 1964, made an eight-bit byte the basic
+   building block of its storage formats. Its compatible machines became widely
+   used, and their byte size travelled with the software and hardware built
+   around them.
+
+Eight bits provide \(2^8 = 256\) patterns: enough to hold every ASCII value with
+one bit left over. Today, a byte almost always means eight bits. Technical
+standards sometimes use **octet** when they need to rule out the older,
+variable-size meaning.
+:::
+
 We will start with `A` and `é`, two characters small enough to inspect by eye.
 R's `charToRaw()` function shows bytes. The word "raw" means that R should
 display the stored values without interpreting them as letters. `map()` from
@@ -105,12 +132,10 @@ stopifnot(
 )
 ```
 
-Every `stopifnot()` here is an **assertion**: a check that halts R when a
-result stops matching what the page claims. They pass, so the output shows `41`
-for `A` and
-`c3 a9` for `é`. Hexadecimal digits may appear in upper- or lowercase without
-changing the values. The bytes `c3 a9` become `é` only when software reads them
-using UTF-8.
+R prints raw bytes as two-digit hexadecimal values. The output shows `41` for
+`A` and `c3 a9` for `é`. Hexadecimal digits may appear in upper- or lowercase
+without changing the values. The bytes `c3 a9` become `é` only when software
+reads them using UTF-8.
 
 ## Recreate the garbled name
 
@@ -172,13 +197,21 @@ of a file still needs to know which encoding the writer used.
 ::: {.callout-note}
 ## Where ASCII and Latin-1 fit
 
-ASCII is an older set of 128 values covering English letters, digits,
-punctuation, and control characters. UTF-8 uses the same byte values for those
-characters.
+ASCII grew from the need for incompatible machines to exchange text. The
+standard uses seven bits for 128 values covering English letters, digits,
+punctuation, and control instructions such as a line break. UTF-8 deliberately
+keeps those same values, so an ASCII file is also valid UTF-8.
 
-Latin-1 is an eight-bit encoding that includes characters used by several
-Western European languages. Its byte values above 127 do not mean the same
-thing in UTF-8. Confusing Latin-1 with UTF-8 is a common cause of garbled text.
+Latin-1 came later and uses all eight bits, giving it 256 values. It adds
+characters used by several Western European languages, but it still cannot
+represent most of the world's writing systems. Its byte values above 127 do not
+mean the same thing in UTF-8. Confusing Latin-1 with UTF-8 is a common cause of
+garbled text.
+
+Unicode took a different approach: assign a common number to each text element,
+then let encodings such as UTF-8 decide how those numbers become bytes. That
+separation is why one system can cover far more than any single eight-bit code
+page.
 :::
 
 ## What R knows about a string
@@ -455,12 +488,26 @@ Detecting an encoding by inspection is possible and sometimes necessary, but a
 detector returns a ranked guess. Keep the guess, its confidence, and the byte
 evidence beside the decoded text so that a later reader can disagree with it.
 
-## A note for Windows users
+## What current R does
 
-R 4.2 and newer use UTF-8 as the native encoding on supported versions of
-Windows. Mac and Linux systems also commonly use UTF-8. Older software may
-still produce Windows-1252, Latin-1, or another encoding, so the computer's
-usual setting cannot settle the question for every file.
+This site builds and tests with R `r r_version`. That is the version that built
+this page, not a promise that it remains the newest release; CRAN's
+[R for Windows page](https://cran.r-project.org/bin/windows/base/) lists the
+current installer.
+
+On Windows 10 version 1903 and later, and on Windows Server 2022 and later,
+current 64-bit R builds use UTF-8 as their native encoding, matching the usual
+setup on macOS and Linux. This removed many older Windows limitations around
+file names, comments, symbols, and text passed to external libraries.
+
+Recent releases have tightened the edges too. R 4.5 made package metadata files
+such as `DESCRIPTION` and `PACKAGES` UTF-8, added
+`readLines(encoding = "bytes")` for inspecting a file without creating invalid
+strings, and made `iconv(from = "")` prefer a string's declared encoding.
+
+Those improvements make modern R safer; they do not tell R how an outside file
+was written. Older software may still produce Windows-1252, Latin-1, or another
+encoding, and one file may still contain rows from several systems.
 
 We can ask R about the current session:
 
@@ -584,5 +631,9 @@ human-sized test: the person who entered a name should get the same name back.
 - [Unicode Text Segmentation, UAX #29](https://www.unicode.org/reports/tr29/)
 - [Unicode FAQ: UTF-8, UTF-16, UTF-32 and BOM](https://www.unicode.org/faq/utf_bom.html)
 - [RFC 3629: UTF-8](https://www.rfc-editor.org/rfc/rfc3629)
+- [RFC 20: seven-bit ASCII in an eight-bit byte](https://www.rfc-editor.org/rfc/rfc20.html)
+- [IBM System/360 Principles of Operation](https://bitsavers.org/pdf/ibm/360/princOps/A22-6821-0_360PrincOps.pdf)
 - [R documentation for declared encodings](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Encoding.html)
-- [R 4.2 changes to Windows encoding support](https://developer.r-project.org/Blog/public/2021/12/07/upcoming-changes-in-r-4.2-on-windows/)
+- [R 4.6.1 for Windows](https://cran.r-project.org/bin/windows/base/)
+- [R NEWS](https://cran.r-project.org/doc/manuals/r-release/NEWS.html)
+- [How native UTF-8 arrived in R for Windows](https://developer.r-project.org/Blog/public/2021/12/07/upcoming-changes-in-r-4.2-on-windows/)

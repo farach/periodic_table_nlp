@@ -1,7 +1,6 @@
 ---
 title: "Parsing prices from text"
 subtitle: "Turn pay mentions into amounts with units"
-author: "Alex Farach"
 description: "Learn how simple R rules pull wages and stipends from text while keeping ranges, missing units, and no-number cases visible."
 categories: [entity enrichment, price parsing, workforce research]
 ---

@@ -1,7 +1,6 @@
 ---
 title: "Drawing grammar links between words"
 subtitle: "Read dependency parses from a small trained model"
-author: "Alex Farach"
 description: "Learn how a dependency parser links words in workforce text and why attachment scores need limits."
 categories: [word parsing, dependency parsing, workforce research]
 ---

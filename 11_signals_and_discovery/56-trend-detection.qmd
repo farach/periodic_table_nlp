@@ -1,7 +1,6 @@
 ---
 title: "Checking word trends over time"
 subtitle: "Normalize counts and test the peak"
-author: "Alex Farach"
 description: "Learn how to track word frequency across speeches while separating durable patterns from one-document spikes."
 categories: [signals and discovery, trend detection, inaugural addresses]
 ---

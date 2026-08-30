@@ -1,7 +1,6 @@
 ---
 title: "Scoring customer feeling"
 subtitle: "Compare a word list with labels from the domain"
-author: "Alex Farach"
 description: "Learn why sentiment scores from word lists and trained labels can disagree, especially with short feedback."
 categories: [classification, sentiment analysis, emotion analysis]
 ---

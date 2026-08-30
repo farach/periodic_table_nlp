@@ -1,7 +1,6 @@
 ---
 title: "Finding distinctive words and phrases"
 subtitle: "Compare tf-idf with tagged phrase keywords"
-author: "Alex Farach"
 description: "Learn how keyword extraction can surface distinctive words and tagged phrases while keeping importance claims separate."
 categories: [signals and discovery, keyword extraction, inaugural addresses]
 ---

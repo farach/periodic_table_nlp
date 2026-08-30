@@ -1,7 +1,6 @@
 ---
 title: "Finding similar documents"
 subtitle: "Nearest neighbours depend on the representation"
-author: "Alex Farach"
 description: "Learn how speech-level document similarity changes under raw counts, tf-idf, and stopword removal."
 categories: [similarity, document similarity, inaugural addresses]
 ---

@@ -1,7 +1,6 @@
 ---
 title: "Evaluating models"
 subtitle: "Read a score only after asking what it was compared with"
-author: "Alex Farach"
 description: "Learn why model evaluation needs a baseline, repeated splits, and a split scheme that matches the claim."
 categories: [model development, evaluation, text classification]
 ---

@@ -1,7 +1,6 @@
 ---
 title: "Looking inside words with a dictionary"
 subtitle: "Use hunspell analyses without mistaking them for contextual morphology"
-author: "Alex Farach"
 description: "Learn what an English spelling dictionary can and cannot say about stems, affixes, ambiguity, and context in workforce text."
 categories: [word parsing, morphology, workforce research]
 ---

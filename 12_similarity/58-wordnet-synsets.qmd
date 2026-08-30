@@ -1,7 +1,6 @@
 ---
 title: "Reading WordNet synsets"
 subtitle: "Treat word meaning as a set, not a spelling"
-author: "Alex Farach"
 description: "Learn how WordNet groups words into synsets, why one word can cover many senses, and where a curated lexical resource helps or fails."
 categories: [similarity, WordNet, word senses]
 ---

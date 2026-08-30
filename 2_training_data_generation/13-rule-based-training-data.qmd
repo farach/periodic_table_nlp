@@ -1,7 +1,6 @@
 ---
 title: "Labeling text with written rules"
 subtitle: "Measure rule coverage, conflicts, and mistakes"
-author: "Alex Farach"
 description: "Learn how rule-based weak labels can expand workforce training data without becoming ground truth."
 categories: [training data, weak supervision, workforce research]
 ---

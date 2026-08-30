@@ -1,7 +1,6 @@
 ---
 title: "Identifying document language"
 subtitle: "Treat language guesses as fallible classifications"
-author: "Alex Farach"
 description: "Learn how two language detectors behave on short Riverton text samples and why abstention can be safer than a wrong route."
 categories: [documents, language identification, workforce research]
 ---

@@ -1,7 +1,6 @@
 ---
 title: "Checking dictionary unknowns"
 subtitle: "Measure what a spell checker catches and what it cannot see"
-author: "Alex Farach"
 description: "Learn how hunspell flags unknown workforce words and how to test constructed spelling errors."
 categories: [word processing, spell checking, workforce research]
 ---

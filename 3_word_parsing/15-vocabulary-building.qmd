@@ -1,7 +1,6 @@
 ---
 title: "Building a vocabulary from tokens"
 subtitle: "Choose which words to keep and measure what falls outside"
-author: "Alex Farach"
 description: "Learn how frequency cutoffs and out-of-vocabulary checks shape a small workforce text vocabulary."
 categories: [word parsing, vocabulary, workforce research]
 ---

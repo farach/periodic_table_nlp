@@ -1,7 +1,6 @@
 ---
 title: "Sorting messages by purpose"
 subtitle: "Train a multi-class intent classifier and question the labels"
-author: "Alex Farach"
 description: "Learn how intent classification routes messages and why the label schema controls what the system can do."
 categories: [classification, intent classification, workforce research]
 ---

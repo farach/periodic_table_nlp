@@ -1,7 +1,6 @@
 ---
 title: "Choosing dictionary forms"
 subtitle: "Compare teaching lemmas with a released pipeline"
-author: "Alex Farach"
 description: "Learn how lemmas differ from stems and why lemmatizers built in different ways disagree on workforce text."
 categories: [word processing, lemmatization, workforce research]
 ---

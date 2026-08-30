@@ -1,7 +1,6 @@
 ---
 title: "Finding phrases with readable rules"
 subtitle: "Score a credential pattern before trusting it"
-author: "Alex Farach"
 description: "Learn how simple string rules find credential phrases, how concordances help inspection, and why rules need maintenance."
 categories: [phrases and entities, rule-based matching, workforce research]
 ---

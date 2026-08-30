@@ -1,7 +1,6 @@
 ---
 title: "Working with several annotators"
 subtitle: "Measure disagreement before combining labels"
-author: "Alex Farach"
 description: "Learn how to compare workforce labels from several reviewers without treating majority vote as truth."
 categories: [training data, crowdsourcing, agreement]
 ---

@@ -1,7 +1,6 @@
 ---
 title: "Checking small grammar rules"
 subtitle: "Score three checks and keep the limits visible"
-author: "Alex Farach"
 description: "Learn how small grammar checks can find planted errors and why they are not a full grammar checker."
 categories: [sentences and paragraphs, grammar checking, workforce research]
 ---
