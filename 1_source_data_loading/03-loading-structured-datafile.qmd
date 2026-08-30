@@ -43,8 +43,6 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-The first code chunk loads the packages used for reading, checking, and displaying the feedback file.
-
 ## What makes a file structured?
 
 The first uncertainty is basic: what does each part of the file represent? A
@@ -91,12 +89,10 @@ stopifnot(
 )
 ```
 
-The `stopifnot()` lines are **assertions**, checks that make R stop if an
-expected result changes. They verify the line count, header, and quoted first
-comment. There are six lines in all: one header and five records. The first
-comment contains a comma, and its quotation marks keep the full sentence in one
-field rather than splitting it across columns. This line count works because
-the teaching file has no quoted line breaks.
+The file has six lines: one header and five records. The first comment contains
+a comma, and its quotation marks keep the full sentence in one field rather
+than splitting it across columns. This line count works because the teaching
+file has no quoted line breaks.
 
 ## Load the CSV into R
 
@@ -457,8 +453,8 @@ value does not always come from a parse problem.
 The transferable idea is not the function name. Declaring column types and
 missing-value rules at read time, and keeping the parser's complaint, is the
 same discipline that `dtype` and `na_values` serve in pandas or an explicit
-schema serves in Arrow. A parser that guesses quietly is the hazard in every
-language.
+schema serves in Arrow. A parser that guesses without reporting the guess is
+the hazard in every language.
 
 ### Check the things a parser cannot know
 

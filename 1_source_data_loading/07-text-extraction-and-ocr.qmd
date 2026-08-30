@@ -41,8 +41,6 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-The first code chunk loads the packages needed to read metadata, keep tibbles, handle text, and run OCR. A tibble is a table that prints its size and each column's type.
-
 ## Inspect the source image
 
 ![Fictional training flyer used for the OCR example](../data/workforce/training-flyer.png){#fig-training-flyer width=720 height=480 fig-alt="A fictional Riverton workforce training flyer. A complete text transcript follows."}

@@ -43,7 +43,7 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Start with a narrow purpose
+## Start with one purpose
 
 The team wants more examples of explicit training offers. It will not claim
 that the examples describe real employers or estimate how often training is
@@ -641,7 +641,7 @@ stopifnot(
 )
 ```
 
-Both sentences satisfy the keyword-only check. The narrow negation rule
+Both sentences satisfy the keyword-only check. The small negation rule
 separates this pair, but it is not a general language-understanding method.
 Label preservation still requires review at the meaning level.
 
@@ -658,8 +658,8 @@ Check:
 7. how conclusions change when synthetic examples are removed.
 
 Large language models can generate many variants, but scale does not settle
-these questions. Repeated training on generated text can also narrow a model's
-representation of the underlying distribution.
+these questions. Repeated training on generated text can also make a model's
+representation of the underlying distribution less varied.
 
 ## What to remember
 

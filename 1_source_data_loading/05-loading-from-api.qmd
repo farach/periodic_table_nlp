@@ -37,8 +37,6 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-The first code chunk loads the packages needed to build the request, read files, shape tibbles, and protect displayed text. A tibble is a table that prints its size and each column's type.
-
 ## Start with a request and a reply
 
 Every API exchange in this lesson has two parts:
@@ -104,12 +102,9 @@ stopifnot(
 )
 ```
 
-Those `stopifnot()` calls are **assertions**. Each one stops the page from
-building if the result it names ever changes. They confirm that httr2 built a
-request for the
-intended address. The printed request begins with `GET`, the standard method
-used here to ask a service to send information. Printing it lets us inspect the
-destination and search choices without contacting the service again.
+The printed request begins with `GET`, the standard method used here to ask a
+service to send information. Printing it lets us inspect the destination and
+search choices without contacting the service again.
 
 The choices added to the address are called **query parameters**:
 
@@ -729,7 +724,7 @@ stopifnot(
 ```
 
 Six saved replies exercised two retry formats, two result pages, and two schema
-failures. None became a quietly empty result table.
+failures. None produced an empty result table without an error.
 
 The refusal returned no records and a waiting time taken from the
 `Retry-After` header, which is the service telling the client how long to pause.
@@ -741,7 +736,7 @@ so `start + records returned < numFound` supplies the next offset. The second
 page reports `start = 5`; adding its two records reaches the reported total, so
 the client stops. A full page alone would not prove that another page exists.
 
-The renamed field is the quiet one. The record still parsed as JSON and still
+The renamed field is harder to catch. The record still parsed as JSON and still
 had a key. Only the explicit list of required fields turned it into a reported
 failure instead of a table with a missing column.
 

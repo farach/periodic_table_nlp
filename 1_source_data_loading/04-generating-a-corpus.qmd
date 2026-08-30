@@ -42,8 +42,6 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-The first code chunk loads the packages needed to read files, build tibbles, repeat work, and handle text. A tibble is a table that prints its size and each column's type.
-
 ## Decide what one document means
 
 Before collecting anything, the editor must choose the **document unit**, the
@@ -103,10 +101,9 @@ stopifnot(
 )
 ```
 
-The `stopifnot()` line is an **assertion**, a check that makes R stop if an
-expected result changes. It confirms that R found all three file names in
-alphabetical order. We keep those names as the first labels in the collection
-so each result can still be traced to the file that supplied its text.
+R prints all three file names in alphabetical order. We keep those names as the
+first labels in the collection so each result can still be traced to the file
+that supplied its text.
 
 ## Read every document
 
@@ -580,9 +577,9 @@ disagree about how strong the resemblance is.
 
 Character similarity reaches 0.65 for the reprint. The added courtesy line
 holds it down, because every extra character counts as a difference. Word
-containment asks a narrower question, whether one document's words all appear in
-the other, and returns 1.00. When a copy is extended rather than edited,
-containment is the measure that keeps working.
+containment asks whether one document's words all appear in the other, and
+returns 1.00. When a copy is extended rather than edited, containment is the
+measure that keeps working.
 
 The thresholds used here, 0.6 and 0.9, are decisions rather than discoveries.
 Any threshold belongs in the record with the measure that produced it, because

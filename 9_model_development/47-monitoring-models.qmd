@@ -47,7 +47,7 @@ suppressPackageStartupMessages({
   library(tibble)
   library(stringr)
   library(tidyr)
-  library(tidytext)
+  library(stopwords)
   library(ggplot2)
   library(rsample)
   library(recipes)
@@ -244,6 +244,10 @@ around 1900. The deeper problem is the same in every nonempty row: each slice ha
 one class. The table is a warning about circular monitoring, not a clean accuracy
 report.
 
+The `2000-2025` row is empty because all speeches from that period landed in
+training under seed `4301`. Grouped splitting keeps whole speeches together, so
+a period can have no held-out examples even when the full corpus contains them.
+
 ## Watch input drift without waiting for labels
 
 Labels often arrive late, and sometimes they never arrive. One thing a team can
@@ -276,6 +280,10 @@ period_lengths <- period_paragraphs |>
     .groups = "drop"
   )
 
+model_stop_words <- tibble(
+  word = stopwords("en", source = "snowball")
+)
+
 drift_table <- period_paragraphs |>
   select(paragraph_id, period, paragraph) |>
   # Tokenise with an explicit pattern rather than `unnest_tokens()`. The default
@@ -285,7 +293,7 @@ drift_table <- period_paragraphs |>
   mutate(token = str_extract_all(tolower(paragraph), "[a-z']+")) |>
   select(-paragraph) |>
   unnest_longer(token) |>
-  anti_join(tidytext::stop_words, by = join_by(token == word)) |>
+  anti_join(model_stop_words, by = join_by(token == word)) |>
   group_by(period) |>
   summarise(
     tokens = n(),
@@ -317,16 +325,19 @@ stopifnot(
   identical(nrow(drift_table), 5L),
   identical(drift_table$paragraphs, c(220L, 265L, 317L, 371L, 204L)),
   identical(drift_table$median_words, c(149.5, 92, 67, 53, 43)),
-  identical(drift_table$tokens, c(15251L, 11344L, 11148L, 7725L, 4299L)),
-  identical(drift_table$absent_tokens, c(9333L, 6872L, 6593L, 4551L, 2602L)),
-  identical(round(drift_table$absent_share, 3), c(0.612, 0.606, 0.591, 0.589, 0.605)),
+  identical(drift_table$tokens, c(19192L, 14562L, 14388L, 10650L, 5579L)),
+  identical(drift_table$absent_tokens, c(9900L, 7390L, 7014L, 4972L, 2800L)),
+  identical(round(drift_table$absent_share, 3), c(0.516, 0.507, 0.487, 0.467, 0.502)),
   max(drift_table$median_words) - min(drift_table$median_words) > 100
 )
 ```
 
+The stop-word list now matches `step_stopwords()` in the fitted recipe: the
+Snowball English list supplied by the stopwords package.
+
 The vocabulary drift measure is close to flat partly by construction. It counts
-tokens outside a fixed 500-token vocabulary, and most non-stopword tokens always
-fall outside that short list. The share ranges from
+tokens outside a fixed 500-token vocabulary, and about half of the non-stopword
+tokens fall outside that short list. The share ranges from
 `r round(min(drift_table$absent_share), 3)` to
 `r round(max(drift_table$absent_share), 3)` across
 `r max(paragraphs$year) - min(paragraphs$year)` years.

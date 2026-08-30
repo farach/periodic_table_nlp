@@ -204,7 +204,7 @@ extra spaces are real characters.
 ## Normalize before hashing
 
 **Normalization** means applying a recorded rule before comparing text. This
-rule is narrow: lowercase the text and replace repeated whitespace with one
+rule does two things: lowercase the text and replace repeated whitespace with one
 space. It catches formatting-only differences and destroys information about
 capitalization and layout.
 

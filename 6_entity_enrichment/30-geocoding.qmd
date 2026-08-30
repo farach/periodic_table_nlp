@@ -321,7 +321,7 @@ When using a live service, several boundaries and limits apply:
 - Geocoding turns a place mention into coordinates.
 - Joining by name can return more than one coordinate pair.
 - A miss should stay a miss rather than becoming a guess.
-- Context such as a parent region can narrow candidates.
+- Context such as a parent region can reduce the candidate list.
 - `ambiguous` and `not found` are first-class geocoding answers.
 
 This teaching gazetteer can map `Riverton Skills Centre` and `Bellhaven`. The

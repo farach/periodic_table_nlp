@@ -12,9 +12,10 @@ That request is reasonable. It is also dangerous if the score has not been
 checked. A weak model can still hand back a tidy list of words that looks like an
 explanation.
 
-This lesson fits the same kind of text model twice. The era model has useful
-evaluation evidence. The party model, with these features and this fixed penalty,
-does not.
+This lesson fits the same kind of text model twice. Grouped folds in lesson 43
+put ridge logistic regression with penalty `0.01` in the leading group, and the
+final test supported keeping it. The era model therefore has useful evaluation
+evidence. The party model, with these features and this fixed penalty, does not.
 
 ::: {.callout-tip}
 ## What you will learn
@@ -52,11 +53,16 @@ historical meaning.
 There is a second gap worth naming before any table appears. The model examined
 below is fitted on every paragraph in the corpus, because an explanation is
 usually wanted for the model a team would actually ship, and that model is
-trained on everything available. It therefore has no score. The 0.8457 reported
-in the evaluation lesson belongs to models fitted on three quarters of the
-speeches and tested on the rest. Those are different fits. Nothing on this page
-measures how well the model explained here performs, and the coefficients would
-look broadly similar whether it performed well or not.
+trained on everything available. It therefore has no score. The 0.8457
+repeated-holdout mean reported in the evaluation lesson belongs to models
+fitted on three quarters of the speeches and tested on the rest. Those are
+different fits. Nothing on this page measures how well the model explained here
+performs, and the coefficients would look broadly similar whether it performed
+well or not.
+
+The folds selected the model family and penalty before this refit. Refitting on
+all rows changes the exact coefficients, so the table explains the refitted
+model rather than reproducing the coefficients from any one assessment fold.
 
 ```{r}
 suppressPackageStartupMessages({

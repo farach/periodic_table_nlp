@@ -48,6 +48,7 @@ if (FALSE) {
   library(tokenizers)
   library(tokenizers.bpe)
   library(topicmodels)
+  library(tune)
   library(udpipe)
   library(vetiver)
   library(word2vec)

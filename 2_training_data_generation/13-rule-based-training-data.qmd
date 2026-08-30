@@ -629,9 +629,9 @@ evidence. The order was chosen by someone who had read the codebook rule saying
 timing takes precedence, and it was applied to two rows. Two successes chosen
 after the fact do not establish that the order generalizes.
 
-The three silent rows are more informative. All three carry the reference label
-`other`, which is the one category no rule was written for. Silence here is
-correct behavior expressed badly: the rules abstain because they have nothing to
+The three rows where every rule abstained are more informative. All three carry
+the reference label `other`, which is the one category no rule was written for.
+The abstentions are correct behavior expressed badly: the rules have nothing to
 say, and a fifth rule for `other` would be worse, since `other` is defined by
 the absence of the other four rather than by any words of its own.
 

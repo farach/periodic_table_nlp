@@ -343,7 +343,7 @@ The number might be right. The question is how anyone would know.
 Start with the word. Before anything can be counted, someone has to say what a
 complaint is. Is a blunt question a complaint? A compliment with one sharp
 clause? A report of a broken link? Some answer gets applied to all 40,000
-comments, quietly and consistently, whether or not a person chose it. A more
+comments, in every run, whether or not a person chose it. A more
 capable model does not settle this, because the difficulty is not what the
 model can do. It is what you meant.
 
@@ -369,7 +369,7 @@ That part has not moved, because it is where the tool gets its instructions and
 where its output is accepted or rejected.
 
 You can still buy the work. Labelled data is for sale, annotation vendors are
-easy to hire, and a model will label almost anything you give it, while quietly
+easy to hire, and a model will label almost anything you give it, while
 refusing a few things. Each of those arrives with a number describing how much
 its labels agree. Reading that number and knowing what it conceals are
 different skills, and in my experience the second comes from having produced

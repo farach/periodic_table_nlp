@@ -101,6 +101,11 @@ style_patterns <- c(
     "cutting[- ]edge)\\b"
   ),
   "corporate verb" = "\\b(utilize|leverage|empower)\\b",
+  "hidden-action wording" = "\\b(quietly|silently|quitely)\\b",
+  "code-stage narration" = paste0(
+    "\\b(the first code chunk|",
+    "the visible code begins)\\b"
+  ),
   "throat-clearing phrase" = paste0(
     "it('s| is) important to note|",
     "it('s| is) worth (noting|mentioning)|",
@@ -131,6 +136,41 @@ round_two <- scan_patterns(
   "Round 2 pattern scan"
 )
 
+scope_word_findings <- character()
+scope_word_pattern <- "\\b(narrow|narrower|narrowest|narrowly)\\b"
+scope_word_limit <- 1L
+
+for (file_number in seq_along(markdown_files)) {
+  lines <- readLines(
+    markdown_files[file_number],
+    encoding = "UTF-8",
+    warn = FALSE
+  )
+  prose <- paste(strip_code_fences(lines), collapse = "\n")
+  locations <- gregexpr(
+    scope_word_pattern,
+    prose,
+    ignore.case = TRUE,
+    perl = TRUE
+  )[[1]]
+  word_count <- if (locations[1] == -1) 0L else length(locations)
+
+  if (word_count > scope_word_limit) {
+    scope_word_findings <- c(
+      scope_word_findings,
+      sprintf(
+        paste0(
+          "Round 2 pattern scan: %s ",
+          "(repeated scope word; limit %d): %d"
+        ),
+        relative_paths[file_number],
+        scope_word_limit,
+        word_count
+      )
+    )
+  }
+}
+
 dash_findings <- character()
 em_dash <- intToUtf8(0x2014)
 
@@ -156,7 +196,12 @@ for (file_number in seq_along(markdown_files)) {
   }
 }
 
-findings <- c(round_one, round_two, dash_findings)
+findings <- c(
+  round_one,
+  round_two,
+  scope_word_findings,
+  dash_findings
+)
 
 if (length(findings) > 0) {
   cat(paste(findings, collapse = "\n"), "\n")

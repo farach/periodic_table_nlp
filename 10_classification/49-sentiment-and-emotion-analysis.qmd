@@ -273,10 +273,11 @@ stopifnot(
 
 On the larger corpus, 41 of 1,377 paragraphs have no Bing match, a share of
 0.0298 after the 25-word filter. The median paragraph has 6 matched words. The
-length table gives the more honest finding: 7.48 percent of 25-49 word paragraphs
-are silent, 1.61 percent of 50-99 word paragraphs are silent, and none of the 439
-paragraphs with at least 100 words are silent. That explains why 3 of the 5 short
-feedback comments are silent while long paragraphs almost never are.
+length table gives the more honest finding: 7.48 percent of 25-49 word
+paragraphs have no match, 1.61 percent of 50-99 word paragraphs have no match,
+and none of the 439 paragraphs with at least 100 words lack a match. That
+explains why the lexicon finds nothing in 3 of the 5 short feedback comments
+while it almost always finds something in long paragraphs.
 
 ## Read the failures before trusting the score
 

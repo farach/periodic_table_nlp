@@ -35,8 +35,6 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-The first code chunk loads the packages used for text patterns and tables before checking the rehearsal messages.
-
 ## Make a small rehearsal set
 
 The five messages below are varied enough to pose real questions and short
@@ -69,11 +67,8 @@ stopifnot(
 )
 ```
 
-An **assertion** is a check that stops R when a result no longer matches what
-the lesson says it should be. That is what `stopifnot()` does. Here the checks
-confirm the number of messages and the text
-of the third one. R then prints all five messages. The number in square
-brackets at the left marks the position where that line of output begins.
+R prints all five messages. The number in square brackets at the left marks the
+position where that line of output begins.
 
 The messages are English, tagged `en` in the BCP 47 language tags used by web
 and publishing tools. That matters for two rules written later. The order ID
@@ -85,8 +80,9 @@ largest unit first.
 
 ## Search for exact text
 
-The simplest first search is the narrowest one that solves the problem. Here we
-ask for the exact text `"café"` before introducing any flexible pattern.
+The simplest search is the one that solves the problem with the fewest moving
+parts. Here we ask for the exact text `"café"` before introducing any flexible
+pattern.
 
 ```{r}
 cafe_message <- str_subset(messages, fixed("café"))
@@ -207,35 +203,103 @@ rehearsal set also contains a date and an email address, so each gets a
 separate pattern.
 
 ```{r}
-all_text <- str_c(messages, collapse = " ")
-
 date_pattern <- r"(\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b)"
 email_pattern <- r"([[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,})"
 
-found <- list(
-  order_ids = str_extract_all(
-    all_text,
-    order_id_pattern
-  )[[1]],
-  date = str_extract(all_text, date_pattern),
-  email = str_extract(all_text, email_pattern)
+message_table <- tibble(
+  message_number = seq_along(messages),
+  message_text = messages
 )
 
-found
+extracted_summary <- message_table |>
+  mutate(
+    order_ids = str_extract_all(
+      message_text,
+      order_id_pattern
+    ),
+    first_date = str_extract(
+      message_text,
+      date_pattern
+    ),
+    first_email = str_extract(
+      message_text,
+      email_pattern
+    )
+  )
+
+extracted_for_display <- extracted_summary |>
+  mutate(
+    order_ids = map_chr(
+      order_ids,
+      \(ids) str_c(ids, collapse = ", ")
+    ),
+    order_ids = if_else(order_ids == "", "No match", order_ids),
+    first_date = coalesce(first_date, "No match"),
+    first_email = coalesce(first_email, "No match")
+  )
+
+knitr::kable(
+  extracted_for_display,
+  col.names = c(
+    "Message",
+    "Text",
+    "Order IDs",
+    "First date",
+    "First email"
+  ),
+  caption = "Matches kept with the message that supplied them",
+  row.names = FALSE
+)
 ```
 
 ```{r}
 #| include: false
 
 stopifnot(
-  identical(found$order_ids, c("R-1042", "R-1043")),
-  identical(found$date, "2026-08-28"),
-  identical(found$email, "support@example.com")
+  identical(
+    extracted_summary$message_number,
+    seq_along(messages)
+  ),
+  identical(
+    extracted_summary$message_text,
+    messages
+  ),
+  identical(
+    extracted_summary$order_ids,
+    list(
+      character(),
+      character(),
+      c("R-1042", "R-1043"),
+      character(),
+      character()
+    )
+  ),
+  identical(
+    extracted_summary$first_date,
+    c(NA, NA, NA, "2026-08-28", NA)
+  ),
+  identical(
+    extracted_summary$first_email,
+    c(NA, "support@example.com", NA, NA, NA)
+  ),
+  identical(
+    extracted_for_display$order_ids,
+    c("No match", "No match", "R-1042, R-1043", "No match", "No match")
+  )
 )
 ```
 
-`str_extract()` returns the first match, while `str_extract_all()` returns
-every match. All three expected pieces are present.
+The table keeps every match beside the message that supplied it. The underlying
+`order_ids` column is a **list-column** because each message can produce zero,
+one, or several IDs. The display copy turns each small character vector into
+readable text and prints `No match` where the extractor found nothing.
+
+`str_extract()` returns only the first match, which is why the other two columns
+are named `first_date` and `first_email`.
+
+`message_number` is a display position, not a durable identifier. Reordering
+the vector would change it. Records from a real system should keep the source's
+message ID from the moment they are read.
 
 The email pattern is intentionally modest. It recognizes the address in this
 example, but it does not validate every email address allowed by internet
@@ -327,22 +391,27 @@ address private. A pattern can replace matching text before the example is
 shared. The following code substitutes `[email]` for the address.
 
 ```{r}
-redacted_messages <- str_replace_all(
-  messages,
-  email_pattern,
-  "[email]"
-)
+redaction_report <- message_table |>
+  mutate(
+    removed_addresses = str_extract_all(
+      message_text,
+      email_pattern
+    ),
+    shared_version = str_replace_all(
+      message_text,
+      email_pattern,
+      "[email]"
+    ),
+    changed = shared_version != message_text
+  )
 
-removed_addresses <- str_extract_all(messages, email_pattern) |>
+removed_addresses <- redaction_report$removed_addresses |>
   list_c()
-changed_messages <- sum(redacted_messages != messages)
+changed_messages <- sum(redaction_report$changed)
 
 knitr::kable(
-  tibble(
-    message_number = seq_along(messages),
-    changed = redacted_messages != messages,
-    shared_version = redacted_messages
-  ),
+  redaction_report |>
+    select(message_number, changed, shared_version),
   col.names = c("Message", "Changed", "Version that leaves the building"),
   caption = "Which messages the redaction step altered",
   row.names = FALSE
@@ -356,14 +425,19 @@ removed_addresses
 
 stopifnot(
   identical(
-    redacted_messages[2],
+    redaction_report$shared_version[2],
     "Email [email] before 17:30."
   ),
-  !any(str_detect(redacted_messages, fixed("@"))),
+  identical(
+    redaction_report$removed_addresses[[2]],
+    "support@example.com"
+  ),
+  all(lengths(redaction_report$removed_addresses[-2]) == 0L),
+  !any(str_detect(redaction_report$shared_version, fixed("@"))),
   identical(changed_messages, 1L),
   identical(removed_addresses, "support@example.com"),
   identical(
-    sum(str_count(messages, email_pattern)),
+    sum(lengths(redaction_report$removed_addresses)),
     length(removed_addresses)
   )
 )
@@ -371,9 +445,9 @@ stopifnot(
 
 One message changed and one address was removed. Both numbers are printed, and
 so is the removed text itself. A redaction step that reports only its output
-cannot be audited: a pattern that quietly matched half a message would look
-exactly as successful. Read the removed material, count it, and compare that
-count with the number of matches the pattern found.
+cannot be audited: a pattern that matched half a message without warning would
+look exactly as successful. Read the removed material, count it, and compare
+that count with the number of matches the pattern found.
 
 The address is gone, while the rest of each sentence stays unchanged. One
 successful example is not enough to establish that a redaction method protects
@@ -417,10 +491,8 @@ stopifnot(
 )
 ```
 
-The `stopifnot()` line compares the actual answers with the expected answers.
-If one differs, R stops with an error and the page is not published. A near
-miss such as `R-12345` therefore remains visible during testing rather than
-becoming a mistaken match later.
+The expected and actual columns agree. A near miss such as `R-12345` remains
+visible during testing rather than becoming a mistaken match later.
 
 ## Reuse a tested pattern
 
@@ -429,28 +501,44 @@ The checked extraction will be used more than once, so we place it in a
 returns a result.
 
 ```{r}
-extract_order_ids <- function(text) {
-  str_extract_all(text, order_id_pattern) |>
+extract_order_ids_by_message <- function(text, pattern) {
+  str_extract_all(text, pattern)
+}
+
+collect_unique_order_ids <- function(text, pattern) {
+  extract_order_ids_by_message(text, pattern) |>
     list_c() |>
     unique()
 }
 
-extracted_ids <- extract_order_ids(messages)
+ids_by_message <- extract_order_ids_by_message(
+  messages,
+  order_id_pattern
+)
+unique_order_ids <- collect_unique_order_ids(
+  messages,
+  order_id_pattern
+)
 
-extracted_ids
+unique_order_ids
 ```
 
 ```{r}
 #| include: false
 
 stopifnot(
-  identical(extracted_ids, c("R-1042", "R-1043"))
+  identical(ids_by_message, order_ids_by_message),
+  identical(unique_order_ids, c("R-1042", "R-1043"))
 )
 ```
 
-The function returns the two expected order numbers and lists each one only
-once, even if it appears repeatedly in the input. `list_c()` from purrr combines
-the message-by-message matches into one character vector.
+The first function preserves one result per message. The second function
+deliberately combines those results into a corpus-wide list and removes
+duplicates. Its name makes the loss of message boundaries explicit.
+
+The distinction matters whenever a later question asks where a match came from.
+Keep the row-level result, then derive a flattened inventory from it when the
+inventory is the actual goal.
 
 ## State which text the pattern accepts
 
@@ -499,7 +587,7 @@ stopifnot(
 
 The first five examples follow the stated rule. The fifth displays as `é` but
 uses `e` plus a combining accent. `hello-world` does not match because a hyphen
-is punctuation. This check answers a narrow text question; it is not a rule
+is punctuation. This check answers a specific text question; it is not a rule
 for deciding whether a person's name or a word is valid.
 
 ::: {.callout-note}
@@ -529,7 +617,7 @@ straight into the full inbox:
 3. Use `fixed()` when you only need exact text.
 4. Build a regular expression one piece at a time.
 5. Inspect the text you extract before replacing anything.
-6. Record the expected answers with an assertion.
+6. Record the expected answers in the lesson's hidden checks.
 7. Add a new example whenever the pattern surprises you.
 
 ## What to remember

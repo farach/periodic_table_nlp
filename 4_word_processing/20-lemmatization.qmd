@@ -300,8 +300,8 @@ contrast into a causal story about training size alone.
 ## Count dictionary failures
 
 A cheap screen asks whether each lemma appears in hunspell's dictionary. It
-answers one narrow question: did the model return a string that is not an English
-word? It cannot tell a correct lemma that the dictionary happens not to hold,
+answers one specific question: did the model return a string that is not an
+English word? It cannot tell a correct lemma that the dictionary happens not to hold,
 such as `riverton`, from a genuine error. It is also blind to a wrong lemma that
 is a real word. If a model returned `leave` as the lemma of `left` in the phrase
 `the left column`, this check would pass it. The counts below measure broken

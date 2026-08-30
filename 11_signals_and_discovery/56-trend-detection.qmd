@@ -128,7 +128,12 @@ stopifnot(
 )
 ```
 
-The table says how often each word appears and how many speeches contain it. The rate column asks a narrower question: where was the word densest after adjusting for speech length? Rates from speeches under 500 words are flagged because one occurrence in such a document is at least 2 uses per thousand words. The median speech here has about 1,959 words, so a 500-word cutoff catches the smallest denominators without removing most speeches.
+The table says how often each word appears and how many speeches contain it. The
+rate column asks where the word was densest after adjusting for speech length.
+Rates from speeches under 500 words are flagged because one occurrence in such
+a document is at least 2 uses per thousand words. The median speech here has
+about 1,959 words, so a 500-word cutoff catches the smallest denominators
+without removing most speeches.
 
 ## Plot the trajectories
 

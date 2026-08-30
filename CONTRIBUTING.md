@@ -97,6 +97,24 @@ clearly, and `ggplot2` for a chart that earns its place.
 - `stringr` uses the ICU regular expression engine. Base R uses TRE, or PCRE2
   with `perl = TRUE`. When a lesson explains how a pattern behaves, say which
   engine produced that behaviour and confirm it by running the code.
+- Keep one row per source record through extraction, with the source identifier
+  and original text attached. Use a list-column when one record can produce
+  several matches. Flatten or collapse records only when the question truly
+  asks for a corpus-wide result, and give that operation a name such as
+  `collect_unique_order_ids()` that makes the loss of row boundaries explicit.
+- A row position from `seq_along()` is a display number, not a durable ID.
+  Preserve identifiers supplied by the source. Name first-match columns
+  `first_date` or `first_email` when another match could exist.
+- For model comparisons, create the final test split first. Compare and tune
+  candidates only inside the training data, using grouped folds when several
+  rows come from one source document. Open the final test set once, after the
+  candidate and settings are fixed.
+- Label candidate selection, final testing, and robustness resampling as
+  different operations. A repeated holdout is not another untouched test set.
+  Keep the candidate set small enough that each model adds a distinct teaching
+  point.
+- Monitoring code must reuse the fitted preprocessing choices, including the
+  same tokenizer, stop-word source, and vocabulary definition.
 - While editing, run one lesson at a time with
   `Rscript scripts/run-lesson.R <path>`. It executes every chunk in order and
   fails on any warning. The full render remains the gate before publishing.
