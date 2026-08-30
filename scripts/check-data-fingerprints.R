@@ -55,6 +55,11 @@ sources <- list(
     hash_column = "fingerprint", dir = "data/inaugural", algo = "sha256"
   ),
   list(
+    metadata = "data/inaugural/topic-k-diagnostics-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/inaugural", algo = "sha256"
+  ),
+  list(
     metadata = "data/treebank/treebank-metadata.csv",
     shape = "artifact", name_column = "artifact",
     hash_column = "fingerprint", dir = "data/treebank", algo = "sha256"

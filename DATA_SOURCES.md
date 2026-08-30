@@ -116,6 +116,13 @@ with a random forest, across 14 settings, without reading the final 14 test
 speeches. `model-comparison-metadata.csv` records the seeds, grids, model
 settings, source, license, and SHA-256 fingerprints.
 
+`topic-k-diagnostic-runs.csv` and `topic-k-diagnostics.csv` compare topic
+counts 3 through 8 under three VEM starts. The vocabulary is built from
+training speeches only. Semantic coherence and adjusted top-word exclusivity
+are computed on training paragraphs; perplexity is computed on held-out
+speeches. `data-raw/build-topic-k-diagnostics.R` rebuilds the files, and
+`topic-k-diagnostics-metadata.csv` records settings and fingerprints.
+
 Party labels in this corpus span 236 years and do not describe a stable thing
 across that range. Lessons use them only as a data column, never as a
 description of any party, president, or policy.

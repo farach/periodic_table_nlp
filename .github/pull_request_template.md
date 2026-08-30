@@ -34,6 +34,8 @@
       step answers an explicit corpus-wide question.
 - [ ] Model selection and tuning stay inside training data; final test data is
       opened only after the candidate and settings are fixed.
+- [ ] Unsupervised parameters are checked with more than one predeclared
+      diagnostic before outputs are interpreted.
 - [ ] The full site rendered without unexplained warnings or errors.
 - [ ] Links, keyboard navigation, focus, zoom, and small screens were checked.
 - [ ] Periodic-table tests passed when its data, links, or styles changed.

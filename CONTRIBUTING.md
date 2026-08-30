@@ -115,6 +115,12 @@ clearly, and `ggplot2` for a chart that earns its place.
   point.
 - Monitoring code must reuse the fitted preprocessing choices, including the
   same tokenizer, stop-word source, and vocabulary definition.
+- For unsupervised models, state what each parameter controls and compare
+  candidate values with more than one diagnostic. Choose the diagnostics before
+  reading the most appealing output. Topic count, cluster count, and outlier
+  threshold are modeling decisions, not facts discovered by the software.
+- Keep the document unit explicit. A paragraph, speech, and corpus create
+  different unsupervised problems even when the words are unchanged.
 - While editing, run one lesson at a time with
   `Rscript scripts/run-lesson.R <path>`. It executes every chunk in order and
   fails on any warning. The full render remains the gate before publishing.
