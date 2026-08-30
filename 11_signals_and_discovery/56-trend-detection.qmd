@@ -7,7 +7,9 @@ categories: [signals and discovery, trend detection, inaugural addresses]
 
 Nia is preparing a timeline for a classroom wall. She can fit four word paths on the chart, and every path has to be fair to speeches of different lengths.
 
-A raw count would reward long speeches. A rate per thousand words gives each speech a comparable scale, but a clean-looking line can still be carried by one short document.
+A raw count would reward long speeches. A rate per thousand alphabetic tokens
+gives each speech a comparable scale, but a clean-looking line can still be
+carried by one short document.
 
 ::: {.callout-tip}
 ## What you will learn
@@ -15,7 +17,7 @@ A raw count would reward long speeches. A rate per thousand words gives each spe
 This lesson shows how to:
 
 - count selected words by speech year;
-- normalize word counts per thousand words;
+- normalize word counts per thousand alphabetic tokens;
 - flag rates from very short speeches;
 - recompute each peak after removing its peak speech; and
 - compare one trajectory with a permutation null.
@@ -55,13 +57,16 @@ speech_tokens <- speeches |>
   filter(str_detect(word, "^[a-z]+$"))
 
 speech_lengths <- speech_tokens |>
-  count(speech_id, year, president, name = "total_words")
+  count(speech_id, year, president, name = "total_alphabetic_tokens")
 
 target_words <- c("america", "freedom", "constitution", "children")
-min_words_for_rate <- 500L
+min_tokens_for_rate <- 500L
 
 length_context <- speech_lengths |>
-  summarise(median_words = median(total_words), minimum_words = min(total_words))
+  summarise(
+    median_alphabetic_tokens = median(total_alphabetic_tokens),
+    minimum_alphabetic_tokens = min(total_alphabetic_tokens)
+  )
 
 trend_counts <- speech_tokens |>
   count(speech_id, year, president, word, name = "count") |>
@@ -72,28 +77,41 @@ trend_counts <- speech_tokens |>
   ) |>
   mutate(
     count = coalesce(count, 0L),
-    per_thousand = count / total_words * 1000,
-    below_min_words = total_words < min_words_for_rate,
+    per_thousand_alphabetic = count / total_alphabetic_tokens * 1000,
+    below_min_tokens = total_alphabetic_tokens < min_tokens_for_rate,
     word = factor(word, levels = target_words)
   ) |>
   arrange(word, year)
 
 trend_summary <- trend_counts |>
   group_by(word) |>
-  arrange(desc(per_thousand), year, .by_group = TRUE) |>
+  arrange(desc(per_thousand_alphabetic), year, .by_group = TRUE) |>
   reframe(
     total = sum(count),
     speeches_with_word = sum(count > 0),
-    max_rate = round(first(per_thousand), 2),
+    max_rate = round(first(per_thousand_alphabetic), 2),
     max_year = first(year),
     max_count = first(count),
-    words_at_max = first(total_words),
-    max_rate_flag = if_else(first(below_min_words), "under 500 words", "ok"),
-    rate_excluding_largest = round(max(per_thousand[-1]), 2),
-    year_excluding_largest = year[-1][which.max(per_thousand[-1])],
-    guarded_rate_excluding_largest = round(max(per_thousand[-1][total_words[-1] >= min_words_for_rate]), 2),
-    guarded_year_excluding_largest = year[-1][total_words[-1] >= min_words_for_rate][
-      which.max(per_thousand[-1][total_words[-1] >= min_words_for_rate])
+    tokens_at_max = first(total_alphabetic_tokens),
+    max_rate_flag = if_else(first(below_min_tokens), "under 500 tokens", "ok"),
+    rate_excluding_largest = round(max(per_thousand_alphabetic[-1]), 2),
+    year_excluding_largest = year[-1][which.max(per_thousand_alphabetic[-1])],
+    guarded_rate_excluding_largest = round(
+      max(
+        per_thousand_alphabetic[-1][
+          total_alphabetic_tokens[-1] >= min_tokens_for_rate
+        ]
+      ),
+      2
+    ),
+    guarded_year_excluding_largest = year[-1][
+      total_alphabetic_tokens[-1] >= min_tokens_for_rate
+    ][
+      which.max(
+        per_thousand_alphabetic[-1][
+          total_alphabetic_tokens[-1] >= min_tokens_for_rate
+        ]
+      )
     ],
     survives_guard = max_rate_flag == "ok" & guarded_rate_excluding_largest >= max_rate * 0.5
   ) |>
@@ -102,8 +120,10 @@ trend_summary <- trend_counts |>
 kable(
   trend_summary,
   col.names = c(
-    "Word", "Total count", "Speeches with word", "Max per 1,000", "Max year",
-    "Count in max year", "Words at max", "Max-rate flag", "Rate excluding largest",
+    "Word", "Total count", "Speeches with word",
+    "Max per 1,000 alphabetic tokens", "Max year",
+    "Count in max year", "Alphabetic tokens at max", "Max-rate flag",
+    "Rate excluding largest",
     "Year excluding largest", "Guarded rate excluding largest", "Guarded year", "Survives guard"
   ),
   caption = "Summary of four tracked words across 60 speeches",
@@ -128,41 +148,44 @@ stopifnot(
   identical(trend_summary$total, c(166L, 175L, 207L, 49L)),
   identical(trend_summary$speeches_with_word, c(31L, 36L, 39L, 22L)),
   identical(trend_summary$max_year, c(1993L, 2005L, 1793L, 2001L)),
-  identical(trend_summary$max_rate_flag, c("ok", "ok", "under 500 words", "ok")),
+  identical(trend_summary$max_rate_flag, c("ok", "ok", "under 500 tokens", "ok")),
   identical(trend_summary$survives_guard, c(TRUE, TRUE, FALSE, TRUE)),
-  identical(as.numeric(length_context$median_words), 1958.5)
+  identical(as.numeric(length_context$median_alphabetic_tokens), 1958.5)
 )
 ```
 
-The table says how often each word appears and how many speeches contain it. The
-rate column asks where the word was densest after adjusting for speech length.
-Rates from speeches under 500 words are flagged because one occurrence in such
-a document is at least 2 uses per thousand words. The median speech here has
-about 1,959 words, so a 500-word cutoff catches the smallest denominators
-without removing most speeches.
+The denominator counts lowercase ASCII alphabetic tokens because the tokenizer
+filters everything else before measuring speech length. The table says how often
+each tracked word appears and where it was densest on that stated scale. Rates
+from speeches under 500 alphabetic tokens are flagged because one occurrence in
+such a document is at least 2 uses per thousand. The median speech here has about
+1,959 alphabetic tokens, so the cutoff catches the smallest denominators without
+removing most speeches.
 
 ## Plot the trajectories
 
-A line chart earns its place here because the corpus spans 236 years. Each dot is one speech, and each line connects speeches for one word. Open circles mark rates from speeches under 500 words.
+A line chart earns its place here because the corpus spans 236 years. Each dot
+is one speech, and each line connects speeches for one word. Open circles mark
+rates from speeches under 500 alphabetic tokens.
 
 ```{r}
 #| label: fig-word-trends
-#| fig-cap: "Uses per thousand words for four selected words across 60 inaugural addresses."
-#| fig-alt: "Line chart showing word rates over time for america, freedom, constitution, and children. Rates from speeches under 500 words are marked with open circles."
+#| fig-cap: "Uses per thousand alphabetic tokens for four selected words across 60 inaugural addresses."
+#| fig-alt: "Line chart showing word rates over time for america, freedom, constitution, and children. Rates from speeches under 500 alphabetic tokens are marked with open circles."
 
 plot_data <- trend_counts |>
   mutate(word = factor(word, levels = target_words))
 
-ggplot(plot_data, aes(x = year, y = per_thousand, color = word)) +
+ggplot(plot_data, aes(x = year, y = per_thousand_alphabetic, color = word)) +
   geom_line(linewidth = 0.7) +
-  geom_point(aes(shape = below_min_words), size = 1.6) +
+  geom_point(aes(shape = below_min_tokens), size = 1.6) +
   scale_shape_manual(
     values = c(`FALSE` = 16, `TRUE` = 1),
-    labels = c(`FALSE` = "500+ words", `TRUE` = "under 500 words")
+    labels = c(`FALSE` = "500+ tokens", `TRUE` = "under 500 tokens")
   ) +
   labs(
     x = "Speech year",
-    y = "Uses per 1,000 words",
+    y = "Uses per 1,000 alphabetic tokens",
     color = "Word",
     shape = "Denominator"
   ) +
@@ -175,12 +198,12 @@ ggplot(plot_data, aes(x = year, y = per_thousand, color = word)) +
 stopifnot(
   identical(nrow(plot_data), 240L),
   identical(levels(plot_data$word), target_words),
-  identical(as.numeric(round(max(plot_data$per_thousand), 2)), 12.35),
+  identical(as.numeric(round(max(plot_data$per_thousand_alphabetic), 2)), 12.35),
   identical(
-    as.integer(plot_data$year[which.max(plot_data$per_thousand)]),
+    as.integer(plot_data$year[which.max(plot_data$per_thousand_alphabetic)]),
     2005L
   ),
-  identical(sum(plot_data$below_min_words), 8L)
+  identical(sum(plot_data$below_min_tokens), 8L)
 )
 ```
 
@@ -197,16 +220,19 @@ constitution_counts <- trend_counts |>
   filter(word == "constitution")
 
 constitution_peak_null <- permutation_null(
-  observed = max(constitution_counts$per_thousand),
+  observed = max(constitution_counts$per_thousand_alphabetic),
   replicate_fn = function() {
     assigned_speeches <- sample(
-      seq_along(constitution_counts$total_words),
+      seq_along(constitution_counts$total_alphabetic_tokens),
       size = sum(constitution_counts$count),
       replace = TRUE,
-      prob = constitution_counts$total_words
+      prob = constitution_counts$total_alphabetic_tokens
     )
-    random_counts <- tabulate(assigned_speeches, nbins = length(constitution_counts$total_words))
-    max(random_counts / constitution_counts$total_words * 1000)
+    random_counts <- tabulate(
+      assigned_speeches,
+      nbins = length(constitution_counts$total_alphabetic_tokens)
+    )
+    max(random_counts / constitution_counts$total_alphabetic_tokens * 1000)
   },
   replicates = 1000L,
   seed = 5601L,
@@ -217,21 +243,29 @@ constitution_peak_null_display <- constitution_peak_null |>
   mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
 
 constitution_top_rates <- constitution_counts |>
-  arrange(desc(per_thousand), year) |>
+  arrange(desc(per_thousand_alphabetic), year) |>
   slice_head(n = 5) |>
   transmute(
     speech_id,
     year,
     president,
     count,
-    total_words,
-    per_thousand = round(per_thousand, 2),
-    denominator_flag = if_else(below_min_words, "under 500 words", "ok")
+    total_alphabetic_tokens,
+    per_thousand_alphabetic = round(per_thousand_alphabetic, 2),
+    denominator_flag = if_else(below_min_tokens, "under 500 tokens", "ok")
   )
 
 kable(
   constitution_top_rates,
-  col.names = c("Speech", "Year", "President", "Count", "Total words", "Per 1,000", "Denominator flag"),
+  col.names = c(
+    "Speech",
+    "Year",
+    "President",
+    "Count",
+    "Alphabetic tokens",
+    "Per 1,000 alphabetic tokens",
+    "Denominator flag"
+  ),
   caption = "The highest constitution rates and their denominators",
   row.names = FALSE
 )
@@ -249,22 +283,30 @@ kable(
 
 stopifnot(
   identical(constitution_top_rates$speech_id[1], "1793-Washington"),
-  identical(as.integer(constitution_top_rates$total_words[1]), 135L),
-  identical(as.numeric(constitution_top_rates$per_thousand[1]), 7.41),
+  identical(as.integer(constitution_top_rates$total_alphabetic_tokens[1]), 135L),
+  identical(as.numeric(constitution_top_rates$per_thousand_alphabetic[1]), 7.41),
   identical(as.numeric(constitution_peak_null_display$observed), 7.407),
   identical(as.numeric(round(constitution_peak_null$null_mean, 2)), 5.31),
   identical(as.numeric(round(constitution_peak_null$p_value, 3)), 0.233)
 )
 ```
 
-The headline problem is visible for `constitution`. Its maximum rate is 7.41 per thousand in 1793, but that speech has only 135 words. One occurrence creates the peak. After removing that peak speech, the next rate is 6.65 in 1861; with the denominator guard applied, the peak does not survive because the reported maximum came from an under-500-word document. Shuffling the 207 occurrences across fixed speech lengths gives a null mean of 5.31, a 90% interval from 3.42 to 7.43, and p = 0.233. The observed 1793 peak is well within what this shuffle can produce.
+The headline problem is visible for `constitution`. Its maximum rate is 7.41
+per thousand alphabetic tokens in 1793, but that speech has only 135 alphabetic
+tokens. One occurrence creates the peak. After removing that peak speech, the
+next rate is 6.65 in 1861; with the denominator guard applied, the peak does not
+survive because the reported maximum came from an under-500-token document.
+Shuffling the 207 occurrences across fixed speech lengths gives a null mean of
+5.31, a 90% interval from 3.42 to 7.43, and p = 0.233. The observed 1793 peak is
+well within what this shuffle can produce.
 
 Trend methods always draw a line once the analyst picks words and dates. The null asks what peak would appear if the same number of word occurrences landed in speeches according to speech length, with time labels no longer carrying the pattern.
 
 ## What to remember
 
-- Normalize word counts per thousand words before comparing speeches.
-- Flag rates from very short documents; this lesson uses a 500-word cutoff.
+- Normalize word counts per thousand alphabetic tokens before comparing
+  speeches.
+- Flag rates from very short documents; this lesson uses a 500-token cutoff.
 - The four tracked words have different coverage across the 60 speeches.
 - `constitution` peaks in 1793 only because 1 occurrence sits in a 135-word speech.
 - Word-rate change can mix word choice, subject matter, transcription, and length.

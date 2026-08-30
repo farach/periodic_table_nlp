@@ -161,6 +161,11 @@ to the test split. A paragraph-length-only rule averages 0.6827. The corpus has
 60 speeches by 40 people. Lesson 44 covers evaluation methodology; this page
 focuses on how representation changes the model's input.
 
+Those committed numbers come from ridge models with stop-word removal and
+unstratified speech-grouped splits. The live comparison below uses lasso models,
+keeps stop words, and stratifies its speech splits. Read the committed table as
+context for the task, not as a score comparison with the live fits.
+
 ## Represent the text
 
 Text classification follows four steps: represent the text, fit a model, predict

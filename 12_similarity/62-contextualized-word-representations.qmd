@@ -307,9 +307,10 @@ stopifnot(
 
 The reversal is the lesson. Same financial sense in different grammatical roles
 scores about 0.3447, almost the same as different senses in different roles at
-about 0.3466. Same financial sense in the same role scores about 0.9422. In this
-small pipeline, syntactic role moves the vectors more than the dictionary sense
-of `bank`.
+about 0.3466. Same financial sense in the same role scores about 0.9422. In these
+four probes, the grammatical-role contrast is at least as large as the
+dictionary-sense contrast. This is an illustration, not a word-sense evaluation:
+there is no benchmark or independent sense labeling here.
 
 ## Contrast with one vector per word
 
@@ -366,8 +367,8 @@ stopifnot(
 - The sentence produces a 15 by 96 tensor.
 - The two `bank` occurrence vectors score about 0.3466, above most token pairs in
   that sentence.
-- In this model, same-sense controls point to grammatical role rather than word
-  sense.
+- In these four probes, grammatical role matters at least as much as the
+  dictionary-sense contrast; that is not a word-sense benchmark.
 
 The student keeps both underlines and adds a note: same spelling, different
 occurrence vectors, not a sense label.

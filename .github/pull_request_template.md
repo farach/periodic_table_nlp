@@ -13,6 +13,7 @@
 - [ ] Round 4 independent edit completed.
 - [ ] Round 5 skeptical fact review completed.
 - [ ] Round 6 record-boundary review completed.
+- [ ] Round 7 comparison and null review completed.
 - [ ] Final rendered-page proofread completed.
 
 ## Evidence
@@ -32,10 +33,18 @@
 - [ ] Tidyverse style check passed.
 - [ ] Row-level outputs retain their source IDs; every collapse or flattening
       step answers an explicit corpus-wide question.
+- [ ] Derived labels and features are joined by source key rather than row
+      position.
+- [ ] Side-by-side rates use the same unit, denominator, and preprocessing
+      policy, or are explicitly marked non-comparable.
 - [ ] Model selection and tuning stay inside training data; final test data is
       opened only after the candidate and settings are fixed.
+- [ ] Model scores have same-split baselines and comparators are labeled
+      in-sample or out-of-sample.
 - [ ] Unsupervised parameters are checked with more than one predeclared
       diagnostic before outputs are interpreted.
+- [ ] Nulls preserve nuisance structure that could otherwise create the
+      statistic being tested.
 - [ ] The full site rendered without unexplained warnings or errors.
 - [ ] Links, keyboard navigation, focus, zoom, and small screens were checked.
 - [ ] Periodic-table tests passed when its data, links, or styles changed.

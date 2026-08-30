@@ -150,18 +150,31 @@ period_matrix <- as.matrix(period_confusion$table)
 test_period_counts <- period_test |>
   count(period, name = "paragraphs")
 
-period_baseline <- max(test_period_counts$paragraphs) / nrow(period_test)
+training_majority_period <- period_train |>
+  count(period, sort = TRUE) |>
+  slice(1) |>
+  pull(period)
+period_baseline <- mean(period_test$period == training_majority_period)
+period_oracle_baseline <- max(test_period_counts$paragraphs) / nrow(period_test)
 
 period_scores <- tibble(
-  measure = c("Model accuracy", "Largest-class baseline"),
-  value = c(period_accuracy, period_baseline)
+  measure = c(
+    "Model accuracy",
+    "Training-majority baseline",
+    "Test-majority oracle"
+  ),
+  value = c(
+    period_accuracy,
+    period_baseline,
+    period_oracle_baseline
+  )
 )
 
 knitr::kable(
   period_scores |>
     mutate(value = round(value, 4)),
   col.names = c("Measure", "Value"),
-  caption = "Four-way model accuracy beside the largest-class baseline",
+  caption = "Four-way model accuracy beside deployable and oracle baselines",
   row.names = FALSE
 )
 
@@ -180,8 +193,10 @@ stopifnot(
   identical(nrow(period_train), 1025L),
   identical(nrow(period_test), 352L),
   identical(test_period_counts$paragraphs, c(48L, 88L, 99L, 117L)),
+  identical(as.character(training_majority_period), "1966-2025"),
   identical(round(period_accuracy, 4), 0.5938),
   identical(round(period_baseline, 4), 0.3324),
+  identical(round(period_oracle_baseline, 4), 0.3324),
   all(
     period_matrix ==
       matrix(
@@ -199,11 +214,12 @@ stopifnot(
 )
 ```
 
-The overall accuracy is 0.5938 on this speech-level split, compared with a
-0.3324 largest-class baseline from always predicting the most common test period.
-That single model number still hides which periods are hard. The confusion
-matrix shows, for example, that many 1907-1965 test paragraphs are sent to the
-1966-2025 label.
+The overall accuracy is 0.5938 on this speech-level split. A deployable baseline
+chooses the most common period in training, `1966-2025`, then applies that rule
+to test; it scores 0.3324. Looking at the test labels first produces the same
+0.3324 oracle value by coincidence on this split, but that is not a rule a
+deployed system could choose in advance. The confusion matrix shows, for example,
+that many 1907-1965 test paragraphs are sent to the 1966-2025 label.
 
 ## Check recall by class
 
@@ -251,6 +267,10 @@ themes. These labels are the dictionary's own output. Agreement with them
 measures agreement with the dictionary, not agreement with human themes or with
 the corpus itself.
 
+A **document-feature matrix** stores document rows and word columns. quanteda
+dictionaries use glob matching by default, so a star means “starts with” here:
+`work*` matches `work`, `working`, and `workforce`.
+
 ```{r}
 theme_dictionary <- dictionary(list(
   work = c("work*", "labor", "employment", "industry", "business"),
@@ -258,7 +278,11 @@ theme_dictionary <- dictionary(list(
   people = c("people", "citizen*", "family", "families", "children")
 ))
 
-theme_dfm <- corpus(paragraphs, text_field = "paragraph") |>
+theme_dfm <- corpus(
+  paragraphs,
+  text_field = "paragraph",
+  docid_field = "paragraph_id"
+) |>
   tokens(remove_punct = TRUE) |>
   tokens_tolower() |>
   dfm() |>
@@ -266,12 +290,12 @@ theme_dfm <- corpus(paragraphs, text_field = "paragraph") |>
 
 theme_counts <- convert(theme_dfm, to = "data.frame") |>
   as_tibble() |>
-  select(-doc_id)
+  rename(paragraph_id = doc_id)
 
-theme_labels <- bind_cols(
-  paragraphs |> select(paragraph_id),
-  theme_counts > 0
-)
+theme_labels <- paragraphs |>
+  select(paragraph_id) |>
+  left_join(theme_counts, by = join_by(paragraph_id)) |>
+  mutate(across(-paragraph_id, \(count) count > 0))
 
 label_count_table <- theme_labels |>
   mutate(label_count = rowSums(across(-paragraph_id))) |>
@@ -289,7 +313,12 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  identical(as.integer(colSums(theme_counts > 0)), c(219L, 501L, 581L)),
+  identical(theme_counts$paragraph_id, paragraphs$paragraph_id),
+  identical(theme_labels$paragraph_id, paragraphs$paragraph_id),
+  identical(
+    as.integer(colSums(select(theme_counts, -paragraph_id) > 0)),
+    c(219L, 501L, 581L)
+  ),
   identical(label_count_table$label_count, c(0, 1, 2, 3)),
   identical(label_count_table$paragraphs, c(449L, 605L, 273L, 50L)),
   identical(sum(label_count_table$paragraphs), 1377L)
@@ -349,6 +378,17 @@ exact_empty_accuracy <- theme_labels |>
   summarise(value = mean(predicted_empty_matches), .groups = "drop") |>
   pull(value)
 
+baseline_accuracy_summary <- tibble(
+  measure = c(
+    "Label-cell accuracy",
+    "Exact empty-set accuracy"
+  ),
+  value = c(
+    overall_label_accuracy,
+    exact_empty_accuracy
+  )
+)
+
 knitr::kable(
   per_label_metrics |>
     mutate(
@@ -370,6 +410,14 @@ knitr::kable(
   caption = "Per-label metrics expose the no-label baseline",
   row.names = FALSE
 )
+
+knitr::kable(
+  baseline_accuracy_summary |>
+    mutate(value = round(value, 4)),
+  col.names = c("Baseline measure", "Accuracy"),
+  caption = "Two overall views of the always-absent baseline",
+  row.names = FALSE
+)
 ```
 
 ```{r}
@@ -383,15 +431,25 @@ stopifnot(
   all(is.na(per_label_metrics$precision)),
   identical(per_label_metrics$recall, c(0, 0, 0)),
   identical(round(overall_label_accuracy, 4), 0.6851),
-  identical(round(exact_empty_accuracy, 4), 0.3261)
+  identical(round(exact_empty_accuracy, 4), 0.3261),
+  identical(
+    round(baseline_accuracy_summary$value, 4),
+    c(0.6851, 0.3261)
+  )
 )
 ```
 
-The always-absent baseline gets 0.6851 label-cell accuracy because absent labels
+Precision is `NA` because the baseline never predicts a present label, leaving
+zero predicted positives in the denominator. That is an undefined metric, not a
+display error.
+
+The always-absent baseline gets
+`r round(overall_label_accuracy, 4)` label-cell accuracy because absent labels
 are common. The label prevalences are 0.422 for people, 0.364 for time, and 0.159
 for work. Its recall is 0 for every label, so it finds none of the 219 work, 501
-time, or 581 people dictionary labels. Exact empty-set accuracy is 0.3261, the
-share of paragraphs with no dictionary theme at all.
+time, or 581 people dictionary labels. Exact empty-set accuracy is
+`r round(exact_empty_accuracy, 4)`, the share of paragraphs with no dictionary
+theme at all.
 
 ## What to remember
 

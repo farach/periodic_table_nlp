@@ -13,8 +13,8 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 12,Aug,Creating additional training examples,practice,2,Training data generation,source,2_training_data_generation/12-textual-data-augmentation.html,available,2026-08-30
 13,Rul,Labeling text with written rules,practice,2,Training data generation,source,2_training_data_generation/13-rule-based-training-data.html,available,2026-08-30
 14,Tok,Tokenization,method,3,Word parsing,language,3_word_parsing/14-tokenization.html,available,2026-08-29
-15,Voc,Vocabulary building,practice,3,Word parsing,language,3_word_parsing/15-vocabulary-building.html,available,2026-08-29
-16,Mor,Morphological tagging,method,3,Word parsing,language,3_word_parsing/16-morphological-tagging.html,available,2026-08-30
+15,Voc,Vocabulary building,practice,3,Word parsing,language,3_word_parsing/15-vocabulary-building.html,available,2026-08-30
+16,Mor,Morphological analysis,method,3,Word parsing,language,3_word_parsing/16-morphological-tagging.html,available,2026-08-30
 17,Pos,Part-of-speech tagging,method,3,Word parsing,language,3_word_parsing/17-part-of-speech-tagging.html,available,2026-08-29
 18,Dep,Dependency parsing,method,3,Word parsing,language,3_word_parsing/18-dependency-parsing.html,available,2026-08-29
 19,Ste,Stemming,method,4,Word processing,language,4_word_processing/19-stemming.html,available,2026-08-30
@@ -46,11 +46,11 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 45,Exp,Explaining models,lifecycle,9,Model development,model,9_model_development/45-explaining-models.html,available,2026-08-30
 46,Dpl,Deploying models,lifecycle,9,Model development,model,9_model_development/46-deploying-models.html,available,2026-08-30
 47,Mon,Monitoring models,lifecycle,9,Model development,model,9_model_development/47-monitoring-models.html,available,2026-08-30
-48,Spa,Spam detection,task,10,Classification,model,10_classification/48-spam-detection.html,available,2026-08-29
+48,Spa,Spam detection,task,10,Classification,model,10_classification/48-spam-detection.html,available,2026-08-30
 49,Sed,Sentiment and emotion analysis,task,10,Classification,model,10_classification/49-sentiment-and-emotion-analysis.html,available,2026-08-30
-50,Int,Intent classification,task,10,Classification,model,10_classification/50-intent-classification.html,available,2026-08-29
-51,Cls,Text classification,task,10,Classification,model,10_classification/51-text-classification.html,available,2026-08-29
-52,Mlc,Multi-label and multi-class classification,task,10,Classification,model,10_classification/52-multi-label-and-multi-class-classification.html,available,2026-08-29
+50,Int,Intent classification,task,10,Classification,model,10_classification/50-intent-classification.html,available,2026-08-30
+51,Cls,Text classification,task,10,Classification,model,10_classification/51-text-classification.html,available,2026-08-30
+52,Mlc,Multi-label and multi-class classification,task,10,Classification,model,10_classification/52-multi-label-and-multi-class-classification.html,available,2026-08-30
 53,Key,Keyword extraction,task,11,Signals and discovery,model,11_signals_and_discovery/53-keyword-extraction.html,available,2026-08-29
 54,Esu,Extractive summarization,task,11,Signals and discovery,model,11_signals_and_discovery/54-extractive-summarization.html,available,2026-08-30
 55,Top,Topic modeling,method,11,Signals and discovery,model,11_signals_and_discovery/55-topic-modeling.html,available,2026-08-30
@@ -59,8 +59,8 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 58,Syn,WordNet synsets,resource,12,Similarity,model,12_similarity/58-wordnet-synsets.html,available,2026-08-29
 59,Dst,Distance measures,method,12,Similarity,model,12_similarity/59-distance-measures.html,available,2026-08-29
 60,Sim,Document similarity,task,12,Similarity,model,12_similarity/60-document-similarity.html,available,2026-08-29
-61,Dis,Distributed word representations,concept,12,Similarity,model,12_similarity/61-distributed-word-representations.html,available,2026-08-29
-62,Con,Contextualized word representations,concept,12,Similarity,model,12_similarity/62-contextualized-word-representations.html,available,2026-08-29
+61,Dis,Distributed word representations,concept,12,Similarity,model,12_similarity/61-distributed-word-representations.html,available,2026-08-30
+62,Con,Contextualized word representations,concept,12,Similarity,model,12_similarity/62-contextualized-word-representations.html,available,2026-08-30
 63,Nex,Next-token prediction,objective,13,Natural language generation,generation,,planned,
 64,Rep,Report writing,application,13,Natural language generation,generation,,planned,
 65,Tra,Machine translation,task,13,Natural language generation,generation,,planned,

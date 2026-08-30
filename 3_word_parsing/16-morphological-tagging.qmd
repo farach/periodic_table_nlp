@@ -40,7 +40,9 @@ By the end of this lesson, you will be able to:
 This lesson takes a limited first step. It asks what an English spelling
 dictionary can say about isolated word forms. That is different from
 **contextual morphology**, where a tagger or morphologizer labels a token in a
-sentence with feature bundles such as `Number=Plur` or `Tense=Past`.
+sentence with feature bundles such as `Number=Plur` or `Tense=Past`. This page
+covers dictionary morphology, not contextual morphological tagging; Lesson 18
+shows token-level feature bundles in its `feats` column.
 
 ```{r}
 #| include: false
@@ -329,10 +331,10 @@ completely false. Hunspell allows `re-` in front of dictionary words, and
 This lesson stays with spelling alone. In NLP, contextual morphology usually
 means assigning feature bundles such as `Number=Plur` or `Tense=Past` to a
 token in a sentence. Those features live in the `feats` column of a treebank
-and can be produced by a tagger or morphologizer, including the tagger in
-Lesson 17. This page does not do that. It runs a spelling dictionary over an
-out-of-context list of word types, which is a different task with a different
-input and output.
+and can be produced by a tagger or morphologizer. Lesson 18 displays them in
+parser output. This page does not produce those tags. It runs a spelling
+dictionary over an out-of-context list of word types, which is a different task
+with a different input and output.
 
 ## What to remember
 

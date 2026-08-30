@@ -178,8 +178,7 @@ diagnostic_summary <- diagnostic_runs |>
     selection_reason = if_else(
       selected,
       paste(
-        "Highest mean semantic coherence;",
-        "strong seed stability in the full-corpus fit;",
+        "Highest mean semantic coherence under the stated diagnostic priority;",
         "more topical resolution than k=3"
       ),
       ""

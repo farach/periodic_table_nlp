@@ -276,8 +276,10 @@ On the larger corpus, 41 of 1,377 paragraphs have no Bing match, a share of
 length table gives the more honest finding: 7.48 percent of 25-49 word
 paragraphs have no match, 1.61 percent of 50-99 word paragraphs have no match,
 and none of the 439 paragraphs with at least 100 words lack a match. That
-explains why the lexicon finds nothing in 3 of the 5 short feedback comments
-while it almost always finds something in long paragraphs.
+shows the direction expected from document length. It does not estimate the
+feedback result: those comments are shorter than every paragraph measured here
+and come from another domain. The `1-24 words` bin is empty because the shared
+corpus helper keeps paragraphs of at least 25 words.
 
 ## Read the failures before trusting the score
 
@@ -362,6 +364,13 @@ rating field supplies three tiny labels for demonstration: ratings of 5 become
 `satisfied`, rating 2 becomes `frustrated`, and rating 4 is left out because it
 is mild. The seed before this deterministic fit is 4901.
 
+The score is an equal-prior, Laplace-smoothed multinomial naive Bayes
+calculation. Adding one to every word count prevents an unseen word from making
+a class probability zero. “Equal-prior” means the calculation gives the two
+labels equal starting weight instead of using the two-to-one training-row
+imbalance; a deployed naive Bayes classifier would make that prior choice
+explicit.
+
 ```{r}
 set.seed(4901)
 labeled_feedback <- feedback |>
@@ -430,7 +439,7 @@ trained_scores <- feedback |>
   mutate(
     training_role = case_when(
       feedback_id %in% labeled_feedback$feedback_id ~ "fitting row",
-      feedback_id == 1002L ~ "held-out rated row",
+      feedback_id == 1002L ~ "excluded mild rating (no reference label)",
       TRUE ~ "unrated row"
     ),
     trained_score = map_dbl(comment, score_with_labels),
@@ -476,7 +485,13 @@ stopifnot(
   identical(nrow(vocabulary), 15L),
   identical(
     trained_scores$training_role,
-    c("fitting row", "held-out rated row", "unrated row", "fitting row", "fitting row")
+    c(
+      "fitting row",
+      "excluded mild rating (no reference label)",
+      "unrated row",
+      "fitting row",
+      "fitting row"
+    )
   ),
   identical(
     trained_scores$trained_label,
@@ -493,11 +508,13 @@ stopifnot(
 
 This trained scorer learns from only three labelled rows, so it is a mechanics
 example rather than an evaluation. Rows 1001, 1004, and 1005 are fitting rows,
-and reporting success on them would be resubstitution. Row 1002 is the only rated
-row held away from fitting, and this scorer sends it to `frustrated`. The table
-therefore shows inspection output, not accuracy. A larger trained model can use
-context if the training labels record the domain you care about. Its cost is that
-labels must be collected, checked, and kept in step with the way people write.
+and reporting success on them would be resubstitution. Row 1002 was excluded
+because its mild rating has no reference label in this two-class scheme. The
+scorer still returns `frustrated`, but that is inspection output with no
+right-or-wrong answer, not a held-out evaluation. A larger trained model can use
+context if the training labels record the domain you care about. Its cost is
+that labels must be collected, checked, and kept in step with the way people
+write.
 
 ## Emotion needs stronger evidence
 

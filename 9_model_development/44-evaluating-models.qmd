@@ -185,6 +185,11 @@ times to show how scores move when different speeches land on each side. These
 repeated holdouts are a **robustness check**, not 10 new untouched test sets,
 and they were not used to choose the candidate in lesson 43.
 
+**Accuracy** is the share of rows with the right label. When classes are uneven,
+a model can get many rows right by favoring the larger class. A **confusion
+matrix** shows which labels were confused, and **balanced accuracy** averages the
+accuracy within each class so the smaller class still counts.
+
 ## Repeated splits change the answer
 
 The study runs 10 replicates for each task and split scheme. A **replicate** is a
@@ -231,6 +236,40 @@ era_speech_length_gap <- era_speech$mean_accuracy - era_speech$mean_length_rule
 
 era_party_speech_gap <- era_party_speech$mean_accuracy - era_party_speech$mean_train_majority
 
+paired_comparisons <- bind_rows(
+  study |>
+    filter(task == "era", split_scheme == "speech") |>
+    summarise(
+      comparison = "era, all rows",
+      model_wins = sum(accuracy > train_majority_accuracy),
+      ties = sum(accuracy == train_majority_accuracy),
+      model_losses = sum(accuracy < train_majority_accuracy)
+    ),
+  study |>
+    filter(task == "era_party_rows", split_scheme == "speech") |>
+    summarise(
+      comparison = "era, party rows",
+      model_wins = sum(accuracy > train_majority_accuracy),
+      ties = sum(accuracy == train_majority_accuracy),
+      model_losses = sum(accuracy < train_majority_accuracy)
+    ),
+  study |>
+    filter(task == "party", split_scheme == "paragraph") |>
+    summarise(
+      comparison = "party, paragraph split",
+      model_wins = sum(accuracy > train_majority_accuracy),
+      ties = sum(accuracy == train_majority_accuracy),
+      model_losses = sum(accuracy < train_majority_accuracy)
+    )
+)
+
+party_president_bal_range <- range(
+  study$bal_accuracy[
+    study$task == "party" &
+      study$split_scheme == "president"
+  ]
+)
+
 knitr::kable(
   score_table,
   col.names = c(
@@ -239,6 +278,13 @@ knitr::kable(
     "Model low", "Model high", "Missing balanced accuracy"
   ),
   caption = "Ten split replicates for each task and split scheme",
+  row.names = FALSE
+)
+
+knitr::kable(
+  paired_comparisons,
+  col.names = c("Comparison", "Model wins", "Ties", "Model losses"),
+  caption = "Paired model-versus-training-majority results across 10 replicates",
   row.names = FALSE
 )
 ```
@@ -266,6 +312,10 @@ stopifnot(
   identical(round(party_speech$mean_train_majority, 4), 0.6563),
   identical(round(party_president$mean_accuracy, 4), 0.4997),
   identical(round(party_president$mean_bal_accuracy, 4), 0.5090),
+  identical(paired_comparisons$model_wins, c(10L, 6L, 3L)),
+  identical(paired_comparisons$ties, c(0L, 0L, 1L)),
+  identical(paired_comparisons$model_losses, c(0L, 4L, 6L)),
+  identical(round(party_president_bal_range, 4), c(0.4769, 0.5595)),
   identical(nrow(na_replicate), 1L),
   identical(na_replicate$replicate, 3L),
   identical(na_replicate$test_majority_rate, 1)
@@ -351,15 +401,18 @@ stopifnot(
 )
 ```
 
-The party model never beats its deployable majority rule at the paragraph split:
-`r round(party_paragraph$mean_accuracy, 4)` for the model against
-`r round(party_paragraph$mean_train_majority, 4)` for the rule. At the speech
+The party model does not beat its deployable majority rule on average at the
+paragraph split: `r round(party_paragraph$mean_accuracy, 4)` for the model
+against `r round(party_paragraph$mean_train_majority, 4)` for the rule. Across
+the 10 paired replicates, the model wins 3, ties 1, and loses 6. At the speech
 split, the model averages `r round(party_speech$mean_accuracy, 4)` against
 `r round(party_speech$mean_train_majority, 4)`. Under the person split, accuracy
-is `r round(party_president$mean_accuracy, 4)` and balanced accuracy is
-`r round(party_president$mean_bal_accuracy, 4)`, which is chance for this setup.
-The conclusion is model-level: this penalty, recipe, and row set did not learn
-party.
+is `r round(party_president$mean_accuracy, 4)` and mean balanced accuracy is
+`r round(party_president$mean_bal_accuracy, 4)`. Its replicate values range from
+`r round(party_president_bal_range[[1]], 4)` to
+`r round(party_president_bal_range[[2]], 4)`, straddling the theoretical
+two-class chance value of 0.5. The conclusion is model-level: this penalty,
+recipe, and row set did not learn party reliably.
 
 ## The controlled comparison is smaller
 
@@ -371,14 +424,15 @@ rows are from other party labels, and those rows are concentrated in the earlies
 speeches with longer paragraphs.
 
 The controlled comparison is `era_party_rows`, which runs the era label on the
-same rows as the party model. On those rows, era still beats its deployable
-baseline at the speech split: `r round(era_party_speech$mean_accuracy, 4)` for
-the model against `r round(era_party_speech$mean_train_majority, 4)` for the
-training-majority rule. The gap is only
+same rows as the party model. On the full era corpus, the model beats the
+deployable rule in all 10 speech-level replicates. On the party-row subset, the
+model averages `r round(era_party_speech$mean_accuracy, 4)` against
+`r round(era_party_speech$mean_train_majority, 4)` for the training-majority
+rule, but it wins 6 paired replicates and loses 4. The mean gap is only
 `r round(100 * era_party_speech_gap, 1)` points because this subset is much more
-imbalanced. A clean wording is: era is learnable here and party is not learned by
-this model, but the size of the era result depends heavily on which rows enter
-the study.
+imbalanced, and its direction is not stable across splits. Era is learnable on
+the full rows here and party is not learned by this model, but the controlled
+subset does not support the same strong era conclusion.
 
 For `era_party_rows` under the person split, replicate
 `r na_replicate$replicate[[1]]` has undefined balanced accuracy because the test
@@ -387,12 +441,12 @@ set has only one class. Its test-majority rate is
 replicate is not a two-class result. The summary table uses `na.rm = TRUE` for
 balanced accuracy and reports the missing count so the case stays visible.
 
-## Accuracy misses some failures
+## Read the final confusion matrix
 
-**Accuracy** is the share of rows with the right label. When classes are uneven,
-a model can get many rows right by favoring the larger class. A **confusion
-matrix** shows which labels were confused, and **balanced accuracy** averages the
-accuracy within each class so the smaller class still counts.
+**Sensitivity** is the share of `before 1900` paragraphs assigned to that first
+factor level. **Specificity** is the share of `1900 or later` paragraphs assigned
+to the second level. Naming the event level matters because reversing the factor
+levels reverses which class each measure describes.
 
 ```{r}
 source("R/inaugural-corpus.R")
@@ -422,6 +476,12 @@ era_fitted <- fit(era_workflow, data = era_training)
 era_predictions <- predict(era_fitted, era_testing) |>
   bind_cols(era_testing |> select(era))
 
+final_training_majority <- era_training |>
+  count(era, sort = TRUE) |>
+  slice(1) |>
+  pull(era)
+final_split_baseline <- mean(era_testing$era == final_training_majority)
+
 confusion <- conf_mat(
   era_predictions,
   truth = era,
@@ -435,7 +495,13 @@ metric_table <- metric_set(accuracy, bal_accuracy, sens, spec)(
   truth = era,
   estimate = .pred_class
 ) |>
-  select(.metric, .estimate)
+  select(.metric, .estimate) |>
+  bind_rows(
+    tibble(
+      .metric = "training_majority_accuracy",
+      .estimate = final_split_baseline
+    )
+  )
 
 knitr::kable(
   confusion_table,
@@ -448,7 +514,7 @@ knitr::kable(
   metric_table |>
     mutate(.estimate = round(.estimate, 4)),
   col.names = c("Measure", "Value"),
-  caption = "Accuracy and class-aware measures for the same predictions",
+  caption = "Model measures and the same-split deployable baseline",
   row.names = FALSE
 )
 ```
@@ -458,8 +524,13 @@ knitr::kable(
 
 stopifnot(
   identical(nrow(era_testing), 335L),
+  identical(as.character(final_training_majority), "1900 or later"),
+  identical(round(final_split_baseline, 4), 0.4179),
   identical(confusion_table$Freq, c(145, 50, 10, 130)),
-  identical(round(metric_table$.estimate, 4), c(0.8209, 0.8361, 0.7436, 0.9286))
+  identical(
+    round(metric_table$.estimate, 4),
+    c(0.8209, 0.8361, 0.7436, 0.9286, 0.4179)
+  )
 )
 ```
 
@@ -468,7 +539,10 @@ misses `r confusion_table$Freq[[2]]` of them. It gets
 `r confusion_table$Freq[[4]]` later-era paragraphs right and misses
 `r confusion_table$Freq[[3]]` of them. Balanced accuracy is
 `r round(metric_table$.estimate[metric_table$.metric == "bal_accuracy"], 4)`,
-which tells a little more than accuracy alone.
+which gives both classes equal weight. The model accuracy is
+`r round(metric_table$.estimate[metric_table$.metric == "accuracy"], 4)`;
+the deployable training-majority rule scores
+`r round(final_split_baseline, 4)` on these same rows.
 
 ## What else could produce this score
 

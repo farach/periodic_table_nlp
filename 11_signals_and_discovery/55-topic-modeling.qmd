@@ -221,13 +221,16 @@ stopifnot(
 
 The diagnostics do not agree. Three topics have the best held-out perplexity
 and adjusted exclusivity. Five topics have the best mean coherence. This lesson
-uses five because coherence is strongest there and the seed check below shows
-that its top words recur across fits. Three would also be a defensible choice
-if prediction or top-word concentration mattered more.
+uses five because it gives coherence priority for this teaching example. Three
+would also be a defensible choice if prediction or top-word concentration
+mattered more. The later seed check examines only `k = 5`, so it cannot choose
+between five and three.
 
 The coherence lead over three topics is only
 `r round(coherence_lead, 3)`, while the three five-topic starts span
 `r round(selected_coherence_spread, 3)`. Rank 1 is not a decisive win here.
+These ranges come from three starts on one speech-grouped split, not confidence
+intervals or a validated optimum for another corpus.
 
 Do not fit several values of `k`, read every word table, and choose the one that
 is easiest to name. That lets the interpretation choose the model after seeing
@@ -255,7 +258,14 @@ that every analysis needs.
 
 ## Fit five topics three times
 
-The analyst chooses `k = 5`. The seed in `control = list(seed = ...)` fixes the random starting values used by the LDA fitting algorithm. It does not choose `k`, and it does not prove that the fitted topics are the only possible solution.
+The analyst chooses `k = 5`. The seed in `control = list(seed = ...)` fixes the
+random starting values used by the LDA fitting algorithm. It does not choose
+`k`, and it does not prove that the fitted topics are the only possible
+solution.
+
+The committed diagnostic study used training and held-out speeches to inform
+that choice. The three objects below are new full-corpus fits used to inspect
+the selected resolution; they are not the diagnostic models.
 
 ```{r}
 top_terms <- function(model, n = 10L) {
@@ -391,16 +401,35 @@ seed_summary <- seed_matches |>
     .by = comparison
   )
 
+within_fit_overlap <- expand_grid(
+  topic_first = sort(unique(terms_a$topic)),
+  topic_second = sort(unique(terms_a$topic))
+) |>
+  filter(topic_first < topic_second) |>
+  mutate(
+    shared_top_10_terms = map2_int(
+      topic_first,
+      topic_second,
+      \(first_topic, second_topic) {
+        length(intersect(
+          terms_a$term[terms_a$topic == first_topic],
+          terms_a$term[terms_a$topic == second_topic]
+        ))
+      }
+    )
+  )
+within_fit_mean <- mean(within_fit_overlap$shared_top_10_terms)
+
 seed_null <- permutation_null(
   observed = mean(seed_matches$shared_top_10_terms[seed_matches$comparison == "seed 42 vs 7"]),
   replicate_fn = function() {
     shuffled_terms <- terms_b |>
-      mutate(term = sample(colnames(lda_input), n(), replace = FALSE))
+      mutate(topic = sample(topic, n(), replace = FALSE))
 
     mean(best_topic_match(terms_a, shuffled_terms)$shared_top_10_terms)
   },
   replicates = 500L,
-  seed = 5501L,
+  seed = 5502L,
   alternative = "greater"
 )
 
@@ -424,7 +453,7 @@ kable(
 kable(
   seed_null_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
-  caption = "Random-term null for seed 42 vs seed 7 overlap",
+  caption = "Frequency-preserving allocation null for seed 42 vs seed 7 overlap",
   row.names = FALSE
 )
 ```
@@ -437,15 +466,25 @@ stopifnot(
   identical(seed_summary$minimum_shared_terms, c(4L, 4L, 3L)),
   identical(seed_summary$maximum_shared_terms, c(7L, 7L, 6L)),
   identical(seed_summary$total_shared_terms, c(28L, 27L, 25L)),
+  identical(as.numeric(within_fit_mean), 3.9),
   identical(as.numeric(seed_null_display$observed), 5.6),
-  identical(as.numeric(seed_null_display$null_mean), 0.098),
-  identical(as.numeric(seed_null_display$p_value), 0.002)
+  identical(as.numeric(seed_null_display$null_mean), 4.901),
+  identical(as.numeric(seed_null_display$p_value), 0.03)
 )
 ```
 
-The five-topic fits are more stable across seeds than the warning at the start might lead you to expect. Matched topics share 5.6, 5.4, and 5.0 of their top 10 terms on average across the three pairwise comparisons. For the seed 42 versus seed 7 comparison, random term labels produce only 0.098 shared terms on average, with 90% of shuffles between 0 and 0.4. The observed mean overlap is 5.6 (p = 0.002).
+The three full-corpus five-topic fits show modest repeatability. Matched topics
+share 5.6, 5.4, and 5.0 of their top 10 terms on average across the three
+pairwise comparisons. Distinct topics within the seed-42 fit already share
+`r round(within_fit_mean, 1)` terms on average.
 
-Topic models always return topics, even for randomized term labels. The null here keeps the fitted topic sizes and vocabulary but breaks the term identities in one run. That makes the seed comparison a claim about repeatability rather than a claim based on tidy-looking rows.
+The null keeps the same 50 top-term rows, including repeated high-frequency
+terms, but randomly reallocates them across five equal-sized topics. Its mean is
+`r round(seed_null$null_mean, 3)`, compared with observed overlap
+`r round(seed_null$observed, 1)` and p =
+`r round(seed_null$p_value, 3)`. That is limited evidence of repeatability for
+these three `k = 5` fits, not evidence that five is more stable than another
+topic count.
 
 ## Changing k changes the question
 
@@ -508,7 +547,8 @@ The first terms for the four-topic model are `must`, `people`, `government`, and
 - No diagnostic supplies a single correct `k`; the choice depends on the
   intended resolution and use.
 - Perplexity, coherence, and exclusivity can favor different topic counts.
-- The same `k = 5` fit was fairly repeatable across seeds in this corpus.
+- Three full-corpus `k = 5` fits showed modest repeatability; that check did not
+  compare topic counts.
 - VEM and Gibbs sampling are different ways to fit LDA; other topic-model
   families answer different questions.
 - Changing `k` changes the question, so topic labels start over.
