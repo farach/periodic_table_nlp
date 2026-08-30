@@ -84,8 +84,9 @@ riverton_sentences <- read_csv(
 )
 
 set.seed(4300)
-riverton_split <- initial_split(
+riverton_split <- group_initial_split(
   riverton_sentences,
+  group = document_id,
   prop = 0.75
 )
 riverton_training <- training(riverton_split)
@@ -110,7 +111,7 @@ knitr::kable(
 knitr::kable(
   split_size,
   col.names = c("Split part", "Rows"),
-  caption = "A 75 percent split leaves only seven test sentences",
+  caption = "Keeping documents whole leaves only four test sentences",
   row.names = FALSE
 )
 ```
@@ -121,14 +122,25 @@ knitr::kable(
 stopifnot(
   identical(nrow(riverton_sentences), 28L),
   identical(n_distinct(riverton_sentences$reference_label), 5L),
-  identical(nrow(riverton_training), 21L),
-  identical(nrow(riverton_testing), 7L),
+  identical(nrow(riverton_training), 24L),
+  identical(nrow(riverton_testing), 4L),
+  identical(n_distinct(riverton_training$document_id), 6L),
+  identical(n_distinct(riverton_testing$document_id), 1L),
+  identical(
+    intersect(
+      riverton_training$document_id,
+      riverton_testing$document_id
+    ),
+    character()
+  ),
   identical(sum(riverton_label_counts$sentences), 28L)
 )
 ```
 
-The split is deterministic because the seed is `4300`. It leaves
-`r nrow(riverton_testing)` test sentences across `r n_distinct(riverton_sentences$reference_label)` labels.
+The split is deterministic because the seed is `4300`, and it keeps all rows
+from a source document together. It leaves `r nrow(riverton_testing)` test
+sentences from one document, containing
+`r n_distinct(riverton_testing$reference_label)` of the five labels.
 A single changed answer would move accuracy by about
 `r round(100 / nrow(riverton_testing), 1)` percentage points. That is not enough
 room to learn how far off an automatic answer might be.
@@ -360,10 +372,9 @@ Balanced accuracy is the primary selection measure because it gives the two era
 classes equal weight. Raw accuracy appears beside it so the effect of the
 uneven class counts stays visible.
 
-The table shows the two tied ridge settings and the leading lasso and forest
-settings. The standard error describes how each score moved across these five
-folds; five related folds do not provide a confidence interval for other
-corpora.
+The table shows the two leading ridge settings and the leading lasso and forest
+settings. The ridge means differ, but their fold-to-fold standard errors overlap.
+Five related folds do not provide a confidence interval for other corpora.
 
 ```{r}
 comparison_display <- model_comparison |>
@@ -451,6 +462,11 @@ Ridge with penalty `0.01` has the highest mean balanced accuracy,
 errors overlap the nearby candidates, so the table does not establish a
 universal winner. We keep ridge because it leads this comparison and leaves a
 linear model whose coefficients can be inspected in lesson 45.
+
+The selected penalty is the lowest ridge value tried. That says less shrinkage
+helped among these four settings; it does not establish that `0.01` is the best
+possible penalty. A finished search would extend the grid before making that
+claim.
 
 The random forest is a useful check rather than a required upgrade. Its best raw
 accuracy is competitive, but its lower balanced accuracy shows that more correct
@@ -562,7 +578,10 @@ Only after the candidate and penalty are fixed do we use the 14 final test
 speeches. The model scores `r round(live_accuracy, 4)` accuracy and
 `r round(live_bal_accuracy, 4)` balanced accuracy. The majority label learned
 from training would score `r round(split_baseline_accuracy, 4)` on this exact
-test set. The corpus-wide largest-class baseline is
+test set. That rate is below 0.5 because the training majority is
+`1900 or later`, while this test split contains more `before 1900` paragraphs.
+Keeping speeches whole does not preserve the corpus class mix. The corpus-wide
+largest-class baseline is
 `r round(corpus_baseline, 4)`, but the same-split comparison is the one a
 deployable rule could use.
 
@@ -576,7 +595,7 @@ a harder split. The next lesson tests those questions with repeated splits.
 ## What to remember
 
 - A pilot corpus can teach labeling without being large enough for testing.
-- A test set with seven rows cannot measure much.
+- A grouped test set with four rows cannot measure much.
 - A speech-held-out split keeps one address from leaking across both sides.
 - Grouped folds compare candidates without spending the final test set.
 - A recipe, model specification, engine, and workflow have different jobs.

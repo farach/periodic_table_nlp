@@ -1,7 +1,7 @@
 k,seeds,coherence_mean,coherence_low,coherence_high,exclusivity_mean,exclusivity_low,exclusivity_high,perplexity_mean,perplexity_low,perplexity_high,coherence_rank,exclusivity_rank,perplexity_rank,selected,selection_reason
 3,3,-1.622917,-1.657894,-1.579513,0.274045,0.255747,0.299545,1084.941605,1084.789448,1085.041493,4,1,1,FALSE,
 4,3,-1.617824,-1.698558,-1.546545,0.195685,0.160208,0.229337,1086.000206,1085.944834,1086.089592,3,2,2,FALSE,
-5,3,-1.603217,-1.662964,-1.568417,0.15687,0.151434,0.16466,1086.982348,1086.68827,1087.180678,1,3,3,TRUE,Highest mean semantic coherence; strong seed stability in the full-corpus fit; more topical resolution than k=3
+5,3,-1.603217,-1.662964,-1.568417,0.15687,0.151434,0.16466,1086.982348,1086.68827,1087.180678,1,3,3,TRUE,Highest mean semantic coherence under the stated diagnostic priority; more topical resolution than k=3
 6,3,-1.616679,-1.666178,-1.554404,0.131401,0.115075,0.142744,1087.567322,1087.472398,1087.64564,2,4,4,FALSE,
 7,3,-1.630869,-1.708232,-1.55086,0.116765,0.105268,0.131981,1088.283867,1088.2012790000001,1088.328659,5,5,5,FALSE,
 8,3,-1.641938,-1.748291,-1.543324,0.100713,0.090658,0.111182,1088.946911,1088.849249,1089.023492,6,6,6,FALSE,

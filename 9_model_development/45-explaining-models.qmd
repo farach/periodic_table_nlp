@@ -42,13 +42,21 @@ A **coefficient** is a learned weight. In this linear model, a positive
 coefficient pushes a paragraph toward the second class, `1900 or later`. A
 negative coefficient pushes it toward the first class, `before 1900`. The size of
 the coefficient shows the fitted weight after the recipe has created tf-idf
-columns.
+columns. This direction depends on the outcome order: the shared corpus helper
+fixes `before 1900` first and `1900 or later` second, which is the target class
+for this binary glmnet fit.
 
 Ranking coefficients by raw magnitude does not prove exactly what the model
 relied on. The features are correlated, and ridge regression spreads weight
 across related words. A different penalty could change the ranking. Read the
 list as terms this fitted model weighted heavily, not as a stable dictionary of
 historical meaning.
+
+glmnet standardizes predictors while fitting but returns coefficients on the
+original tf-idf scale. A rare term with little spread can therefore receive a
+larger raw coefficient than a common term with the same standardized effect.
+Multiplying each coefficient by its feature standard deviation would produce a
+different ranking.
 
 There is a second gap worth naming before any table appears. The model examined
 below is fitted on every paragraph in the corpus, because an explanation is
@@ -125,6 +133,7 @@ knitr::kable(
 stopifnot(
   identical(nrow(paragraphs), 1377L),
   identical(n_distinct(paragraphs$president), 40L),
+  identical(levels(paragraphs$era), c("before 1900", "1900 or later")),
   identical(nrow(era_coefficients), 501L),
   identical(sort(checked_coefficients$word), sort(check_words)),
   all(abs(checked_coefficients$estimate) > 7),

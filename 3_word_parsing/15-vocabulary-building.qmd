@@ -39,13 +39,15 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Count tokens and types
 
-The first visible chunk loads readr for files, dplyr and tibble for tables,
-purrr for repeated work, tokenizers for word tokens, and tokenizers.bpe for
-subword tokens. A **tibble** is a table that prints its size and column types.
+The first visible chunk loads readr for files, dplyr, tidyr, and tibble for
+tables, purrr for repeated work, tokenizers for word tokens, and tokenizers.bpe
+for subword tokens. A **tibble** is a table that prints its size and column
+types.
 
 ```{r}
 library(readr)
 library(dplyr)
+library(tidyr)
 library(tibble)
 library(purrr)
 library(tokenizers)
@@ -70,11 +72,14 @@ sentences <- read_csv(
   )
 )
 
-word_tokens <- unlist(
-  tokenize_words(sentences$text),
-  use.names = FALSE
-)
-word_counts <- tibble(token = word_tokens) |>
+word_token_rows <- sentences |>
+  transmute(
+    sentence_id,
+    token = tokenize_words(text)
+  ) |>
+  unnest_longer(token)
+
+word_counts <- word_token_rows |>
   count(token, name = "frequency", sort = TRUE)
 top_word_counts <- word_counts |>
   slice_head(n = 8)
@@ -92,7 +97,8 @@ knitr::kable(
 
 stopifnot(
   identical(nrow(sentences), 28L),
-  identical(length(word_tokens), 153L),
+  identical(nrow(word_token_rows), 153L),
+  all(!is.na(word_token_rows$sentence_id)),
   identical(nrow(word_counts), 96L),
   identical(sum(word_counts$frequency == 1L), 72L),
   identical(
@@ -137,22 +143,27 @@ job_rows <- sentences |>
 flyer_rows <- sentences |>
   filter(document_id == "F001")
 
-job_tokens <- unlist(
-  tokenize_words(job_rows$text),
-  use.names = FALSE
-)
-flyer_tokens <- unlist(
-  tokenize_words(flyer_rows$text),
-  use.names = FALSE
-)
-job_word_counts <- tibble(token = job_tokens) |>
+job_token_rows <- job_rows |>
+  transmute(
+    sentence_id,
+    token = tokenize_words(text)
+  ) |>
+  unnest_longer(token)
+flyer_token_rows <- flyer_rows |>
+  transmute(
+    sentence_id,
+    token = tokenize_words(text)
+  ) |>
+  unnest_longer(token)
+
+job_word_counts <- job_token_rows |>
   count(token, name = "frequency", sort = TRUE)
 
 split_summary <- tibble(
   split = c("job-detail rows", "training flyer"),
   rows = c(nrow(job_rows), nrow(flyer_rows)),
-  tokens = c(length(job_tokens), length(flyer_tokens)),
-  types = c(nrow(job_word_counts), n_distinct(flyer_tokens))
+  tokens = c(nrow(job_token_rows), nrow(flyer_token_rows)),
+  types = c(nrow(job_word_counts), n_distinct(flyer_token_rows$token))
 )
 
 knitr::kable(
@@ -169,9 +180,10 @@ knitr::kable(
 stopifnot(
   identical(nrow(job_rows), 22L),
   identical(nrow(flyer_rows), 6L),
-  identical(length(job_tokens), 133L),
+  identical(nrow(job_token_rows), 133L),
   identical(nrow(job_word_counts), 86L),
-  identical(length(flyer_tokens), 20L)
+  identical(nrow(flyer_token_rows), 20L),
+  all(!is.na(c(job_token_rows$sentence_id, flyer_token_rows$sentence_id)))
 )
 ```
 
@@ -201,14 +213,14 @@ frequency_cutoffs <- tibble(minimum_frequency = 1:3) |>
         kept <- job_word_counts |>
           filter(frequency >= cutoff) |>
           pull(token)
-        sum(job_tokens %in% kept)
+        sum(job_token_rows$token %in% kept)
       }
     ),
-    coverage = covered_tokens / length(job_tokens),
+    coverage = covered_tokens / nrow(job_token_rows),
     coverage_label = sprintf(
       "%s/%s (%s%%)",
       covered_tokens,
-      length(job_tokens),
+      nrow(job_token_rows),
       round(100 * coverage)
     )
   )
@@ -259,10 +271,9 @@ stores the pieces it will use to encode new text.
 
 ```{r}
 job_vocabulary <- job_word_counts$token
-unknown_flyer_tokens <- flyer_tokens[
-  !flyer_tokens %in% job_vocabulary
-]
-unknown_flyer_types <- sort(unique(unknown_flyer_tokens))
+unknown_flyer_rows <- flyer_token_rows |>
+  filter(!token %in% job_vocabulary)
+unknown_flyer_types <- sort(unique(unknown_flyer_rows$token))
 unknown_summary <- tibble(
   measure = c(
     "flyer tokens",
@@ -270,12 +281,12 @@ unknown_summary <- tibble(
     "unknown share"
   ),
   value = c(
-    as.character(length(flyer_tokens)),
-    as.character(length(unknown_flyer_tokens)),
+    as.character(nrow(flyer_token_rows)),
+    as.character(nrow(unknown_flyer_rows)),
     sprintf(
       "%s/%s (about half)",
-      length(unknown_flyer_tokens),
-      length(flyer_tokens)
+      nrow(unknown_flyer_rows),
+      nrow(flyer_token_rows)
     )
   )
 )
@@ -292,8 +303,9 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  identical(length(unknown_flyer_tokens), 10L),
-  identical(length(flyer_tokens), 20L),
+  identical(nrow(unknown_flyer_rows), 10L),
+  identical(nrow(flyer_token_rows), 20L),
+  all(!is.na(unknown_flyer_rows$sentence_id)),
   identical(
     unknown_summary$value[unknown_summary$measure == "unknown share"],
     "10/20 (about half)"
@@ -328,11 +340,13 @@ together the pair that occurs most often. The Lab trains a BPE model on the
 job-detail rows only, then encodes the flyer rows. This gives the subword
 vocabulary the same held-out test as the word vocabulary.
 
-The `vocab_size = 200L` argument is a modeling choice that controls how many
-pieces the trainer can keep. The `coverage = 1` argument tells the trainer to
-keep every character it sees in the job-detail text. Characters outside that set
-have no piece. The special marker `<UNK>` is the model's way of saying it has no
-piece for this, short for "unknown".
+The word tokenizer lowercases both sources, so the BPE comparison does the same.
+Holding case constant matters: otherwise the comparison would change both the
+tokenization method and the case policy. The `vocab_size = 200L` argument is a
+modeling choice that controls how many pieces the trainer can keep. The
+`coverage = 1` argument tells the trainer to keep every character it sees in the
+lowercased job-detail text. The special marker `<UNK>` is the model's way of
+saying it has no piece for this, short for "unknown".
 
 ::: {.callout-note}
 The explicit `model_path` sends the model to a temporary file during rendering.
@@ -340,7 +354,7 @@ The explicit `model_path` sends the model to a temporary file during rendering.
 
 ```{r}
 job_corpus_file <- tempfile(fileext = ".txt")
-write_lines(job_rows$text, job_corpus_file)
+write_lines(tolower(job_rows$text), job_corpus_file)
 
 job_bpe_model <- bpe(
   job_corpus_file,
@@ -352,29 +366,36 @@ job_bpe_model <- bpe(
 
 flyer_subwords <- bpe_encode(
   job_bpe_model,
-  x = flyer_rows$text,
+  x = tolower(flyer_rows$text),
   type = "subwords"
 )
 flyer_ids <- bpe_encode(
   job_bpe_model,
-  x = flyer_rows$text,
+  x = tolower(flyer_rows$text),
+  type = "ids"
+)
+flyer_word_ids <- bpe_encode(
+  job_bpe_model,
+  x = flyer_token_rows$token,
   type = "ids"
 )
 flat_flyer_subwords <- unlist(flyer_subwords, use.names = FALSE)
 flat_flyer_ids <- unlist(flyer_ids, use.names = FALSE)
-first_flyer_subwords <- flyer_subwords[[1]]
-first_flyer_ids <- flyer_ids[[1]]
 unknown_id <- job_bpe_model$vocabulary$id[
   job_bpe_model$vocabulary$subword == "<UNK>"
 ]
 unknown_flyer_piece_count <- as.integer(sum(flat_flyer_ids == unknown_id))
-unknown_flyer_piece_label <- sprintf(
-  "%s/%s (%.1f%%)",
-  unknown_flyer_piece_count,
-  length(flat_flyer_ids),
-  100 * unknown_flyer_piece_count / length(flat_flyer_ids)
-)
+flyer_word_bpe <- flyer_token_rows |>
+  mutate(
+    bpe_ids = flyer_word_ids,
+    has_unknown_id = map_lgl(
+      bpe_ids,
+      \(ids) any(ids == unknown_id)
+    )
+  )
+unknown_flyer_word_count <- sum(flyer_word_bpe$has_unknown_id)
 flyer_unknown_by_line <- tibble(
+  sentence_id = flyer_rows$sentence_id,
   text = flyer_rows$text,
   pieces = map_int(flyer_ids, length),
   unknown_pieces = map_int(
@@ -382,33 +403,20 @@ flyer_unknown_by_line <- tibble(
     \(ids) as.integer(sum(ids == unknown_id))
   )
 )
-first_flyer_piece_table <- tibble(
-  piece_number = seq_along(first_flyer_subwords),
-  displayed_subword = first_flyer_subwords,
-  model_id = first_flyer_ids,
-  is_unknown_id = first_flyer_ids == unknown_id
-)
-capital_letters <- function(text) {
-  characters <- strsplit(paste(text, collapse = ""), "")[[1]]
-  sort(unique(characters[grepl("[A-Z]", characters)]))
-}
-job_capital_letters <- capital_letters(job_rows$text)
-flyer_capital_letters <- capital_letters(flyer_rows$text)
-missing_flyer_capitals <- setdiff(flyer_capital_letters, job_capital_letters)
 subword_test_summary <- tibble(
   measure = c(
     "BPE vocabulary rows",
+    "flyer word tokens",
+    "word tokens with an unknown id",
     "flyer subword pieces",
-    "unknown ids",
-    "first flyer line pieces",
-    "missing flyer capital letters"
+    "unknown piece ids"
   ),
   value = c(
     as.character(nrow(job_bpe_model$vocabulary)),
+    as.character(nrow(flyer_word_bpe)),
+    as.character(unknown_flyer_word_count),
     as.character(length(flat_flyer_ids)),
-    unknown_flyer_piece_label,
-    as.character(length(first_flyer_subwords)),
-    paste(missing_flyer_capitals, collapse = " ")
+    as.character(unknown_flyer_piece_count)
   )
 )
 
@@ -421,15 +429,8 @@ knitr::kable(
 
 knitr::kable(
   flyer_unknown_by_line,
-  col.names = c("Flyer line", "Subword pieces", "Unknown ids"),
+  col.names = c("Sentence ID", "Flyer line", "Subword pieces", "Unknown ids"),
   caption = "Unknown subword ids by flyer line",
-  row.names = FALSE
-)
-
-knitr::kable(
-  first_flyer_piece_table,
-  col.names = c("Piece", "Displayed subword", "Model ID", "Unknown ID"),
-  caption = "Displayed pieces and model ids for the first flyer line",
   row.names = FALSE
 )
 ```
@@ -439,72 +440,27 @@ knitr::kable(
 
 stopifnot(
   identical(nrow(job_bpe_model$vocabulary), 200L),
-  identical(length(flat_flyer_subwords), 91L),
-  identical(length(flat_flyer_ids), 91L),
+  identical(length(flat_flyer_subwords), 68L),
+  identical(length(flat_flyer_ids), 68L),
   identical(as.integer(unknown_id), 1L),
-  identical(unknown_flyer_piece_count, 7L),
-  identical(
-    unknown_flyer_piece_label,
-    "7/91 (7.7%)"
-  ),
-  identical(
-    flyer_unknown_by_line$unknown_pieces,
-    c(4L, 3L, 0L, 0L, 0L, 0L)
-  ),
-  identical(
-    job_capital_letters,
-    c("A", "C", "E", "N", "O", "P", "R", "S", "T", "W")
-  ),
-  identical(
-    missing_flyer_capitals,
-    c("D", "F", "H", "I", "K", "L", "U", "V")
-  ),
-  identical(length(first_flyer_subwords), 22L),
-  identical(
-    first_flyer_subwords,
-    c(
-      "▁R",
-      "IV",
-      "E",
-      "R",
-      "T",
-      "O",
-      "N",
-      "▁",
-      "S",
-      "KILL",
-      "S",
-      "▁",
-      "O",
-      "P",
-      "E",
-      "N",
-      "▁",
-      "H",
-      "O",
-      "U",
-      "S",
-      "E"
-    )
-  )
+  identical(unknown_flyer_word_count, 0L),
+  identical(unknown_flyer_piece_count, 0L),
+  identical(flyer_unknown_by_line$sentence_id, flyer_rows$sentence_id),
+  identical(flyer_unknown_by_line$unknown_pieces, rep(0L, 6L))
 )
 ```
 
-The honest comparison is 10 of 20 flyer word tokens with no entry, versus 7 of
-91 subword pieces with the unknown id. Subwords reduce the problem sharply; they
-do not remove it.
+The like-for-like comparison is now at the word-token level. The whole-word
+vocabulary has no entry for 10 of 20 flyer tokens. With both sources lowercased,
+none of the 20 word tokens contains a BPE unknown id, and none of the 68 BPE
+pieces is unknown. The subword model can assemble unseen words from characters
+and pieces learned in the job rows.
 
-The display strings from `bpe_encode(type = "subwords")` show text from the
-input, not the model's own ids, so they hide unknown pieces. Checking
-`bpe_encode(type = "ids")` shows the model result. The unknown pieces appear
-because the flyer is printed in capitals and the job-detail rows contain only
-the capital letters A, C, E, N, O, P, R, S, T, and W. The flyer also uses D, F,
-H, I, K, L, U, and V. Here, the `7/91` count belongs to this 200-piece
-character-based BPE model with `coverage = 1` and an `<UNK>` id for unseen
-characters. Other tokenizers use different out-of-vocabulary policies. A
-byte-level tokenizer can avoid this particular unknown-piece problem, while
-another subword vocabulary may still leave unknown material in a different
-place.
+That result belongs to this 200-piece model and this case policy. It is not a
+general promise that BPE removes out-of-vocabulary material. Case-sensitive
+input, a different writing system, a smaller character coverage, or another
+tokenizer can produce unknown ids. Comparing 10 word tokens with 68 pieces would
+also mix denominators, so the conclusion uses the 20 word-token outcomes.
 
 ## What to remember
 
@@ -513,7 +469,8 @@ place.
 - Most word types in this small file appear exactly once.
 - Frequency cutoffs shrink a vocabulary and reduce token coverage.
 - Held-out text exposes out-of-vocabulary words.
-- Subwords reduce unknown material here, but they do not remove it.
+- With the same lowercase policy, this BPE model encodes all 20 held-out word
+  tokens; that result is setting-specific, not a general guarantee.
 
 These percentages belong only to this 28-sentence teaching corpus. They show
 how vocabulary choices behave on the Riverton example, not how often these

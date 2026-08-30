@@ -64,7 +64,6 @@ library(purrr)
 library(stringr)
 library(httr2)
 library(digest)
-library(jsonlite)
 library(htmltools)
 
 book_request <- httr2::request(
@@ -123,10 +122,11 @@ not guarantee that an unavailable service will respond.
 
 ## Understand what happened when the request was sent
 
-The request was sent once on the retrieval date recorded below. httr2's
-`req_perform()` function performed the exchange and would have stopped on an
-unsuccessful HTTP status such as 404 or 500. The response returned status `200`,
-which means the service completed that request successfully.
+The original request was sent once on the retrieval date recorded below. During
+this lesson, `req_perform()` receives the same request but uses a local mock that
+replays the saved response bytes. That exercises the request-to-response step
+without contacting Open Library again. A normal `req_perform()` call would stop
+on an unsuccessful HTTP status such as 404 or 500.
 
 **JSON**, short for JavaScript Object Notation, is a text format that can hold
 named values, lists, and records. Many programming languages can read it, which
@@ -218,15 +218,73 @@ The MD5 fingerprint detects an accidental change to the saved file. It is not
 proof that the source is accurate or trustworthy. The request address and API
 documentation remain in the metadata file for a later audit.
 
+## Perform the request against the saved reply
+
+A **mock** replaces the network exchange with a local function. httr2 still
+passes the prepared request into `req_perform()` and returns an
+`httr2_response`; the mock supplies the dated status, header, and JSON body.
+
+```{r}
+replay_saved_response <- function(req) {
+  httr2::response(
+    status_code = as.integer(fixture_metadata$http_status),
+    url = req$url,
+    method = "GET",
+    headers = list(
+      `content-type` = fixture_metadata$content_type
+    ),
+    body = charToRaw(paste(fixture_lines, collapse = "\n"))
+  )
+}
+
+fixture_response <- httr2::req_perform(
+  book_request,
+  mock = replay_saved_response
+)
+
+response_summary <- tibble(
+  detail = c("Response class", "HTTP status", "Content type"),
+  value = c(
+    class(fixture_response)[[1]],
+    as.character(httr2::resp_status(fixture_response)),
+    httr2::resp_header(fixture_response, "content-type")
+  )
+)
+
+knitr::kable(
+  response_summary,
+  col.names = c("Response detail", "Value"),
+  caption = "The prepared request returns a replayed httr2 response",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  inherits(fixture_response, "httr2_response"),
+  identical(httr2::resp_status(fixture_response), 200L),
+  identical(
+    httr2::resp_header(fixture_response, "content-type"),
+    "application/json"
+  ),
+  identical(
+    rawToChar(httr2::resp_body_raw(fixture_response)),
+    paste(fixture_lines, collapse = "\n")
+  )
+)
+```
+
 ## Turn the saved response into a table
 
 Open Library places search results inside a JSON section named `docs`.
-`jsonlite::fromJSON()` translates that section into rows and columns because
-this response has the same fields for each catalog record.
+`resp_body_json()` translates that section into rows and columns because this
+response has the same fields for each catalog record.
 
 ```{r}
-fixture_data <- jsonlite::fromJSON(
-  fixture_path,
+fixture_data <- httr2::resp_body_json(
+  fixture_response,
   simplifyVector = TRUE
 )
 book_records <- as_tibble(fixture_data$docs)

@@ -228,7 +228,7 @@ cheap cue could substitute for reading.
 superficial_features <- inbox |>
   transmute(
     is_spam,
-    `first-person pronoun` = str_detect(text, regex("\\b(i|my|me)\\b", ignore_case = TRUE)),
+    `first-person pronoun` = str_detect(text, first_person_pattern),
     `ends with a question mark` = str_detect(text, "\\?\\s*$"),
     `longer than the median` = str_count(text, "\\S+") >= median(str_count(text, "\\S+")),
     `exclamation mark` = str_detect(text, "!"),
@@ -237,21 +237,50 @@ superficial_features <- inbox |>
   pivot_longer(-is_spam, names_to = "feature", values_to = "present")
 
 shortcut_sweep <- superficial_features |>
-  summarise(
-    accuracy = max(mean(present == is_spam), mean(present != is_spam)),
-    scam_recall = max(
+  reframe(
+    spam_when_feature_is = c("present", "absent"),
+    accuracy = c(
+      mean(present == is_spam),
+      mean(present != is_spam)
+    ),
+    scam_recall = c(
       mean(present[is_spam]),
       mean(!present[is_spam])
     ),
     .by = feature
   ) |>
-  arrange(desc(accuracy))
+  arrange(feature, desc(accuracy), desc(scam_recall)) |>
+  slice_head(n = 1, by = feature) |>
+  arrange(desc(accuracy), feature)
+
+shortcut_display <- bind_rows(
+  shortcut_sweep,
+  tibble(
+    feature = "always genuine baseline",
+    spam_when_feature_is = "never",
+    accuracy = mean(!inbox$is_spam),
+    scam_recall = 0
+  )
+) |>
+  arrange(desc(accuracy), feature)
+
+length_feature_counts <- superficial_features |>
+  filter(feature == "longer than the median") |>
+  summarise(
+    scams_above_median = sum(present & is_spam),
+    genuine_above_median = sum(present & !is_spam)
+  )
 
 knitr::kable(
-  shortcut_sweep |>
+  shortcut_display |>
     mutate(across(where(is.numeric), \(value) round(value, 4))),
-  col.names = c("Superficial feature", "Best accuracy", "Best scam recall"),
-  caption = "No single superficial feature solves the rebuilt inbox, but two come close",
+  col.names = c(
+    "Superficial feature",
+    "Predict spam when feature is",
+    "Accuracy",
+    "Scam recall"
+  ),
+  caption = "Each shortcut uses one orientation and is compared with the majority baseline",
   row.names = FALSE
 )
 ```
@@ -261,27 +290,61 @@ knitr::kable(
 
 stopifnot(
   identical(nrow(shortcut_sweep), 5L),
-  max(shortcut_sweep$accuracy) < 0.80,
-  max(shortcut_sweep$scam_recall) < 0.95,
-  identical(shortcut_sweep$feature[[1]], "exclamation mark")
+  identical(nrow(shortcut_display), 6L),
+  identical(shortcut_sweep$feature[[1]], "exclamation mark"),
+  identical(
+    round(
+      shortcut_sweep$accuracy[
+        shortcut_sweep$feature == "exclamation mark"
+      ],
+      4
+    ),
+    0.7667
+  ),
+  identical(
+    round(
+      shortcut_sweep$scam_recall[
+        shortcut_sweep$feature == "exclamation mark"
+      ],
+      4
+    ),
+    0.125
+  ),
+  identical(
+    round(
+      shortcut_sweep$accuracy[
+        shortcut_sweep$feature == "contains a digit"
+      ],
+      4
+    ),
+    0.7333
+  ),
+  identical(
+    round(
+      shortcut_display$accuracy[
+        shortcut_display$feature == "always genuine baseline"
+      ],
+      4
+    ),
+    0.7333
+  ),
+  identical(length_feature_counts$scams_above_median, 13L),
+  identical(length_feature_counts$genuine_above_median, 22L)
 )
 ```
 
-Two cues still carry real weight. An exclamation mark and the presence of a digit
-each reach about 0.75 accuracy on their own. That is worth separating from the
-pronoun problem rather than lumping it in, because the two are different kinds of
-thing. Grammatical person was an accident of authorship: the messages happened to
-be written in different voices, and nothing about real scams makes them avoid the
-word "my". Exclamation marks and dollar figures are different. Real scam messages
-do lean on urgency and numbers, so a filter that keys on them is picking up
-something that exists outside this file.
+No cue improves accuracy much beyond always predicting `genuine`. Exclamation
+marks improve accuracy by two messages, but catch only 2 of 16 scams. The digit
+cue exactly matches the 0.7333 majority baseline. Message length exposes another
+fixture artifact: 13 of 16 scams, but also 22 of 44 genuine messages, are longer
+than the median. That cue catches many scams while producing too many false
+alarms to classify well. These are diagnostics of how the hand-written file was
+made, not evidence that any cue will transfer. The way to find out is to test
+text that did not shape the examples or the rule.
 
-That distinction is the one to carry away. A shortcut that reflects how the data
-was made is a defect. A shortcut that reflects how the world works is a shallow
-but real signal, and the way to tell them apart is to ask whether the cue would
-still hold for text you did not write. The build script for this file enforces
-the first kind: it recomputes this sweep before writing the CSV and refuses to
-write if any single feature reaches 0.80 accuracy or 0.95 scam recall.
+The build script for this file recomputes the orientation-preserving sweep before
+writing the CSV and refuses to write if any single feature reaches 0.80 accuracy
+or 0.95 scam recall.
 
 ## Start with a rule a person can read
 
@@ -365,8 +428,9 @@ The word list was written after reading these messages. Eleven of its 18 terms
 match exactly one message, so the full 60-row table is a lookup table scored on
 the same rows that shaped it. The two blocked genuine messages were written with
 scam vocabulary on purpose to show that a readable rule can fail on reports about
-scams. The comparison below uses the same 19-row test split for both the rule and
-the trained model.
+scams. The comparison below applies both methods to the same 19 rows, but that
+does not make the rule out-of-sample: its terms were chosen after reading all 60
+messages, including those 19.
 
 ## Train a small filter
 
@@ -444,6 +508,22 @@ test_rule_confusion <- yardstick::conf_mat(
 )
 test_rule_matrix <- as.matrix(test_rule_confusion$table)
 
+test_comparison <- tibble(
+  method = c("Readable rule", "Trained model", "Always genuine"),
+  correct = c(
+    sum(spam_scored$rule_spam == spam_scored$is_spam),
+    sum(spam_scored$model_spam == spam_scored$is_spam),
+    sum(!spam_scored$is_spam)
+  ),
+  rows = nrow(spam_scored),
+  accuracy = correct / rows,
+  evidence_status = c(
+    "in-sample: terms came from all 60 messages",
+    "out-of-sample for the fitted model",
+    "not fitted"
+  )
+)
+
 knitr::kable(
   as.data.frame(test_rule_confusion$table),
   col.names = c("Rule prediction", "Recorded label", "Messages"),
@@ -457,6 +537,14 @@ knitr::kable(
   caption = "Model confusion matrix on the invented test split",
   row.names = FALSE
 )
+
+knitr::kable(
+  test_comparison |>
+    mutate(accuracy = round(accuracy, 4)),
+  col.names = c("Method", "Correct", "Rows", "Accuracy", "Evidence status"),
+  caption = "The model is compared with its same-split majority baseline",
+  row.names = FALSE
+)
 ```
 
 ```{r}
@@ -466,6 +554,11 @@ stopifnot(
   identical(nrow(spam_train), 41L),
   identical(nrow(spam_test), 19L),
   identical(as.integer(count(spam_test, spam_label)$n), c(5L, 14L)),
+  identical(test_comparison$correct, c(16L, 14L, 14L)),
+  identical(
+    round(test_comparison$accuracy, 4),
+    c(0.8421, 0.7368, 0.7368)
+  ),
   all(
     test_rule_matrix ==
       matrix(
@@ -496,11 +589,13 @@ stopifnot(
 )
 ```
 
-On the same 19 test rows, the rule labels 3 of the 5 invented scams as spam and
-blocks one genuine message. The model labels 3 of the 5 invented test scams as
-spam and sends three genuine messages to the spam side. These numbers establish
-only that the code path found the recorded labels in this made-up test split.
-They are not evidence about a real filter.
+On the same 19 rows, the rule labels 3 of the 5 invented scams as spam and blocks
+one genuine message. Its 0.8421 accuracy is in-sample because the terms were
+written after reading all 60 messages. The model also catches 3 scams, but blocks
+three genuine messages. Its out-of-sample accuracy is 0.7368, exactly the
+always-genuine baseline on this split. The rule and model therefore cannot be
+ranked as held-out competitors. The table does show why a score needs a baseline:
+without one, a fitted model can look informative while matching a trivial rule.
 
 ## Look at the disagreements
 
@@ -561,6 +656,11 @@ alarms. Those are different kinds of errors.
 The model produces a score between 0 and 1. The cut point turns that score into a
 decision. A lower cut point catches more possible scams and risks blocking more
 genuine messages. A higher cut point does the reverse.
+
+This curve uses the same 19 rows as the model table. Choosing a cut point from
+the curve and then reporting its errors on these rows would spend the test set
+twice. A deployed threshold should be chosen on separate calibration data before
+the final test.
 
 ```{r}
 #| label: fig-spam-threshold

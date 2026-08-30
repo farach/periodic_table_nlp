@@ -105,20 +105,39 @@ clearly, and `ggplot2` for a chart that earns its place.
 - A row position from `seq_along()` is a display number, not a durable ID.
   Preserve identifiers supplied by the source. Name first-match columns
   `first_date` or `first_email` when another match could exist.
+- Join derived labels and features back by a source key. Do not delete the key
+  and rely on `bind_cols()` or row order, even when the current output happens
+  to align.
+- Compare rates only when the unit, denominator, case policy, tokenizer, and
+  other preprocessing choices match. If a comparison changes more than one of
+  those, separate the effects or state that the rates are not directly
+  comparable.
 - For model comparisons, create the final test split first. Compare and tune
   candidates only inside the training data, using grouped folds when several
   rows come from one source document. Open the final test set once, after the
   candidate and settings are fixed.
 - Label candidate selection, final testing, and robustness resampling as
   different operations. A repeated holdout is not another untouched test set.
+  When prose describes a direction across replicates, report paired
+  win/tie/loss counts rather than inferring “always” or “never” from means.
   Keep the candidate set small enough that each model adds a distinct teaching
   point.
-- Monitoring code must reuse the fitted preprocessing choices, including the
-  same tokenizer, stop-word source, and vocabulary definition.
+- A baseline must be available at the same decision point as the model score.
+  Mark whether each comparator is training-only, held out, or shaped after
+  reading all rows. A split cannot make a hand-written rule out-of-sample if its
+  terms were chosen from the full dataset.
+- Monitoring code that claims exact model-input coverage must reuse the fitted
+  tokenizer, stop-word source, and vocabulary definition. A
+  reproducibility-motivated substitute must be labeled as an approximation and
+  name the preprocessing difference it introduces.
 - For unsupervised models, state what each parameter controls and compare
   candidate values with more than one diagnostic. Choose the diagnostics before
   reading the most appealing output. Topic count, cluster count, and outlier
   threshold are modeling decisions, not facts discovered by the software.
+- A null should preserve nuisance structure that can create the statistic, such
+  as repeated high-frequency terms. A stability check run only for the selected
+  setting can describe that setting, but it cannot choose among settings that
+  did not receive the same check.
 - Keep the document unit explicit. A paragraph, speech, and corpus create
   different unsupervised problems even when the words are unchanged.
 - While editing, run one lesson at a time with

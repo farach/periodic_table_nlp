@@ -254,7 +254,10 @@ Labels often arrive late, and sometimes they never arrive. One thing a team can
 watch without labels is whether the incoming text is moving away from the text
 the model saw during fitting. The code below uses the 500 model features as the
 training vocabulary, then asks what share of non-stopword tokens in each period
-falls outside that vocabulary. It also reports median paragraph length.
+falls outside that vocabulary. It also reports median paragraph length. This is
+a retrospective teaching check over the full corpus, so most rows helped choose
+the vocabulary and bias the result toward familiar terms. Live monitoring should
+score only later, unseen text.
 
 ```{r}
 training_vocabulary <- tidy(extract_fit_parsnip(era_fitted)) |>
@@ -312,7 +315,7 @@ knitr::kable(
     "Non-stopword tokens", "Tokens outside 500 features",
     "Share outside 500 features"
   ),
-  caption = "Input drift checks by period using the training vocabulary",
+  caption = "Approximate input-coverage checks by period using the training vocabulary",
   row.names = FALSE
 )
 ```
@@ -335,12 +338,18 @@ stopifnot(
 The stop-word list now matches `step_stopwords()` in the fitted recipe: the
 Snowball English list supplied by the stopwords package.
 
+The explicit regex is not the fitted recipe's `step_tokenize()` tokenizer. It
+keeps this lesson reproducible across ICU versions, but the resulting
+`absent_share` is an approximation of feature coverage and can include
+tokenization differences as well as vocabulary drift.
+
 The vocabulary drift measure is close to flat partly by construction. It counts
 tokens outside a fixed 500-token vocabulary, and about half of the non-stopword
 tokens fall outside that short list. The share ranges from
 `r round(min(drift_table$absent_share), 3)` to
 `r round(max(drift_table$absent_share), 3)` across
-`r max(paragraphs$year) - min(paragraphs$year)` years.
+`r max(paragraphs$year) - min(paragraphs$year)` years. These historical shares
+mix training and held-out rows and are not an out-of-sample drift estimate.
 
 Median paragraph length is the clearer signal. It falls from
 `r max(drift_table$median_words)` words in the earliest period to

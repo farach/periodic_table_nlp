@@ -152,9 +152,32 @@ probability_check <- intent_predictions |>
     probability_sum = rowSums(pick(all_of(probability_columns)))
   )
 
+probability_display <- intent_predictions |>
+  slice_head(n = 3) |>
+  select(message_id, all_of(probability_columns)) |>
+  rename_with(
+    \(column) str_remove(column, "^\\.pred_"),
+    all_of(probability_columns)
+  )
+
 predicted_distribution <- intent_predictions |>
   count(.pred_class, name = "messages") |>
   arrange(.pred_class)
+
+knitr::kable(
+  probability_display |>
+    mutate(across(-message_id, \(value) round(value, 3))),
+  col.names = c(
+    "Message",
+    "Ask eligibility",
+    "Check status",
+    "Report problem",
+    "Request callback",
+    "Reset access"
+  ),
+  caption = "Five class probabilities for three fitted-row examples",
+  row.names = FALSE
+)
 
 knitr::kable(
   predicted_distribution,
@@ -172,6 +195,12 @@ stopifnot(
   identical(length(levels(inbox$intent)), 5L),
   identical(length(probability_columns), 5L),
   all(abs(probability_check$probability_sum - 1) < 0.0000001),
+  identical(nrow(probability_display), 3L),
+  all(
+    abs(
+      rowSums(select(probability_display, -message_id)) - 1
+    ) < 0.0000001
+  ),
   identical(sum(predicted_distribution$messages), 60L),
   identical(
     as.character(predicted_distribution$.pred_class),
@@ -189,14 +218,12 @@ stopifnot(
 The fitted model has five classes. For each message it returns five
 probabilities, one for each class, and each row's probabilities sum to 1. Those
 predictions are made on the same 60 rows the model was fitted to, so the table
-above shows the shape of the output and nothing about how well the model works.
-No accuracy, recall, or F1 score is reported here. **Recall** is the share of one
-recorded class that the model sends back to that class, and **F1** combines
-precision and recall into one score. The messages were written by the same
-person who built the classifier, there are only 60 of them, and any number
-computed from them would measure this fixture rather than the method. A real
-number would require messages the author did not write, labels supplied by
-people who did not build the model, and a holdout set kept away from fitting.
+above shows output shape and nothing about how well the model works. No
+performance score is reported here. The messages were written by the same person
+who built the classifier, there are only 60 of them, and any score computed from
+them would measure this fixture rather than the method. A real number would
+require messages the author did not write, labels supplied by people who did not
+build the model, and a holdout set kept away from fitting.
 
 ## Find labels that strain the taxonomy
 
