@@ -111,6 +111,12 @@ kable(
 )
 ```
 
+These four words were chosen to illustrate the method. Searching hundreds of
+words and reporting only the lines that look dramatic would create a
+multiple-comparisons problem: the search itself would make an unusual-looking
+line easier to find. A real trend scan must record how many words were tested
+and adjust its evidence or confirm the result on new documents.
+
 ```{r}
 #| include: false
 

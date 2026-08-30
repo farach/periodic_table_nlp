@@ -156,6 +156,11 @@ The selected sentences come from positions 6, 67, and 60. That spread looks diff
 
 There is no reference summary for this speech in the corpus. That means this page cannot report accuracy. It can test checkable behavior: which sentences were selected, where they appear, and whether those positions look unusual compared with random sentence choices.
 
+If human reference summaries existed, an overlap measure such as **ROUGE**
+could compare selected words or word sequences with those references. ROUGE
+would measure overlap, not whether the summary is complete, factual, or useful
+to a particular reader.
+
 A **lead baseline** takes the first sentences. This baseline is often hard to beat in news writing because opening paragraphs often carry the main facts. Here it is only a comparison point.
 
 A **permutation null** gives the same statistic after random shuffling. The **p-value** is the share of shuffled selections at least as extreme as the observed selection.
@@ -289,4 +294,5 @@ Use the ranked sentences as a reading aid. Do not turn them into a score for wha
 - [textrank R package documentation](https://bnosac.github.io/textrank/)
 - [TextRank paper by Mihalcea and Tarau](https://aclanthology.org/W04-3252/)
 - [Nenkova and McKeown survey on automatic summarization](https://doi.org/10.1561/1500000015)
+- [Lin's ROUGE evaluation paper](https://aclanthology.org/W04-1013/)
 - [tokenizers sentence tokenizer documentation](https://docs.ropensci.org/tokenizers/reference/basic-tokenizers.html)

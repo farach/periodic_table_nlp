@@ -1,7 +1,7 @@
 ---
 title: "Reading topic-model output carefully"
-subtitle: "Fit LDA and test random starts"
-description: "Learn how LDA groups co-occurring words while treating topic labels and model choices with care."
+subtitle: "Choose k, fit LDA, and test random starts"
+description: "Learn how LDA groups co-occurring words, how diagnostics inform the topic count, and why no single metric chooses k for you."
 categories: [signals and discovery, topic modeling, inaugural addresses]
 ---
 
@@ -16,6 +16,8 @@ This lesson shows how to:
 
 - define Latent Dirichlet Allocation in everyday language;
 - build a paragraph-level document-feature matrix;
+- compare candidate topic counts with three diagnostics;
+- distinguish an LDA model from the algorithm used to fit it;
 - fit a five-topic LDA model with explicit seeds;
 - match topics across runs by their top terms; and
 - compare observed agreement with a random-label null.
@@ -37,6 +39,7 @@ library(dplyr)
 library(tibble)
 library(stringr)
 library(purrr)
+library(readr)
 library(quanteda)
 library(topicmodels)
 library(knitr)
@@ -84,7 +87,171 @@ stopifnot(
 )
 ```
 
-Trimming keeps words that appear at least five times in the paragraph corpus. The matrix has 1,377 paragraph documents and 2,587 word features.
+Trimming keeps words that appear at least five times in the paragraph corpus.
+The matrix has 1,377 paragraph documents and 2,587 word features.
+
+Using paragraphs rather than whole speeches gives the model 1,377 documents
+instead of 60. The tradeoff is that each document contains fewer words, so its
+topic mixture is based on less evidence. Document size is part of the model
+design, not a housekeeping choice. This is also a modest corpus for LDA, so the
+results describe these speeches and should not be treated as a general map of
+political language.
+
+## Compare candidate topic counts
+
+There is no single correct value of `k`. Fewer topics make broad groups; more
+topics divide the same vocabulary into finer pieces. A useful value depends on
+what the topics will be used for.
+
+The committed diagnostic study fits `k = 3` through `k = 8` under three random
+starts. It builds the vocabulary from training speeches and evaluates
+perplexity on held-out speeches. Three measures ask different questions:
+
+- **Held-out perplexity** asks how surprised the model is by word counts in
+  speeches it did not fit. Lower is better.
+- **Semantic coherence** asks whether a topic's most probable words appear
+  together in the training paragraphs. Higher values, which are less negative
+  here, are better.
+- **Adjusted top-word exclusivity** asks whether those words concentrate in one
+  topic rather than being spread across all topics. Higher is better. The
+  adjustment removes the \(1/k\) share expected if a word were distributed
+  equally.
+
+```{r}
+topic_diagnostics <- read_csv(
+  "data/inaugural/topic-k-diagnostics.csv",
+  na = character(),
+  col_types = cols(
+    k = col_integer(),
+    seeds = col_integer(),
+    coherence_mean = col_double(),
+    coherence_low = col_double(),
+    coherence_high = col_double(),
+    exclusivity_mean = col_double(),
+    exclusivity_low = col_double(),
+    exclusivity_high = col_double(),
+    perplexity_mean = col_double(),
+    perplexity_low = col_double(),
+    perplexity_high = col_double(),
+    coherence_rank = col_integer(),
+    exclusivity_rank = col_integer(),
+    perplexity_rank = col_integer(),
+    selected = col_logical(),
+    selection_reason = col_character()
+  )
+)
+
+diagnostic_display <- topic_diagnostics |>
+  transmute(
+    k,
+    coherence = round(coherence_mean, 3),
+    coherence_rank,
+    adjusted_exclusivity = round(exclusivity_mean, 3),
+    exclusivity_rank,
+    heldout_perplexity = round(perplexity_mean, 1),
+    perplexity_rank,
+    used_below = if_else(selected, "yes", "no")
+  )
+
+selected_diagnostics <- topic_diagnostics |>
+  filter(selected)
+
+three_topic_diagnostics <- topic_diagnostics |>
+  filter(k == 3L)
+
+coherence_lead <- (
+  selected_diagnostics$coherence_mean -
+    three_topic_diagnostics$coherence_mean
+)
+selected_coherence_spread <- (
+  selected_diagnostics$coherence_high -
+    selected_diagnostics$coherence_low
+)
+
+knitr::kable(
+  diagnostic_display,
+  col.names = c(
+    "k",
+    "Coherence",
+    "Coherence rank",
+    "Adjusted exclusivity",
+    "Exclusivity rank",
+    "Held-out perplexity",
+    "Perplexity rank",
+    "Used below"
+  ),
+  caption = "Three diagnostics disagree about the number of topics",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(topic_diagnostics$k, 3:8),
+  all(topic_diagnostics$seeds == 3L),
+  identical(
+    topic_diagnostics$k[
+      topic_diagnostics$coherence_rank == 1L
+    ],
+    5L
+  ),
+  identical(
+    topic_diagnostics$k[
+      topic_diagnostics$exclusivity_rank == 1L
+    ],
+    3L
+  ),
+  identical(
+    topic_diagnostics$k[
+      topic_diagnostics$perplexity_rank == 1L
+    ],
+    3L
+  ),
+  identical(selected_diagnostics$k, 5L),
+  identical(
+    round(selected_diagnostics$coherence_mean, 3),
+    -1.603
+  ),
+  identical(round(coherence_lead, 3), 0.020),
+  identical(round(selected_coherence_spread, 3), 0.095)
+)
+```
+
+The diagnostics do not agree. Three topics have the best held-out perplexity
+and adjusted exclusivity. Five topics have the best mean coherence. This lesson
+uses five because coherence is strongest there and the seed check below shows
+that its top words recur across fits. Three would also be a defensible choice
+if prediction or top-word concentration mattered more.
+
+The coherence lead over three topics is only
+`r round(coherence_lead, 3)`, while the three five-topic starts span
+`r round(selected_coherence_spread, 3)`. Rank 1 is not a decisive win here.
+
+Do not fit several values of `k`, read every word table, and choose the one that
+is easiest to name. That lets the interpretation choose the model after seeing
+its output. Set the diagnostics and their priority first, then read the topics.
+Human review still matters because predictive fit and automated coherence do
+not guarantee that a topic is useful or even understandable.
+
+::: {.callout-note}
+## The model and fitting method are separate choices
+
+The topicmodels package can fit LDA in two ways. **Variational expectation
+maximization**, or **VEM**, approximates the model's probability distributions.
+It is the method used in this lesson. **Gibbs sampling** draws repeated samples
+from those distributions and needs choices about iterations, warm-up, and how
+many samples to keep. Both methods fit LDA, but they can return different
+answers.
+
+Other topic models change the assumptions. A correlated topic model allows
+topics to appear together rather than treating their proportions as
+independent. A structural topic model can use document information such as year
+when estimating topic prevalence or content. Seeded and supervised topic models
+add analyst guidance or an outcome. Those are different questions, not upgrades
+that every analysis needs.
+:::
 
 ## Fit five topics three times
 
@@ -104,13 +271,28 @@ top_terms <- function(model, n = 10L) {
 }
 
 set.seed(42)
-lda_a <- LDA(lda_input, k = 5, control = list(seed = 42))
+lda_a <- LDA(
+  lda_input,
+  k = 5,
+  method = "VEM",
+  control = list(seed = 42)
+)
 
 set.seed(7)
-lda_b <- LDA(lda_input, k = 5, control = list(seed = 7))
+lda_b <- LDA(
+  lda_input,
+  k = 5,
+  method = "VEM",
+  control = list(seed = 7)
+)
 
 set.seed(2024)
-lda_c <- LDA(lda_input, k = 5, control = list(seed = 2024))
+lda_c <- LDA(
+  lda_input,
+  k = 5,
+  method = "VEM",
+  control = list(seed = 2024)
+)
 
 terms_a <- top_terms(lda_a, n = 10L)
 terms_b <- top_terms(lda_b, n = 10L)
@@ -271,7 +453,12 @@ A four-topic fit is useful as a sensitivity check, but it is not the same object
 
 ```{r}
 set.seed(42)
-lda_4 <- LDA(lda_input, k = 4, control = list(seed = 42))
+lda_4 <- LDA(
+  lda_input,
+  k = 4,
+  method = "VEM",
+  control = list(seed = 42)
+)
 
 topics_4 <- top_terms(lda_4, n = 8L) |>
   summarise(
@@ -318,7 +505,12 @@ The first terms for the four-topic model are `must`, `people`, `government`, and
 
 - LDA groups words that co-occur across paragraph documents.
 - This lesson used 1,377 paragraph documents and 2,587 features.
+- No diagnostic supplies a single correct `k`; the choice depends on the
+  intended resolution and use.
+- Perplexity, coherence, and exclusivity can favor different topic counts.
 - The same `k = 5` fit was fairly repeatable across seeds in this corpus.
+- VEM and Gibbs sampling are different ways to fit LDA; other topic-model
+  families answer different questions.
 - Changing `k` changes the question, so topic labels start over.
 - A topic name is a reading aid, not a finding produced by the model.
 
@@ -327,6 +519,10 @@ Keep the topic numbers attached to their model settings. If the setting changes,
 ## Sources
 
 - [topicmodels package documentation](https://cran.r-project.org/package=topicmodels)
+- [topicmodels vignette: VEM, Gibbs, and correlated topic models](https://cran.r-project.org/web/packages/topicmodels/vignettes/topicmodels.pdf)
 - [Blei, Ng, and Jordan paper on Latent Dirichlet Allocation](https://www.jmlr.org/papers/v3/blei03a.html)
 - [Chang et al. on human interpretation of topic models](https://papers.nips.cc/paper_files/paper/2009/hash/f92586a25bb3145facd64ab20fd554ff-Abstract.html)
+- [Mimno et al. on semantic coherence](https://aclanthology.org/D11-1024/)
+- [STM `searchK()` diagnostics](https://search.r-project.org/CRAN/refmans/stm/html/searchK.html)
+- [Structural Topic Model overview](https://www.structuraltopicmodel.com/)
 - [quanteda document-feature matrix documentation](https://quanteda.io/reference/dfm.html)
