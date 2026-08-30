@@ -227,8 +227,8 @@ stopifnot(
 )
 ```
 
-If a writer meant `from` and typed `form`, this dictionary stays quiet. Both
-strings are familiar to it, so context has to do the work.
+If a writer meant `from` and typed `form`, this dictionary reports no problem.
+Both strings are familiar to it, so context has to do the work.
 
 ## What to remember
 

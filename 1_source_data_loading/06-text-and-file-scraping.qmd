@@ -45,8 +45,6 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-The first code chunk loads the packages needed to read the archived page, extract HTML fields, and build tibbles. A tibble is a table that prints its size and each column's type.
-
 ## Begin with an archived page
 
 Live websites change. A saved source file lets another researcher inspect the
@@ -290,9 +288,9 @@ stopifnot(
 )
 ```
 
-The exact comparison succeeds: all 22 sentences match the fixture in
-the same order. This check would stop the build if a selector silently dropped,
-duplicated, or reordered text.
+The exact comparison succeeds: all 22 sentences match the fixture in the same
+order. This check would stop the build if a selector dropped, duplicated, or
+reordered text.
 
 Both the HTML and expected table were written for this lesson, so the
 comparison tests parser behavior rather than independent truth. A live
@@ -390,7 +388,7 @@ stopifnot(
 Zero matches is the dangerous result, because zero matches is also what an
 empty page produces. Without the expected count, the scraper would write an
 empty table and the day's collection would look like a day with no postings.
-An expected count turns a silent redesign into a stop.
+An expected count turns an unreported redesign into a stop.
 
 The second page is harder. Its visible container has no job text. The same file
 stores a JSON payload in a script element that application code could read and
@@ -492,7 +490,8 @@ collected or republished.
   is true or representative.
 - Archive the source and record when it was collected.
 - Keep source IDs attached to extracted text.
-- Assert expected counts and content so selectors cannot fail silently.
+- Assert expected counts and content so selector failures cannot return zero
+  rows without an error.
 - Zero matches and an empty page look identical without an expected count.
 - Some pages hold their text outside the markup, where an HTML parser cannot
   reach it.

@@ -246,7 +246,7 @@ stopifnot(
 
 For this installed version, both detectors abstain on `Open house.` by returning
 `NA`. That is a useful failure for routing, because the item can be sent to human
-review rather than silently routed by a wrong code.
+review rather than routed under a wrong code without review.
 
 ## Count matches, abstentions, and label differences
 

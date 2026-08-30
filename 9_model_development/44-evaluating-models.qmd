@@ -21,6 +21,7 @@ and this fixed penalty, does not learn a reliable party signal.
 
 This lesson shows how to:
 
+- separate candidate selection, final testing, and robustness checks;
 - compare every score with a deployable largest-class baseline;
 - read the spread across repeated train/test splits;
 - explain what paragraph, speech, and person splits measure;
@@ -171,11 +172,27 @@ model can train only on rows with a Democratic or Republican label, so it uses
 remaining rows come from other party labels. Each task also selects its own 500
 tokens from its own training data.
 
+## Selection, testing, and robustness do different jobs
+
+Lesson 43 compared candidate settings with five grouped folds made only from
+the training speeches. It then used the 14 untouched test speeches once, after
+the candidate and penalty were fixed. That is the final test for that modeling
+decision inside this worked example. A new corpus would be needed to test
+whether the result transfers to another collection.
+
+The repeated study below asks a different question. It redraws the split 10
+times to show how scores move when different speeches land on each side. These
+repeated holdouts are a **robustness check**, not 10 new untouched test sets,
+and they were not used to choose the candidate in lesson 43.
+
 ## Repeated splits change the answer
 
 The study runs 10 replicates for each task and split scheme. A **replicate** is a
 fresh split made by the same rule. The mean tells the center of the results, and
-the low and high values show how much the score moved across the 10 runs.
+the low and high values show how much the score moved across the 10 runs. Unlike
+five-fold cross-validation, a repeated holdout does not guarantee that every
+speech takes one turn in assessment. Its purpose here is sensitivity to the
+split, not model selection.
 
 ```{r}
 score_table <- split_summary |>
@@ -300,8 +317,8 @@ plot_data <- study |>
     )
   )
 
-# The y scale is left to the data. Fixing the lower bound at 0.3 would silently
-# drop the two replicates where the training-majority rule scores 0.27, and those
+# The y scale is left to the data. Fixing the lower bound at 0.3 would drop the
+# two replicates where the training-majority rule scores 0.27, and those
 # are exactly the cases worth seeing: the rule collapses when the class that was
 # largest in training is the smaller one in test.
 ggplot(plot_data, aes(x = split_scheme, y = score, color = measure)) +
@@ -461,7 +478,7 @@ independent speech units, not `r baseline_display$rows[baseline_display$task == 
 independent paragraphs. The speech split averages about
 `r round(era_speech$mean_test_speeches, 1)` speeches per test set. That is why the
 model range across speech splits is `r round(era_speech_range_width, 4)`, not the
-narrow range one might expect from hundreds of independent rows. The 10
+tighter range one might expect from hundreds of independent rows. The 10
 replicates describe resampling variability inside one corpus; they are not a
 confidence interval for political speech beyond this collection.
 
@@ -476,7 +493,7 @@ and nothing here separates the two. Nineteenth- and twenty-first-century texts
 can also differ because of transcription and typesetting conventions, which no
 measurement on this page would distinguish from either.
 
-This lesson supports the narrow claim that era is learnable from this text. It
+This lesson supports the limited claim that era is learnable from this text. It
 does not show that the model learned what a period was about. A features-only
 stylometric model, or a subsample matched on paragraph length, would be needed to
 pull period vocabulary apart from period register.
@@ -484,6 +501,7 @@ pull period vocabulary apart from period register.
 ## What to remember
 
 - A score with no baseline is hard to interpret.
+- Candidate selection must finish before the final test set is opened.
 - Group splits need same-split baselines, not only corpus-wide baselines.
 - One split gives one number; repeated splits show the spread.
 - The split scheme decides what the score is measuring.
@@ -499,4 +517,6 @@ allowed to trust.
 - [yardstick metrics reference](https://yardstick.tidymodels.org/)
 - [rsample initial splits](https://rsample.tidymodels.org/reference/initial_split.html)
 - [rsample grouped splits](https://rsample.tidymodels.org/reference/group_initial_split.html)
+- [rsample grouped V-fold cross-validation](https://rsample.tidymodels.org/reference/group_vfold_cv.html)
+- [tidymodels tuning](https://www.tidymodels.org/start/tuning/)
 - [tidymodels workflows](https://workflows.tidymodels.org/)

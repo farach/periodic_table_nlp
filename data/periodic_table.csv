@@ -1,34 +1,34 @@
 task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,last_reviewed
 1,Bit,Bits to character encoding,concept,1,Source data loading,source,1_source_data_loading/01-bits-to-character-encoding.html,available,2026-08-30
-2,Typ,Manual examples and pattern matching,practice,1,Source data loading,source,1_source_data_loading/02-manual-typewriting.html,available,2026-08-29
-3,Str,Loading a structured data file,practice,1,Source data loading,source,1_source_data_loading/03-loading-structured-datafile.html,available,2026-08-29
-4,Cor,Generating a corpus,practice,1,Source data loading,source,1_source_data_loading/04-generating-a-corpus.html,available,2026-08-29
-5,Api,Loading from an API,practice,1,Source data loading,source,1_source_data_loading/05-loading-from-api.html,available,2026-08-29
-6,Scr,Collecting text from a web page,practice,1,Source data loading,source,1_source_data_loading/06-text-and-file-scraping.html,available,2026-08-29
-7,Ext,Extracting text from an image,task,1,Source data loading,source,1_source_data_loading/07-text-extraction-and-ocr.html,available,2026-08-29
-8,Man,Turning decisions into labels,practice,2,Training data generation,source,2_training_data_generation/08-manual-annotation.html,available,2026-08-29
-9,Act,Choosing what to label next,practice,2,Training data generation,source,2_training_data_generation/09-annotation-with-active-learning.html,available,2026-08-29
+2,Typ,Manual examples and pattern matching,practice,1,Source data loading,source,1_source_data_loading/02-manual-typewriting.html,available,2026-08-30
+3,Str,Loading a structured data file,practice,1,Source data loading,source,1_source_data_loading/03-loading-structured-datafile.html,available,2026-08-30
+4,Cor,Generating a corpus,practice,1,Source data loading,source,1_source_data_loading/04-generating-a-corpus.html,available,2026-08-30
+5,Api,Loading from an API,practice,1,Source data loading,source,1_source_data_loading/05-loading-from-api.html,available,2026-08-30
+6,Scr,Collecting text from a web page,practice,1,Source data loading,source,1_source_data_loading/06-text-and-file-scraping.html,available,2026-08-30
+7,Ext,Extracting text from an image,task,1,Source data loading,source,1_source_data_loading/07-text-extraction-and-ocr.html,available,2026-08-30
+8,Man,Turning decisions into labels,practice,2,Training data generation,source,2_training_data_generation/08-manual-annotation.html,available,2026-08-30
+9,Act,Choosing what to label next,practice,2,Training data generation,source,2_training_data_generation/09-annotation-with-active-learning.html,available,2026-08-30
 10,Pro,Inspecting provider schemas and provenance,service,2,Training data generation,source,2_training_data_generation/10-training-data-providers.html,available,2026-08-29
 11,Cro,Working with several annotators,service,2,Training data generation,source,2_training_data_generation/11-crowdsourcing-annotation.html,available,2026-08-29
-12,Aug,Creating additional training examples,practice,2,Training data generation,source,2_training_data_generation/12-textual-data-augmentation.html,available,2026-08-29
-13,Rul,Labeling text with written rules,practice,2,Training data generation,source,2_training_data_generation/13-rule-based-training-data.html,available,2026-08-29
+12,Aug,Creating additional training examples,practice,2,Training data generation,source,2_training_data_generation/12-textual-data-augmentation.html,available,2026-08-30
+13,Rul,Labeling text with written rules,practice,2,Training data generation,source,2_training_data_generation/13-rule-based-training-data.html,available,2026-08-30
 14,Tok,Tokenization,method,3,Word parsing,language,3_word_parsing/14-tokenization.html,available,2026-08-29
 15,Voc,Vocabulary building,practice,3,Word parsing,language,3_word_parsing/15-vocabulary-building.html,available,2026-08-29
-16,Mor,Morphological tagging,method,3,Word parsing,language,3_word_parsing/16-morphological-tagging.html,available,2026-08-29
+16,Mor,Morphological tagging,method,3,Word parsing,language,3_word_parsing/16-morphological-tagging.html,available,2026-08-30
 17,Pos,Part-of-speech tagging,method,3,Word parsing,language,3_word_parsing/17-part-of-speech-tagging.html,available,2026-08-29
 18,Dep,Dependency parsing,method,3,Word parsing,language,3_word_parsing/18-dependency-parsing.html,available,2026-08-29
-19,Ste,Stemming,method,4,Word processing,language,4_word_processing/19-stemming.html,available,2026-08-29
-20,Lem,Lemmatization,method,4,Word processing,language,4_word_processing/20-lemmatization.html,available,2026-08-29
+19,Ste,Stemming,method,4,Word processing,language,4_word_processing/19-stemming.html,available,2026-08-30
+20,Lem,Lemmatization,method,4,Word processing,language,4_word_processing/20-lemmatization.html,available,2026-08-30
 21,Nrm,Normalization,practice,4,Word processing,language,4_word_processing/21-normalization.html,available,2026-08-29
-22,Spl,Spell checking,task,4,Word processing,language,4_word_processing/22-spell-checking.html,available,2026-08-29
+22,Spl,Spell checking,task,4,Word processing,language,4_word_processing/22-spell-checking.html,available,2026-08-30
 23,Neg,Negation recognition,task,4,Word processing,language,4_word_processing/23-negation-recognition.html,available,2026-08-29
 24,Ngr,N-grams,method,5,Phrases and entities,language,5_phrases_and_entities/24-n-grams.html,available,2026-08-29
 25,Phr,Rule-based phrase matching,method,5,Phrases and entities,language,5_phrases_and_entities/25-rule-based-phrase-matching.html,available,2026-08-29
 26,Chu,Dependency noun chunks,method,5,Phrases and entities,language,5_phrases_and_entities/26-dependency-noun-chunks.html,available,2026-08-29
 27,Ner,Named entity recognition,task,5,Phrases and entities,language,5_phrases_and_entities/27-named-entity-recognition.html,available,2026-08-29
 28,Abr,Abbreviation finding,task,5,Phrases and entities,language,5_phrases_and_entities/28-abbreviation-finding.html,available,2026-08-29
-29,Pri,Price parsing,task,6,Entity enrichment,language,6_entity_enrichment/29-price-parsing.html,available,2026-08-29
-30,Geo,Geocoding,task,6,Entity enrichment,language,6_entity_enrichment/30-geocoding.html,available,2026-08-29
+29,Pri,Price parsing,task,6,Entity enrichment,language,6_entity_enrichment/29-price-parsing.html,available,2026-08-30
+30,Geo,Geocoding,task,6,Entity enrichment,language,6_entity_enrichment/30-geocoding.html,available,2026-08-30
 31,Tmp,Temporal parsing,task,6,Entity enrichment,language,6_entity_enrichment/31-temporal-parsing.html,available,2026-08-29
 32,Nel,Named entity linking,task,6,Entity enrichment,language,6_entity_enrichment/32-named-entity-linking.html,available,2026-08-29
 33,Crf,Coreference resolution,task,6,Entity enrichment,language,6_entity_enrichment/33-coreference-resolution.html,available,2026-08-29
@@ -37,24 +37,24 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 36,Par,Paragraph segmentation,practice,7,Sentences and paragraphs,language,7_sentences_and_paragraphs/36-paragraph-segmentation.html,available,2026-08-29
 37,Grm,Grammar checking,task,7,Sentences and paragraphs,language,7_sentences_and_paragraphs/37-grammar-checking.html,available,2026-08-29
 38,Rea,Readability scoring,method,7,Sentences and paragraphs,language,7_sentences_and_paragraphs/38-readability-scoring.html,available,2026-08-29
-39,Ded,Deduplication,practice,8,Documents,language,8_documents/39-deduplication.html,available,2026-08-29
+39,Ded,Deduplication,practice,8,Documents,language,8_documents/39-deduplication.html,available,2026-08-30
 40,Raw,Raw text cleaning,practice,8,Documents,language,8_documents/40-raw-text-cleaning.html,available,2026-08-29
 41,Met,Metadata extraction,task,8,Documents,language,8_documents/41-metadata-extraction.html,available,2026-08-29
-42,Lng,Language identification,task,8,Documents,language,8_documents/42-language-identification.html,available,2026-08-29
-43,Trn,Training models,lifecycle,9,Model development,model,9_model_development/43-training-models.html,available,2026-08-29
-44,Tst,Evaluating models,lifecycle,9,Model development,model,9_model_development/44-evaluating-models.html,available,2026-08-29
-45,Exp,Explaining models,lifecycle,9,Model development,model,9_model_development/45-explaining-models.html,available,2026-08-29
-46,Dpl,Deploying models,lifecycle,9,Model development,model,9_model_development/46-deploying-models.html,available,2026-08-29
-47,Mon,Monitoring models,lifecycle,9,Model development,model,9_model_development/47-monitoring-models.html,available,2026-08-29
+42,Lng,Language identification,task,8,Documents,language,8_documents/42-language-identification.html,available,2026-08-30
+43,Trn,Training models,lifecycle,9,Model development,model,9_model_development/43-training-models.html,available,2026-08-30
+44,Tst,Evaluating models,lifecycle,9,Model development,model,9_model_development/44-evaluating-models.html,available,2026-08-30
+45,Exp,Explaining models,lifecycle,9,Model development,model,9_model_development/45-explaining-models.html,available,2026-08-30
+46,Dpl,Deploying models,lifecycle,9,Model development,model,9_model_development/46-deploying-models.html,available,2026-08-30
+47,Mon,Monitoring models,lifecycle,9,Model development,model,9_model_development/47-monitoring-models.html,available,2026-08-30
 48,Spa,Spam detection,task,10,Classification,model,10_classification/48-spam-detection.html,available,2026-08-29
-49,Sed,Sentiment and emotion analysis,task,10,Classification,model,10_classification/49-sentiment-and-emotion-analysis.html,available,2026-08-29
+49,Sed,Sentiment and emotion analysis,task,10,Classification,model,10_classification/49-sentiment-and-emotion-analysis.html,available,2026-08-30
 50,Int,Intent classification,task,10,Classification,model,10_classification/50-intent-classification.html,available,2026-08-29
 51,Cls,Text classification,task,10,Classification,model,10_classification/51-text-classification.html,available,2026-08-29
 52,Mlc,Multi-label and multi-class classification,task,10,Classification,model,10_classification/52-multi-label-and-multi-class-classification.html,available,2026-08-29
 53,Key,Keyword extraction,task,11,Signals and discovery,model,11_signals_and_discovery/53-keyword-extraction.html,available,2026-08-29
 54,Esu,Extractive summarization,task,11,Signals and discovery,model,11_signals_and_discovery/54-extractive-summarization.html,available,2026-08-29
 55,Top,Topic modeling,method,11,Signals and discovery,model,11_signals_and_discovery/55-topic-modeling.html,available,2026-08-29
-56,Tre,Trend detection,task,11,Signals and discovery,model,11_signals_and_discovery/56-trend-detection.html,available,2026-08-29
+56,Tre,Trend detection,task,11,Signals and discovery,model,11_signals_and_discovery/56-trend-detection.html,available,2026-08-30
 57,Out,Outlier detection,task,11,Signals and discovery,model,11_signals_and_discovery/57-outlier-detection.html,available,2026-08-29
 58,Syn,WordNet synsets,resource,12,Similarity,model,12_similarity/58-wordnet-synsets.html,available,2026-08-29
 59,Dst,Distance measures,method,12,Similarity,model,12_similarity/59-distance-measures.html,available,2026-08-29

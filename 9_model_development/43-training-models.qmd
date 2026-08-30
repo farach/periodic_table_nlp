@@ -31,8 +31,9 @@ This lesson shows how to:
 
 - tell when a labeled set is too small for model testing;
 - move from a labeling pilot to a larger teaching corpus;
-- build a text classification workflow with tokens, stop words, and tf-idf;
-- fit a penalized logistic regression model; and
+- distinguish a recipe, model specification, workflow, fit, and prediction;
+- compare a few candidate models without touching the final test set;
+- fit the selected penalized logistic regression model; and
 - report a live score with a baseline and limits attached.
 :::
 
@@ -205,22 +206,23 @@ That size does not make the task general to all political speech or all
 historical writing. It does give the lesson enough held-out paragraphs to test a
 specific claim on this corpus.
 
-## Fit one speech-held-out model
+## Keep the final test set out of model selection
 
 The split keeps each speech whole. A paragraph from one inaugural address cannot
 sit in training while another paragraph from the same address sits in testing.
-The seed is `4301` for the split and `4302` for the fit.
+The seed is `4301` for the split.
 
-The recipe turns text into model columns. **Tf-idf** means term frequency times
-inverse document frequency. In plain language, a word counts for more in a
-paragraph when it is common there and rare elsewhere. Stop words such as `the`
-and `of` are removed first, and the recipe keeps the 500 most frequent remaining
-tokens.
+The test speeches get one job in this worked example: estimate performance
+after the model choice is finished. Choosing a model from its test score would
+spend that evidence before the final check. This is still an internal holdout
+from a corpus used throughout the section, not confirmation on new text from
+another source.
 
-The model is **logistic regression**, a linear classifier for categories. The
-penalty pulls large coefficients toward zero so the model does not chase every
-small accident in the training text. Here the penalty is fixed at `0.01` so the
-page can run quickly and exactly.
+Inside the training set, **cross-validation** makes several temporary
+train-and-check splits. Each temporary check is called a **fold**. The folds are
+often called **CV folds**. They are grouped by speech here, so every paragraph
+from one address stays together. Five folds put 9 or 10 speeches in each
+assessment set while leaving both era labels represented.
 
 ```{r}
 baselines <- read_csv(
@@ -237,6 +239,38 @@ baselines <- read_csv(
   )
 )
 
+model_comparison <- read_csv(
+  "data/inaugural/model-comparison.csv",
+  na = "",
+  col_types = cols(
+    rank = col_integer(),
+    candidate = col_character(),
+    family = col_character(),
+    penalty = col_double(),
+    mtry = col_integer(),
+    min_n = col_integer(),
+    mean_bal_accuracy = col_double(),
+    std_err_bal_accuracy = col_double(),
+    mean_accuracy = col_double(),
+    std_err_accuracy = col_double(),
+    selected = col_logical(),
+    selection_reason = col_character()
+  )
+)
+
+fold_summary <- read_csv(
+  "data/inaugural/model-comparison-folds.csv",
+  na = character(),
+  col_types = cols(
+    fold = col_character(),
+    analysis_speeches = col_integer(),
+    assessment_speeches = col_integer(),
+    assessment_paragraphs = col_integer(),
+    before_1900 = col_integer(),
+    later_1900 = col_integer()
+  )
+)
+
 set.seed(4301)
 era_split <- group_initial_split(
   paragraphs,
@@ -246,6 +280,206 @@ era_split <- group_initial_split(
 era_training <- training(era_split)
 era_testing <- testing(era_split)
 
+set.seed(4310)
+era_folds <- group_vfold_cv(
+  era_training,
+  group = speech_id,
+  v = 5,
+  strata = era,
+  balance = "groups"
+)
+
+fold_group_overlap <- vapply(
+  era_folds$splits,
+  \(split) {
+    length(intersect(
+      unique(analysis(split)$speech_id),
+      unique(assessment(split)$speech_id)
+    ))
+  },
+  integer(1)
+)
+
+knitr::kable(
+  fold_summary,
+  col.names = c(
+    "Fold",
+    "Training speeches",
+    "Assessment speeches",
+    "Assessment paragraphs",
+    "Before 1900",
+    "1900 or later"
+  ),
+  caption = "Five grouped folds inside the training speeches",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(era_training), 1042L),
+  identical(nrow(era_testing), 335L),
+  identical(n_distinct(era_training$speech_id), 46L),
+  identical(n_distinct(era_testing$speech_id), 14L),
+  identical(nrow(era_folds), 5L),
+  all(fold_group_overlap == 0L),
+  identical(fold_summary$assessment_speeches, c(10L, 9L, 9L, 9L, 9L)),
+  all(fold_summary$before_1900 > 0L),
+  all(fold_summary$later_1900 > 0L)
+)
+```
+
+Stratification distributes early and later speeches across the folds; it does
+not equalize paragraph counts. The table shows that the paragraph-level class
+mix still varies, which is one reason balanced accuracy is the primary measure.
+
+## Compare a small set of candidates
+
+This is not a search across every model R can fit. The comparison asks whether a
+different kind of decision rule changes the answer:
+
+- **Ridge logistic regression** keeps every word feature but pulls all fitted
+  weights toward zero.
+- **Lasso logistic regression** uses the same linear model but can set some word
+  weights exactly to zero.
+- A **random forest** combines many branching rules and can learn relationships
+  that are not linear.
+
+The **tuning parameters** control how each candidate learns. Ridge tests four
+penalties from `0.01` to `10`; lasso tests four from `0.0001` to `0.1`.
+Their fitted penalty paths span different scales, so copying one grid across
+both would waste settings on duplicate or intercept-only fits. The forest tries
+six combinations of features per split (`mtry`) and the minimum rows needed in
+a branch (`min_n`). The builder in `data-raw/build-model-comparison.R` fits all
+14 settings: four ridge, four lasso, and six forest. It never reads the final
+test speeches.
+
+Balanced accuracy is the primary selection measure because it gives the two era
+classes equal weight. Raw accuracy appears beside it so the effect of the
+uneven class counts stays visible.
+
+The table shows the two tied ridge settings and the leading lasso and forest
+settings. The standard error describes how each score moved across these five
+folds; five related folds do not provide a confidence interval for other
+corpora.
+
+```{r}
+comparison_display <- model_comparison |>
+  filter(selected | rank %in% c(2L, 3L, 5L)) |>
+  mutate(
+    setting = case_when(
+      candidate == "random forest" ~
+        paste0("mtry ", mtry, "; min_n ", min_n),
+      TRUE ~ paste0("penalty ", penalty)
+    ),
+    chosen = if_else(selected, "yes", "no")
+  ) |>
+  select(
+    candidate,
+    setting,
+    mean_bal_accuracy,
+    std_err_bal_accuracy,
+    mean_accuracy,
+    chosen
+  )
+
+selected_candidate <- model_comparison |>
+  filter(selected)
+
+knitr::kable(
+  comparison_display |>
+    mutate(
+      across(
+        c(
+          mean_bal_accuracy,
+          std_err_bal_accuracy,
+          mean_accuracy
+        ),
+        \(value) round(value, 4)
+      )
+    ),
+  col.names = c(
+    "Candidate",
+    "Setting",
+    "Mean balanced accuracy",
+    "Standard error",
+    "Mean accuracy",
+    "Chosen"
+  ),
+  caption = "Leading settings from 14 candidates compared on training folds",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(model_comparison), 14L),
+  identical(nrow(comparison_display), 4L),
+  identical(sum(model_comparison$selected), 1L),
+  identical(selected_candidate$candidate, "ridge logistic"),
+  identical(selected_candidate$penalty, 0.01),
+  identical(round(selected_candidate$mean_bal_accuracy, 4), 0.8008),
+  identical(
+    round(
+      model_comparison$mean_bal_accuracy[
+        model_comparison$candidate == "ridge logistic" &
+          model_comparison$penalty == 0.1
+      ],
+      4
+    ),
+    0.7901
+  ),
+  identical(
+    round(
+      model_comparison$mean_bal_accuracy[
+        model_comparison$candidate == "lasso logistic" &
+          model_comparison$penalty == 0.001
+      ],
+      4
+    ),
+    0.7809
+  )
+)
+```
+
+Ridge with penalty `0.01` has the highest mean balanced accuracy,
+`r round(selected_candidate$mean_bal_accuracy, 4)`. The fold-to-fold standard
+errors overlap the nearby candidates, so the table does not establish a
+universal winner. We keep ridge because it leads this comparison and leaves a
+linear model whose coefficients can be inspected in lesson 45.
+
+The random forest is a useful check rather than a required upgrade. Its best raw
+accuracy is competitive, but its lower balanced accuracy shows that more correct
+paragraphs can still mean less even performance across classes.
+
+## Build the selected workflow
+
+A tidymodels pipeline has four parts:
+
+1. A **recipe** is a set of instructions that turns raw text into numeric model
+   columns. Each `step_*()` line adds one instruction.
+2. A **model specification** names the kind of model and its settings before it
+   sees data.
+3. An **engine** names the package that performs the calculations. Here that
+   package is glmnet.
+4. A **workflow** keeps the recipe and model specification together. **Fitting**
+   the workflow hands it training data so it can estimate model weights.
+
+The recipe turns text into model columns. **Tf-idf** means term frequency times
+inverse document frequency. In plain language, a word counts for more in a
+paragraph when it is common there and rare elsewhere. Stop words such as `the`
+and `of` are removed first, and the recipe keeps the 500 most frequent remaining
+tokens.
+
+The selected model is **logistic regression**, a linear classifier for
+categories. The penalty pulls large coefficients toward zero so the model does
+not chase every small accident in the training text.
+
+```{r}
 text_recipe <- recipe(era ~ paragraph, data = era_training) |>
   step_tokenize(paragraph) |>
   step_stopwords(paragraph) |>
@@ -265,11 +499,16 @@ era_fitted <- fit(era_workflow, data = era_training)
 era_predictions <- predict(era_fitted, era_testing) |>
   bind_cols(era_testing |> select(era))
 
-live_accuracy <- accuracy(
+live_metrics <- metric_set(accuracy, bal_accuracy)(
   era_predictions,
   truth = era,
   estimate = .pred_class
-) |>
+)
+live_accuracy <- live_metrics |>
+  filter(.metric == "accuracy") |>
+  pull(.estimate)
+live_bal_accuracy <- live_metrics |>
+  filter(.metric == "bal_accuracy") |>
   pull(.estimate)
 
 corpus_baseline <- baselines |>
@@ -283,53 +522,26 @@ training_majority <- era_training |>
 
 split_baseline_accuracy <- mean(era_testing$era == training_majority)
 
-length_cut <- median(era_training$paragraph_words)
-length_levels <- levels(era_training$era)
-best_length_accuracy <- -Inf
-for (flip in c(FALSE, TRUE)) {
-  low_label <- if (flip) length_levels[2] else length_levels[1]
-  high_label <- if (flip) length_levels[1] else length_levels[2]
-  training_length_pred <- if_else(
-    era_training$paragraph_words <= length_cut,
-    low_label,
-    high_label
-  )
-  training_length_accuracy <- mean(training_length_pred == as.character(era_training$era))
-  if (training_length_accuracy > best_length_accuracy) {
-    best_length_accuracy <- training_length_accuracy
-    best_length_direction <- c(low = low_label, high = high_label)
-  }
-}
-length_predictions <- factor(
-  if_else(
-    era_testing$paragraph_words <= length_cut,
-    best_length_direction[["low"]],
-    best_length_direction[["high"]]
-  ),
-  levels = length_levels
-)
-length_rule_accuracy <- mean(length_predictions == era_testing$era)
-
 score_table <- tibble(
   measure = c(
-    "Live speech-held-out model",
+    "Final test accuracy",
+    "Final test balanced accuracy",
     "Same-split training-majority rule",
-    "Same-split paragraph-length rule",
     "Corpus largest-class baseline"
   ),
-  accuracy = c(
+  value = c(
     live_accuracy,
+    live_bal_accuracy,
     split_baseline_accuracy,
-    length_rule_accuracy,
     corpus_baseline
   )
 )
 
 knitr::kable(
   score_table |>
-    mutate(accuracy = round(accuracy, 4)),
-  col.names = c("Measure", "Accuracy"),
-  caption = "One live model score with same-split baselines",
+    mutate(value = round(value, 4)),
+  col.names = c("Measure", "Value"),
+  caption = "One held-out test after candidate selection",
   row.names = FALSE
 )
 ```
@@ -338,24 +550,21 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  identical(nrow(era_training), 1042L),
-  identical(nrow(era_testing), 335L),
-  identical(n_distinct(era_training$speech_id), 46L),
-  identical(n_distinct(era_testing$speech_id), 14L),
   identical(round(live_accuracy, 4), 0.8209),
+  identical(round(live_bal_accuracy, 4), 0.8361),
   identical(round(split_baseline_accuracy, 4), 0.4179),
-  identical(round(length_rule_accuracy, 4), 0.6388),
   identical(round(corpus_baseline, 4), 0.6478),
   all(era_predictions$.pred_class %in% levels(paragraphs$era))
 )
 ```
 
-The live model scores `r round(live_accuracy, 4)` on this speech-held-out test
-set. The majority label learned from training would score
-`r round(split_baseline_accuracy, 4)` on this exact test set, and a one-number
-rule based only on paragraph length would score `r round(length_rule_accuracy, 4)`.
-The corpus-wide largest-class baseline is `r round(corpus_baseline, 4)`, but the
-same-split comparisons are the ones a deployable rule could use.
+Only after the candidate and penalty are fixed do we use the 14 final test
+speeches. The model scores `r round(live_accuracy, 4)` accuracy and
+`r round(live_bal_accuracy, 4)` balanced accuracy. The majority label learned
+from training would score `r round(split_baseline_accuracy, 4)` on this exact
+test set. The corpus-wide largest-class baseline is
+`r round(corpus_baseline, 4)`, but the same-split comparison is the one a
+deployable rule could use.
 
 ## What the fit did not prove
 
@@ -369,6 +578,8 @@ a harder split. The next lesson tests those questions with repeated splits.
 - A pilot corpus can teach labeling without being large enough for testing.
 - A test set with seven rows cannot measure much.
 - A speech-held-out split keeps one address from leaking across both sides.
+- Grouped folds compare candidates without spending the final test set.
+- A recipe, model specification, engine, and workflow have different jobs.
 - Tf-idf gives more weight to words that are common in one paragraph and rare in
   the rest.
 - A model score needs a baseline beside it.

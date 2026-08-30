@@ -560,8 +560,8 @@ selection rule differed.
 Neither direction is a law. A rule that finds hard cases usually flatters the
 data and punishes the score; a rule that finds easy cases does the reverse; a
 rule that happens to select a class the model handles well can make a weak model
-look strong. What can be said in general is narrower and more useful: any
-estimate computed on a selected subset describes that subset.
+look strong. The more defensible statement is also more useful: any estimate
+computed on a selected subset describes that subset.
 
 The remedy has not changed. Keep a fixed evaluation set drawn at random,
 disjoint by document from anything active learning touches, and report pool-level

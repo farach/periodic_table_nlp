@@ -601,7 +601,7 @@ perspectives should be designed into the study rather than treated as noise.
 - One unit per row keeps the decision small and traceable.
 - A codebook needs a version, examples, and a change record.
 - Run a pilot and let its disagreements write the rules.
-- Ambiguity should lead to review, not silent correction.
+- Ambiguity should lead to review, not an unrecorded correction.
 - Human labels require ethical working conditions and relevant expertise.
 
 The Lab has defined the categories and preserved its reading decisions. To test

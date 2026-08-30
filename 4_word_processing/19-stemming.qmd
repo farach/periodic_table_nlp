@@ -14,8 +14,8 @@ the list grows. If endings are chopped too aggressively, different meanings can
 collapse into one code.
 
 **Stemming** removes or changes word endings using fixed rules. In linguistics,
-a stem is the part of a word that an ending attaches to. Here the word is used
-more narrowly: a **stem** is whatever string these rules return. It is a
+a stem is the part of a word that an ending attaches to. In this lesson, a
+**stem** is whatever string these rules return. It is a
 comparison key. It may or may not be a word.
 
 ::: {.callout-note}

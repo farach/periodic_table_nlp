@@ -12,6 +12,7 @@
 - [ ] Round 3 spoken edit completed.
 - [ ] Round 4 independent edit completed.
 - [ ] Round 5 skeptical fact review completed.
+- [ ] Round 6 record-boundary review completed.
 - [ ] Final rendered-page proofread completed.
 
 ## Evidence
@@ -28,6 +29,11 @@
 
 - [ ] Every published code chunk ran without cached output.
 - [ ] Important outputs have assertions.
+- [ ] Tidyverse style check passed.
+- [ ] Row-level outputs retain their source IDs; every collapse or flattening
+      step answers an explicit corpus-wide question.
+- [ ] Model selection and tuning stay inside training data; final test data is
+      opened only after the candidate and settings are fixed.
 - [ ] The full site rendered without unexplained warnings or errors.
-- [ ] Links, keyboard navigation, focus, zoom, and narrow screens were checked.
+- [ ] Links, keyboard navigation, focus, zoom, and small screens were checked.
 - [ ] Periodic-table tests passed when its data, links, or styles changed.

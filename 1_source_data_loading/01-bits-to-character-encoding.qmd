@@ -44,8 +44,6 @@ stopifnot(
 )
 ```
 
-The first code chunk loads the lesson's helper packages before checking the bytes for two small text values.
-
 ## What happens when a computer saves a word
 
 Checking Anaïs's name begins with a precise account of what the computer saved.
@@ -295,8 +293,8 @@ stopifnot(
 
 The converted text still reads `"café"`, but its final byte changes from `e9`
 to the two-byte UTF-8 sequence `c3 a9`. `sub = NA_character_` tells R to return
-a missing value rather than silently replace a byte that cannot be converted.
-That visible missing value gives us a chance to investigate the source.
+a missing value rather than replace a byte without reporting the failure. That
+visible missing value gives us a chance to investigate the source.
 
 ## Bytes that are not well-formed UTF-8
 
