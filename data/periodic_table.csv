@@ -22,7 +22,7 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 21,Nrm,Normalization,practice,4,Word processing,language,4_word_processing/21-normalization.html,available,2026-08-29
 22,Spl,Spell checking,task,4,Word processing,language,4_word_processing/22-spell-checking.html,available,2026-08-30
 23,Neg,Negation recognition,task,4,Word processing,language,4_word_processing/23-negation-recognition.html,available,2026-08-29
-24,Ngr,N-grams,method,5,Phrases and entities,language,5_phrases_and_entities/24-n-grams.html,available,2026-08-29
+24,Ngr,N-grams,method,5,Phrases and entities,language,5_phrases_and_entities/24-n-grams.html,available,2026-09-01
 25,Phr,Rule-based phrase matching,method,5,Phrases and entities,language,5_phrases_and_entities/25-rule-based-phrase-matching.html,available,2026-08-29
 26,Chu,Dependency noun chunks,method,5,Phrases and entities,language,5_phrases_and_entities/26-dependency-noun-chunks.html,available,2026-08-29
 27,Ner,Named entity recognition,task,5,Phrases and entities,language,5_phrases_and_entities/27-named-entity-recognition.html,available,2026-08-29
@@ -51,10 +51,10 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 50,Int,Intent classification,task,10,Classification,model,10_classification/50-intent-classification.html,available,2026-08-30
 51,Cls,Text classification,task,10,Classification,model,10_classification/51-text-classification.html,available,2026-08-30
 52,Mlc,Multi-label and multi-class classification,task,10,Classification,model,10_classification/52-multi-label-and-multi-class-classification.html,available,2026-08-30
-53,Key,Keyword extraction,task,11,Signals and discovery,model,11_signals_and_discovery/53-keyword-extraction.html,available,2026-08-29
+53,Key,Keyword extraction and keyness,task,11,Signals and discovery,model,11_signals_and_discovery/53-keyword-extraction.html,available,2026-08-29
 54,Esu,Extractive summarization,task,11,Signals and discovery,model,11_signals_and_discovery/54-extractive-summarization.html,available,2026-08-30
-55,Top,Topic modeling,method,11,Signals and discovery,model,11_signals_and_discovery/55-topic-modeling.html,available,2026-08-30
-56,Tre,Trend detection,task,11,Signals and discovery,model,11_signals_and_discovery/56-trend-detection.html,available,2026-08-30
+55,Top,Topic modeling and clustering,method,11,Signals and discovery,model,11_signals_and_discovery/55-topic-modeling.html,available,2026-08-30
+56,Tre,Trend and burst detection,task,11,Signals and discovery,model,11_signals_and_discovery/56-trend-detection.html,available,2026-08-30
 57,Out,Outlier detection,task,11,Signals and discovery,model,11_signals_and_discovery/57-outlier-detection.html,available,2026-08-29
 58,Syn,WordNet synsets,resource,12,Similarity,model,12_similarity/58-wordnet-synsets.html,available,2026-08-29
 59,Dst,Distance measures,method,12,Similarity,model,12_similarity/59-distance-measures.html,available,2026-08-29

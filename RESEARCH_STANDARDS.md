@@ -40,7 +40,9 @@ For each lesson, keep:
 - the strongest supporting source;
 - the strongest credible counterevidence;
 - the populations, languages, domains, and time periods covered;
-- licensing, consent, and provenance concerns; and
+- licensing, consent, and provenance concerns, including publisher
+  text-and-data-mining terms that can forbid bulk download or model training
+  even when a few records are visible in a browser; and
 - a note about what remains unknown.
 
 The current review record lives in `data/lesson_reviews.csv`. An available
@@ -70,7 +72,9 @@ Later lessons should consider these developments when they affect the task:
 
 Do not force every topic into every lesson. Character encoding does not need an
 LLM section. Corpus construction does need provenance and consent because large
-models depend on collected text.
+models depend on collected text. Citation databases and bibliometric exports
+are licensed data products. Treat co-word or co-citation maps as an application
+of graph and trend methods, not as a separate NLP task.
 
 ## Describe decoding methods precisely
 

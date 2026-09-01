@@ -1,7 +1,7 @@
 ---
 title: "Counting nearby words with n-grams"
 subtitle: "See why phrase counts get sparse fast"
-description: "Learn how bigrams and trigrams count adjacent tokens in the Riverton sentences and why most of them appear only once."
+description: "Learn how bigrams and trigrams count adjacent tokens in the Riverton sentences, why most of them appear only once, and why a PMI score without a count floor ranks unique pairs first."
 categories: [phrases and entities, n-grams, workforce research]
 ---
 
@@ -25,7 +25,8 @@ This lesson shows how to:
 - define an n-gram as a run of adjacent tokens;
 - build bigrams and trigrams with tidytext;
 - count repeated n-grams in the Riverton sentences;
-- measure how many n-grams appear once; and
+- measure how many n-grams appear once;
+- score repeated bigrams with pointwise mutual information; and
 - explain why phrase vocabularies can generalise badly from small data.
 :::
 
@@ -257,11 +258,143 @@ stopifnot(
 The chart focuses on the quantity the table asks the reader to compare: how much
 of each list appears only once.
 
+## Score pairs against chance
+
+Raw frequency likes common words. **Pointwise mutual information**, or **PMI**,
+asks whether two adjacent words appear more often than they would if each word
+were chosen independently. For a pair `(w1, w2)`:
+
+`PMI = log2( P(w1, w2) / (P(w1) * P(w2)) )`
+
+The probabilities here are token shares in these 28 sentences: 153 unigram
+tokens and 125 bigram tokens. A pair of words that each appear once, and that
+appear together once, gets a high score because the denominator is tiny. That
+is a property of the formula, not evidence that the pair is a stable phrase.
+
+```{r}
+unigram_tokens <- make_ngrams(1L)
+bigram_tokens <- make_ngrams(2L)
+unigram_n <- nrow(unigram_tokens)
+bigram_n <- nrow(bigram_tokens)
+
+unigram_counts <- unigram_tokens |>
+  count(ngram, name = "word_n")
+
+pmi_bigrams <- bigram_tokens |>
+  separate_wider_delim(
+    ngram,
+    delim = " ",
+    names = c("word1", "word2"),
+    too_many = "merge"
+  ) |>
+  count(word1, word2, name = "pair_n") |>
+  left_join(unigram_counts, by = join_by(word1 == ngram)) |>
+  rename(word1_n = word_n) |>
+  left_join(unigram_counts, by = join_by(word2 == ngram)) |>
+  rename(word2_n = word_n) |>
+  mutate(
+    ngram = str_c(word1, word2, sep = " "),
+    pmi = log2(
+      (pair_n / bigram_n) /
+        ((word1_n / unigram_n) * (word2_n / unigram_n))
+    )
+  )
+
+hapax_singletons <- pmi_bigrams |>
+  filter(pair_n == 1L, word1_n == 1L, word2_n == 1L) |>
+  arrange(ngram)
+
+repeated_pmi <- pmi_bigrams |>
+  filter(pair_n >= 2L) |>
+  arrange(desc(pmi), desc(pair_n), ngram)
+
+hapax_singleton_pmi <- log2(
+  (1 / bigram_n) / ((1 / unigram_n) * (1 / unigram_n))
+)
+
+is_required <- pmi_bigrams |>
+  filter(ngram == "is required")
+
+knitr::kable(
+  hapax_singletons |>
+    slice_head(n = 3) |>
+    transmute(
+      ngram,
+      pair_n,
+      pmi = round(pmi, 2)
+    ),
+  col.names = c("Bigram", "Pair count", "PMI"),
+  caption = "Three one-time bigrams whose words also appear only once",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(unigram_n, 153L),
+  identical(bigram_n, 125L),
+  identical(nrow(pmi_bigrams), 112L),
+  identical(sum(pmi_bigrams$pair_n == 1L), 102L),
+  identical(nrow(repeated_pmi), 10L),
+  identical(nrow(hapax_singletons), 37L),
+  abs(hapax_singletons$pmi[1] - hapax_singleton_pmi) < 1e-10,
+  identical(hapax_singletons$ngram[1], "50 pounds"),
+  identical(repeated_pmi$ngram[1], "no prior"),
+  identical(is_required$pair_n, 4L),
+  is_required$pmi < hapax_singleton_pmi,
+  is_required$pmi < repeated_pmi$pmi[1]
+)
+```
+
+Thirty-seven of the 102 one-time bigrams are pairs of words that each appear once.
+They all receive PMI 7.55. The most frequent bigram, `is required` (4 times),
+scores 3.04 because `is` appears 13 times and `required` appears 7 times. A
+floor of two pair counts leaves ten bigrams.
+
+```{r}
+repeated_pmi_table <- repeated_pmi |>
+  transmute(
+    ngram,
+    pair_n,
+    pmi = round(pmi, 2)
+  )
+
+knitr::kable(
+  repeated_pmi_table,
+  col.names = c("Bigram", "Pair count", "PMI"),
+  caption = "Bigrams seen at least twice, ranked by PMI",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(repeated_pmi_table), 10L),
+  identical(repeated_pmi_table$ngram[1], "no prior"),
+  identical(repeated_pmi_table$pair_n[repeated_pmi_table$ngram == "is required"], 4L),
+  identical(repeated_pmi_table$pmi[1], 6.55),
+  identical(
+    repeated_pmi_table$pmi[repeated_pmi_table$ngram == "is required"],
+    3.04
+  )
+)
+```
+
+With that floor, `no prior` leads and `is required` falls to ninth. Both lists
+still describe 28 teaching sentences. PMI does not repair sparsity; it changes
+which sparse pairs look interesting. For matches in running text, Lesson 25 uses
+a concordance instead of a score.
+
 ## What to remember
 
 - An n-gram counts adjacent tokens after a chosen token rule.
 - The Riverton rows contain 112 distinct bigrams and 96 distinct trigrams.
 - A two-token sentence contributes no trigram.
+- PMI without a count floor ranks unique word pairs first.
 - Counts from 28 sentences illustrate sparsity; they do not estimate phrase use in workforce writing.
 
 Report the repeated phrases as local clues, then stop. The useful result here is
@@ -271,4 +404,5 @@ a small list of repeats paired with a warning about sparse phrase counts.
 
 - [tidytext documentation for `unnest_tokens()`](https://juliasilge.github.io/tidytext/reference/unnest_tokens.html)
 - [tokenizers documentation for n-gram tokenizers](https://docs.ropensci.org/tokenizers/reference/ngram-tokenizers.html)
+- [Church and Hanks (1990), Word association norms, mutual information, and lexicography](https://aclanthology.org/J90-1003/)
 - [ggplot2 documentation](https://ggplot2.tidyverse.org/)
