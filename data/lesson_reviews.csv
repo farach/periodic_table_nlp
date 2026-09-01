@@ -22,7 +22,7 @@ task_number,source_file,editorial_status,last_researched,last_code_run,project_n
 21,4_word_processing/21-normalization.qmd,review-ready,2026-08-29,2026-08-30,passed,passed,passed,2,passed,pending,pending,Normalization choices are shown on a few strings and destroy information by design
 22,4_word_processing/22-spell-checking.qmd,review-ready,2026-08-29,2026-08-30,passed,passed,passed,2,passed,pending,pending,"A dictionary flags unknown words, not wrong ones; constructed errors are not a sample"
 23,4_word_processing/23-negation-recognition.qmd,review-ready,2026-08-29,2026-08-30,passed,passed,passed,2,passed,pending,pending,Trigger words are not scope; the rule is scored on 28 hand-marked sentences
-24,5_phrases_and_entities/24-n-grams.qmd,review-ready,2026-08-29,2026-08-30,passed,passed,passed,2,passed,pending,pending,N-gram sparsity is demonstrated on 28 sentences and estimates nothing general
+24,5_phrases_and_entities/24-n-grams.qmd,review-ready,2026-09-01,2026-09-01,passed,passed,passed,2,passed,pending,pending,N-gram sparsity and PMI ranks are demonstrated on 28 sentences and estimate nothing general
 25,5_phrases_and_entities/25-rule-based-phrase-matching.qmd,review-ready,2026-08-29,2026-08-30,passed,passed,passed,2,passed,pending,pending,Hand-written patterns are scored against hand-marked sentences from one corpus
 26,5_phrases_and_entities/26-dependency-noun-chunks.qmd,review-ready,2026-08-29,2026-08-30,passed,passed,passed,2,passed,pending,pending,Chunk agreement is counted on 28 sentences with two models of unequal quality
 27,5_phrases_and_entities/27-named-entity-recognition.qmd,review-ready,2026-08-29,2026-08-30,passed,passed,passed,2,passed,pending,pending,A released model is applied to invented names; its errors show domain mismatch

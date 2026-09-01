@@ -262,6 +262,21 @@ evidence.
   `aria-disabled`, or click handlers. Stage and status must never depend on
   color alone.
 
+## Keep later methods on existing tiles
+
+Do not add a new map tile when a method already has a home:
+
+- Pointwise mutual information for adjacent pairs belongs in lesson 24.
+- KWIC / concordance inspection belongs in lesson 25.
+- Keyness, weighted log-odds, and lexical dispersion belong in lesson 53
+  (keyword extraction and keyness).
+- Document clustering belongs in lesson 55 (topic modeling and clustering).
+- Burst detection belongs in lesson 56 (trend and burst detection).
+- Co-word or citation networks belong in planned lesson 81 as one use of
+  knowledge-graph visualisation, not as a bibliometrics tile.
+- Publisher TDM licences belong in research notes and
+  [RESEARCH_STANDARDS.md](RESEARCH_STANDARDS.md), not on the map.
+
 ## Review before publishing
 
 - [ ] A first-time reader can explain why the lesson matters.
