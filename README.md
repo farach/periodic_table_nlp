@@ -9,7 +9,7 @@ Finished tiles open lessons; planned tiles show where the project is going.
 
 ## Lessons
 
-The canonical map and publishing manifest currently identify 62 available
+The canonical map and publishing manifest currently identify 64 available
 lessons. This list is checked against `data/periodic_table.csv`.
 
 - **Source data loading (1-7):**
@@ -86,6 +86,10 @@ lessons. This list is checked against `data/periodic_table.csv`.
   [document similarity](12_similarity/60-document-similarity.qmd),
   [word vectors](12_similarity/61-distributed-word-representations.qmd), and
   [words in context](12_similarity/62-contextualized-word-representations.qmd).
+- **Natural language generation (63-64):**
+  [next-token prediction](13_natural_language_generation/63-next-token-prediction.qmd)
+  and
+  [report writing](13_natural_language_generation/64-report-writing.qmd).
 
 The topic map comes from Rob van Zoest's
 [Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).

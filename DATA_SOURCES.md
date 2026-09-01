@@ -80,7 +80,7 @@ compares recognised text against `training-flyer-ground-truth.txt` rather than
 treating OCR output as correct by default.
 
 ## United States presidential inaugural addresses
-Tasks 43 to 62 use `quanteda::data_corpus_inaugural`, the 60 inaugural addresses
+Tasks 43 to 64 use `quanteda::data_corpus_inaugural`, the 60 inaugural addresses
 delivered between 1789 and 2025. The speeches are works of the United States
 federal government and are in the public domain; quanteda packages and
 distributes them, and quanteda itself is GPL-3.
@@ -122,6 +122,15 @@ training speeches only. Semantic coherence and adjusted top-word exclusivity
 are computed on training paragraphs; perplexity is computed on held-out
 speeches. `data-raw/build-topic-k-diagnostics.R` rebuilds the files, and
 `topic-k-diagnostics-metadata.csv` records settings and fingerprints.
+
+The next-token study uses speech-level training, validation, and test splits.
+It builds a training-only 2,500-token vocabulary, evaluates paragraph-bounded
+contexts, and chooses context length and interpolation strength on validation
+speeches before opening the test set. The split holds out speeches rather than
+speakers, so presidents with multiple inaugurals can appear in more than one
+split. `data-raw/build-next-token-study.R` writes the split, validation, test,
+and paired-speech files. `next-token-study-metadata.csv` records settings,
+source, license, and SHA-256 fingerprints for those four artifacts.
 
 Party labels in this corpus span 236 years and do not describe a stable thing
 across that range. Lessons use them only as a data column, never as a

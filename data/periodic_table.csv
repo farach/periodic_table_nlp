@@ -61,8 +61,8 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 60,Sim,Document similarity,task,12,Similarity,model,12_similarity/60-document-similarity.html,available,2026-08-29
 61,Dis,Distributed word representations,concept,12,Similarity,model,12_similarity/61-distributed-word-representations.html,available,2026-08-30
 62,Con,Contextualized word representations,concept,12,Similarity,model,12_similarity/62-contextualized-word-representations.html,available,2026-08-30
-63,Nex,Next-token prediction,objective,13,Natural language generation,generation,,planned,
-64,Rep,Report writing,application,13,Natural language generation,generation,,planned,
+63,Nex,Next-token prediction,objective,13,Natural language generation,generation,13_natural_language_generation/63-next-token-prediction.html,available,2026-09-01
+64,Rep,Report writing,application,13,Natural language generation,generation,13_natural_language_generation/64-report-writing.html,available,2026-09-01
 65,Tra,Machine translation,task,13,Natural language generation,generation,,planned,
 66,Asu,Abstractive summarization,task,13,Natural language generation,generation,,planned,
 67,Prp,Paraphrasing,task,13,Natural language generation,generation,,planned,

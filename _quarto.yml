@@ -17,6 +17,7 @@ project:
     - 10_classification/*.qmd
     - 11_signals_and_discovery/*.qmd
     - 12_similarity/*.qmd
+    - 13_natural_language_generation/*.qmd
 
 website:
   title: "Periodic Table of NLP Tasks in R"
@@ -159,6 +160,10 @@ website:
         text: Training word vectors
       - href: 12_similarity/62-contextualized-word-representations.qmd
         text: Reading words in context
+      - href: 13_natural_language_generation/63-next-token-prediction.qmd
+        text: Predicting the next token
+      - href: 13_natural_language_generation/64-report-writing.qmd
+        text: Writing a report from checked claims
       - href: accessibility.qmd
         text: Accessibility
   page-footer:
