@@ -48,7 +48,6 @@ library(dplyr)
 library(tidyr)
 library(tibble)
 library(stringr)
-library(tidytext)
 library(purrr)
 library(readr)
 library(knitr)
@@ -168,7 +167,7 @@ artifact_paths <- file.path(
 stopifnot(
   all(c(
     "digest", "dplyr", "tidyr", "tibble", "stringr",
-    "tidytext", "purrr", "readr", "knitr"
+    "purrr", "readr", "knitr"
   ) %in% loadedNamespaces()),
   identical(nrow(split_assignments), 60L),
   identical(nrow(validation_results), 13L),
@@ -195,8 +194,10 @@ their different jobs.
 
 ## Build paragraph-bounded next-token rows
 
-The study uses lowercase ASCII alphabetic tokens. It keeps the 2,499 most common
-training tokens and maps every other token to `<unk>`, giving a 2,500-token
+The study uses an explicit word-like pattern so token counts do not depend on
+the rendering machine's word-boundary library. It then keeps lowercase ASCII
+alphabetic tokens. The 2,499 most common training token types get their own
+vocabulary entries; every other token maps to `<unk>`, giving a 2,500-token
 model vocabulary.
 
 Each prediction row keeps its paragraph and speech ID. `previous_1` is the token
@@ -207,6 +208,10 @@ of another, and this model does not learn how to start a paragraph.
 
 ```{r}
 paragraphs <- inaugural_paragraphs()
+token_pattern <- paste0(
+  "(?:[a-z]\\.){2,}|",
+  "[a-z0-9]+(?:['\\x{2019}][a-z0-9]+)*"
+)
 
 training_tokens <- paragraphs |>
   select(paragraph_id, speech_id, paragraph) |>
@@ -216,7 +221,14 @@ training_tokens <- paragraphs |>
       select(speech_id),
     by = join_by(speech_id)
   ) |>
-  unnest_tokens(token, paragraph) |>
+  mutate(
+    token = str_extract_all(
+      str_to_lower(paragraph, locale = "en"),
+      regex(token_pattern)
+    )
+  ) |>
+  select(-paragraph) |>
+  unnest_longer(token) |>
   filter(str_detect(token, "^[a-z]+$")) |>
   mutate(position = row_number(), .by = paragraph_id)
 

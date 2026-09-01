@@ -15,9 +15,9 @@ suppressPackageStartupMessages({
   library(purrr)
   library(readr)
   library(rsample)
+  library(stringr)
   library(tibble)
   library(tidyr)
-  library(tidytext)
 })
 
 source("R/inaugural-corpus.R")
@@ -27,6 +27,10 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 vocabulary_size <- 2500L
 candidate_strengths <- c(0.1, 1, 10, 100, 1000, 10000)
+token_pattern <- paste0(
+  "(?:[a-z]\\.){2,}|",
+  "[a-z0-9]+(?:['\\x{2019}][a-z0-9]+)*"
+)
 
 paragraphs <- inaugural_paragraphs()
 speeches <- paragraphs |>
@@ -67,8 +71,15 @@ split_assignments <- bind_rows(
 tokens <- paragraphs |>
   select(paragraph_id, speech_id, paragraph) |>
   inner_join(split_assignments, by = join_by(speech_id)) |>
-  unnest_tokens(token, paragraph) |>
-  filter(grepl("^[a-z]+$", token)) |>
+  mutate(
+    token = str_extract_all(
+      str_to_lower(paragraph, locale = "en"),
+      regex(token_pattern)
+    )
+  ) |>
+  select(-paragraph) |>
+  unnest_longer(token) |>
+  filter(str_detect(token, "^[a-z]+$")) |>
   mutate(position = row_number(), .by = paragraph_id)
 
 training_vocabulary <- tokens |>
