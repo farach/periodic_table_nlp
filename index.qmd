@@ -7,34 +7,8 @@ sidebar: false
 body-classes: task-map-page
 ---
 
-Computers work with human language constantly and mostly out of sight: a search
-box, a spam filter, a translation, a reply that arrives too fast to have been
-typed. The field that studies how they do it is called natural language
-processing, usually shortened to **NLP**. It covers dozens of connected tasks,
-from reading a file without corrupting it to generating a paragraph. Each tile
-below is one of them.
-
-## The tasks {#periodic-table-heading}
-
-Related tasks share a column, and the columns run roughly from getting text in,
-on the left, through cutting it into usable pieces, to models, generation,
-systems, and visual explanation. The arrangement is editorial: position tells
-you what a task is filed near and nothing else about it. Laying the field out
-at once means a lesson can be found by where it sits rather than by remembering
-its name. Sixty-two of the eighty-one lessons are written. The rest are planned,
-and their tiles stay visible so you can see what is coming.
-
-::: {.callout-tip}
-## Start here
-
-For a course, read in number order because the R code builds on earlier
-lessons. For a specific problem, open any available lesson; each page introduces
-its own NLP idea and points out the assumptions it needs.
-:::
-
 ```{r}
-#| echo: false
-#| output: asis
+#| include: false
 
 options(warn = 2)
 
@@ -65,6 +39,36 @@ available <- task_map |>
 
 planned <- task_map |>
   filter(status == "planned")
+```
+
+Computers work with human language constantly and mostly out of sight: a search
+box, a spam filter, a translation, a reply that arrives too fast to have been
+typed. The field that studies how they do it is called natural language
+processing, usually shortened to **NLP**. It covers dozens of connected tasks,
+from reading a file without corrupting it to generating a paragraph. Each tile
+below is one of them.
+
+## The tasks {#periodic-table-heading}
+
+Related tasks share a column, and the columns run roughly from getting text in,
+on the left, through cutting it into usable pieces, to models, generation,
+systems, and visual explanation. The arrangement is editorial: position tells
+you what a task is filed near and nothing else about it. Laying the field out
+at once means a lesson can be found by where it sits rather than by remembering
+its name. `r nrow(available)` of the `r nrow(task_map)` lessons are written. The
+rest are planned, and their tiles stay visible so you can see what is coming.
+
+::: {.callout-tip}
+## Start here
+
+For a course, read in number order because the R code builds on earlier
+lessons. For a specific problem, open any available lesson; each page introduces
+its own NLP idea and points out the assumptions it needs.
+:::
+
+```{r}
+#| echo: false
+#| output: asis
 
 group_sizes <- task_map |>
   count(group_id) |>
