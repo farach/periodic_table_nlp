@@ -36,10 +36,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Start with the reporting decision
 
-The audience is the archive team. They need to decide whether the bigram is a
-better count-model baseline for the next demonstration. They do not need a
-claim about how people write, why one context length won, or how another corpus
-would behave.
+The audience is the archive team. They need to decide whether the
+validation-selected trigram improves on the unigram baseline on the test
+speeches. They do not need a claim about how people write, why one context
+length won, or how another corpus would behave.
 
 That brief limits the report before any sentence is generated:
 
@@ -68,7 +68,7 @@ validation_results <- read_csv(
     split = col_character(),
     model = col_character(),
     context_tokens = col_integer(),
-    backoff_strength = col_double(),
+    interpolation_strength = col_double(),
     next_token_rows = col_integer(),
     oov_target_share = col_double(),
     seen_context_share = col_double(),
@@ -85,7 +85,7 @@ test_results <- read_csv(
     split = col_character(),
     model = col_character(),
     context_tokens = col_integer(),
-    backoff_strength = col_double(),
+    interpolation_strength = col_double(),
     next_token_rows = col_integer(),
     oov_target_share = col_double(),
     seen_context_share = col_double(),
@@ -125,6 +125,7 @@ paired_test <- test_by_speech |>
     values_from = perplexity
   ) |>
   summarise(
+    test_speeches = n(),
     trigram_wins = sum(trigram < unigram),
     ties = sum(trigram == unigram),
     trigram_losses = sum(trigram > unigram)
@@ -134,7 +135,7 @@ evidence_ledger <- tribble(
   ~evidence_id, ~source_artifact, ~split, ~measure, ~value, ~unit, ~limit,
   "E1", "next-token-validation.csv", "validation", "trigram perplexity",
   validation_trigram$perplexity, "perplexity",
-  "trigram with backoff strength 100; used for selection",
+  "trigram with interpolation strength 100; minimum across 13 candidates",
   "E2", "next-token-test.csv", "test", "uniform perplexity",
   test_uniform$perplexity, "perplexity",
   "2,500 equally likely vocabulary items",
@@ -149,10 +150,16 @@ evidence_ledger <- tribble(
   "one highest-probability guess per row",
   "E6", "next-token-test-by-speech.csv", "test", "speech-level wins",
   paired_test$trigram_wins, "speeches",
-  "paired against the unigram on the same 13 speeches",
+  "paired against the unigram on the same test speeches",
   "E7", "next-token-test.csv", "test", "targets mapped to <unk>",
   test_trigram$oov_target_share, "share",
-  "the original unseen token is not identified"
+  "the original unseen token is not identified",
+  "E8", "data-raw/build-next-token-study.R", "study", "token rule",
+  NA_real_, "setup",
+  "lowercase ASCII alphabetic tokens; training-only vocabulary",
+  "E9", "R/inaugural-corpus.R", "study", "corpus grain",
+  NA_real_, "setup",
+  "reconstructed inaugural paragraphs; paragraph-bounded contexts"
 )
 
 kable(
@@ -161,6 +168,7 @@ kable(
       value = case_when(
         unit == "share" ~ sprintf("%.1f%%", 100 * value),
         unit == "speeches" ~ as.character(as.integer(value)),
+        unit == "setup" ~ "documented",
         TRUE ~ sprintf("%.1f", value)
       )
     ),
@@ -182,17 +190,27 @@ kable(
 #| include: false
 
 stopifnot(
-  identical(evidence_ledger$evidence_id, paste0("E", 1:7)),
+  identical(evidence_ledger$evidence_id, paste0("E", 1:9)),
   identical(validation_trigram$model, "trigram"),
-  identical(validation_trigram$backoff_strength, 100),
+  identical(validation_trigram$interpolation_strength, 100),
+  identical(
+    validation_trigram$perplexity,
+    min(validation_results$perplexity)
+  ),
   identical(round(validation_trigram$perplexity, 1), 133.3),
   identical(round(test_uniform$perplexity, 1), 2500.0),
   identical(round(test_unigram$perplexity, 1), 240.7),
   identical(round(test_trigram$perplexity, 1), 145.3),
   identical(round(test_trigram$top_1_accuracy, 3), 0.192),
+  identical(paired_test$test_speeches, 13L),
   identical(paired_test$trigram_wins, 13L),
   identical(round(perplexity_reduction, 3), 0.396),
-  identical(round(test_trigram$oov_target_share, 3), 0.117)
+  identical(round(test_trigram$oov_target_share, 3), 0.117),
+  identical(
+    evidence_ledger$source_artifact[8:9],
+    c("data-raw/build-next-token-study.R", "R/inaugural-corpus.R")
+  ),
+  all(is.na(evidence_ledger$value[8:9]))
 )
 ```
 
@@ -210,7 +228,7 @@ candidate_claims <- tribble(
   ~claim_id, ~claim, ~evidence_ids, ~status, ~reason,
   "C1",
   glue(
-    "The trigram with backoff strength 100 had the lowest ",
+    "The trigram with interpolation strength 100 had the lowest ",
     "validation perplexity ({round(validation_trigram$perplexity, 1)})."
   ),
   "E1",
@@ -234,6 +252,40 @@ candidate_claims <- tribble(
   "E5",
   "supported",
   "reports the decision rule separately from perplexity",
+  "C4",
+  glue(
+    "The trigram reduced test perplexity by ",
+    "{sprintf('%.1f%%', 100 * perplexity_reduction)} ",
+    "relative to the unigram baseline."
+  ),
+  "E3;E4",
+  "supported",
+  "derives a comparison from two test perplexities",
+  "C5",
+  glue(
+    "The trigram had lower perplexity in ",
+    "{paired_test$trigram_wins} of {paired_test$test_speeches} ",
+    "paired test speeches."
+  ),
+  "E6",
+  "supported",
+  "uses the paired speech-level comparison",
+  "C6",
+  paste(
+    "The study uses lowercase alphabetic tokens from reconstructed",
+    "inaugural paragraphs."
+  ),
+  "E8;E9",
+  "supported",
+  "states the token rule and source grain",
+  "C7",
+  glue(
+    "{sprintf('%.1f%%', 100 * test_trigram$oov_target_share)} ",
+    "of test targets were mapped to an unknown-token bucket."
+  ),
+  "E7",
+  "supported",
+  "states the recorded unknown-token limit",
   "U1",
   "The trigram understands presidential language.",
   NA_character_,
@@ -260,17 +312,21 @@ kable(
 stopifnot(
   identical(
     candidate_claims$status,
-    c("supported", "supported", "supported", "reject", "reject")
+    c(rep("supported", 7), "reject", "reject")
   ),
   identical(
-    candidate_claims$evidence_ids[1:3],
-    c("E1", "E3;E4", "E5")
+    candidate_claims$evidence_ids[1:7],
+    c("E1", "E3;E4", "E5", "E3;E4", "E6", "E8;E9", "E7")
   ),
-  all(is.na(candidate_claims$evidence_ids[4:5])),
+  all(is.na(candidate_claims$evidence_ids[8:9])),
   str_detect(candidate_claims$claim[[1]], fixed("133.3")),
   str_detect(candidate_claims$claim[[2]], fixed("145.3")),
   str_detect(candidate_claims$claim[[2]], fixed("240.7")),
-  str_detect(candidate_claims$claim[[3]], fixed("19.2%"))
+  str_detect(candidate_claims$claim[[3]], fixed("19.2%")),
+  str_detect(candidate_claims$claim[[4]], fixed("39.6%")),
+  str_detect(candidate_claims$claim[[5]], fixed("13 of 13")),
+  str_detect(candidate_claims$claim[[6]], fixed("reconstructed")),
+  str_detect(candidate_claims$claim[[7]], fixed("11.7%"))
 )
 ```
 
@@ -286,27 +342,29 @@ with the decision, gives the untouched-test result, and ends with the limit.
 
 ```{r}
 report_plan <- tribble(
-  ~sentence_id, ~role, ~evidence_ids,
-  "S1", "selection", "E1",
-  "S2", "test comparison", "E3;E4;E6",
-  "S3", "top-choice result", "E5",
-  "S4", "scope and unknown-token limit", "E7"
+  ~sentence_id, ~role, ~claim_ids, ~evidence_ids,
+  "S1", "selection", "C1", "E1",
+  "S2", "test comparison", "C2;C4;C5", "E3;E4;E6",
+  "S3", "top-choice result", "C3", "E5",
+  "S4", "scope and unknown-token limit", "C6;C7", "E7;E8;E9"
 )
 
 report_sentences <- report_plan |>
   mutate(
     text = case_when(
       sentence_id == "S1" ~ glue(
-        "A trigram with backoff strength 100 was selected because it had ",
+        "A trigram with interpolation strength 100 was selected because it had ",
         "the lowest validation perplexity ",
         "({round(validation_trigram$perplexity, 1)})."
       ),
       sentence_id == "S2" ~ glue(
-        "On 13 untouched test speeches, its perplexity was ",
+        "On {paired_test$test_speeches} untouched test speeches, ",
+        "its perplexity was ",
         "{round(test_trigram$perplexity, 1)}, compared with ",
         "{round(test_unigram$perplexity, 1)} for the unigram baseline, ",
         "a reduction of {sprintf('%.1f%%', 100 * perplexity_reduction)}; ",
-        "it had lower perplexity in all {paired_test$trigram_wins} speeches."
+        "it had lower perplexity in {paired_test$trigram_wins} of ",
+        "{paired_test$test_speeches} speeches."
       ),
       sentence_id == "S3" ~ glue(
         "Its highest-probability token matched ",
@@ -328,9 +386,9 @@ report_text <- str_c(
 
 kable(
   report_sentences |>
-    select(sentence_id, role, evidence_ids, text),
-  col.names = c("Sentence", "Role", "Evidence IDs", "Generated text"),
-  caption = "Every factual report sentence retains its evidence IDs",
+    select(sentence_id, role, claim_ids, evidence_ids, text),
+  col.names = c("Sentence", "Role", "Claim IDs", "Evidence IDs", "Generated text"),
+  caption = "Every factual report sentence retains its claim and evidence IDs",
   row.names = FALSE
 )
 ```
@@ -338,29 +396,105 @@ kable(
 ```{r}
 #| include: false
 
-used_evidence_ids <- report_sentences$evidence_ids |>
-  str_split(";") |>
-  unlist(use.names = FALSE) |>
-  unique()
+split_id_string <- function(value) {
+  value |>
+    str_split(";") |>
+    unlist(use.names = FALSE) |>
+    unique() |>
+    sort()
+}
+
+used_claim_ids <- split_id_string(report_sentences$claim_ids)
+used_evidence_ids <- split_id_string(report_sentences$evidence_ids)
+supported_claims <- candidate_claims |>
+  filter(status == "supported")
+
+plan_trace_resolves <- vapply(
+  seq_len(nrow(report_plan)),
+  function(row) {
+    plan_claim_ids <- split_id_string(report_plan$claim_ids[[row]])
+    plan_evidence_ids <- split_id_string(
+      report_plan$evidence_ids[[row]]
+    )
+    claim_evidence_ids <- supported_claims |>
+      filter(claim_id %in% plan_claim_ids) |>
+      pull(evidence_ids) |>
+      split_id_string()
+
+    all(plan_claim_ids %in% supported_claims$claim_id) &&
+      identical(claim_evidence_ids, plan_evidence_ids)
+  },
+  logical(1)
+)
+
+claim_and_evidence_ids_resolve <-
+  setequal(used_claim_ids, supported_claims$claim_id) &&
+    all(used_evidence_ids %in% evidence_ledger$evidence_id) &&
+    all(plan_trace_resolves)
+
+numbers_match_evidence <- all(c(
+  str_detect(
+    report_text,
+    fixed(as.character(round(validation_trigram$perplexity, 1)))
+  ),
+  str_detect(
+    report_text,
+    fixed(as.character(round(test_trigram$perplexity, 1)))
+  ),
+  str_detect(
+    report_text,
+    fixed(as.character(round(test_unigram$perplexity, 1)))
+  ),
+  str_detect(
+    report_text,
+    fixed(sprintf("%.1f%%", 100 * perplexity_reduction))
+  ),
+  str_detect(
+    report_text,
+    fixed(sprintf("%.1f%%", 100 * test_trigram$top_1_accuracy))
+  ),
+  str_detect(
+    report_text,
+    fixed(sprintf("%.1f%%", 100 * test_trigram$oov_target_share))
+  ),
+  str_detect(
+    report_text,
+    fixed(as.character(glue(
+      "{paired_test$trigram_wins} of ",
+      "{paired_test$test_speeches} speeches"
+    )))
+  )
+))
+
+unsupported_claims_excluded <- all(c(
+  !str_detect(
+    report_text,
+    regex("\\bunderstands?\\b", ignore_case = TRUE)
+  ),
+  !str_detect(
+    report_text,
+    regex("\\bcaused?\\b", ignore_case = TRUE)
+  ),
+  !str_detect(report_text, fixed("improve report writing"))
+))
+
+automated_checks <- c(
+  "claim and evidence IDs resolve" =
+    claim_and_evidence_ids_resolve,
+  "numbers match evidence" = numbers_match_evidence,
+  "unsupported claims excluded" = unsupported_claims_excluded
+)
 
 stopifnot(
   identical(report_sentences$sentence_id, paste0("S", 1:4)),
-  all(used_evidence_ids %in% evidence_ledger$evidence_id),
-  str_detect(report_text, fixed("133.3")),
-  str_detect(report_text, fixed("145.3")),
-  str_detect(report_text, fixed("240.7")),
-  str_detect(report_text, fixed("39.6%")),
-  str_detect(report_text, fixed("19.2%")),
-  str_detect(report_text, fixed("11.7%")),
-  !str_detect(report_text, regex("\\bunderstands?\\b", ignore_case = TRUE)),
-  !str_detect(report_text, regex("\\bcaused?\\b", ignore_case = TRUE)),
-  !str_detect(report_text, fixed("improve report writing"))
+  identical(length(plan_trace_resolves), 4L),
+  all(automated_checks)
 )
 ```
 
 The trace table stays with the report draft. If a value changes, the sentence
-can be found by evidence ID rather than by searching for a number copied into a
-paragraph.
+can be found by claim or evidence ID rather than by searching for a number
+copied into a paragraph.
 
 ## Render the checked report
 
@@ -383,13 +517,13 @@ cat(
 
 expected_report <- str_c(
   paste0(
-    "A trigram with backoff strength 100 was selected because it had the ",
+    "A trigram with interpolation strength 100 was selected because it had the ",
     "lowest validation perplexity (133.3)."
   ),
   paste0(
     "On 13 untouched test speeches, its perplexity was 145.3, compared with ",
     "240.7 for the unigram baseline, a reduction of 39.6%; it had lower ",
-    "perplexity in all 13 speeches."
+    "perplexity in 13 of 13 speeches."
   ),
   paste0(
     "Its highest-probability token matched 19.2% of test rows."
@@ -409,23 +543,19 @@ stopifnot(
 
 ## Check facts and prose separately
 
-The automated checks can verify known numbers, evidence IDs, and prohibited
-claims. They cannot decide whether the report is clear enough for the archive
-team or whether that team should act on it.
+The automated checks can verify known numbers, claim and evidence IDs, and
+prohibited claims. They cannot decide whether the report is clear enough for the
+archive team or whether that team should act on it.
 
 ```{r}
 review_status <- tibble(
   review = c(
-    "source IDs resolve",
-    "numbers match evidence",
-    "unsupported claims excluded",
+    names(automated_checks),
     "human factual review",
     "human prose review"
   ),
   status = c(
-    "passed",
-    "passed",
-    "passed",
+    unname(if_else(automated_checks, "passed", "failed")),
     "pending",
     "pending"
   )
@@ -443,6 +573,10 @@ kable(
 #| include: false
 
 stopifnot(
+  identical(
+    review_status$review[1:3],
+    names(automated_checks)
+  ),
   identical(
     review_status$status,
     c("passed", "passed", "passed", "pending", "pending")

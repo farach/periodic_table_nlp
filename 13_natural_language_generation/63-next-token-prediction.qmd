@@ -23,7 +23,7 @@ This lesson shows how to:
 - build next-token rows without crossing paragraph boundaries;
 - estimate unigram, bigram, and trigram count models;
 - compare greedy choice with probability-weighted sampling;
-- select a context length with validation perplexity; and
+- select context length and interpolation strength with validation perplexity; and
 - explain what held-out perplexity does not measure.
 :::
 
@@ -39,7 +39,8 @@ stopifnot(identical(getOption("warn"), 2L))
 The inaugural corpus contains 60 public-domain speeches. The committed study
 uses 37 speeches for training, 10 for model selection, and 13 for the final
 test. A speech belongs to one split only. The split is stratified by era so both
-eras appear in every part.
+eras appear in every part. The split holds out speeches, not speakers:
+presidents with more than one inaugural address can appear in multiple splits.
 
 ```{r}
 library(digest)
@@ -75,7 +76,7 @@ validation_results <- read_csv(
     split = col_character(),
     model = col_character(),
     context_tokens = col_integer(),
-    backoff_strength = col_double(),
+    interpolation_strength = col_double(),
     next_token_rows = col_integer(),
     oov_target_share = col_double(),
     seen_context_share = col_double(),
@@ -92,7 +93,7 @@ test_results <- read_csv(
     split = col_character(),
     model = col_character(),
     context_tokens = col_integer(),
-    backoff_strength = col_double(),
+    interpolation_strength = col_double(),
     next_token_rows = col_integer(),
     oov_target_share = col_double(),
     seen_context_share = col_double(),
@@ -182,7 +183,7 @@ stopifnot(
     "trigram"
   ),
   identical(
-    validation_results$backoff_strength[validation_results$selected],
+    validation_results$interpolation_strength[validation_results$selected],
     100
   )
 )
@@ -294,15 +295,16 @@ uses one previous token. A **trigram** uses two. More context can help, but each
 longer context appears less often.
 
 Raw counts assign probability zero to a next token that never followed the
-context in training. The study avoids zero probabilities by mixing a longer
-context with the shorter model. The **backoff strength** controls how much
-weight the fallback receives. Six values are compared on validation speeches;
-the selected trigram uses 100.
+context in training. The study avoids zero probabilities through
+**interpolation**: every estimate mixes the longer-context counts with the
+shorter model. The **interpolation strength** controls how much weight the
+shorter model receives, so a larger value leans more on that model. Six values
+are compared on validation speeches; the selected trigram uses 100.
 
 ```{r}
 selected_validation <- validation_results |>
   filter(selected)
-backoff_strength <- selected_validation$backoff_strength
+interpolation_strength <- selected_validation$interpolation_strength
 
 unigram_counts <- training_tokens |>
   mutate(
@@ -350,10 +352,10 @@ predict_after_one <- function(previous_token) {
       context_count = sum(bigram_count),
       bigram_probability = (
         bigram_count +
-          backoff_strength * unigram_probability
+          interpolation_strength * unigram_probability
       ) / (
         context_count +
-          backoff_strength
+          interpolation_strength
       )
     ) |>
     arrange(desc(bigram_probability), next_token)
@@ -373,10 +375,10 @@ predict_after_two <- function(previous_2_token, previous_1_token) {
       context_count = sum(trigram_count),
       probability = (
         trigram_count +
-          backoff_strength * bigram_probability
+          interpolation_strength * bigram_probability
       ) / (
         context_count +
-          backoff_strength
+          interpolation_strength
       ),
       context = str_c(
         previous_2_token,
@@ -412,7 +414,7 @@ the_united_distribution <- predict_after_two("the", "united")
 
 stopifnot(
   identical(selected_validation$model, "trigram"),
-  identical(backoff_strength, 100),
+  identical(interpolation_strength, 100),
   identical(
     context_predictions$next_token[
       context_predictions$context == "we must"
@@ -497,7 +499,7 @@ a continuation is factual, useful, or appropriate for a reader.
 
 ## Select context length and smoothing before testing
 
-The builder compares six backoff strengths for both the bigram and trigram, plus
+The builder compares six interpolation strengths for both the bigram and trigram, plus
 the unigram baseline, on validation speeches.
 **Log loss** penalizes probability assigned away from the observed next token.
 **Perplexity** is the exponentiated mean log loss; lower is better when the
@@ -507,20 +509,20 @@ tokenizer, vocabulary, and evaluation rows are identical.
 validation_display <- validation_results |>
   filter(
     model == "unigram" |
-      (model == "bigram" & backoff_strength == 100) |
+      (model == "bigram" & interpolation_strength == 100) |
       (
         model == "trigram" &
-          backoff_strength %in% c(10, 100, 1000)
+          interpolation_strength %in% c(10, 100, 1000)
       )
   ) |>
-  arrange(context_tokens, backoff_strength) |>
+  arrange(context_tokens, interpolation_strength) |>
   transmute(
     model,
     context_tokens,
-    backoff_strength = if_else(
-      is.na(backoff_strength),
+    interpolation_strength = if_else(
+      is.na(interpolation_strength),
       "not applicable",
-      as.character(backoff_strength)
+      as.character(interpolation_strength)
     ),
     seen_context = if_else(
       is.na(seen_context_share),
@@ -536,7 +538,7 @@ kable(
   col.names = c(
     "Candidate",
     "Context tokens",
-    "Best backoff strength",
+    "Interpolation strength",
     "Validation contexts seen in training",
     "Validation perplexity",
     "Selected"
@@ -556,7 +558,7 @@ stopifnot(
     c("unigram", "bigram", "trigram", "trigram", "trigram")
   ),
   identical(
-    validation_display$backoff_strength,
+    validation_display$interpolation_strength,
     c("not applicable", "100", "10", "100", "1000")
   ),
   identical(
@@ -571,7 +573,7 @@ stopifnot(
     round(
       validation_results$seen_context_share[
         validation_results$model == "trigram" &
-          validation_results$backoff_strength == 100
+          validation_results$interpolation_strength == 100
       ],
       3
     ),
@@ -584,18 +586,18 @@ stopifnot(
 )
 ```
 
-The trigram with backoff strength 100 has the lowest validation perplexity,
+The trigram with interpolation strength 100 has the lowest validation perplexity,
 133.3. The best bigram is close at 134.8. The tested strengths on both sides of
 100 score worse, so the selected value is not a grid boundary. Only 74.9 percent
 of the trigram's two-token validation contexts appeared in training. When a
-context is unseen, its estimate falls back toward the bigram and then the
+context is unseen, its estimate relies entirely on the bigram and then the
 unigram. The bigram's 100 percent seen-context rate follows from mapping every
 token into the training vocabulary, including `<unk>`; it is not evidence that
 the model generalizes to every word.
 
 ## Open the test speeches once
 
-After selecting the trigram and its backoff strength, the study scores it,
+After selecting the trigram and its interpolation strength, the study scores it,
 the predeclared unigram baseline, and a uniform 2,500-token floor on the 13 test
 speeches.
 
@@ -618,16 +620,49 @@ perplexity_reduction <- 1 -
   test_results$perplexity[test_results$model == "trigram"] /
     test_results$perplexity[test_results$model == "unigram"]
 
-paired_test <- test_by_speech |>
+test_comparison_by_speech <- test_by_speech |>
   select(speech_id, model, perplexity) |>
   pivot_wider(
     names_from = model,
     values_from = perplexity
-  ) |>
+  )
+
+speech_people <- paragraphs |>
+  distinct(speech_id, president)
+training_presidents <- split_assignments |>
+  filter(split == "training") |>
+  inner_join(speech_people, by = join_by(speech_id)) |>
+  pull(president)
+test_speaker_overlap <- split_assignments |>
+  filter(split == "test") |>
+  inner_join(speech_people, by = join_by(speech_id)) |>
+  mutate(
+    president_seen_in_training = president %in% training_presidents
+  )
+
+paired_test <- test_comparison_by_speech |>
   summarise(
+    test_speeches = n(),
     trigram_wins = sum(trigram < unigram),
     ties = sum(trigram == unigram),
     trigram_losses = sum(trigram > unigram)
+  )
+
+speaker_overlap_test <- test_speaker_overlap |>
+  summarise(
+    repeated_president_speeches = sum(president_seen_in_training),
+    other_speeches = sum(!president_seen_in_training)
+  )
+non_overlap_test <- test_comparison_by_speech |>
+  inner_join(
+    test_speaker_overlap |>
+      select(speech_id, president_seen_in_training),
+    by = join_by(speech_id)
+  ) |>
+  filter(!president_seen_in_training) |>
+  summarise(
+    speeches = n(),
+    trigram_wins = sum(trigram < unigram)
   )
 
 kable(
@@ -660,7 +695,15 @@ stopifnot(
   identical(round(test_results$oov_target_share, 3), rep(0.117, 3)),
   identical(
     as.integer(unlist(paired_test)),
-    c(13L, 0L, 0L)
+    c(13L, 13L, 0L, 0L)
+  ),
+  identical(
+    as.integer(unlist(speaker_overlap_test)),
+    c(8L, 5L)
+  ),
+  identical(
+    as.integer(unlist(non_overlap_test)),
+    c(5L, 5L)
   ),
   identical(
     unigram_probabilities$model_token[
@@ -680,7 +723,14 @@ baseline and wins the paired comparison in all
 Its highest-probability guess is right on 19.2 percent of test rows. The unigram
 scores 11.7 percent because its most likely token is `<unk>`, the bucket that
 collects many rare training words. A correct unknown-bucket guess does not
-recover the original word.
+recover the original word. The trigram also leans on this bucket: roughly one
+third of its correct guesses are unknown-bucket matches rather than recovered
+words.
+
+Eight of the 13 test speeches were delivered by a president who also appears in
+training. The test is speech-held-out, not speaker-held-out; repeated presidents
+can carry phrasing across splits. The trigram still beats the unigram on all five
+test speeches whose president is absent from training.
 
 Perplexity would change under another vocabulary, tokenizer, boundary rule, or
 test set. The values here cannot be compared with the LDA perplexity in Lesson
@@ -694,8 +744,9 @@ how a report can stay tied to evidence.
 
 - Next-token prediction assigns probabilities after a context.
 - Paragraph boundaries prevent invented transitions between source records.
-- Validation data select the context length; test data check the fixed choice.
-- The trigram and backoff strength are selected together on validation data.
+- Validation data select context length and interpolation strength; test data
+  check the fixed choice.
+- The trigram and interpolation strength are selected together on validation data.
 - The selected trigram beats the unigram on all 13 test speeches here, but its
   top choice is still wrong on about four out of five rows.
 - Perplexity is comparable only under the same tokens, vocabulary, and test rows.

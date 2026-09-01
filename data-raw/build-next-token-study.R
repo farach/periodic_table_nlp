@@ -142,7 +142,7 @@ previous_2_1_counts <- training_rows |>
     name = "previous_2_1_count"
   )
 
-score_rows <- function(data, backoff_strength) {
+score_rows <- function(data, interpolation_strength) {
   data |>
     left_join(
       unigram_probabilities,
@@ -173,28 +173,28 @@ score_rows <- function(data, backoff_strength) {
       ),
       bigram_probability = (
         bigram_count +
-          backoff_strength * unigram_probability
+          interpolation_strength * unigram_probability
       ) / (
         previous_1_count +
-          backoff_strength
+          interpolation_strength
       ),
       trigram_probability = (
         trigram_count +
-          backoff_strength * bigram_probability
+          interpolation_strength * bigram_probability
       ) / (
         previous_2_1_count +
-          backoff_strength
+          interpolation_strength
       )
     )
 }
 
 summarize_unigram <- function(data, split_name) {
-  scored <- score_rows(data, backoff_strength = 1)
+  scored <- score_rows(data, interpolation_strength = 1)
   tibble(
     split = split_name,
     model = "unigram",
     context_tokens = 0L,
-    backoff_strength = NA_real_,
+    interpolation_strength = NA_real_,
     next_token_rows = nrow(scored),
     oov_target_share = mean(scored$next_token == "<unk>"),
     seen_context_share = NA_real_,
@@ -206,15 +206,15 @@ summarize_unigram <- function(data, split_name) {
 summarize_context_models <- function(
   data,
   split_name,
-  backoff_strength
+  interpolation_strength
 ) {
-  scored <- score_rows(data, backoff_strength)
+  scored <- score_rows(data, interpolation_strength)
 
   tibble(
     split = split_name,
     model = c("bigram", "trigram"),
     context_tokens = 1:2,
-    backoff_strength = backoff_strength,
+    interpolation_strength = interpolation_strength,
     next_token_rows = nrow(scored),
     oov_target_share = mean(scored$next_token == "<unk>"),
     seen_context_share = c(
@@ -241,26 +241,26 @@ validation_results <- bind_rows(
     }) |>
     list_rbind()
 ) |>
-  arrange(context_tokens, backoff_strength)
+  arrange(context_tokens, interpolation_strength)
 
 selected_candidate <- validation_results |>
   slice_min(perplexity, n = 1, with_ties = FALSE) |>
-  select(model, backoff_strength)
+  select(model, interpolation_strength)
 selected_model <- selected_candidate$model
-selected_strength <- selected_candidate$backoff_strength
+selected_strength <- selected_candidate$interpolation_strength
 
 validation_results <- validation_results |>
   mutate(
     selected = replace_na(
       model == selected_model &
-        backoff_strength == selected_strength,
+        interpolation_strength == selected_strength,
       FALSE
     ),
     selection_reason = if_else(
       selected,
       paste(
         "Lowest validation perplexity across context lengths",
-        "and backoff strengths before opening test"
+        "and interpolation strengths before opening test"
       ),
       ""
     )
@@ -445,6 +445,18 @@ if (selected_model == "bigram") {
     )
 }
 
+selected_prediction_is_correct <-
+  test_predictions$selected_prediction == test_predictions$next_token
+unknown_bucket_correct_share <- sum(
+  selected_prediction_is_correct &
+    test_predictions$selected_prediction == "<unk>"
+) / sum(selected_prediction_is_correct)
+known_target_rows <- test_predictions$next_token != "<unk>"
+known_target_top_1_accuracy <- mean(
+  test_predictions$selected_prediction[known_target_rows] ==
+    test_predictions$next_token[known_target_rows]
+)
+
 selected_seen_context <- if (selected_model == "bigram") {
   mean(test_scored$previous_1_count > 0L)
 } else {
@@ -459,7 +471,7 @@ test_results <- tibble(
     0L,
     match(selected_model, c("unigram", "bigram", "trigram")) - 1L
   ),
-  backoff_strength = c(NA_real_, NA_real_, selected_strength),
+  interpolation_strength = c(NA_real_, NA_real_, selected_strength),
   next_token_rows = nrow(test_scored),
   oov_target_share = mean(test_scored$next_token == "<unk>"),
   seen_context_share = c(
@@ -573,6 +585,8 @@ stopifnot(
       test_results$model == "trigram"
     ]
   ),
+  identical(round(unknown_bucket_correct_share, 3), 0.353),
+  identical(round(known_target_top_1_accuracy, 3), 0.141),
   sum(unlist(paired_test)) == 13L
 )
 
@@ -615,7 +629,7 @@ metadata <- tibble(
   )),
   description = c(
     "Speech-level train, validation, and test assignments",
-    "Validation perplexity for context-length and backoff-strength candidates",
+    "Validation perplexity for context-length and interpolation-strength candidates",
     "Untouched-test perplexity and top-1 accuracy for uniform, unigram, and selected models",
     "Per-speech test perplexity for the unigram baseline and selected model"
   ),
@@ -624,7 +638,7 @@ metadata <- tibble(
     paste(
       "training-only vocabulary",
       vocabulary_size,
-      "tokens; paragraph-bounded contexts; backoff strengths",
+      "tokens; paragraph-bounded contexts; interpolation strengths",
       paste(candidate_strengths, collapse = ",")
     ),
     "test opened after validation selection; same tokenizer and vocabulary; uniform floor 2500",

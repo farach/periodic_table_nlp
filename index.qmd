@@ -86,7 +86,7 @@ stopifnot(
   identical(task_map$task_number, 1:81),
   identical(sort(unique(task_map$group_id)), 1:15),
   identical(group_sizes, expected_group_sizes),
-  identical(which(task_map$status == "available"), 1:62),
+  identical(which(task_map$status == "available"), 1:64),
   identical(length(unique(task_map$symbol)), 81L),
   all(task_map$status %in% c("available", "planned")),
   all(nzchar(available$lesson_path)),
@@ -267,14 +267,14 @@ route_html <- paste(
 
 stopifnot(
   identical(length(groups), 15L),
-  identical(length(route_links), 12L),
+  identical(length(route_links), 13L),
   identical(
     str_count(table_html, fixed('class="element-slot"')),
     81L
   ),
   identical(
     str_count(table_html, fixed('class="nlp-element is-available"')),
-    62L
+    64L
   )
 )
 
