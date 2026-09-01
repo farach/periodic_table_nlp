@@ -1,0 +1,61 @@
+speech_id,era,split
+1789-Washington,before 1900,training
+1801-Jefferson,before 1900,training
+1809-Madison,before 1900,training
+1817-Monroe,before 1900,training
+1821-Monroe,before 1900,training
+1829-Jackson,before 1900,training
+1841-Harrison,before 1900,training
+1849-Taylor,before 1900,training
+1857-Buchanan,before 1900,training
+1861-Lincoln,before 1900,training
+1865-Lincoln,before 1900,training
+1869-Grant,before 1900,training
+1873-Grant,before 1900,training
+1877-Hayes,before 1900,training
+1881-Garfield,before 1900,training
+1885-Cleveland,before 1900,training
+1897-McKinley,before 1900,training
+1901-McKinley,1900 or later,training
+1905-Roosevelt,1900 or later,training
+1909-Taft,1900 or later,training
+1917-Wilson,1900 or later,training
+1921-Harding,1900 or later,training
+1925-Coolidge,1900 or later,training
+1945-Roosevelt,1900 or later,training
+1949-Truman,1900 or later,training
+1957-Eisenhower,1900 or later,training
+1969-Nixon,1900 or later,training
+1973-Nixon,1900 or later,training
+1985-Reagan,1900 or later,training
+1993-Clinton,1900 or later,training
+1997-Clinton,1900 or later,training
+2001-Bush,1900 or later,training
+2005-Bush,1900 or later,training
+2009-Obama,1900 or later,training
+2017-Trump,1900 or later,training
+2021-Biden,1900 or later,training
+2025-Trump,1900 or later,training
+1825-Adams,before 1900,validation
+1845-Polk,before 1900,validation
+1853-Pierce,before 1900,validation
+1889-Harrison,before 1900,validation
+1893-Cleveland,before 1900,validation
+1937-Roosevelt,1900 or later,validation
+1965-Johnson,1900 or later,validation
+1977-Carter,1900 or later,validation
+1981-Reagan,1900 or later,validation
+2013-Obama,1900 or later,validation
+1793-Washington,before 1900,test
+1797-Adams,before 1900,test
+1805-Jefferson,before 1900,test
+1813-Madison,before 1900,test
+1833-Jackson,before 1900,test
+1837-VanBuren,before 1900,test
+1913-Wilson,1900 or later,test
+1929-Hoover,1900 or later,test
+1933-Roosevelt,1900 or later,test
+1941-Roosevelt,1900 or later,test
+1953-Eisenhower,1900 or later,test
+1961-Kennedy,1900 or later,test
+1989-Bush,1900 or later,test

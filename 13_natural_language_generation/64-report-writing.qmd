@@ -1,0 +1,488 @@
+---
+title: "Writing a report from checked claims"
+subtitle: "Choose evidence before generating sentences"
+description: "Learn how to turn verified results into a short report while keeping every factual sentence tied to its source."
+categories: [natural language generation, report writing, data to text]
+---
+
+Nia has finished the next-token study. The archive team wants a short report,
+not a folder of CSV files and not a guess about why one model scored better.
+
+**Report writing** is a natural language generation application. A
+**data-to-text** workflow chooses supported content, orders the claims, turns
+them into sentences, and checks the result against its sources. The sentences
+can be produced by templates or drafted by a language model. Neither method
+makes a claim true.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- define a report's audience, purpose, and exclusions;
+- keep one evidence row for each reported value;
+- separate content selection, document planning, and sentence realization;
+- generate a deterministic report with `glue`;
+- reject fluent claims that the evidence does not support; and
+- keep factual checks separate from human prose review.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Start with the reporting decision
+
+The audience is the archive team. They need to decide whether the bigram is a
+better count-model baseline for the next demonstration. They do not need a
+claim about how people write, why one context length won, or how another corpus
+would behave.
+
+That brief limits the report before any sentence is generated:
+
+- include the validation choice and untouched-test comparison;
+- state the tokenizer, corpus, and unknown-token limit; and
+- exclude causes, transfer claims, and claims about factual writing quality.
+
+## Build an evidence ledger
+
+An **evidence ledger** gives each usable result an ID. The report can then name
+which records support each sentence instead of attaching a source only after
+the prose is written.
+
+```{r}
+library(dplyr)
+library(tibble)
+library(stringr)
+library(readr)
+library(glue)
+library(knitr)
+
+validation_results <- read_csv(
+  "data/inaugural/next-token-validation.csv",
+  na = c("", "NA"),
+  col_types = cols(
+    split = col_character(),
+    model = col_character(),
+    context_tokens = col_integer(),
+    backoff_strength = col_double(),
+    next_token_rows = col_integer(),
+    oov_target_share = col_double(),
+    seen_context_share = col_double(),
+    mean_log_loss = col_double(),
+    perplexity = col_double(),
+    selected = col_logical(),
+    selection_reason = col_character()
+  )
+)
+test_results <- read_csv(
+  "data/inaugural/next-token-test.csv",
+  na = c("", "NA"),
+  col_types = cols(
+    split = col_character(),
+    model = col_character(),
+    context_tokens = col_integer(),
+    backoff_strength = col_double(),
+    next_token_rows = col_integer(),
+    oov_target_share = col_double(),
+    seen_context_share = col_double(),
+    mean_log_loss = col_double(),
+    perplexity = col_double(),
+    top_1_accuracy = col_double(),
+    role = col_character()
+  )
+)
+test_by_speech <- read_csv(
+  "data/inaugural/next-token-test-by-speech.csv",
+  na = character(),
+  col_types = cols(
+    speech_id = col_character(),
+    next_token_rows = col_integer(),
+    model = col_character(),
+    perplexity = col_double()
+  )
+)
+
+validation_trigram <- validation_results |>
+  filter(selected)
+test_uniform <- test_results |>
+  filter(model == "uniform")
+test_unigram <- test_results |>
+  filter(model == "unigram")
+test_trigram <- test_results |>
+  filter(model == "trigram")
+
+perplexity_reduction <- 1 -
+  test_trigram$perplexity / test_unigram$perplexity
+
+paired_test <- test_by_speech |>
+  select(speech_id, model, perplexity) |>
+  tidyr::pivot_wider(
+    names_from = model,
+    values_from = perplexity
+  ) |>
+  summarise(
+    trigram_wins = sum(trigram < unigram),
+    ties = sum(trigram == unigram),
+    trigram_losses = sum(trigram > unigram)
+  )
+
+evidence_ledger <- tribble(
+  ~evidence_id, ~source_artifact, ~split, ~measure, ~value, ~unit, ~limit,
+  "E1", "next-token-validation.csv", "validation", "trigram perplexity",
+  validation_trigram$perplexity, "perplexity",
+  "trigram with backoff strength 100; used for selection",
+  "E2", "next-token-test.csv", "test", "uniform perplexity",
+  test_uniform$perplexity, "perplexity",
+  "2,500 equally likely vocabulary items",
+  "E3", "next-token-test.csv", "test", "unigram perplexity",
+  test_unigram$perplexity, "perplexity",
+  "predeclared baseline under the same tokens",
+  "E4", "next-token-test.csv", "test", "trigram perplexity",
+  test_trigram$perplexity, "perplexity",
+  "selected on validation speeches",
+  "E5", "next-token-test.csv", "test", "trigram top-1 accuracy",
+  test_trigram$top_1_accuracy, "share",
+  "one highest-probability guess per row",
+  "E6", "next-token-test-by-speech.csv", "test", "speech-level wins",
+  paired_test$trigram_wins, "speeches",
+  "paired against the unigram on the same 13 speeches",
+  "E7", "next-token-test.csv", "test", "targets mapped to <unk>",
+  test_trigram$oov_target_share, "share",
+  "the original unseen token is not identified"
+)
+
+kable(
+  evidence_ledger |>
+    mutate(
+      value = case_when(
+        unit == "share" ~ sprintf("%.1f%%", 100 * value),
+        unit == "speeches" ~ as.character(as.integer(value)),
+        TRUE ~ sprintf("%.1f", value)
+      )
+    ),
+  col.names = c(
+    "Evidence ID",
+    "Source artifact",
+    "Split",
+    "Measure",
+    "Value",
+    "Unit",
+    "Limit"
+  ),
+  caption = "Evidence records available to the report",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(evidence_ledger$evidence_id, paste0("E", 1:7)),
+  identical(validation_trigram$model, "trigram"),
+  identical(validation_trigram$backoff_strength, 100),
+  identical(round(validation_trigram$perplexity, 1), 133.3),
+  identical(round(test_uniform$perplexity, 1), 2500.0),
+  identical(round(test_unigram$perplexity, 1), 240.7),
+  identical(round(test_trigram$perplexity, 1), 145.3),
+  identical(round(test_trigram$top_1_accuracy, 3), 0.192),
+  identical(paired_test$trigram_wins, 13L),
+  identical(round(perplexity_reduction, 3), 0.396),
+  identical(round(test_trigram$oov_target_share, 3), 0.117)
+)
+```
+
+The IDs carry more than numbers. They also record the split, unit, role, and
+limit. E1 cannot support a final test claim. E2 through E4 are comparable
+because they use the same test rows, tokenizer, and vocabulary.
+
+## Decide which claims belong
+
+**Content determination** chooses the facts the report will include. A fluent
+sentence can still fail here.
+
+```{r}
+candidate_claims <- tribble(
+  ~claim_id, ~claim, ~evidence_ids, ~status, ~reason,
+  "C1",
+  glue(
+    "The trigram with backoff strength 100 had the lowest ",
+    "validation perplexity ({round(validation_trigram$perplexity, 1)})."
+  ),
+  "E1",
+  "supported",
+  "describes the recorded selection result",
+  "C2",
+  glue(
+    "On test speeches, trigram perplexity was ",
+    "{round(test_trigram$perplexity, 1)} versus ",
+    "{round(test_unigram$perplexity, 1)} for the unigram baseline."
+  ),
+  "E3;E4",
+  "supported",
+  "compares the same unit and test rows",
+  "C3",
+  glue(
+    "The trigram's highest-probability token matched ",
+    "{sprintf('%.1f%%', 100 * test_trigram$top_1_accuracy)} ",
+    "of test rows."
+  ),
+  "E5",
+  "supported",
+  "reports the decision rule separately from perplexity",
+  "U1",
+  "The trigram understands presidential language.",
+  NA_character_,
+  "reject",
+  "perplexity does not measure understanding",
+  "U2",
+  "Using a trigram will improve report writing.",
+  NA_character_,
+  "reject",
+  "the study did not evaluate reports"
+)
+
+kable(
+  candidate_claims,
+  col.names = c("Claim ID", "Candidate sentence", "Evidence IDs", "Decision", "Reason"),
+  caption = "Candidate claims are checked before document planning",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    candidate_claims$status,
+    c("supported", "supported", "supported", "reject", "reject")
+  ),
+  identical(
+    candidate_claims$evidence_ids[1:3],
+    c("E1", "E3;E4", "E5")
+  ),
+  all(is.na(candidate_claims$evidence_ids[4:5])),
+  str_detect(candidate_claims$claim[[1]], fixed("133.3")),
+  str_detect(candidate_claims$claim[[2]], fixed("145.3")),
+  str_detect(candidate_claims$claim[[2]], fixed("240.7")),
+  str_detect(candidate_claims$claim[[3]], fixed("19.2%"))
+)
+```
+
+The rejected sentences sound reasonable. They still exceed the evidence.
+Perplexity measures next-token probability under one setup. The study contains
+no test of understanding and no written-report outcome.
+
+## Plan the document before writing it
+
+**Document planning** sets the order and purpose of the sentences.
+**Realization** turns the checked values into wording. The plan below starts
+with the decision, gives the untouched-test result, and ends with the limit.
+
+```{r}
+report_plan <- tribble(
+  ~sentence_id, ~role, ~evidence_ids,
+  "S1", "selection", "E1",
+  "S2", "test comparison", "E3;E4;E6",
+  "S3", "top-choice result", "E5",
+  "S4", "scope and unknown-token limit", "E7"
+)
+
+report_sentences <- report_plan |>
+  mutate(
+    text = case_when(
+      sentence_id == "S1" ~ glue(
+        "A trigram with backoff strength 100 was selected because it had ",
+        "the lowest validation perplexity ",
+        "({round(validation_trigram$perplexity, 1)})."
+      ),
+      sentence_id == "S2" ~ glue(
+        "On 13 untouched test speeches, its perplexity was ",
+        "{round(test_trigram$perplexity, 1)}, compared with ",
+        "{round(test_unigram$perplexity, 1)} for the unigram baseline, ",
+        "a reduction of {sprintf('%.1f%%', 100 * perplexity_reduction)}; ",
+        "it had lower perplexity in all {paired_test$trigram_wins} speeches."
+      ),
+      sentence_id == "S3" ~ glue(
+        "Its highest-probability token matched ",
+        "{sprintf('%.1f%%', 100 * test_trigram$top_1_accuracy)} ",
+        "of test rows."
+      ),
+      sentence_id == "S4" ~ glue(
+        "These results describe lowercase alphabetic tokens from reconstructed ",
+        "inaugural paragraphs; {sprintf('%.1f%%', 100 * test_trigram$oov_target_share)} ",
+        "of test targets were mapped to an unknown-token bucket."
+      )
+    )
+  )
+
+report_text <- str_c(
+  report_sentences$text,
+  collapse = "\n\n"
+)
+
+kable(
+  report_sentences |>
+    select(sentence_id, role, evidence_ids, text),
+  col.names = c("Sentence", "Role", "Evidence IDs", "Generated text"),
+  caption = "Every factual report sentence retains its evidence IDs",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+used_evidence_ids <- report_sentences$evidence_ids |>
+  str_split(";") |>
+  unlist(use.names = FALSE) |>
+  unique()
+
+stopifnot(
+  identical(report_sentences$sentence_id, paste0("S", 1:4)),
+  all(used_evidence_ids %in% evidence_ledger$evidence_id),
+  str_detect(report_text, fixed("133.3")),
+  str_detect(report_text, fixed("145.3")),
+  str_detect(report_text, fixed("240.7")),
+  str_detect(report_text, fixed("39.6%")),
+  str_detect(report_text, fixed("19.2%")),
+  str_detect(report_text, fixed("11.7%")),
+  !str_detect(report_text, regex("\\bunderstands?\\b", ignore_case = TRUE)),
+  !str_detect(report_text, regex("\\bcaused?\\b", ignore_case = TRUE)),
+  !str_detect(report_text, fixed("improve report writing"))
+)
+```
+
+The trace table stays with the report draft. If a value changes, the sentence
+can be found by evidence ID rather than by searching for a number copied into a
+paragraph.
+
+## Render the checked report
+
+This chunk writes the four planned sentences as report prose. The generation
+is deterministic: the same evidence and templates produce the same text.
+
+```{r}
+#| output: asis
+
+cat(
+  "### Next-token study report\n\n",
+  report_text,
+  "\n",
+  sep = ""
+)
+```
+
+```{r}
+#| include: false
+
+expected_report <- str_c(
+  paste0(
+    "A trigram with backoff strength 100 was selected because it had the ",
+    "lowest validation perplexity (133.3)."
+  ),
+  paste0(
+    "On 13 untouched test speeches, its perplexity was 145.3, compared with ",
+    "240.7 for the unigram baseline, a reduction of 39.6%; it had lower ",
+    "perplexity in all 13 speeches."
+  ),
+  paste0(
+    "Its highest-probability token matched 19.2% of test rows."
+  ),
+  paste0(
+    "These results describe lowercase alphabetic tokens from reconstructed ",
+    "inaugural paragraphs; 11.7% of test targets were mapped to an ",
+    "unknown-token bucket."
+  ),
+  sep = "\n\n"
+)
+
+stopifnot(
+  identical(report_text, expected_report)
+)
+```
+
+## Check facts and prose separately
+
+The automated checks can verify known numbers, evidence IDs, and prohibited
+claims. They cannot decide whether the report is clear enough for the archive
+team or whether that team should act on it.
+
+```{r}
+review_status <- tibble(
+  review = c(
+    "source IDs resolve",
+    "numbers match evidence",
+    "unsupported claims excluded",
+    "human factual review",
+    "human prose review"
+  ),
+  status = c(
+    "passed",
+    "passed",
+    "passed",
+    "pending",
+    "pending"
+  )
+)
+
+kable(
+  review_status,
+  col.names = c("Review gate", "Status"),
+  caption = "Automated checks do not substitute for human approval",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    review_status$status,
+    c("passed", "passed", "passed", "pending", "pending")
+  ),
+  sum(review_status$status == "passed") == 3L,
+  sum(review_status$status == "pending") == 2L
+)
+```
+
+The factual reviewer follows each sentence back to the source records and checks
+that the wording does not add a cause, population, or claim of transfer. The
+prose reviewer checks order, clarity, tone, and usefulness for the named
+audience. Passing one review says nothing about the other.
+
+## Where a language model fits
+
+A language model can draft alternate wording after the evidence ledger and
+report plan are fixed. Save the prompt, model, version, and output if the draft
+is used. Reject any new number, entity, cause, citation, or evidence ID that is
+not in the ledger, then run factual and human review again.
+
+This lesson does not call a live model. Credentials, model updates, and
+stochastic output would make the rendered page hard to reproduce. More
+important, a plausible continuation would still not supply evidence for its own
+claims.
+
+## What to remember
+
+- Define the audience and decision before generating prose.
+- Select supported claims before arranging sentences.
+- Keep evidence IDs, units, splits, and limits attached.
+- Templates improve reproducibility; they do not establish truth.
+- A language model may draft wording, but new claims require evidence.
+- Automated factual checks and human prose review answer different questions.
+
+## Sources
+
+- [Reiter and Dale, Building Natural Language Generation Systems](https://doi.org/10.1017/CBO9780511519857)
+- [Gatt and Krahmer, Survey of the State of the Art in Natural Language Generation](https://arxiv.org/abs/1703.09902)
+- [Wiseman, Shieber, and Rush on challenges in data-to-document generation](https://aclanthology.org/D17-1239/)
+- [Thomson and Reiter on automatic evaluation of generated text](https://aclanthology.org/2020.inlg-1.22/)
+- [NIST AI 600-1, Generative Artificial Intelligence Profile](https://doi.org/10.6028/NIST.AI.600-1)
+- [glue package documentation](https://glue.tidyverse.org/articles/glue.html)

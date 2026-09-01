@@ -1,0 +1,711 @@
+---
+title: "Predicting the next token"
+subtitle: "Count context, choose on validation data, and test once"
+description: "Learn how a language model assigns probabilities to the next token and how to evaluate an inspectable count model."
+categories: [natural language generation, next-token prediction, language models]
+---
+
+Nia is building an autocomplete demonstration for an archive. After a reader
+types `we`, the tool must decide which token could come next.
+
+A **language model** assigns probabilities to token sequences. In
+**next-token prediction**, the input is the context already seen and the output
+is a probability for each possible next token. This is one language-model
+training objective. It is not a definition of every language model or every
+text-generation system.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- keep training, validation, and test speeches separate;
+- build next-token rows without crossing paragraph boundaries;
+- estimate unigram, bigram, and trigram count models;
+- compare greedy choice with probability-weighted sampling;
+- select a context length with validation perplexity; and
+- explain what held-out perplexity does not measure.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the split and study results
+
+The inaugural corpus contains 60 public-domain speeches. The committed study
+uses 37 speeches for training, 10 for model selection, and 13 for the final
+test. A speech belongs to one split only. The split is stratified by era so both
+eras appear in every part.
+
+```{r}
+library(digest)
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(stringr)
+library(tidytext)
+library(purrr)
+library(readr)
+library(knitr)
+
+source("R/inaugural-corpus.R")
+
+split_path <- "data/inaugural/next-token-splits.csv"
+validation_path <- "data/inaugural/next-token-validation.csv"
+test_path <- "data/inaugural/next-token-test.csv"
+metadata_path <- "data/inaugural/next-token-study-metadata.csv"
+
+split_assignments <- read_csv(
+  split_path,
+  na = character(),
+  col_types = cols(
+    speech_id = col_character(),
+    era = col_character(),
+    split = col_character()
+  )
+)
+validation_results <- read_csv(
+  validation_path,
+  na = c("", "NA"),
+  col_types = cols(
+    split = col_character(),
+    model = col_character(),
+    context_tokens = col_integer(),
+    backoff_strength = col_double(),
+    next_token_rows = col_integer(),
+    oov_target_share = col_double(),
+    seen_context_share = col_double(),
+    mean_log_loss = col_double(),
+    perplexity = col_double(),
+    selected = col_logical(),
+    selection_reason = col_character()
+  )
+)
+test_results <- read_csv(
+  test_path,
+  na = c("", "NA"),
+  col_types = cols(
+    split = col_character(),
+    model = col_character(),
+    context_tokens = col_integer(),
+    backoff_strength = col_double(),
+    next_token_rows = col_integer(),
+    oov_target_share = col_double(),
+    seen_context_share = col_double(),
+    mean_log_loss = col_double(),
+    perplexity = col_double(),
+    top_1_accuracy = col_double(),
+    role = col_character()
+  )
+)
+test_by_speech <- read_csv(
+  "data/inaugural/next-token-test-by-speech.csv",
+  na = character(),
+  col_types = cols(
+    speech_id = col_character(),
+    next_token_rows = col_integer(),
+    model = col_character(),
+    perplexity = col_double()
+  )
+)
+study_metadata <- read_csv(
+  metadata_path,
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    settings = col_character(),
+    source = col_character(),
+    license = col_character(),
+    built_on = col_character(),
+    fingerprint = col_character()
+  )
+)
+
+split_counts <- split_assignments |>
+  mutate(
+    split = factor(
+      split,
+      levels = c("training", "validation", "test")
+    ),
+    era = factor(
+      era,
+      levels = c("before 1900", "1900 or later")
+    )
+  ) |>
+  count(split, era, name = "speeches") |>
+  arrange(split, era)
+
+kable(
+  split_counts,
+  col.names = c("Split", "Era", "Speeches"),
+  caption = "Speech-level assignments used for next-token modeling",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+hash_lines <- function(path) {
+  digest(
+    paste(read_lines(path), collapse = "\n"),
+    algo = "sha256",
+    serialize = FALSE
+  )
+}
+
+artifact_paths <- file.path(
+  "data/inaugural",
+  study_metadata$artifact
+)
+
+stopifnot(
+  all(c(
+    "digest", "dplyr", "tidyr", "tibble", "stringr",
+    "tidytext", "purrr", "readr", "knitr"
+  ) %in% loadedNamespaces()),
+  identical(nrow(split_assignments), 60L),
+  identical(nrow(validation_results), 13L),
+  identical(nrow(test_results), 3L),
+  identical(nrow(test_by_speech), 26L),
+  identical(split_counts$speeches, c(17L, 20L, 5L, 5L, 6L, 7L)),
+  !anyDuplicated(split_assignments$speech_id),
+  all(file.exists(artifact_paths)),
+  identical(map_chr(artifact_paths, hash_lines), study_metadata$fingerprint),
+  identical(
+    validation_results$model[validation_results$selected],
+    "trigram"
+  ),
+  identical(
+    validation_results$backoff_strength[validation_results$selected],
+    100
+  )
+)
+```
+
+The validation set is used to choose among candidate models. The test speeches
+stay closed until that choice is fixed. Calling both sets "held out" would hide
+their different jobs.
+
+## Build paragraph-bounded next-token rows
+
+The study uses lowercase ASCII alphabetic tokens. It keeps the 2,499 most common
+training tokens and maps every other token to `<unk>`, giving a 2,500-token
+model vocabulary.
+
+Each prediction row keeps its paragraph and speech ID. `previous_1` is the token
+immediately before the target. `previous_2` is one more step back. The first two
+tokens in each paragraph have no full two-token context, so they are not
+evaluation rows. No transition joins the end of one paragraph to the beginning
+of another, and this model does not learn how to start a paragraph.
+
+```{r}
+paragraphs <- inaugural_paragraphs()
+
+training_tokens <- paragraphs |>
+  select(paragraph_id, speech_id, paragraph) |>
+  inner_join(
+    split_assignments |>
+      filter(split == "training") |>
+      select(speech_id),
+    by = join_by(speech_id)
+  ) |>
+  unnest_tokens(token, paragraph) |>
+  filter(str_detect(token, "^[a-z]+$")) |>
+  mutate(position = row_number(), .by = paragraph_id)
+
+training_vocabulary <- training_tokens |>
+  count(token, sort = TRUE) |>
+  slice_head(n = 2499L) |>
+  pull(token)
+model_vocabulary <- c(training_vocabulary, "<unk>")
+
+training_next_tokens <- training_tokens |>
+  mutate(
+    model_token = if_else(
+      token %in% training_vocabulary,
+      token,
+      "<unk>"
+    )
+  ) |>
+  arrange(paragraph_id, position) |>
+  mutate(
+    previous_1 = lag(model_token, 1L),
+    previous_2 = lag(model_token, 2L),
+    .by = paragraph_id
+  ) |>
+  filter(position >= 3L) |>
+  transmute(
+    paragraph_id,
+    speech_id,
+    previous_2,
+    previous_1,
+    next_token = model_token
+  )
+
+training_summary <- tibble(
+  measure = c(
+    "training speeches",
+    "training paragraphs",
+    "training tokens",
+    "next-token rows",
+    "model vocabulary"
+  ),
+  value = c(
+    n_distinct(training_next_tokens$speech_id),
+    n_distinct(training_tokens$paragraph_id),
+    nrow(training_tokens),
+    nrow(training_next_tokens),
+    length(model_vocabulary)
+  )
+)
+
+kable(
+  training_summary,
+  col.names = c("Training item", "Value"),
+  caption = "Training data for the inspectable count model",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    training_summary$value,
+    c(37L, 867L, 83458L, 81724L, 2500L)
+  ),
+  all(!is.na(training_next_tokens$paragraph_id)),
+  all(!is.na(training_next_tokens$speech_id)),
+  all(training_next_tokens$paragraph_id %in% paragraphs$paragraph_id)
+)
+```
+
+## Count what followed each token
+
+A **unigram** ignores context and uses overall token frequency. A **bigram**
+uses one previous token. A **trigram** uses two. More context can help, but each
+longer context appears less often.
+
+Raw counts assign probability zero to a next token that never followed the
+context in training. The study avoids zero probabilities by mixing a longer
+context with the shorter model. The **backoff strength** controls how much
+weight the fallback receives. Six values are compared on validation speeches;
+the selected trigram uses 100.
+
+```{r}
+selected_validation <- validation_results |>
+  filter(selected)
+backoff_strength <- selected_validation$backoff_strength
+
+unigram_counts <- training_tokens |>
+  mutate(
+    model_token = if_else(
+      token %in% training_vocabulary,
+      token,
+      "<unk>"
+    )
+  ) |>
+  count(model_token, name = "unigram_count")
+training_token_total <- sum(unigram_counts$unigram_count)
+
+unigram_probabilities <- tibble(
+  model_token = model_vocabulary
+) |>
+  left_join(unigram_counts, by = join_by(model_token)) |>
+  mutate(
+    unigram_count = replace_na(unigram_count, 0L),
+    unigram_probability = (unigram_count + 1) /
+      (training_token_total + length(model_vocabulary))
+  )
+
+bigram_counts <- training_next_tokens |>
+  count(previous_1, next_token, name = "bigram_count")
+trigram_counts <- training_next_tokens |>
+  count(
+    previous_2,
+    previous_1,
+    next_token,
+    name = "trigram_count"
+  )
+
+predict_after_one <- function(previous_token) {
+  context_counts <- bigram_counts |>
+    filter(previous_1 == previous_token)
+
+  tibble(next_token = model_vocabulary) |>
+    left_join(
+      unigram_probabilities,
+      by = join_by(next_token == model_token)
+    ) |>
+    left_join(context_counts, by = join_by(next_token)) |>
+    mutate(
+      bigram_count = replace_na(bigram_count, 0L),
+      context_count = sum(bigram_count),
+      bigram_probability = (
+        bigram_count +
+          backoff_strength * unigram_probability
+      ) / (
+        context_count +
+          backoff_strength
+      )
+    ) |>
+    arrange(desc(bigram_probability), next_token)
+}
+
+predict_after_two <- function(previous_2_token, previous_1_token) {
+  context_counts <- trigram_counts |>
+    filter(
+      previous_2 == previous_2_token,
+      previous_1 == previous_1_token
+    )
+
+  predict_after_one(previous_1_token) |>
+    left_join(context_counts, by = join_by(next_token)) |>
+    mutate(
+      trigram_count = replace_na(trigram_count, 0L),
+      context_count = sum(trigram_count),
+      probability = (
+        trigram_count +
+          backoff_strength * bigram_probability
+      ) / (
+        context_count +
+          backoff_strength
+      ),
+      context = str_c(
+        previous_2_token,
+        previous_1_token,
+        sep = " "
+      )
+    ) |>
+    arrange(desc(probability), next_token)
+}
+
+context_predictions <- bind_rows(
+  predict_after_two("we", "must") |>
+    slice_head(n = 5),
+  predict_after_two("the", "united") |>
+    slice_head(n = 5)
+) |>
+  select(context, next_token, trigram_count, probability)
+
+kable(
+  context_predictions |>
+    mutate(probability = round(probability, 4)),
+  col.names = c("Previous two tokens", "Possible next token", "Training count", "Probability"),
+  caption = "Highest-probability next tokens from the selected trigram",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+we_must_distribution <- predict_after_two("we", "must")
+the_united_distribution <- predict_after_two("the", "united")
+
+stopifnot(
+  identical(selected_validation$model, "trigram"),
+  identical(backoff_strength, 100),
+  identical(
+    context_predictions$next_token[
+      context_predictions$context == "we must"
+    ],
+    c("be", "<unk>", "not", "do", "show")
+  ),
+  identical(
+    context_predictions$next_token[
+      context_predictions$context == "the united"
+    ],
+    c("states", "nations", "<unk>", "and", "the")
+  ),
+  abs(sum(we_must_distribution$probability) - 1) < 1e-12,
+  abs(sum(the_united_distribution$probability) - 1) < 1e-12,
+  identical(
+    round(
+      context_predictions$probability[
+        context_predictions$context == "the united" &
+          context_predictions$next_token == "states"
+      ],
+      3
+    ),
+    0.719
+  )
+)
+```
+
+After `the united`, the model assigns about 0.72 probability to `states`. That
+reflects a repeated phrase in US inaugural addresses. It does not show a general
+English rule. After `we must`, several continuations remain plausible.
+
+The `<unk>` row stands for any token outside the training vocabulary. Predicting
+that bucket does not identify the original word.
+
+## Choose or sample a next token
+
+The probability table does not decide how text is generated. **Greedy decoding**
+takes the highest-probability token. **Sampling** draws according to the full
+distribution. The seed below makes five draws reproducible.
+
+```{r}
+greedy_next <- we_must_distribution$next_token[[1]]
+
+set.seed(6303)
+sampled_next <- sample(
+  we_must_distribution$next_token,
+  size = 5,
+  replace = TRUE,
+  prob = we_must_distribution$probability
+)
+
+choice_table <- tibble(
+  method = c("greedy", "five seeded samples"),
+  output = c(
+    greedy_next,
+    str_c(sampled_next, collapse = ", ")
+  )
+)
+
+kable(
+  choice_table,
+  col.names = c("Choice rule", "Next-token output after 'we must'"),
+  caption = "One probability distribution can support different choice rules",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(greedy_next, "be"),
+  identical(length(sampled_next), 5L),
+  all(sampled_next %in% model_vocabulary),
+  identical(choice_table$method, c("greedy", "five seeded samples"))
+)
+```
+
+Greedy choice repeats the most common continuation. Sampling can select less
+common tokens and will change when the seed changes. Neither rule checks whether
+a continuation is factual, useful, or appropriate for a reader.
+
+## Select context length and smoothing before testing
+
+The builder compares six backoff strengths for both the bigram and trigram, plus
+the unigram baseline, on validation speeches.
+**Log loss** penalizes probability assigned away from the observed next token.
+**Perplexity** is the exponentiated mean log loss; lower is better when the
+tokenizer, vocabulary, and evaluation rows are identical.
+
+```{r}
+validation_display <- validation_results |>
+  filter(
+    model == "unigram" |
+      (model == "bigram" & backoff_strength == 100) |
+      (
+        model == "trigram" &
+          backoff_strength %in% c(10, 100, 1000)
+      )
+  ) |>
+  arrange(context_tokens, backoff_strength) |>
+  transmute(
+    model,
+    context_tokens,
+    backoff_strength = if_else(
+      is.na(backoff_strength),
+      "not applicable",
+      as.character(backoff_strength)
+    ),
+    seen_context = if_else(
+      is.na(seen_context_share),
+      "not applicable",
+      sprintf("%.1f%%", 100 * seen_context_share)
+    ),
+    perplexity = round(perplexity, 1),
+    selected = if_else(selected, "yes", "no")
+  )
+
+kable(
+  validation_display,
+  col.names = c(
+    "Candidate",
+    "Context tokens",
+    "Best backoff strength",
+    "Validation contexts seen in training",
+    "Validation perplexity",
+    "Selected"
+  ),
+  caption = "Validation settings around the selected trigram",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(validation_results), 13L),
+  identical(
+    validation_display$model,
+    c("unigram", "bigram", "trigram", "trigram", "trigram")
+  ),
+  identical(
+    validation_display$backoff_strength,
+    c("not applicable", "100", "10", "100", "1000")
+  ),
+  identical(
+    validation_display$perplexity,
+    c(238.0, 134.8, 194.4, 133.3, 143.6)
+  ),
+  identical(
+    validation_display$selected,
+    c("no", "no", "no", "yes", "no")
+  ),
+  identical(
+    round(
+      validation_results$seen_context_share[
+        validation_results$model == "trigram" &
+          validation_results$backoff_strength == 100
+      ],
+      3
+    ),
+    0.749
+  ),
+  identical(
+    round(validation_results$oov_target_share[[1]], 3),
+    0.117
+  )
+)
+```
+
+The trigram with backoff strength 100 has the lowest validation perplexity,
+133.3. The best bigram is close at 134.8. The tested strengths on both sides of
+100 score worse, so the selected value is not a grid boundary. Only 74.9 percent
+of the trigram's two-token validation contexts appeared in training. When a
+context is unseen, its estimate falls back toward the bigram and then the
+unigram. The bigram's 100 percent seen-context rate follows from mapping every
+token into the training vocabulary, including `<unk>`; it is not evidence that
+the model generalizes to every word.
+
+## Open the test speeches once
+
+After selecting the trigram and its backoff strength, the study scores it,
+the predeclared unigram baseline, and a uniform 2,500-token floor on the 13 test
+speeches.
+
+```{r}
+test_display <- test_results |>
+  transmute(
+    model,
+    role,
+    next_token_rows,
+    oov_targets = sprintf("%.1f%%", 100 * oov_target_share),
+    perplexity = round(perplexity, 1),
+    top_1_accuracy = if_else(
+      is.na(top_1_accuracy),
+      "not applicable",
+      sprintf("%.1f%%", 100 * top_1_accuracy)
+    )
+  )
+
+perplexity_reduction <- 1 -
+  test_results$perplexity[test_results$model == "trigram"] /
+    test_results$perplexity[test_results$model == "unigram"]
+
+paired_test <- test_by_speech |>
+  select(speech_id, model, perplexity) |>
+  pivot_wider(
+    names_from = model,
+    values_from = perplexity
+  ) |>
+  summarise(
+    trigram_wins = sum(trigram < unigram),
+    ties = sum(trigram == unigram),
+    trigram_losses = sum(trigram > unigram)
+  )
+
+kable(
+  test_display,
+  col.names = c(
+    "Model",
+    "Role",
+    "Test next-token rows",
+    "Targets mapped to <unk>",
+    "Test perplexity",
+    "Top-1 accuracy"
+  ),
+  caption = "Untouched-test result for the selected model and baseline",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(test_results$model, c("uniform", "unigram", "trigram")),
+  identical(test_display$next_token_rows, rep(24337L, 3)),
+  identical(test_display$perplexity, c(2500.0, 240.7, 145.3)),
+  identical(
+    test_display$top_1_accuracy,
+    c("not applicable", "11.7%", "19.2%")
+  ),
+  identical(round(perplexity_reduction, 3), 0.396),
+  identical(round(test_results$oov_target_share, 3), rep(0.117, 3)),
+  identical(
+    as.integer(unlist(paired_test)),
+    c(13L, 0L, 0L)
+  ),
+  identical(
+    unigram_probabilities$model_token[
+      which.max(unigram_probabilities$unigram_probability)
+    ],
+    "<unk>"
+  )
+)
+```
+
+The uniform model has perplexity 2,500 because it gives every vocabulary item
+the same probability. The selected trigram reduces test perplexity by about
+`r sprintf("%.1f%%", 100 * perplexity_reduction)` relative to the unigram
+baseline and wins the paired comparison in all
+`r paired_test$trigram_wins` test speeches.
+
+Its highest-probability guess is right on 19.2 percent of test rows. The unigram
+scores 11.7 percent because its most likely token is `<unk>`, the bucket that
+collects many rare training words. A correct unknown-bucket guess does not
+recover the original word.
+
+Perplexity would change under another vocabulary, tokenizer, boundary rule, or
+test set. The values here cannot be compared with the LDA perplexity in Lesson
+55 or a published model score from another tokenization.
+
+The result does not show that the model understands a speech, writes a good
+report, or produces facts. The next lesson uses these same measurements to show
+how a report can stay tied to evidence.
+
+## What to remember
+
+- Next-token prediction assigns probabilities after a context.
+- Paragraph boundaries prevent invented transitions between source records.
+- Validation data select the context length; test data check the fixed choice.
+- The trigram and backoff strength are selected together on validation data.
+- The selected trigram beats the unigram on all 13 test speeches here, but its
+  top choice is still wrong on about four out of five rows.
+- Perplexity is comparable only under the same tokens, vocabulary, and test rows.
+- A likely next token is not necessarily factual or useful.
+
+## Sources
+
+- [Jurafsky and Martin, Speech and Language Processing, chapter on n-gram language models](https://web.stanford.edu/~jurafsky/slp3/3.pdf)
+- [Bengio et al., A Neural Probabilistic Language Model](https://www.jmlr.org/papers/v3/bengio03a.html)
+- [Chen and Goodman, An Empirical Study of Smoothing Techniques for Language Modeling](https://aclanthology.org/P96-1041/)
+- [Hugging Face documentation on perplexity for fixed-length models](https://huggingface.co/docs/transformers/perplexity)
+- [Meister and Cotterell, Language Model Evaluation Beyond Perplexity](https://aclanthology.org/2021.acl-long.414/)
+- [quanteda inaugural-address corpus documentation](https://quanteda.io/reference/data_corpus_inaugural.html)
