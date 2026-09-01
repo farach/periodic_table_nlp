@@ -7,34 +7,8 @@ sidebar: false
 body-classes: task-map-page
 ---
 
-Computers work with human language constantly and mostly out of sight: a search
-box, a spam filter, a translation, a reply that arrives too fast to have been
-typed. The field that studies how they do it is called natural language
-processing, usually shortened to **NLP**. It covers dozens of connected tasks,
-from reading a file without corrupting it to generating a paragraph. Each tile
-below is one of them.
-
-## The tasks {#periodic-table-heading}
-
-Related tasks share a column, and the columns run roughly from getting text in,
-on the left, through cutting it into usable pieces, to models, generation,
-systems, and visual explanation. The arrangement is editorial: position tells
-you what a task is filed near and nothing else about it. Laying the field out
-at once means a lesson can be found by where it sits rather than by remembering
-its name. Sixty-two of the eighty-one lessons are written. The rest are planned,
-and their tiles stay visible so you can see what is coming.
-
-::: {.callout-tip}
-## Start here
-
-For a course, read in number order because the R code builds on earlier
-lessons. For a specific problem, open any available lesson; each page introduces
-its own NLP idea and points out the assumptions it needs.
-:::
-
 ```{r}
-#| echo: false
-#| output: asis
+#| include: false
 
 options(warn = 2)
 
@@ -65,6 +39,36 @@ available <- task_map |>
 
 planned <- task_map |>
   filter(status == "planned")
+```
+
+Computers work with human language constantly and mostly out of sight: a search
+box, a spam filter, a translation, a reply that arrives too fast to have been
+typed. The field that studies how they do it is called natural language
+processing, usually shortened to **NLP**. It covers dozens of connected tasks,
+from reading a file without corrupting it to generating a paragraph. Each tile
+below is one of them.
+
+## The tasks {#periodic-table-heading}
+
+Related tasks share a column, and the columns run roughly from getting text in,
+on the left, through cutting it into usable pieces, to models, generation,
+systems, and visual explanation. The arrangement is editorial: position tells
+you what a task is filed near and nothing else about it. Laying the field out
+at once means a lesson can be found by where it sits rather than by remembering
+its name. `r nrow(available)` of the `r nrow(task_map)` lessons are written. The
+rest are planned, and their tiles stay visible so you can see what is coming.
+
+::: {.callout-tip}
+## Start here
+
+For a course, read in number order because the R code builds on earlier
+lessons. For a specific problem, open any available lesson; each page introduces
+its own NLP idea and points out the assumptions it needs.
+:::
+
+```{r}
+#| echo: false
+#| output: asis
 
 group_sizes <- task_map |>
   count(group_id) |>
@@ -212,7 +216,7 @@ render_group <- function(group_rows) {
         '<h3 class="element-group-title" id="%s">',
         '<span class="element-stage">%s</span>',
         '<span class="element-group-name">%s</span>',
-        '</h3>'
+        "</h3>"
       ),
       heading_id,
       escape_text(stage_label),
@@ -230,7 +234,7 @@ stage_key <- stage_labels |>
       paste0(
         '<span class="task-map-stage-key-item stage-%s">',
         '<span class="task-map-stage-swatch" aria-hidden="true"></span>',
-        '%s</span>'
+        "%s</span>"
       ),
       escape_attribute(stage),
       escape_text(label)
@@ -282,42 +286,42 @@ cat(
   '<div class="task-map-key">',
   '<span class="task-map-key-item">',
   '<span class="task-map-key-swatch available" aria-hidden="true"></span>',
-  'Read lesson',
-  '</span>',
+  "Read lesson",
+  "</span>",
   '<span class="task-map-key-item">',
   '<span class="task-map-key-swatch" aria-hidden="true"></span>',
-  'Lesson planned',
-  '</span>',
-  '</div>',
+  "Lesson planned",
+  "</span>",
+  "</div>",
   '<div class="task-map-stage-key" aria-label="Task stages">',
   stage_key,
-  '</div>',
+  "</div>",
   '<p class="task-map-instructions" id="task-map-instructions">',
-  'Select a solid-bordered tile to open its lesson. ',
-  'Dashed tiles are planned. If the map is wider than the window, ',
-  'use the buttons, arrow keys, or horizontal scrolling.',
-  '</p>',
+  "Select a solid-bordered tile to open its lesson. ",
+  "Dashed tiles are planned. If the map is wider than the window, ",
+  "use the buttons, arrow keys, or horizontal scrolling.",
+  "</p>",
   '<div class="task-map-scroll-controls" ',
   'aria-label="Move through task groups">',
   '<button type="button" data-map-direction="-1" ',
   'aria-controls="nlp-task-map">Earlier groups</button>',
   '<button type="button" data-map-direction="1" ',
   'aria-controls="nlp-task-map">Later groups</button>',
-  '</div>',
+  "</div>",
   '<div class="periodic-scroll" id="nlp-task-map" ',
   'tabindex="0" role="region" ',
   'aria-label="Periodic table of NLP tasks" ',
   'aria-describedby="task-map-instructions">',
   '<div class="periodic-table">',
   table_html,
-  '</div></div>',
+  "</div></div>",
   '<nav class="available-routes" aria-label="Available lesson routes">',
-  '<strong>Start with ',
+  "<strong>Start with ",
   '<a href="1_source_data_loading/01-bits-to-character-encoding.html">',
-  'task 1</a>, or enter an available group:</strong> ',
+  "task 1</a>, or enter an available group:</strong> ",
   route_html,
-  '.',
-  '</nav>',
+  ".",
+  "</nav>",
   sep = ""
 )
 ```
