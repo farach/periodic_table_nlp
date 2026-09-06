@@ -455,8 +455,18 @@ kable(
 screen_actions <- invariant_checks |>
   rowwise() |>
   mutate(
-    applicable_screens = sum(!is.na(c_across(-probe_id))),
-    flagged_screens = sum(c_across(-probe_id) %in% FALSE)
+    applicable_screens = sum(!is.na(c_across(c(
+      numbers_preserved,
+      name_present,
+      negation_visible,
+      modal_visible
+    )))),
+    flagged_screens = sum(c_across(c(
+      numbers_preserved,
+      name_present,
+      negation_visible,
+      modal_visible
+    )) %in% FALSE)
   ) |>
   ungroup() |>
   select(probe_id, applicable_screens, flagged_screens)

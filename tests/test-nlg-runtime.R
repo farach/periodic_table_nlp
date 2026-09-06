@@ -176,6 +176,37 @@ stopifnot(
   !grepl("verified", nlg_screen_label(FALSE), fixed = TRUE)
 )
 
+suppressPackageStartupMessages(library(dplyr))
+
+all_not_applicable <- tibble(
+  item_id = "all-na",
+  numbers_preserved = NA,
+  name_present = NA,
+  negation_visible = NA,
+  modal_visible = NA
+) |>
+  rowwise() |>
+  mutate(
+    applicable_screens = sum(!is.na(c_across(c(
+      numbers_preserved,
+      name_present,
+      negation_visible,
+      modal_visible
+    )))),
+    flagged_screens = sum(c_across(c(
+      numbers_preserved,
+      name_present,
+      negation_visible,
+      modal_visible
+    )) %in% FALSE)
+  ) |>
+  ungroup()
+
+stopifnot(
+  identical(all_not_applicable$applicable_screens, 0L),
+  identical(all_not_applicable$flagged_screens, 0L)
+)
+
 suppressPackageStartupMessages({
   library(huggingfaceR)
   library(reticulate)

@@ -433,8 +433,16 @@ source contained no protected name or negation condition to test.
 translation_screen_counts <- translation_checks |>
   rowwise() |>
   mutate(
-    applicable_screens = sum(!is.na(c_across(-source_id))),
-    flagged_screens = sum(c_across(-source_id) %in% FALSE)
+    applicable_screens = sum(!is.na(c_across(c(
+      numerals_preserved,
+      name_present,
+      negation_visible
+    )))),
+    flagged_screens = sum(c_across(c(
+      numerals_preserved,
+      name_present,
+      negation_visible
+    )) %in% FALSE)
   ) |>
   ungroup()
 
