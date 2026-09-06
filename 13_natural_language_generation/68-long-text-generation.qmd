@@ -221,6 +221,43 @@ The continuity state is a checked restatement of assigned evidence. It is not a
 model-generated summary of the previous section. This prevents an unsupported
 detail in one section from becoming accepted context for the next.
 
+The context-only policy is stricter than simple factual support: incoming
+continuity may orient a transition, but a section must not restate a continuity
+fact unless that fact is also assigned to the section's scoped evidence. The
+following E05 pattern is declared before generation to check that policy for
+SEC-03.
+
+```{r}
+continuity_patterns <- tribble(
+  ~section_id, ~context_evidence_id, ~pattern,
+  "SEC-03",
+  "E05",
+  paste(
+    "\\b(29|twenty-nine|twenty nine)\\b.*\\bevening",
+    "|\\bevening\\b.*\\b(29|twenty-nine|twenty nine)\\b"
+  )
+)
+
+kable(
+  continuity_patterns |>
+    select(section_id, context_evidence_id),
+  col.names = c("Section checked", "Context-only evidence"),
+  caption = "Predeclared cross-section restatement check",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(continuity_patterns$section_id, "SEC-03"),
+  identical(continuity_patterns$context_evidence_id, "E05"),
+  !continuity_patterns$context_evidence_id %in%
+    document_plan$evidence_ids[[3]]
+)
+```
+
 ## Build section prompts and budgets
 
 Each prompt contains one section purpose, only its assigned evidence, and the
@@ -408,15 +445,15 @@ stopifnot(
     stopping_diagnostics$ended_by_eos |
       stopping_diagnostics$hit_token_cap
   ),
-  !any(
-    stopping_diagnostics$ended_by_eos &
-      stopping_diagnostics$hit_token_cap
-  )
+  all(stopping_diagnostics$output_tokens <=
+    stopping_diagnostics$output_budget)
 )
 ```
 
 EOS says the model selected a termination token. It does not establish that the
-section is complete, accurate, or ready to publish.
+section is complete, accurate, or ready to publish. EOS and the token-cap flag
+are independent: both may be true when a model forces EOS on the last permitted
+new token.
 
 ## Check repetition and scoped evidence
 
@@ -508,6 +545,24 @@ coverage_diagnostics <- document_plan |>
   ) |>
   select(section_id, evidence_id, surface_flag)
 
+continuity_diagnostics <- continuity_patterns |>
+  left_join(
+    section_generations |>
+      select(section_id, generated_text),
+    by = "section_id"
+  ) |>
+  mutate(
+    restated_outside_scope = str_detect(
+      generated_text,
+      regex(pattern, ignore_case = TRUE)
+    )
+  ) |>
+  select(
+    section_id,
+    context_evidence_id,
+    restated_outside_scope
+  )
+
 kable(
   section_diagnostics |>
     select(
@@ -533,6 +588,17 @@ kable(
   caption = "Evidence coverage flags for each generated section",
   row.names = FALSE
 )
+
+kable(
+  continuity_diagnostics,
+  col.names = c(
+    "Section ID",
+    "Context-only evidence",
+    "Restated outside assigned scope"
+  ),
+  caption = "Cross-section continuity leakage check",
+  row.names = FALSE
+)
 ```
 
 ```{r}
@@ -547,17 +613,22 @@ stopifnot(
   is.logical(coverage_diagnostics$surface_flag),
   is.logical(section_diagnostics$unsupported_number),
   is.logical(section_diagnostics$unsupported_evaluation),
+  is.logical(continuity_diagnostics$restated_outside_scope),
   any(!coverage_diagnostics$surface_flag),
-  any(section_diagnostics$unsupported_evaluation)
+  any(section_diagnostics$unsupported_evaluation),
+  any(continuity_diagnostics$restated_outside_scope)
 )
 ```
 
 These are structural hygiene checks. They do not detect an invented plant
 example, an unsupported causal explanation, a shifted obligation, or a
 contradiction written without a new numeral.
-This render still exposes two concrete failures. `Successfully` adds an
-evaluation absent from the ledger, and the final section does not state that
-volunteers made no guarantee about seed growth. Both send the draft back for
+This render exposes three concrete failures. `Successfully` adds an evaluation
+absent from the ledger, and the final section does not state that volunteers
+made no guarantee about seed growth. SEC-03 also restates the E05 evening
+request from continuity context even though E05 belongs to SEC-02. The number
+29 was supplied to the model, so it is not an invented numeral; its reuse still
+violates the declared section scope. These findings send the draft back for
 revision.
 
 ## Assemble the draft and make a decision
@@ -599,7 +670,66 @@ automatic_revision_needed <- any(
   stopping_diagnostics$hit_token_cap,
   section_diagnostics$unsupported_number,
   section_diagnostics$unsupported_evaluation,
-  !coverage_diagnostics$surface_flag
+  !coverage_diagnostics$surface_flag,
+  continuity_diagnostics$restated_outside_scope
+)
+
+held_sections <- unique(c(
+  stopping_diagnostics$section_id[
+    stopping_diagnostics$hit_token_cap
+  ],
+  section_diagnostics$section_id[
+    section_diagnostics$unsupported_number |
+      section_diagnostics$unsupported_evaluation
+  ],
+  coverage_diagnostics$section_id[
+    !coverage_diagnostics$surface_flag
+  ],
+  continuity_diagnostics$section_id[
+    continuity_diagnostics$restated_outside_scope
+  ]
+))
+
+long_review <- tibble(
+  review = c(
+    "local section generation",
+    "prompt plus output budget",
+    "token-level stopping diagnostics",
+    "automatic evidence and continuity screens",
+    "human factual, continuity, tone, and audience review"
+  ),
+  status = c(
+    sprintf(
+      "completed: %d sections",
+      sum(nzchar(section_generations$generated_text))
+    ),
+    sprintf(
+      "within budget: %d/%d sections",
+      sum(section_requests$fits_context),
+      nrow(section_requests)
+    ),
+    sprintf(
+      "recorded: %d/%d sections",
+      sum(
+        stopping_diagnostics$ended_by_eos |
+          stopping_diagnostics$hit_token_cap
+      ),
+      nrow(stopping_diagnostics)
+    ),
+    sprintf(
+      "held: %d/%d sections flagged",
+      length(held_sections),
+      nrow(section_generations)
+    ),
+    "pending"
+  )
+)
+
+kable(
+  long_review,
+  col.names = c("Review gate", "Status"),
+  caption = "Completed scans do not approve the generated sections",
+  row.names = FALSE
 )
 
 document_decision <- tibble(
@@ -631,6 +761,9 @@ kable(
 #| include: false
 
 stopifnot(
+  !any(long_review$status == "passed"),
+  identical(tail(long_review$status, 1L), "pending"),
+  length(held_sections) > 0L,
   document_decision$automated_recommendation %in%
     c("revise before human review", "send to human review"),
   identical(document_decision$publication_decision, "reject")

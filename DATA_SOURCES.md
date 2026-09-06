@@ -249,9 +249,11 @@ applicable terms before downloading or transmitting data.
 ## Local generation models
 
 Lessons 65 through 68 prepare two public model snapshots before rendering.
-`data/nlg-models.csv` records their immutable revisions, task scope, required
-files, weight byte counts, SHA-256 fingerprints, model-card links, and review
-date.
+`data/nlg-models.csv` records their immutable revisions, task scope, model-card
+links, and review date. `data/nlg-model-files.csv` binds every runtime-loaded
+weight, tokenizer, vocabulary/merge, SentencePiece, configuration, and
+generation-configuration file to the same model ID and revision, with its
+exact byte count and SHA-256 fingerprint.
 
 - `Helsinki-NLP/opus-mt-en-fr` at revision
   `dd7f6540a7a48a7f4db59e5c0b9c42c8eea67f18` is an English-to-French
@@ -271,5 +273,8 @@ models have never seen similar wording.
 
 Model weights are downloaded by `scripts/setup-nlg-models.py` into the ignored
 `data-raw/.cache/nlg-models/` directory. They are not redistributed in this
-repository. Rendering sets Hugging Face and Transformers offline modes and
-fails if a prepared snapshot is absent.
+repository. Setup verifies every recorded file after download or cache restore,
+and an existing mismatched snapshot fails closed rather than being repaired by
+a silent redownload. The R loader repeats that verification before loading.
+Rendering sets Hugging Face and Transformers offline modes and fails if a
+prepared snapshot is absent or changed.

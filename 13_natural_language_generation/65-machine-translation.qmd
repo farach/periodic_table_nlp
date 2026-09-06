@@ -108,14 +108,23 @@ tokenizer_config_path <- file.path(
   translation_model$metadata$local_directory,
   "tokenizer_config.json"
 )
+generation_config_path <- file.path(
+  "data-raw",
+  ".cache",
+  "nlg-models",
+  translation_model$metadata$local_directory,
+  "generation_config.json"
+)
 
 tokenizer_config <- fromJSON(tokenizer_config_path)
+generation_config <- fromJSON(generation_config_path)
 
 direction <- tibble(
   checkpoint = translation_model$metadata$model_id,
   source_language = tokenizer_config$source_lang,
   target_language = tokenizer_config$target_lang,
-  runtime_language_switch = FALSE
+  runtime_language_switch = FALSE,
+  checkpoint_beams = generation_config$num_beams
 )
 
 kable(
@@ -124,7 +133,8 @@ kable(
     "Checkpoint",
     "Source",
     "Target",
-    "Runtime direction switch"
+    "Runtime direction switch",
+    "Checkpoint beams"
   ),
   caption = "Translation direction recorded in the tokenizer configuration",
   row.names = FALSE
@@ -136,9 +146,11 @@ kable(
 
 stopifnot(
   file.exists(tokenizer_config_path),
+  file.exists(generation_config_path),
   identical(direction$source_language, "en"),
   identical(direction$target_language, "fr"),
-  identical(direction$runtime_language_switch, FALSE)
+  identical(direction$runtime_language_switch, FALSE),
+  identical(direction$checkpoint_beams, 4L)
 )
 ```
 
@@ -239,9 +251,16 @@ or stop for review.
 
 ## Generate French candidates
 
-The source text goes directly to the encoder. Greedy decoding uses one beam and
-a limit of 80 new tokens. The returned record identifies whether the decoder
-emitted its end-of-sequence token or exhausted the configured output budget.
+The source text goes directly to the encoder. The checkpoint ships with a
+four-beam generation default. The course helper overrides it with
+`num_beams = 1` and `do_sample = FALSE`, a deterministic greedy choice used to
+keep this teaching workflow consistent. It is not a claim that the checkpoint's
+four-beam setting is nondeterministic or inferior.
+
+The output limit is 80 newly generated tokens. The returned record separately
+identifies whether the decoder emitted its end-of-sequence token and whether it
+used the full output budget. Both can be true when the checkpoint forces EOS at
+the cap. Neither field proves that the translation is complete for a reader.
 
 ```{r}
 translation_results <- translation_budget |>
@@ -329,18 +348,25 @@ translation_checks <- translation_results |>
       protected_name,
       french_candidate,
       \(name, output) {
-        !nzchar(name) || str_detect(output, fixed(name))
+        if (!nzchar(name)) {
+          NA
+        } else {
+          str_detect(output, fixed(name))
+        }
       }
     ),
     negation_visible = map2_lgl(
       requires_negation,
       french_candidate,
       \(required, output) {
-        !required ||
+        if (!required) {
+          NA
+        } else {
           str_detect(
             output,
             regex("\\b(pas|jamais|aucun)\\b", ignore_case = TRUE)
           )
+        }
       }
     )
   ) |>
@@ -351,15 +377,23 @@ translation_checks <- translation_results |>
     negation_visible
   )
 
+translation_check_display <- translation_checks |>
+  mutate(
+    across(
+      c(numerals_preserved, name_present, negation_visible),
+      nlg_screen_label
+    )
+  )
+
 kable(
-  translation_checks,
+  translation_check_display,
   col.names = c(
     "Source ID",
-    "Numerals match",
-    "Protected name present",
-    "French negation marker present"
+    "Arabic-numeral screen",
+    "Protected-name screen",
+    "French-negation screen"
   ),
-  caption = "Surface preservation checks for the constructed notices",
+  caption = "Conservative surface screens for the constructed notices",
   row.names = FALSE
 )
 ```
@@ -370,7 +404,17 @@ kable(
 stopifnot(
   identical(translation_checks$source_id, translation_inputs$source_id),
   all(vapply(translation_checks[-1], is.logical, logical(1))),
-  identical(nrow(translation_checks), 4L)
+  identical(nrow(translation_checks), 4L),
+  all(is.na(
+    translation_checks$name_present[
+      !nzchar(translation_inputs$protected_name)
+    ]
+  )),
+  all(is.na(
+    translation_checks$negation_visible[
+      !translation_inputs$requires_negation
+    ]
+  ))
 )
 ```
 
@@ -379,9 +423,21 @@ reference corpus, preprocessing signature, and corpus-level interpretation.
 Even then, one reference cannot represent every acceptable French rendering,
 and automatic overlap does not replace bilingual judgment.
 
+`Not flagged by screen` means only that this finite string check found no
+problem. It does not verify translation adequacy. `Not applicable` means the
+source contained no protected name or negation condition to test.
+
 ## Leave approval to a bilingual reader
 
 ```{r}
+translation_screen_counts <- translation_checks |>
+  rowwise() |>
+  mutate(
+    applicable_screens = sum(!is.na(c_across(-source_id))),
+    flagged_screens = sum(c_across(-source_id) %in% FALSE)
+  ) |>
+  ungroup()
+
 translation_review <- tibble(
   review = c(
     "local model execution",
@@ -391,10 +447,28 @@ translation_review <- tibble(
     "bilingual meaning and register review"
   ),
   status = c(
-    "passed",
-    "passed",
-    "passed",
-    "passed",
+    sprintf(
+      "completed: %d candidates",
+      sum(nzchar(translation_results$french_candidate))
+    ),
+    sprintf(
+      "within budget: %d/%d candidates",
+      sum(translation_budget$fits_without_truncation),
+      nrow(translation_budget)
+    ),
+    sprintf(
+      "recorded: %d/%d candidates",
+      sum(
+        translation_results$ended_by_eos |
+          translation_results$hit_token_cap
+      ),
+      nrow(translation_results)
+    ),
+    sprintf(
+      "scan completed: %d flags across %d applicable checks",
+      sum(translation_screen_counts$flagged_screens),
+      sum(translation_screen_counts$applicable_screens)
+    ),
     "pending"
   )
 )
@@ -411,10 +485,9 @@ kable(
 #| include: false
 
 stopifnot(
-  identical(
-    translation_review$status,
-    c("passed", "passed", "passed", "passed", "pending")
-  )
+  !any(translation_review$status == "passed"),
+  identical(tail(translation_review$status, 1L), "pending"),
+  all(translation_screen_counts$flagged_screens >= 0L)
 )
 ```
 

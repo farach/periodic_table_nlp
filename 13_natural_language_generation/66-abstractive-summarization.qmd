@@ -99,14 +99,17 @@ lesson and are not a random sample, a held-out benchmark, or evidence about
 archive services elsewhere.
 
 Each brief states information that matters to the reader. SUM-01 needs the
-service, schedule, and boundary on volunteer help. SUM-02 needs the event,
-registration rule, and restricted-storage limit.
+service, Tuesday schedule, and boundary on volunteer help. SUM-02 needs the
+event, photo-identification rule, and restricted-storage limit.
 
 ```{r}
 summary_sources <- tribble(
   ~source_id, ~brief, ~source_text,
   "SUM-01",
-  "One sentence for staff; retain the service and its boundary.",
+  paste(
+    "One sentence for staff; retain the job-search service, Tuesday help",
+    "schedule, and boundary on volunteer help."
+  ),
   paste(
     "The Riverton library opens a new job-search room on Monday.",
     "The room has 12 computers.",
@@ -115,7 +118,10 @@ summary_sources <- tribble(
     "The pilot runs for six weeks."
   ),
   "SUM-02",
-  "One sentence for visitors; retain the event and both access conditions.",
+  paste(
+    "One sentence for visitors; retain the catalog workshop,",
+    "photo-identification rule, and restricted-storage limit."
+  ),
   paste(
     "The neighborhood archive will open Room 5 on 14 September for a",
     "catalog workshop led by Maya Chen.",
@@ -139,6 +145,66 @@ stopifnot(
   identical(summary_sources$source_id, c("SUM-01", "SUM-02")),
   !anyDuplicated(summary_sources$source_id),
   all(str_count(summary_sources$source_text, "[.!?]") >= 3L)
+)
+```
+
+## Declare required and optional facts
+
+The checklist is fixed before generation. A missing required item sends a
+candidate back for revision. Optional clues remain useful during source review,
+but their omission alone does not violate the brief.
+
+```{r}
+summary_checks <- tribble(
+  ~source_id, ~check_id, ~needed_information, ~required, ~pattern,
+  "SUM-01", "F1", "job-search service", TRUE,
+  "\\bjob[ -]search\\b",
+  "SUM-01", "F2", "Tuesday help", TRUE,
+  "\\bTuesday\\b",
+  "SUM-01", "F3", "volunteers do not complete applications", TRUE,
+  "\\b(not|no|never|without|do not|does not)\\b",
+  "SUM-01", "F4", "12 computers", FALSE,
+  "\\b12\\b",
+  "SUM-01", "F5", "six-week pilot", FALSE,
+  "\\b(six|6)[ -]week",
+  "SUM-02", "F6", "catalog workshop", TRUE,
+  "\\bworkshop\\b",
+  "SUM-02", "F7", "photo identification", TRUE,
+  "\\b(photo|identification|ID)\\b",
+  "SUM-02", "F8", "no restricted-storage access", TRUE,
+  "\\b(not|no|without|does not)\\b",
+  "SUM-02", "F9", "Room 5", FALSE,
+  "\\bRoom 5\\b",
+  "SUM-02", "F10", "14 September", FALSE,
+  "\\b14\\b.*\\bSeptember\\b",
+  "SUM-02", "F11", "Maya Chen", FALSE,
+  "\\bMaya Chen\\b",
+  "SUM-02", "F12", "free registration", FALSE,
+  "\\bfree\\b"
+)
+
+kable(
+  summary_checks |>
+    select(source_id, check_id, needed_information, required),
+  col.names = c(
+    "Source ID",
+    "Check",
+    "Predeclared information",
+    "Required by brief"
+  ),
+  caption = "Required facts and optional review clues declared before generation",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(summary_checks$check_id, paste0("F", 1:12)),
+  all(summary_checks$source_id %in% summary_sources$source_id),
+  all(summary_checks$required %in% c(TRUE, FALSE)),
+  all(summary_checks$needed_information[summary_checks$required] != "")
 )
 ```
 
@@ -324,21 +390,6 @@ an omission worth reading. A present flag cannot prove that the name, number,
 or negative statement has the right role or scope.
 
 ```{r}
-summary_checks <- tribble(
-  ~source_id, ~check_id, ~needed_information, ~pattern,
-  "SUM-01", "F1", "12 computers", "\\b12\\b",
-  "SUM-01", "F2", "Tuesday help", "\\bTuesday",
-  "SUM-01", "F3", "volunteers do not complete applications",
-  "\\b(not|no|never|without|do not|does not)\\b",
-  "SUM-01", "F4", "six-week pilot", "\\b(six|6)[ -]week",
-  "SUM-02", "F5", "Room 5", "\\bRoom 5\\b",
-  "SUM-02", "F6", "14 September", "\\b14\\b.*\\bSeptember\\b",
-  "SUM-02", "F7", "Maya Chen", "\\bMaya Chen\\b",
-  "SUM-02", "F8", "photo identification", "\\b(photo|identification|ID)\\b",
-  "SUM-02", "F9", "no restricted-storage access",
-  "\\b(not|no|without|does not)\\b"
-)
-
 summary_flags <- summary_checks |>
   left_join(
     summary_results |>
@@ -351,18 +402,34 @@ summary_flags <- summary_checks |>
       regex(pattern, ignore_case = TRUE)
     )
   ) |>
-  select(source_id, check_id, needed_information, text_flag)
+  select(
+    source_id,
+    check_id,
+    needed_information,
+    required,
+    text_flag
+  )
 
 summary_actions <- summary_flags |>
   group_by(source_id) |>
   summarise(
-    flagged_items = sum(!text_flag),
+    decision = list(nlg_required_fact_action(required, text_flag)),
+    optional_clues_missing = sum(!required & !text_flag),
+    .groups = "drop"
+  ) |>
+  mutate(
+    missing_required = map_int(decision, "missing_required"),
     action = if_else(
-      flagged_items > 0L,
+      map_lgl(decision, "revision_needed"),
       "revise",
       "send to human source review"
-    ),
-    .groups = "drop"
+    )
+  ) |>
+  select(
+    source_id,
+    missing_required,
+    optional_clues_missing,
+    action
   )
 
 kable(
@@ -371,16 +438,22 @@ kable(
     "Source ID",
     "Check",
     "Information chosen before generation",
-    "Text flag present"
+    "Required by brief",
+    "Surface flag present"
   ),
-  caption = "Surface flags for facts the brief asked the summary to cover",
+  caption = "Surface flags for required facts and optional review clues",
   row.names = FALSE
 )
 
 kable(
   summary_actions,
-  col.names = c("Source ID", "Missing surface flags", "Next action"),
-  caption = "Missing brief items send a generated summary back for revision",
+  col.names = c(
+    "Source ID",
+    "Missing required facts",
+    "Missing optional clues",
+    "Next action"
+  ),
+  caption = "Only missing required facts trigger automatic revision",
   row.names = FALSE
 )
 ```
@@ -389,11 +462,16 @@ kable(
 #| include: false
 
 stopifnot(
-  identical(summary_flags$check_id, paste0("F", 1:9)),
+  identical(summary_flags$check_id, paste0("F", 1:12)),
   all(summary_flags$source_id %in% summary_sources$source_id),
   is.logical(summary_flags$text_flag),
-  length(summary_flags$text_flag) == 9L,
+  length(summary_flags$text_flag) == 12L,
   any(!summary_flags$text_flag),
+  all(
+    summary_actions$action[
+      summary_actions$missing_required == 0L
+    ] == "send to human source review"
+  ),
   all(summary_actions$action %in% c(
     "revise",
     "send to human source review"
@@ -423,13 +501,30 @@ summary_review <- tibble(
     "local model execution",
     "prompt input within 256 tokens",
     "output stopped at EOS or token cap",
+    "required-fact surface screen",
     "human source-support review",
     "human usefulness and prose review"
   ),
   status = c(
-    "passed",
-    "passed",
-    "passed",
+    sprintf(
+      "completed: %d candidates",
+      sum(nzchar(summary_results$generated_summary))
+    ),
+    sprintf(
+      "within budget: %d/%d candidates",
+      sum(summary_inputs$input_tokens <= 256L),
+      nrow(summary_inputs)
+    ),
+    sprintf(
+      "recorded: %d/%d candidates",
+      sum(summary_results$ended_by_eos | summary_results$hit_token_cap),
+      nrow(summary_results)
+    ),
+    sprintf(
+      "held: %d/%d candidates missing required facts",
+      sum(summary_actions$missing_required > 0L),
+      nrow(summary_actions)
+    ),
     "pending",
     "pending"
   )
@@ -447,10 +542,8 @@ kable(
 #| include: false
 
 stopifnot(
-  identical(
-    summary_review$status,
-    c("passed", "passed", "passed", "pending", "pending")
-  )
+  !any(summary_review$status == "passed"),
+  identical(tail(summary_review$status, 2L), c("pending", "pending"))
 )
 ```
 

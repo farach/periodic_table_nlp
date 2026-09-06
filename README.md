@@ -136,6 +136,8 @@ python -m venv .venv-spacy
 python -m venv .venv-nlg
 .venv-nlg/Scripts/python -m pip install -r requirements-nlg.txt
 .venv-nlg/Scripts/python scripts/setup-nlg-models.py
+.venv-nlg/Scripts/python tests/test-nlg-runtime.py
+Rscript tests/test-nlg-runtime.R
 npm ci
 npx playwright install chromium
 Rscript scripts/check-prose.R
@@ -147,13 +149,17 @@ Rscript tests/test-workforce-data.R
 npm run test:a11y
 ```
 
-On macOS and Linux, install the Python requirements with
-`.venv-spacy/bin/python -m pip install -r requirements-spacy.txt` and
-`.venv-nlg/bin/python -m pip install -r requirements-nlg.txt`, then run
-`.venv-nlg/bin/python scripts/setup-nlg-models.py`. The generation setup
-downloads immutable public model snapshots before rendering; lesson execution
-is offline. Native dependencies for OCR, PDF processing, and `cld3` are listed
-in the render workflow.
+On Linux, replace `Scripts/python` with `bin/python`. The
+`requirements-nlg.txt` lock uses the CPU-only PyTorch wheel index and has been
+validated on Windows and Linux. It is not presented as a working macOS lock;
+macOS contributors need a separately compatible local environment.
+
+The generation setup downloads immutable public model snapshots before
+rendering. It verifies the SHA-256 and byte size of every runtime-loaded weight,
+tokenizer, vocabulary, merge, SentencePiece, and configuration file against
+`data/nlg-model-files.csv`. A corrupt existing snapshot fails closed instead of
+being overwritten. Lesson execution is offline. Native dependencies for OCR,
+PDF processing, and `cld3` are listed in the render workflow.
 
 The automated accessibility suite uses axe-core and browser interaction tests
 across every page. It does not replace manual testing with screen readers,
@@ -163,8 +169,9 @@ Use `quarto preview` for local development. Quarto writes the generated site
 to `_site/`.
 
 Package versions are recorded in `renv.lock`, `requirements-spacy.txt`, and
-`requirements-nlg.txt`. Model IDs, revisions, licenses, and fingerprints are
-recorded in `data/nlg-models.csv`. The source documents and configuration are
-tracked; generated site files, model weights, and local environments are not.
-CI uploads the exact rendered `_site` artifact for inspection but does not
-deploy it. Deployment to the canonical host is managed outside this repository.
+`requirements-nlg.txt`. Model IDs, revisions, and licenses are recorded in
+`data/nlg-models.csv`; revision-bound per-file fingerprints are recorded in
+`data/nlg-model-files.csv`. The source documents and configuration are tracked;
+generated site files, model weights, and local environments are not. CI uploads
+the exact rendered `_site` artifact for inspection but does not deploy it.
+Deployment to the canonical host is managed outside this repository.

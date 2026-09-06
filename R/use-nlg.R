@@ -20,6 +20,22 @@ nlg_model_manifest <- function() {
   )
 }
 
+nlg_model_file_manifest <- function() {
+  read.csv(
+    file.path(nlg_project_root(), "data", "nlg-model-files.csv"),
+    colClasses = c(
+      model_key = "character",
+      model_id = "character",
+      revision = "character",
+      local_directory = "character",
+      file_path = "character",
+      sha256 = "character",
+      bytes = "numeric"
+    ),
+    check.names = FALSE
+  )
+}
+
 nlg_python_path <- function() {
   root <- nlg_project_root()
   candidates <- if (.Platform$OS.type == "windows") {
@@ -93,27 +109,91 @@ nlg_model_path <- function(model_key) {
     "nlg-models",
     selected$local_directory
   )
-  required_files <- strsplit(
-    selected$required_files,
-    ";",
-    fixed = TRUE
-  )[[1]]
-  missing <- required_files[
-    !file.exists(file.path(model_path, required_files))
+  nlg_verify_model_snapshot(selected, model_path)
+
+  normalizePath(model_path, winslash = "/", mustWork = TRUE)
+}
+
+nlg_verify_model_snapshot <- function(model_record,
+                                      model_path,
+                                      file_manifest = nlg_model_file_manifest()) {
+  files <- file_manifest[
+    file_manifest$model_key == model_record$model_key,
+    ,
+    drop = FALSE
   ]
 
-  if (length(missing) > 0L) {
+  if (nrow(files) == 0L) {
     stop(
-      paste0(
-        "The pinned model ", selected$model_id, " is incomplete. ",
-        "Run .venv-nlg's Python with scripts/setup-nlg-models.py. ",
-        "Missing: ", paste(missing, collapse = ", ")
+      sprintf(
+        "No runtime files are recorded for NLG model '%s'.",
+        model_record$model_key
       ),
       call. = FALSE
     )
   }
 
-  normalizePath(model_path, winslash = "/", mustWork = TRUE)
+  bound_fields <- c("model_id", "revision", "local_directory")
+  for (field in bound_fields) {
+    if (!all(files[[field]] == model_record[[field]])) {
+      stop(
+        sprintf(
+          "data/nlg-model-files.csv has a mismatched %s for '%s'.",
+          field,
+          model_record$model_key
+        ),
+        call. = FALSE
+      )
+    }
+  }
+
+  for (row_index in seq_len(nrow(files))) {
+    file_record <- files[row_index, , drop = FALSE]
+    path <- file.path(model_path, file_record$file_path)
+    expected_bytes <- file_record$bytes
+    expected_hash <- file_record$sha256
+
+    if (!file.exists(path)) {
+      stop(
+        sprintf(
+          "%s: missing; expected %.0f bytes and SHA-256 %s. Run %s.",
+          path,
+          expected_bytes,
+          expected_hash,
+          "scripts/setup-nlg-models.py in a clean snapshot directory"
+        ),
+        call. = FALSE
+      )
+    }
+
+    actual_bytes <- file.info(path)$size
+    if (!identical(as.numeric(actual_bytes), as.numeric(expected_bytes))) {
+      stop(
+        sprintf(
+          "%s: found %.0f bytes; expected %.0f.",
+          path,
+          actual_bytes,
+          expected_bytes
+        ),
+        call. = FALSE
+      )
+    }
+
+    actual_hash <- digest::digest(file = path, algo = "sha256")
+    if (!identical(actual_hash, expected_hash)) {
+      stop(
+        sprintf(
+          "%s: found SHA-256 %s; expected %s.",
+          path,
+          actual_hash,
+          expected_hash
+        ),
+        call. = FALSE
+      )
+    }
+  }
+
+  invisible(files)
 }
 
 load_nlg_pipeline <- function(model_key, task) {
@@ -172,6 +252,80 @@ nlg_token_count <- function(tokenizer, text, add_special_tokens = TRUE) {
   as.integer(length(unlist(nlg_as_r(token_ids), use.names = FALSE)))
 }
 
+nlg_assert_input_budget <- function(input_tokens, max_input_tokens, item_ids) {
+  over_budget <- input_tokens > max_input_tokens
+  if (any(over_budget)) {
+    stop(
+      sprintf(
+        "Input budget exceeded before generation for %s: %s tokens; limit %s.",
+        paste(item_ids[over_budget], collapse = ", "),
+        paste(input_tokens[over_budget], collapse = ", "),
+        max_input_tokens
+      ),
+      call. = FALSE
+    )
+  }
+
+  invisible(TRUE)
+}
+
+nlg_output_diagnostics <- function(sequence_ids,
+                                   is_encoder_decoder,
+                                   input_tokens,
+                                   max_new_tokens,
+                                   eos_ids,
+                                   decoder_seed_tokens = 1L) {
+  sequence_ids <- as.integer(sequence_ids)
+  prompt_tokens <- if (is_encoder_decoder) {
+    as.integer(decoder_seed_tokens)
+  } else {
+    as.integer(input_tokens)
+  }
+  output_ids <- if (length(sequence_ids) > prompt_tokens) {
+    sequence_ids[seq.int(prompt_tokens + 1L, length(sequence_ids))]
+  } else {
+    integer()
+  }
+  ended_by_eos <- length(output_ids) > 0L &&
+    tail(output_ids, 1L) %in% eos_ids
+
+  list(
+    output_ids = output_ids,
+    output_tokens = length(output_ids),
+    ended_by_eos = ended_by_eos,
+    hit_token_cap = length(output_ids) >= max_new_tokens,
+    last_token_id = if (length(output_ids) > 0L) {
+      tail(output_ids, 1L)
+    } else {
+      NA_integer_
+    }
+  )
+}
+
+nlg_required_fact_action <- function(required, text_flag) {
+  if (length(required) != length(text_flag) || anyNA(required)) {
+    stop("Required-fact flags must have matching lengths.", call. = FALSE)
+  }
+
+  missing_required <- required & !text_flag
+  list(
+    missing_required = sum(missing_required),
+    revision_needed = any(missing_required)
+  )
+}
+
+nlg_screen_label <- function(result) {
+  ifelse(
+    is.na(result),
+    "not applicable",
+    ifelse(
+      result,
+      "not flagged by screen",
+      "held for human review"
+    )
+  )
+}
+
 nlg_generate <- function(model_bundle,
                          prompt,
                          max_new_tokens,
@@ -205,13 +359,6 @@ nlg_generate <- function(model_bundle,
       model_bundle$pipeline$model$config$is_encoder_decoder
     )
   )
-  output_ids <- if (is_encoder_decoder) {
-    sequence_ids
-  } else if (length(sequence_ids) > input_tokens) {
-    sequence_ids[seq.int(input_tokens + 1L, length(sequence_ids))]
-  } else {
-    integer()
-  }
   eos_ids <- as.integer(
     unlist(
       nlg_as_r(
@@ -220,8 +367,14 @@ nlg_generate <- function(model_bundle,
       use.names = FALSE
     )
   )
-  ended_by_eos <- length(output_ids) > 0L &&
-    tail(output_ids, 1L) %in% eos_ids
+  diagnostics <- nlg_output_diagnostics(
+    sequence_ids = sequence_ids,
+    is_encoder_decoder = is_encoder_decoder,
+    input_tokens = input_tokens,
+    max_new_tokens = max_new_tokens,
+    eos_ids = eos_ids
+  )
+  output_ids <- diagnostics$output_ids
 
   list(
     text = trimws(
@@ -232,14 +385,9 @@ nlg_generate <- function(model_bundle,
       )
     ),
     input_tokens = input_tokens,
-    output_tokens = length(output_ids),
-    ended_by_eos = ended_by_eos,
-    hit_token_cap = length(output_ids) >= max_new_tokens &&
-      !ended_by_eos,
-    last_token_id = if (length(output_ids) > 0L) {
-      tail(output_ids, 1L)
-    } else {
-      NA_integer_
-    }
+    output_tokens = diagnostics$output_tokens,
+    ended_by_eos = diagnostics$ended_by_eos,
+    hit_token_cap = diagnostics$hit_token_cap,
+    last_token_id = diagnostics$last_token_id
   )
 }

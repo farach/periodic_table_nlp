@@ -65,7 +65,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data-raw/.cache/nlg-models
-          key: ${{ runner.os }}-nlg-models-${{ hashFiles('data/nlg-models.csv') }}
+          key: ${{ runner.os }}-nlg-models-${{ hashFiles('data/nlg-models.csv', 'data/nlg-model-files.csv') }}
 
       - name: Install and prepare local generation models
         run: |
@@ -73,6 +73,11 @@ jobs:
           .venv-nlg/bin/python -m pip install --upgrade pip
           .venv-nlg/bin/python -m pip install --no-cache-dir -r requirements-nlg.txt
           .venv-nlg/bin/python scripts/setup-nlg-models.py
+
+      - name: Test local generation runtime
+        run: |
+          .venv-nlg/bin/python tests/test-nlg-runtime.py
+          Rscript tests/test-nlg-runtime.R
 
       - uses: actions/setup-node@v5
         with:
