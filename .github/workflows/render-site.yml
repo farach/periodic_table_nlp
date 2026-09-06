@@ -72,6 +72,7 @@ jobs:
           python -m venv .venv-nlg
           .venv-nlg/bin/python -m pip install --upgrade pip
           .venv-nlg/bin/python -m pip install --no-cache-dir -r requirements-nlg.txt
+          .venv-nlg/bin/python -c "import sys, torch, transformers; print(sys.executable, torch.__version__, transformers.__version__)"
           .venv-nlg/bin/python scripts/setup-nlg-models.py
 
       - name: Test local generation runtime

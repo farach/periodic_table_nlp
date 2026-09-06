@@ -212,6 +212,41 @@ suppressPackageStartupMessages({
   library(reticulate)
 })
 
+use_project_nlg()
+nlg_config <- reticulate::py_config()
+stopifnot(
+  nlg_same_path(nlg_config$virtualenv, nlg_venv_path())
+)
+
+transformers_module <- nlg_import_python_module("transformers")
+transformers_path <- normalizePath(
+  nlg_as_r(transformers_module$`__file__`),
+  winslash = "/",
+  mustWork = TRUE
+)
+stopifnot(startsWith(
+  tolower(transformers_path),
+  paste0(tolower(nlg_venv_path()), "/")
+))
+
+missing_module_error <- tryCatch(
+  nlg_import_python_module("_periodic_table_nlg_missing_module"),
+  error = identity
+)
+stopifnot(
+  inherits(missing_module_error, "error"),
+  grepl(
+    "Underlying Python error:",
+    conditionMessage(missing_module_error),
+    fixed = TRUE
+  ),
+  grepl(
+    "_periodic_table_nlg_missing_module",
+    conditionMessage(missing_module_error),
+    fixed = TRUE
+  )
+)
+
 translation_model <- load_nlg_pipeline("opus_en_fr", "translation")
 forced_probe <- nlg_generate(
   translation_model,

@@ -36,15 +36,11 @@ nlg_model_file_manifest <- function() {
   )
 }
 
-nlg_python_path <- function() {
+nlg_venv_path <- function() {
   root <- nlg_project_root()
-  candidates <- if (.Platform$OS.type == "windows") {
-    file.path(root, ".venv-nlg", "Scripts", "python.exe")
-  } else {
-    file.path(root, ".venv-nlg", "bin", "python")
-  }
+  venv <- file.path(root, ".venv-nlg")
 
-  if (!file.exists(candidates)) {
+  if (!dir.exists(venv)) {
     stop(
       paste(
         "The pinned NLG Python environment is missing.",
@@ -55,20 +51,51 @@ nlg_python_path <- function() {
     )
   }
 
-  normalizePath(candidates, winslash = "/", mustWork = TRUE)
+  normalizePath(venv, winslash = "/", mustWork = TRUE)
+}
+
+nlg_python_path <- function() {
+  venv <- nlg_venv_path()
+  python <- if (.Platform$OS.type == "windows") {
+    file.path(venv, "Scripts", "python.exe")
+  } else {
+    file.path(venv, "bin", "python")
+  }
+
+  if (!file.exists(python)) {
+    stop(
+      sprintf("The pinned NLG interpreter is missing at %s.", python),
+      call. = FALSE
+    )
+  }
+
+  # Do not resolve this file on Linux. A venv's bin/python is commonly a
+  # symlink to the base executable, and resolving it discards the venv prefix.
+  python
+}
+
+nlg_same_path <- function(left, right) {
+  identical(
+    tolower(normalizePath(left, winslash = "/", mustWork = TRUE)),
+    tolower(normalizePath(right, winslash = "/", mustWork = TRUE))
+  )
 }
 
 use_project_nlg <- function() {
+  venv <- nlg_venv_path()
   python <- nlg_python_path()
 
   if (reticulate::py_available(initialize = FALSE)) {
-    active_python <- normalizePath(
-      reticulate::py_config()$python,
-      winslash = "/",
-      mustWork = TRUE
-    )
+    config <- reticulate::py_config()
+    active_python <- config$python
+    active_venv <- config$virtualenv
 
-    if (!identical(tolower(active_python), tolower(python))) {
+    if (
+      is.null(active_venv) ||
+        is.na(active_venv) ||
+        !nzchar(active_venv) ||
+        !nlg_same_path(active_venv, venv)
+    ) {
       stop(
         paste0(
           "reticulate is already using ", active_python, ". ",
@@ -79,7 +106,8 @@ use_project_nlg <- function() {
       )
     }
   } else {
-    reticulate::use_python(python, required = TRUE)
+    Sys.setenv(RETICULATE_PYTHON = python)
+    reticulate::use_virtualenv(venv, required = TRUE)
   }
 
   Sys.setenv(
@@ -89,6 +117,36 @@ use_project_nlg <- function() {
   )
 
   invisible(python)
+}
+
+nlg_import_python_module <- function(module) {
+  imported <- tryCatch(
+    reticulate::import(module, delay_load = FALSE),
+    error = identity
+  )
+
+  if (inherits(imported, "error")) {
+    config <- tryCatch(
+      reticulate::py_config(),
+      error = function(error) NULL
+    )
+    selected_python <- if (is.null(config)) {
+      nlg_python_path()
+    } else {
+      config$python
+    }
+
+    stop(
+      paste0(
+        "The pinned NLG interpreter ", selected_python,
+        " could not import Python module '", module, "'. ",
+        "Underlying Python error: ", conditionMessage(imported)
+      ),
+      call. = FALSE
+    )
+  }
+
+  imported
 }
 
 nlg_model_path <- function(model_key) {
@@ -198,6 +256,7 @@ nlg_verify_model_snapshot <- function(model_record,
 
 load_nlg_pipeline <- function(model_key, task) {
   use_project_nlg()
+  nlg_import_python_module("transformers")
   manifest <- nlg_model_manifest()
   metadata <- manifest[manifest$model_key == model_key, , drop = FALSE]
   model_path <- nlg_model_path(model_key)
