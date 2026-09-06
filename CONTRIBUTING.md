@@ -177,6 +177,49 @@ The helper finds that environment, quiets the library's startup output, and
 stops with instructions if the environment is missing. Nothing is downloaded
 during a render. Call `spacy_finalize()` when the lesson is done with it.
 
+## Set up local generation models once
+
+Lessons 65 through 68 use public Hugging Face models through the pinned
+`huggingfaceR` and `reticulate` packages. They use a separate Python environment
+because a single R session cannot switch safely between the spaCy and generation
+interpreters after Python has initialized.
+
+```powershell
+python -m venv .venv-nlg
+.venv-nlg/Scripts/python -m pip install -r requirements-nlg.txt
+.venv-nlg/Scripts/python scripts/setup-nlg-models.py
+.venv-nlg/Scripts/python tests/test-nlg-runtime.py
+Rscript tests/test-nlg-runtime.R
+```
+
+On Linux, replace `Scripts/python` with `bin/python`. The pinned
+`requirements-nlg.txt` installation has been validated on Windows and Linux.
+Its `torch==2.9.1+cpu` wheel source is not a macOS compatibility claim; use a
+separately compatible environment on macOS.
+
+The setup script downloads only the runtime files listed in
+`data/nlg-model-files.csv`, from the immutable revisions in
+`data/nlg-models.csv`. It verifies every listed file's byte count and SHA-256
+after download or cache restore. An existing incomplete or mismatched snapshot
+stops with the exact path and is not overwritten. Remove only that named cache
+directory if you intend to replace it, then rerun setup. Model weights stay
+under `data-raw/.cache/` and are not committed.
+
+In an NLG lesson, initialize the local runtime before loading a pipeline:
+
+```r
+library(huggingfaceR)
+library(reticulate)
+source("R/use-nlg.R")
+model <- load_nlg_pipeline("qwen_1_5b_instruct", "text-generation")
+```
+
+The helper selects `.venv-nlg`, verifies every runtime file again before model
+loading, forces offline access during rendering, and stops with a path-specific
+error if the environment or snapshot is missing or changed. Render a spaCy
+lesson and an NLG lesson in separate R sessions rather than trying to attach
+both Python environments at once.
+
 The project-level Quarto settings execute every R chunk and stop on errors. The
 GitHub Actions workflow restores the locked R environment and renders every
 page on each pull request.

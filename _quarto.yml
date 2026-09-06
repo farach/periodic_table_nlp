@@ -164,6 +164,14 @@ website:
         text: Predicting the next token
       - href: 13_natural_language_generation/64-report-writing.qmd
         text: Writing a report from checked claims
+      - href: 13_natural_language_generation/65-machine-translation.qmd
+        text: Translating a notice to French
+      - href: 13_natural_language_generation/66-abstractive-summarization.qmd
+        text: Writing a shorter account
+      - href: 13_natural_language_generation/67-paraphrasing.qmd
+        text: Rewriting without changing meaning
+      - href: 13_natural_language_generation/68-long-text-generation.qmd
+        text: Building a document in sections
       - href: accessibility.qmd
         text: Accessibility
   page-footer:

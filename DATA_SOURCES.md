@@ -245,3 +245,36 @@ license, language, size, and known limitations:
 There is no single license or consent determination for every Hub dataset.
 Researchers must inspect the card, repository files, source provenance, and
 applicable terms before downloading or transmitting data.
+
+## Local generation models
+
+Lessons 65 through 68 prepare two public model snapshots before rendering.
+`data/nlg-models.csv` records their immutable revisions, task scope, model-card
+links, and review date. `data/nlg-model-files.csv` binds every runtime-loaded
+weight, tokenizer, vocabulary/merge, SentencePiece, configuration, and
+generation-configuration file to the same model ID and revision, with its
+exact byte count and SHA-256 fingerprint.
+
+- `Helsinki-NLP/opus-mt-en-fr` at revision
+  `dd7f6540a7a48a7f4db59e5c0b9c42c8eea67f18` is an English-to-French
+  Marian translation model under Apache-2.0.
+- `Qwen/Qwen2.5-1.5B-Instruct` at revision
+  `989aa7980e4cf806f80c7fef2b1adb7bc71aa306` is an instruction-tuned
+  causal language model under Apache-2.0. The lessons use it for small,
+  constructed summarization, paraphrasing, and multi-section generation
+  demonstrations.
+
+The model cards document software provenance and intended use, but they do not
+establish that generated lesson outputs are correct. The lessons preserve
+visible omissions and unsupported additions and keep human factual, bilingual,
+and prose review pending. Constructed records are teaching probes, not random
+held-out benchmarks, and unknown pretraining overlap prevents a claim that the
+models have never seen similar wording.
+
+Model weights are downloaded by `scripts/setup-nlg-models.py` into the ignored
+`data-raw/.cache/nlg-models/` directory. They are not redistributed in this
+repository. Setup verifies every recorded file after download or cache restore,
+and an existing mismatched snapshot fails closed rather than being repaired by
+a silent redownload. The R loader repeats that verification before loading.
+Rendering sets Hugging Face and Transformers offline modes and fails if a
+prepared snapshot is absent or changed.

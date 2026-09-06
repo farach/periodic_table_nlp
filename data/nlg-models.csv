@@ -1,0 +1,3 @@
+model_key,model_id,revision,license,task_scope,local_directory,model_card,checked_on
+opus_en_fr,Helsinki-NLP/opus-mt-en-fr,dd7f6540a7a48a7f4db59e5c0b9c42c8eea67f18,Apache-2.0,machine translation,Helsinki-NLP--opus-mt-en-fr--dd7f6540a7a48a7f4db59e5c0b9c42c8eea67f18,https://huggingface.co/Helsinki-NLP/opus-mt-en-fr,2026-09-06
+qwen_1_5b_instruct,Qwen/Qwen2.5-1.5B-Instruct,989aa7980e4cf806f80c7fef2b1adb7bc71aa306,Apache-2.0,abstractive summarization;paraphrasing;long-text generation,Qwen--Qwen2.5-1.5B-Instruct--989aa7980e4cf806f80c7fef2b1adb7bc71aa306,https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct,2026-09-06
