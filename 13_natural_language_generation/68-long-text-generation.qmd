@@ -1,0 +1,662 @@
+---
+title: "Building a document one section at a time"
+subtitle: "Plan evidence, carry continuity, inspect stopping, and hold for review"
+description: "Learn a three-section local generation workflow with explicit evidence scopes, token budgets, continuity state, and publication gates."
+categories: [natural language generation, long-text generation, evaluation]
+---
+
+Kai needs a short public update about a fictional seed-sharing pilot. Asking a
+small model to "write the whole report" would combine document planning,
+evidence selection, continuity, and prose generation in one opaque call.
+
+This lesson separates those jobs. A human-written plan assigns evidence to
+three sections. The local model generates each section. A compact,
+evidence-checked continuity state moves forward without copying the whole draft
+back into the prompt.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- plan a three-section document before generating prose;
+- give each section a bounded evidence ledger and output budget;
+- account for prompt and output tokens in a decoder-only context window;
+- carry compact, checked continuity state between section calls;
+- distinguish end-of-sequence stopping from a token-cap stop;
+- inspect repetition, unsupported numbers, and evidence coverage; and
+- reject the assembled draft for publication until human review is complete.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the local causal model
+
+The course helper loads a prepared local snapshot through `huggingfaceR`. The
+model is a decoder-only causal language model, so prompt tokens and newly
+generated tokens share the same context window.
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(huggingfaceR)
+  library(jsonlite)
+  library(knitr)
+  library(purrr)
+  library(reticulate)
+  library(stringr)
+  library(tibble)
+  library(tidyr)
+})
+
+source("R/use-nlg.R")
+
+long_model <- load_nlg_pipeline(
+  "qwen_1_5b_instruct",
+  "text-generation"
+)
+
+model_config_path <- file.path(
+  "data-raw",
+  ".cache",
+  "nlg-models",
+  long_model$metadata$local_directory,
+  "config.json"
+)
+model_config <- fromJSON(model_config_path)
+context_limit <- as.integer(model_config$max_position_embeddings)
+
+model_record <- long_model$metadata |>
+  transmute(
+    model = model_id,
+    revision,
+    license,
+    architecture = "decoder-only causal language model",
+    context_limit
+  )
+
+kable(
+  model_record,
+  col.names = c(
+    "Model",
+    "Revision",
+    "License",
+    "Architecture",
+    "Context limit"
+  ),
+  caption = "Pinned model and its shared causal context window",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c(
+    "dplyr", "huggingfaceR", "jsonlite", "knitr", "purrr",
+    "reticulate", "stringr", "tibble", "tidyr"
+  ) %in% loadedNamespaces()),
+  identical(
+    model_record$model,
+    "Qwen/Qwen2.5-1.5B-Instruct"
+  ),
+  identical(
+    model_record$revision,
+    "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
+  ),
+  identical(model_record$license, "Apache-2.0"),
+  file.exists(model_config_path),
+  context_limit >= 1024L
+)
+```
+
+For this architecture, enforce
+`prompt_tokens + max_new_tokens <= context_limit`.
+
+An encoder-decoder model has separate encoder-input and decoder-output limits.
+That distinction matters when moving the workflow to another checkpoint.
+
+## Plan before writing
+
+The evidence below is fictional demonstration material. It is not a survey
+estimate, a program evaluation, or a claim about a real seed library.
+
+Each evidence row receives an ID. The plan assigns those IDs to one section and
+states the section's job before any prose is generated.
+
+```{r}
+evidence_ledger <- tribble(
+  ~evidence_id, ~evidence,
+  "E01", "The pilot registered 48 residents.",
+  "E02", "The pilot completed 36 pickup appointments in April.",
+  "E03", "12 volunteers staffed the collection table.",
+  "E04", "Volunteers did not guarantee that any seed would grow.",
+  "E05", "29 participants requested an evening pickup.",
+  "E06",
+  paste(
+    "Staff will decide whether to add one Thursday evening;",
+    "no decision has been made."
+  )
+)
+
+document_plan <- tribble(
+  ~section_id, ~heading, ~purpose, ~evidence_ids, ~max_new_tokens,
+  ~continuity_in, ~continuity_out,
+  "SEC-01",
+  "Pilot activity",
+  "Describe participation, completed pickups, and staffing.",
+  c("E01", "E02", "E03"),
+  120L,
+  "This is the opening section.",
+  paste(
+    "The pilot registered 48 residents, completed 36 April pickups,",
+    "and used 12 volunteers."
+  ),
+  "SEC-02",
+  "Participant request",
+  "Describe the request for an evening pickup without claiming a decision.",
+  c("E05"),
+  100L,
+  paste(
+    "The pilot registered 48 residents, completed 36 April pickups,",
+    "and used 12 volunteers."
+  ),
+  "Twenty-nine participants requested an evening pickup.",
+  "SEC-03",
+  "Decision and limit",
+  "State the pending Thursday decision and the volunteer guarantee limit.",
+  c("E04", "E06"),
+  120L,
+  "Twenty-nine participants requested an evening pickup.",
+  paste(
+    "A Thursday evening remains undecided, and volunteers did not",
+    "guarantee seed growth."
+  )
+)
+
+kable(
+  document_plan |>
+    select(
+      section_id,
+      heading,
+      purpose,
+      evidence_ids,
+      max_new_tokens
+    ) |>
+    mutate(evidence_ids = map_chr(evidence_ids, paste, collapse = ", ")),
+  col.names = c(
+    "Section ID",
+    "Heading",
+    "Section purpose",
+    "Evidence IDs",
+    "Output budget"
+  ),
+  caption = "A three-section document plan fixes scope before generation",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(document_plan$section_id, paste0("SEC-0", 1:3)),
+  !anyDuplicated(evidence_ledger$evidence_id),
+  !anyDuplicated(document_plan$section_id),
+  setequal(unlist(document_plan$evidence_ids), paste0("E0", 1:6)),
+  identical(
+    document_plan$continuity_in[-1],
+    document_plan$continuity_out[-nrow(document_plan)]
+  )
+)
+```
+
+The continuity state is a checked restatement of assigned evidence. It is not a
+model-generated summary of the previous section. This prevents an unsupported
+detail in one section from becoming accepted context for the next.
+
+## Build section prompts and budgets
+
+Each prompt contains one section purpose, only its assigned evidence, and the
+compact incoming state. Raw previous prose is not concatenated.
+
+```{r}
+long_system <- paste(
+  "Write one section of a public program update in 2 or 3 sentences.",
+  "Use only the listed evidence.",
+  "Do not add examples, causes, recommendations, people, places, or outcomes.",
+  "Do not write a heading."
+)
+
+section_requests <- document_plan |>
+  mutate(
+    scoped_evidence = map(
+      evidence_ids,
+      \(ids) {
+        evidence_ledger |>
+          filter(evidence_id %in% ids) |>
+          transmute(line = paste0(evidence_id, ": ", evidence)) |>
+          pull(line) |>
+          paste(collapse = "\n")
+      }
+    ),
+    user_prompt = pmap_chr(
+      list(section_id, purpose, continuity_in, scoped_evidence),
+      \(section_id, purpose, continuity_in, scoped_evidence) {
+        paste0(
+          "SECTION ID: ", section_id,
+          "\nPURPOSE: ", purpose,
+          "\nCONTINUITY STATE: ", continuity_in,
+          "\nSCOPED EVIDENCE:\n", scoped_evidence
+        )
+      }
+    ),
+    model_prompt = map_chr(
+      user_prompt,
+      \(user) {
+        nlg_chat_prompt(
+          long_model$tokenizer,
+          long_system,
+          user
+        )
+      }
+    ),
+    prompt_tokens = map_int(
+      model_prompt,
+      \(prompt) nlg_token_count(long_model$tokenizer, prompt)
+    ),
+    planned_total_tokens = prompt_tokens + max_new_tokens,
+    fits_context = planned_total_tokens <= context_limit
+  )
+
+kable(
+  section_requests |>
+    select(
+      section_id,
+      prompt_tokens,
+      max_new_tokens,
+      planned_total_tokens,
+      fits_context
+    ),
+  col.names = c(
+    "Section ID",
+    "Prompt tokens",
+    "Maximum new tokens",
+    "Planned total",
+    "Fits context"
+  ),
+  caption = "Decoder-only token accounting for every section call",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(section_requests$prompt_tokens > 0L),
+  all(section_requests$max_new_tokens > 0L),
+  all(section_requests$fits_context),
+  all(
+    section_requests$planned_total_tokens ==
+      section_requests$prompt_tokens +
+        section_requests$max_new_tokens
+  )
+)
+```
+
+## Generate all three sections
+
+The loop below makes three separate neural generation calls. Greedy decoding
+keeps this demonstration repeatable. Literature documents repetitive
+degeneration as a risk of likelihood-maximizing decoding in open-ended tasks;
+it is an empirical tendency, not a guarantee that every greedy output loops.
+
+```{r}
+section_generations <- section_requests |>
+  mutate(
+    generation = map2(
+      model_prompt,
+      max_new_tokens,
+      \(prompt, budget) {
+        nlg_generate(
+          long_model,
+          prompt,
+          max_new_tokens = budget,
+          repetition_penalty = 1.05
+        )
+      }
+    ),
+    generated_text = map_chr(generation, "text"),
+    output_tokens = map_int(generation, "output_tokens"),
+    ended_by_eos = map_lgl(generation, "ended_by_eos"),
+    hit_token_cap = map_lgl(generation, "hit_token_cap")
+  )
+
+kable(
+  section_generations |>
+    select(section_id, heading, generated_text),
+  col.names = c("Section ID", "Heading", "Generated section"),
+  caption = "Three separately generated sections",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(nzchar(section_generations$generated_text)),
+  all(section_generations$output_tokens > 0L),
+  all(
+    section_generations$output_tokens <=
+      section_generations$max_new_tokens
+  ),
+  all(
+    section_generations$ended_by_eos |
+      section_generations$hit_token_cap
+  )
+)
+```
+
+## Inspect architectural stopping
+
+A final period is a surface character. It does not reveal why generation
+stopped. The helper checks the final generated token ID against the model's EOS
+configuration and separately records whether the output reached the token cap.
+
+```{r}
+stopping_diagnostics <- section_generations |>
+  transmute(
+    section_id,
+    output_tokens,
+    output_budget = max_new_tokens,
+    ended_by_eos,
+    hit_token_cap,
+    ends_with_punctuation = str_detect(
+      str_trim(generated_text),
+      "[.!?]$"
+    )
+  )
+
+kable(
+  stopping_diagnostics,
+  col.names = c(
+    "Section ID",
+    "Output tokens",
+    "Output budget",
+    "EOS emitted",
+    "Hit token cap",
+    "Ends with punctuation"
+  ),
+  caption = "Token-level stopping evidence beside a surface heuristic",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(
+    stopping_diagnostics$ended_by_eos |
+      stopping_diagnostics$hit_token_cap
+  ),
+  !any(
+    stopping_diagnostics$ended_by_eos &
+      stopping_diagnostics$hit_token_cap
+  )
+)
+```
+
+EOS says the model selected a termination token. It does not establish that the
+section is complete, accurate, or ready to publish.
+
+## Check repetition and scoped evidence
+
+The distinct trigram ratio divides unique three-token sequences by all
+three-token sequences after lowercasing and extracting letter and number
+sequences. Values nearer 1 show fewer exact repeated trigrams. No universal
+publication threshold is asserted.
+
+The evidence flags are simpler: each planned fact has a surface pattern. A
+missing pattern is a reason to revise. A present pattern cannot prove that the
+fact has the correct relation or scope.
+
+```{r}
+distinct_ngram_ratio <- function(text, n = 3L) {
+  tokens <- str_extract_all(
+    str_to_lower(text, locale = "en"),
+    "[\\p{L}\\p{N}]+"
+  )[[1]]
+
+  if (length(tokens) < n) {
+    return(1)
+  }
+
+  starts <- seq_len(length(tokens) - n + 1L)
+  ngrams <- map_chr(
+    starts,
+    \(start) paste(tokens[start:(start + n - 1L)], collapse = " ")
+  )
+  length(unique(ngrams)) / length(ngrams)
+}
+
+evidence_patterns <- tribble(
+  ~evidence_id, ~pattern,
+  "E01", "\\b48\\b",
+  "E02", "\\b36\\b.*\\bApril\\b|\\bApril\\b.*\\b36\\b",
+  "E03", "\\b(12|twelve)\\b.*\\bvolunteer",
+  "E04", "\\b(not|no|never|without|did not)\\b.*\\bguarantee",
+  "E05",
+  paste(
+    "\\b(29|twenty-nine|twenty nine)\\b.*\\bevening",
+    "|\\bevening\\b.*\\b(29|twenty-nine|twenty nine)\\b"
+  ),
+  "E06", "\\bThursday\\b.*\\b(no|not|undecided|pending)"
+)
+
+section_diagnostics <- section_generations |>
+  transmute(
+    section_id,
+    distinct_trigram_ratio = map_dbl(
+      generated_text,
+      distinct_ngram_ratio
+    ),
+    source_numbers = map(
+      scoped_evidence,
+      \(text) sort(str_extract_all(text, "\\b\\d+\\b")[[1]])
+    ),
+    output_numbers = map(
+      generated_text,
+      \(text) sort(str_extract_all(text, "\\b\\d+\\b")[[1]])
+    ),
+    unsupported_number = map2_lgl(
+      source_numbers,
+      output_numbers,
+      \(source, output) !all(output %in% source)
+    ),
+    unsupported_evaluation = str_detect(
+      generated_text,
+      regex(
+        "\\b(successfully|effective|improved|successful)\\b",
+        ignore_case = TRUE
+      )
+    )
+  )
+
+coverage_diagnostics <- document_plan |>
+  select(section_id, evidence_ids) |>
+  unnest_longer(evidence_ids, values_to = "evidence_id") |>
+  left_join(evidence_patterns, by = "evidence_id") |>
+  left_join(
+    section_generations |>
+      select(section_id, generated_text),
+    by = "section_id"
+  ) |>
+  mutate(
+    surface_flag = str_detect(
+      generated_text,
+      regex(pattern, ignore_case = TRUE)
+    )
+  ) |>
+  select(section_id, evidence_id, surface_flag)
+
+kable(
+  section_diagnostics |>
+    select(
+      section_id,
+      distinct_trigram_ratio,
+      unsupported_number,
+      unsupported_evaluation
+    ),
+  digits = 2,
+  col.names = c(
+    "Section ID",
+    "Distinct trigram ratio",
+    "Unsupported numeral present",
+    "Unsupported evaluative wording"
+  ),
+  caption = "Repetition and numeral diagnostics",
+  row.names = FALSE
+)
+
+kable(
+  coverage_diagnostics,
+  col.names = c("Section ID", "Evidence ID", "Surface flag present"),
+  caption = "Evidence coverage flags for each generated section",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(
+    section_diagnostics$distinct_trigram_ratio >= 0 &
+      section_diagnostics$distinct_trigram_ratio <= 1
+  ),
+  setequal(coverage_diagnostics$evidence_id, paste0("E0", 1:6)),
+  is.logical(coverage_diagnostics$surface_flag),
+  is.logical(section_diagnostics$unsupported_number),
+  is.logical(section_diagnostics$unsupported_evaluation),
+  any(!coverage_diagnostics$surface_flag),
+  any(section_diagnostics$unsupported_evaluation)
+)
+```
+
+These are structural hygiene checks. They do not detect an invented plant
+example, an unsupported causal explanation, a shifted obligation, or a
+contradiction written without a new numeral.
+This render still exposes two concrete failures. `Successfully` adds an
+evaluation absent from the ledger, and the final section does not state that
+volunteers made no guarantee about seed growth. Both send the draft back for
+revision.
+
+## Assemble the draft and make a decision
+
+The headings come from the human plan. The prose under each heading comes from
+the three model calls above.
+
+```{r}
+assembled_document <- section_generations |>
+  transmute(
+    section_id,
+    section = paste0("## ", heading, "\n\n", generated_text)
+  ) |>
+  pull(section) |>
+  paste(collapse = "\n\n")
+
+cat(assembled_document)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  str_count(
+    assembled_document,
+    regex("^## ", multiline = TRUE)
+  ) == 3L,
+  all(str_detect(assembled_document, document_plan$heading))
+)
+```
+
+The automatic findings determine whether the draft already needs revision.
+They still cannot authorize publication. Until a person checks every generated
+claim, continuity across sections, audience, and tone, the explicit publication
+decision is **reject**.
+
+```{r}
+automatic_revision_needed <- any(
+  stopping_diagnostics$hit_token_cap,
+  section_diagnostics$unsupported_number,
+  section_diagnostics$unsupported_evaluation,
+  !coverage_diagnostics$surface_flag
+)
+
+document_decision <- tibble(
+  automated_recommendation = if_else(
+    automatic_revision_needed,
+    "revise before human review",
+    "send to human review"
+  ),
+  publication_decision = "reject",
+  reason = paste(
+    "Human factual, continuity, tone, and audience review is pending;",
+    "automatic checks cannot approve the document."
+  )
+)
+
+kable(
+  document_decision,
+  col.names = c(
+    "Automated recommendation",
+    "Publication decision",
+    "Reason"
+  ),
+  caption = "The generated document is not approved for publication",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  document_decision$automated_recommendation %in%
+    c("revise before human review", "send to human review"),
+  identical(document_decision$publication_decision, "reject")
+)
+```
+
+A future editor may revise and accept the document. This render records no such
+approval.
+
+## What to remember
+
+- Long-text generation starts with document planning and section-scoped
+  evidence.
+- Decoder-only prompts and outputs share one context window.
+- Carry compact, evidence-checked continuity state instead of unbounded raw
+  history.
+- Check EOS and token-cap status directly; punctuation is only a surface clue.
+- Repetition, numeral, and evidence flags are preliminary filters.
+- Reject generated prose for publication until a human editor reviews the
+  complete document.
+
+## Sources
+
+- [Reiter and Dale on document planning in applied NLG](https://doi.org/10.1017/S1351324997001681)
+- [Holtzman et al. on neural text degeneration](https://arxiv.org/abs/1904.09751)
+- [Fan et al. on hierarchical long-form generation](https://aclanthology.org/P18-1082/)
+- [See et al. on multi-paragraph generation and discourse failures](https://aclanthology.org/K19-1079/)
+- [Transformers text-generation controls](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation)
+- [Qwen2.5-1.5B-Instruct model card](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)

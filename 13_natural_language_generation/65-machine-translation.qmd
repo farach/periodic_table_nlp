@@ -1,0 +1,440 @@
+---
+title: "Moving a notice from English to French"
+subtitle: "Run one fixed translation direction and inspect what survived"
+description: "Learn how a local machine-translation checkpoint changes language while preserving the source message."
+categories: [natural language generation, machine translation, evaluation]
+---
+
+An archive sends short notices to English- and French-speaking visitors. A
+translation must change the language while preserving the people, quantities,
+dates, permissions, and limits in the source.
+
+The model in this lesson has one direction: English to French. That direction
+belongs to the checkpoint. It is not a language choice discovered from each
+input, and it is not changed by adding a target-language label to the output.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- load a revision-pinned English-to-French model and tokenizer locally;
+- keep constructed source records and generated translations tied to IDs;
+- count source tokens against the checkpoint's 512-token input limit;
+- compare translation with a source-copy baseline;
+- inspect names, numbers, and negation without calling them adequacy scores; and
+- reserve meaning and register judgments for a bilingual reviewer.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load one local translation direction
+
+`huggingfaceR::hf_load_tokenizer()` and
+`huggingfaceR::hf_load_pipeline()` load the prepared local snapshot through the
+course helper. Offline mode prevents a render-time download. The model and
+tokenizer files came from the same immutable revision.
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(huggingfaceR)
+  library(jsonlite)
+  library(knitr)
+  library(purrr)
+  library(reticulate)
+  library(stringr)
+  library(tibble)
+  library(tidyr)
+})
+
+source("R/use-nlg.R")
+
+translation_model <- load_nlg_pipeline(
+  "opus_en_fr",
+  "translation"
+)
+
+model_record <- translation_model$metadata |>
+  select(model_id, revision, license, task_scope)
+
+kable(
+  model_record,
+  col.names = c("Model", "Revision", "License", "Use in this course"),
+  caption = "Pinned local checkpoint for English-to-French translation",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c(
+    "dplyr", "huggingfaceR", "jsonlite", "knitr", "purrr",
+    "reticulate", "stringr", "tibble", "tidyr"
+  ) %in% loadedNamespaces()),
+  identical(
+    model_record$model_id,
+    "Helsinki-NLP/opus-mt-en-fr"
+  ),
+  identical(
+    model_record$revision,
+    "dd7f6540a7a48a7f4db59e5c0b9c42c8eea67f18"
+  ),
+  identical(model_record$license, "Apache-2.0")
+)
+```
+
+The package also exports `hf_translate()`, which calls a remote inference
+service. This lesson does not use it. Generation runs through the local model
+object returned by the pinned pipeline.
+
+## Read direction from the checkpoint
+
+The local tokenizer configuration names English as the source and French as
+the target. A different direction requires a different checkpoint.
+
+```{r}
+tokenizer_config_path <- file.path(
+  "data-raw",
+  ".cache",
+  "nlg-models",
+  translation_model$metadata$local_directory,
+  "tokenizer_config.json"
+)
+
+tokenizer_config <- fromJSON(tokenizer_config_path)
+
+direction <- tibble(
+  checkpoint = translation_model$metadata$model_id,
+  source_language = tokenizer_config$source_lang,
+  target_language = tokenizer_config$target_lang,
+  runtime_language_switch = FALSE
+)
+
+kable(
+  direction,
+  col.names = c(
+    "Checkpoint",
+    "Source",
+    "Target",
+    "Runtime direction switch"
+  ),
+  caption = "Translation direction recorded in the tokenizer configuration",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  file.exists(tokenizer_config_path),
+  identical(direction$source_language, "en"),
+  identical(direction$target_language, "fr"),
+  identical(direction$runtime_language_switch, FALSE)
+)
+```
+
+## Prepare constructed notices
+
+These four English notices were written for the lesson. They are demonstrations,
+not human reference translations, a held-out test set, or a population quality
+benchmark.
+
+```{r}
+translation_inputs <- tribble(
+  ~source_id, ~source_text, ~protected_name, ~requires_negation,
+  "MT-01",
+  "Maya Chen will open Room 5 on 14 September.",
+  "Maya Chen",
+  FALSE,
+  "MT-02",
+  "The library did not cancel the workshop.",
+  "",
+  TRUE,
+  "MT-03",
+  "Visitors must bring 2 forms.",
+  "",
+  FALSE,
+  "MT-04",
+  "The volunteers may use 12 computers on Tuesday.",
+  "",
+  FALSE
+)
+
+kable(
+  translation_inputs,
+  col.names = c(
+    "Source ID",
+    "Constructed English source",
+    "Protected name",
+    "Negation required"
+  ),
+  caption = "Constructed records for the translation demonstration",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(translation_inputs$source_id, paste0("MT-0", 1:4)),
+  !anyDuplicated(translation_inputs$source_id),
+  identical(sum(translation_inputs$requires_negation), 1L)
+)
+```
+
+## Count tokens before calling the model
+
+Marian tokenizes words into subword units. Its configured input ceiling is 512
+tokens. Truncation is not enabled here because dropping the end of a notice can
+drop its meaning.
+
+```{r}
+translation_budget <- translation_inputs |>
+  mutate(
+    input_tokens = map_int(
+      source_text,
+      \(text) nlg_token_count(translation_model$tokenizer, text)
+    ),
+    model_input_limit = 512L,
+    fits_without_truncation = input_tokens <= model_input_limit
+  )
+
+kable(
+  translation_budget |>
+    select(source_id, input_tokens, model_input_limit, fits_without_truncation),
+  col.names = c(
+    "Source ID",
+    "Tokenizer units",
+    "Input limit",
+    "Fits without truncation"
+  ),
+  caption = "Input budgets are checked before translation",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(translation_budget$input_tokens > 0L),
+  all(translation_budget$fits_without_truncation),
+  all(translation_budget$model_input_limit == 512L)
+)
+```
+
+For a longer source, setting `truncation = TRUE` would discard source tokens and
+become a lossy data decision. A production workflow would section the document
+or stop for review.
+
+## Generate French candidates
+
+The source text goes directly to the encoder. Greedy decoding uses one beam and
+a limit of 80 new tokens. The returned record identifies whether the decoder
+emitted its end-of-sequence token or exhausted the configured output budget.
+
+```{r}
+translation_results <- translation_budget |>
+  mutate(
+    generation = map(
+      source_text,
+      \(text) {
+        nlg_generate(
+          translation_model,
+          text,
+          max_new_tokens = 80L
+        )
+      }
+    ),
+    french_candidate = map_chr(generation, "text"),
+    output_tokens = map_int(generation, "output_tokens"),
+    ended_by_eos = map_lgl(generation, "ended_by_eos"),
+    hit_token_cap = map_lgl(generation, "hit_token_cap"),
+    source_copy_baseline = source_text
+  )
+
+kable(
+  translation_results |>
+    select(source_id, source_text, french_candidate, source_copy_baseline),
+  col.names = c(
+    "Source ID",
+    "English source",
+    "Generated French candidate",
+    "Untranslated copy baseline"
+  ),
+  caption = "Real local translations beside a no-translation baseline",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(nzchar(translation_results$french_candidate)),
+  all(translation_results$output_tokens > 0L),
+  all(translation_results$output_tokens <= 80L),
+  all(
+    translation_results$ended_by_eos |
+      translation_results$hit_token_cap
+  ),
+  any(
+    translation_results$french_candidate !=
+      translation_results$source_copy_baseline
+  )
+)
+```
+
+The copy baseline preserves the English source exactly and performs no
+translation. It prevents a changed-looking string from being treated as
+automatic evidence that the task succeeded.
+
+## Inspect visible details
+
+The next checks compare exact Arabic numerals, look for the protected person
+name, and look for a common French negation marker when the English source
+contains `did not`. These checks can find some clear failures. They cannot
+decide whether the sentence is grammatical, whether `must` and `may` have the
+right force, or whether the register fits the audience.
+
+```{r}
+extract_numbers <- function(text) {
+  str_extract_all(text, "\\b\\d+\\b")[[1]] |>
+    sort()
+}
+
+translation_checks <- translation_results |>
+  mutate(
+    numerals_preserved = map2_lgl(
+      source_text,
+      french_candidate,
+      \(source, output) {
+        identical(
+          extract_numbers(source),
+          extract_numbers(output)
+        )
+      }
+    ),
+    name_present = map2_lgl(
+      protected_name,
+      french_candidate,
+      \(name, output) {
+        !nzchar(name) || str_detect(output, fixed(name))
+      }
+    ),
+    negation_visible = map2_lgl(
+      requires_negation,
+      french_candidate,
+      \(required, output) {
+        !required ||
+          str_detect(
+            output,
+            regex("\\b(pas|jamais|aucun)\\b", ignore_case = TRUE)
+          )
+      }
+    )
+  ) |>
+  select(
+    source_id,
+    numerals_preserved,
+    name_present,
+    negation_visible
+  )
+
+kable(
+  translation_checks,
+  col.names = c(
+    "Source ID",
+    "Numerals match",
+    "Protected name present",
+    "French negation marker present"
+  ),
+  caption = "Surface preservation checks for the constructed notices",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(translation_checks$source_id, translation_inputs$source_id),
+  all(vapply(translation_checks[-1], is.logical, logical(1))),
+  identical(nrow(translation_checks), 4L)
+)
+```
+
+No BLEU or chrF number is reported. Those metrics require a documented
+reference corpus, preprocessing signature, and corpus-level interpretation.
+Even then, one reference cannot represent every acceptable French rendering,
+and automatic overlap does not replace bilingual judgment.
+
+## Leave approval to a bilingual reader
+
+```{r}
+translation_review <- tibble(
+  review = c(
+    "local model execution",
+    "source within the 512-token input limit",
+    "decoder stopped at EOS or the output cap",
+    "surface preservation checks",
+    "bilingual meaning and register review"
+  ),
+  status = c(
+    "passed",
+    "passed",
+    "passed",
+    "passed",
+    "pending"
+  )
+)
+
+kable(
+  translation_review,
+  col.names = c("Review gate", "Status"),
+  caption = "Automatic checks do not grant bilingual approval",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    translation_review$status,
+    c("passed", "passed", "passed", "passed", "pending")
+  )
+)
+```
+
+The lesson contains no human ratings. A bilingual reviewer still has to compare
+each pair for meaning, tone, register, and natural French.
+
+## What to remember
+
+- Translation changes language while trying to preserve the source message.
+- This checkpoint's English-to-French direction is fixed in its model files.
+- Count model tokens before generation and treat truncation as data loss.
+- Keep an untranslated copy baseline beside generated candidates.
+- Names, numbers, and negation checks can reveal errors but cannot prove
+  adequacy.
+- Human bilingual review remains necessary before publication.
+
+## Sources
+
+- [Helsinki-NLP English-to-French model card](https://huggingface.co/Helsinki-NLP/opus-mt-en-fr)
+- [OPUS-MT: open translation models for many languages](https://aclanthology.org/2020.eamt-1.61/)
+- [Papineni et al. on corpus-level BLEU](https://aclanthology.org/P02-1040/)
+- [Post on reproducible machine-translation evaluation](https://aclanthology.org/W18-6319/)
+- [Hossain et al. on negation in machine translation](https://aclanthology.org/2020.findings-emnlp.345/)

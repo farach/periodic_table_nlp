@@ -1,0 +1,501 @@
+---
+title: "Changing the wording without changing the instruction"
+subtitle: "Separate a real rewrite from a meaning-preservation check"
+description: "Learn how to generate paraphrases and inspect names, numbers, negation, and modality without treating word overlap as equivalence."
+categories: [natural language generation, paraphrasing, evaluation]
+---
+
+June edits public notices for an archive. Repeating the same sentence in every
+channel sounds stiff, but a rewrite that changes who may enter or what visitors
+must bring creates a new instruction.
+
+For this lesson, a **paraphrase** changes the wording while preserving the
+participants, quantities, negation, scope, and obligations that matter for the
+notice. Linguistic research sometimes uses a looser idea of approximate
+meaning. An operational notice needs a stricter rule because readers may act on
+one word such as `may`, `must`, or `not`.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- generate paraphrase candidates with a pinned local model;
+- keep an unchanged-input baseline beside the generated wording;
+- measure visible wording change without calling it semantic equivalence;
+- probe names, numbers, negation, and modality;
+- preserve model failures instead of filtering them away; and
+- record human meaning review as pending.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the same fixed checkpoint
+
+The checkpoint is shared with the summarization lesson, but this page gives it
+a different task, prompt, baseline, and review rule. The model is loaded from
+the prepared local directory through `huggingfaceR`.
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(huggingfaceR)
+  library(knitr)
+  library(purrr)
+  library(reticulate)
+  library(stringr)
+  library(tibble)
+  library(tidyr)
+})
+
+source("R/use-nlg.R")
+
+paraphrase_model <- load_nlg_pipeline(
+  "qwen_1_5b_instruct",
+  "text-generation"
+)
+
+model_record <- paraphrase_model$metadata |>
+  select(model_id, revision, license)
+
+kable(
+  model_record,
+  col.names = c("Model", "Revision", "License"),
+  caption = "Pinned local model used for paraphrase generation",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c(
+    "dplyr", "huggingfaceR", "knitr", "purrr",
+    "reticulate", "stringr", "tibble", "tidyr"
+  ) %in% loadedNamespaces()),
+  identical(model_record$model_id, "Qwen/Qwen2.5-1.5B-Instruct"),
+  identical(
+    model_record$revision,
+    "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
+  ),
+  identical(model_record$license, "Apache-2.0")
+)
+```
+
+## Write the preservation rule first
+
+The four notices below are constructed behavioral probes. They were chosen to
+expose common changes in operational meaning. They are not a random test set,
+and no population accuracy will be estimated from them.
+
+`protected_name`, `modality_class`, and `modality_pattern` are blank when a
+probe does not need that check. A copy of the source is kept as the baseline.
+Copying preserves the original wording and facts, but it does not perform the
+requested rewrite.
+
+```{r}
+paraphrase_inputs <- tribble(
+  ~probe_id, ~source_text, ~protected_name, ~requires_negation,
+  ~modality_class, ~modality_pattern,
+  "PAR-01",
+  "The clinic sent 24 reminder letters on Monday.",
+  "",
+  FALSE,
+  "",
+  "",
+  "PAR-02",
+  "Visitors may bring one notebook to the reading room.",
+  "",
+  FALSE,
+  "permission",
+  "\\b(may|can|allowed|permitted)\\b",
+  "PAR-03",
+  paste(
+    "Maya Chen did not cancel the 14 September workshop;",
+    "she moved it from Room 2 to Room 5."
+  ),
+  "Maya Chen",
+  TRUE,
+  "",
+  "",
+  "PAR-04",
+  "Only archive staff must sign the restricted-room log.",
+  "",
+  FALSE,
+  "obligation",
+  "\\b(must|required|obliged|has to)\\b"
+)
+
+kable(
+  paraphrase_inputs,
+  col.names = c(
+    "Probe ID",
+    "Source notice",
+    "Protected name",
+    "Negation required",
+    "Modality class",
+    "Accepted surface markers"
+  ),
+  caption = "Constructed paraphrase probes and predeclared invariants",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(paraphrase_inputs$probe_id, paste0("PAR-0", 1:4)),
+  !anyDuplicated(paraphrase_inputs$probe_id),
+  identical(sum(paraphrase_inputs$requires_negation), 1L),
+  identical(
+    paraphrase_inputs$modality_class,
+    c("", "permission", "", "obligation")
+  )
+)
+```
+
+## Generate candidates without silent truncation
+
+The complete chat-formatted prompt must stay below 192 input tokens. Greedy
+decoding and a 72-token output cap make the call repeatable, but deterministic
+generation can still produce a wrong paraphrase.
+
+```{r}
+paraphrase_system <- paste(
+  "Rewrite the notice in different words.",
+  "Preserve every participant, quantity, date, negation, scope,",
+  "permission, and obligation.",
+  "Return the rewritten notice only."
+)
+
+paraphrase_results <- paraphrase_inputs |>
+  mutate(
+    user_prompt = paste0(
+      "PROBE ID: ", probe_id,
+      "\nNOTICE: ", source_text
+    ),
+    model_prompt = map_chr(
+      user_prompt,
+      \(user) {
+        nlg_chat_prompt(
+          paraphrase_model$tokenizer,
+          paraphrase_system,
+          user
+        )
+      }
+    ),
+    input_tokens = map_int(
+      model_prompt,
+      \(prompt) nlg_token_count(paraphrase_model$tokenizer, prompt)
+    ),
+    generation = map(
+      model_prompt,
+      \(prompt) {
+        nlg_generate(
+          paraphrase_model,
+          prompt,
+          max_new_tokens = 72L,
+          repetition_penalty = 1.05
+        )
+      }
+    ),
+    candidate = map_chr(generation, "text"),
+    candidate_display = str_replace_all(
+      candidate,
+      "\\s*\\n+\\s*",
+      " / "
+    ),
+    output_tokens = map_int(generation, "output_tokens"),
+    ended_by_eos = map_lgl(generation, "ended_by_eos"),
+    hit_token_cap = map_lgl(generation, "hit_token_cap"),
+    copy_baseline = source_text
+  )
+
+kable(
+  paraphrase_results |>
+    select(probe_id, source_text, candidate_display, copy_baseline),
+  col.names = c(
+    "Probe ID",
+    "Source",
+    "Generated candidate",
+    "Unchanged-input baseline"
+  ),
+  caption = "Generated paraphrases retain failures and copies for inspection",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(paraphrase_results$input_tokens <= 192L),
+  all(nzchar(paraphrase_results$candidate)),
+  all(paraphrase_results$output_tokens > 0L),
+  all(paraphrase_results$output_tokens <= 72L),
+  all(
+    paraphrase_results$ended_by_eos |
+      paraphrase_results$hit_token_cap
+  ),
+  any(paraphrase_results$candidate != paraphrase_results$source_text)
+)
+```
+
+The copy baseline should pass every literal preservation check. It also fails
+the user's request for different wording. The generated column has to solve
+both parts.
+
+## Measure wording change
+
+This diagnostic lowercases each string, extracts letter and number sequences
+with the ICU regular-expression engine used by `stringr`, and computes Jaccard
+overlap on the unique token sets. An overlap of 1 means the sets match. A lower
+value means some visible wording changed.
+
+```{r}
+token_set <- function(text) {
+  str_extract_all(
+    str_to_lower(text, locale = "en"),
+    "[\\p{L}\\p{N}]+"
+  )[[1]] |>
+    unique()
+}
+
+jaccard_overlap <- function(left, right) {
+  left_tokens <- token_set(left)
+  right_tokens <- token_set(right)
+  length(intersect(left_tokens, right_tokens)) /
+    length(union(left_tokens, right_tokens))
+}
+
+wording_diagnostics <- paraphrase_results |>
+  transmute(
+    probe_id,
+    exact_copy = candidate == source_text,
+    unique_token_jaccard = map2_dbl(
+      source_text,
+      candidate,
+      jaccard_overlap
+    )
+  )
+
+kable(
+  wording_diagnostics,
+  digits = 2,
+  col.names = c(
+    "Probe ID",
+    "Exact copy",
+    "Unique-token Jaccard overlap"
+  ),
+  caption = "Wording diagnostics do not decide whether meaning survived",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(
+    wording_diagnostics$unique_token_jaccard >= 0 &
+      wording_diagnostics$unique_token_jaccard <= 1
+  ),
+  any(!wording_diagnostics$exact_copy)
+)
+```
+
+A low overlap can come from a good synonym or a damaging change. A high overlap
+can hide a removed `not`. The score describes token sets, not equivalence.
+
+## Check visible invariants
+
+The code now looks for exact numerals, the protected name, an explicit
+negation marker, and accepted surface markers for the predeclared modality
+class. These checks catch some preventable mistakes. They do not know which
+noun a number modifies or whether a negation has the same scope.
+
+```{r}
+extract_numbers <- function(text) {
+  str_extract_all(text, "\\b\\d+\\b")[[1]] |>
+    sort()
+}
+
+has_negation <- function(text) {
+  str_detect(
+    text,
+    regex(
+      "\\b(no|not|never|without|cannot|can't|didn't|did not)\\b",
+      ignore_case = TRUE
+    )
+  )
+}
+
+invariant_checks <- paraphrase_results |>
+  mutate(
+    numbers_preserved = map2_lgl(
+      source_text,
+      candidate,
+      \(source, output) {
+        identical(
+          extract_numbers(source),
+          extract_numbers(output)
+        )
+      }
+    ),
+    name_present = map2_lgl(
+      protected_name,
+      candidate,
+      \(name, output) {
+        !nzchar(name) || str_detect(output, fixed(name))
+      }
+    ),
+    negation_visible = map2_lgl(
+      requires_negation,
+      candidate,
+      \(required, output) !required || has_negation(output)
+    ),
+    modal_visible = map2_lgl(
+      modality_pattern,
+      candidate,
+      \(pattern, output) {
+        !nzchar(pattern) ||
+          str_detect(
+            output,
+            regex(pattern, ignore_case = TRUE)
+          )
+      }
+    )
+  ) |>
+  select(
+    probe_id,
+    numbers_preserved,
+    name_present,
+    negation_visible,
+    modal_visible
+  )
+
+kable(
+  invariant_checks,
+  col.names = c(
+    "Probe ID",
+    "Numerals match",
+    "Protected name present",
+    "Negation marker present",
+    "Modality marker present"
+  ),
+  caption = "Surface checks for predeclared paraphrase invariants",
+  row.names = FALSE
+)
+
+paraphrase_actions <- wording_diagnostics |>
+  left_join(invariant_checks, by = "probe_id") |>
+  mutate(
+    action = case_when(
+      exact_copy ~ "revise wording",
+      !numbers_preserved |
+        !name_present |
+        !negation_visible |
+        !modal_visible ~ "reject candidate",
+      TRUE ~ "send to human meaning review"
+    )
+  ) |>
+  select(probe_id, action)
+
+kable(
+  paraphrase_actions,
+  col.names = c("Probe ID", "Next action"),
+  caption = "Automatic failures block a candidate before human review",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(invariant_checks$probe_id, paraphrase_inputs$probe_id),
+  all(vapply(invariant_checks[-1], is.logical, logical(1))),
+  identical(nrow(invariant_checks), 4L),
+  any(paraphrase_actions$action == "reject candidate")
+)
+```
+
+Any `FALSE` value is a direct reason to reject the candidate. In this render,
+the stress probe echoes prompt labels and drops Room 2, while the obligation
+probe weakens `must` into authorization. A row of `TRUE` values still needs a
+person to compare the whole pair because a surface marker can move to a
+different participant or clause.
+
+## Keep the decision honest
+
+The model has completed generation, and the automatic checks have completed
+their limited jobs. No human has approved the candidates.
+
+```{r}
+paraphrase_review <- tibble(
+  review = c(
+    "local model execution",
+    "complete prompt within 192 tokens",
+    "wording-change diagnostic",
+    "surface invariant checks",
+    "human meaning-preservation review",
+    "human prose review"
+  ),
+  status = c(
+    "passed",
+    "passed",
+    "passed",
+    "passed",
+    "pending",
+    "pending"
+  )
+)
+
+kable(
+  paraphrase_review,
+  col.names = c("Review gate", "Status"),
+  caption = "A generated rewrite is not an approved paraphrase",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    paraphrase_review$status,
+    c(
+      "passed", "passed", "passed",
+      "passed", "pending", "pending"
+    )
+  )
+)
+```
+
+June can accept a candidate only after reading it beside the notice and applying
+the rule stated at the start. Generation, visible wording change, and invariant
+flags are evidence for that review. None replaces it.
+
+## What to remember
+
+- A paraphrase changes wording while preserving the information that matters.
+- Copying is a useful preservation baseline, but it is not a successful rewrite.
+- Token overlap measures wording, not semantic equivalence.
+- Check names, numbers, negation, scope, permission, and obligation separately.
+- Keep failed model outputs visible when they reveal a broken invariant.
+- Record human meaning and prose review apart from automatic execution.
+
+## Sources
+
+- [Bhagat and Hovy on definitions and varieties of paraphrase](https://aclanthology.org/J13-3001/)
+- [Qwen2.5-1.5B-Instruct model card](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)
+- [Transformers text-generation controls](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation)
+- [Transformers tokenizer documentation](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/tokenizer)

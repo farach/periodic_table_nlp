@@ -9,7 +9,7 @@ Finished tiles open lessons; planned tiles show where the project is going.
 
 ## Lessons
 
-The canonical map and publishing manifest currently identify 64 available
+The canonical map and publishing manifest currently identify 68 available
 lessons. This list is checked against `data/periodic_table.csv`.
 
 - **Source data loading (1-7):**
@@ -86,10 +86,13 @@ lessons. This list is checked against `data/periodic_table.csv`.
   [document similarity](12_similarity/60-document-similarity.qmd),
   [word vectors](12_similarity/61-distributed-word-representations.qmd), and
   [words in context](12_similarity/62-contextualized-word-representations.qmd).
-- **Natural language generation (63-64):**
-  [next-token prediction](13_natural_language_generation/63-next-token-prediction.qmd)
-  and
-  [report writing](13_natural_language_generation/64-report-writing.qmd).
+- **Natural language generation (63-68):**
+  [next-token prediction](13_natural_language_generation/63-next-token-prediction.qmd),
+  [report writing](13_natural_language_generation/64-report-writing.qmd),
+  [machine translation](13_natural_language_generation/65-machine-translation.qmd),
+  [abstractive summarization](13_natural_language_generation/66-abstractive-summarization.qmd),
+  [paraphrasing](13_natural_language_generation/67-paraphrasing.qmd), and
+  [long-text generation](13_natural_language_generation/68-long-text-generation.qmd).
 
 The topic map comes from Rob van Zoest's
 [Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).
@@ -130,6 +133,9 @@ $env:RENV_CONFIG_SANDBOX_ENABLED = "FALSE"
 Rscript -e "renv::restore()"
 python -m venv .venv-spacy
 .venv-spacy/Scripts/python -m pip install -r requirements-spacy.txt
+python -m venv .venv-nlg
+.venv-nlg/Scripts/python -m pip install -r requirements-nlg.txt
+.venv-nlg/Scripts/python scripts/setup-nlg-models.py
 npm ci
 npx playwright install chromium
 Rscript scripts/check-prose.R
@@ -142,9 +148,12 @@ npm run test:a11y
 ```
 
 On macOS and Linux, install the Python requirements with
-`.venv-spacy/bin/python -m pip install -r requirements-spacy.txt`. Native
-dependencies for OCR, PDF processing, and `cld3` are listed in the render
-workflow.
+`.venv-spacy/bin/python -m pip install -r requirements-spacy.txt` and
+`.venv-nlg/bin/python -m pip install -r requirements-nlg.txt`, then run
+`.venv-nlg/bin/python scripts/setup-nlg-models.py`. The generation setup
+downloads immutable public model snapshots before rendering; lesson execution
+is offline. Native dependencies for OCR, PDF processing, and `cld3` are listed
+in the render workflow.
 
 The automated accessibility suite uses axe-core and browser interaction tests
 across every page. It does not replace manual testing with screen readers,
@@ -153,8 +162,9 @@ keyboard-only navigation, zoom, and forced-colors mode.
 Use `quarto preview` for local development. Quarto writes the generated site
 to `_site/`.
 
-Package versions are recorded in `renv.lock` and
-`requirements-spacy.txt`. The source documents and configuration are tracked;
-generated site files and local environments are not. CI uploads the exact
-rendered `_site` artifact for inspection but does not deploy it. Deployment to
-the canonical host is managed outside this repository.
+Package versions are recorded in `renv.lock`, `requirements-spacy.txt`, and
+`requirements-nlg.txt`. Model IDs, revisions, licenses, and fingerprints are
+recorded in `data/nlg-models.csv`. The source documents and configuration are
+tracked; generated site files, model weights, and local environments are not.
+CI uploads the exact rendered `_site` artifact for inspection but does not
+deploy it. Deployment to the canonical host is managed outside this repository.
