@@ -29,7 +29,7 @@ By the end of this lesson, you will be able to:
 - keep document dates, evidence text, and offsets for every fact;
 - merge duplicate facts without losing provenance;
 - keep conflicting dated values instead of overwriting them; and
-- route negated, ambiguous, NIL, and type-failed candidates to review.
+- route negated, hedged, ambiguous, NIL, and type-failed candidates to review.
 :::
 
 ```{r}
@@ -136,8 +136,7 @@ stopifnot(
     alias_hash,
     metadata$fingerprint[metadata$artifact == "riverton-aliases.csv"]
   ),
-  sum(aliases$alias == "Riverton") == 2L,
-  !any(str_detect(entities$canonical_name, "job board"))
+  sum(aliases$alias == "Riverton") == 2L
 )
 ```
 
@@ -156,6 +155,8 @@ slot_schema <- tribble(
   ~slot, ~subject_type, ~object_type, ~cardinality, ~merge_rule,
   "offers", "organisation", "credential", "list-valued",
   "One fact per subject-object pair; repeated evidence adds provenance.",
+  "requires", "organisation", "credential", "list-valued",
+  "One fact per subject-object pair; negated or hedged statements stay out of facts.",
   "application_deadline", "organisation", "date literal", "single-valued",
   "Keep each dated value, flag conflict, and let review decide.",
   "located_in", "organisation", "place", "single-valued",
@@ -180,7 +181,7 @@ knitr::kable(
 stopifnot(
   "single-valued" %in% slot_schema$cardinality,
   "list-valued" %in% slot_schema$cardinality,
-  all(c("offers", "application_deadline") %in% slot_schema$slot)
+  all(c("offers", "requires", "application_deadline") %in% slot_schema$slot)
 )
 ```
 
@@ -192,8 +193,9 @@ error.
 ## Prepare dated announcements
 
 The documents below are constructed announcements. They cover one new fact, one
-duplicate, one single-valued conflict, one negated statement, an ambiguous
-`Riverton` mention, one NIL organisation, and one visible type-check failure.
+duplicate, one single-valued conflict, one negated statement, one hedged
+statement, an ambiguous `Riverton` mention, one NIL organisation, one
+undeclared slot, and one visible type-check failure.
 
 ```{r}
 extractor_version <- "riverton-kbp-rules-1.0"
@@ -207,7 +209,9 @@ documents <- tribble(
   "A005", as.Date("2026-09-07"), "Marrow County Transit does not require the Forklift Operator Licence.",
   "A006", as.Date("2026-09-08"), "Riverton will host the Data Support Certificate.",
   "A007", as.Date("2026-09-09"), "Riverton Transit offers forklift certification.",
-  "A008", as.Date("2026-09-10"), "Bellhaven offers the Data Support Certificate."
+  "A008", as.Date("2026-09-10"), "Bellhaven offers the Data Support Certificate.",
+  "A009", as.Date("2026-09-11"), "Riverton Skills Centre may offer the Forklift Operator Licence.",
+  "A010", as.Date("2026-09-12"), "Riverton Skills Centre promotes the Data Support Certificate."
 )
 
 candidate_plan <- tribble(
@@ -219,7 +223,9 @@ candidate_plan <- tribble(
   "CAND-005", "A005", "requires", "Marrow County Transit", "Forklift Operator Licence", "negated", "reject negated",
   "CAND-006", "A006", "offers", "Riverton", "Data Support Certificate", "asserted", "hold ambiguous",
   "CAND-007", "A007", "offers", "Riverton Transit", "forklift certification", "asserted", "hold NIL",
-  "CAND-008", "A008", "offers", "Bellhaven", "Data Support Certificate", "asserted", "reject type"
+  "CAND-008", "A008", "offers", "Bellhaven", "Data Support Certificate", "asserted", "reject type",
+  "CAND-009", "A009", "offers", "Riverton Skills Centre", "Forklift Operator Licence", "hedged", "hold hedged",
+  "CAND-010", "A010", "promotes", "Riverton Skills Centre", "Data Support Certificate", "asserted", "reject undeclared slot"
 )
 
 knitr::kable(
@@ -244,16 +250,21 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  identical(nrow(documents), 8L),
-  identical(nrow(candidate_plan), 8L),
-  all(candidate_plan$status %in% c("asserted", "negated")),
+  identical(nrow(documents), 10L),
+  identical(nrow(candidate_plan), 10L),
+  all(candidate_plan$status %in% c("asserted", "negated", "hedged")),
   any(candidate_plan$expected_action == "hold NIL"),
+  any(candidate_plan$expected_action == "hold hedged"),
+  any(candidate_plan$expected_action == "reject undeclared slot"),
   any(candidate_plan$expected_action == "flag conflict")
 )
 ```
 
 These expected actions are not a benchmark. They are a checklist for a teaching
 pipeline written by the same author as the examples.
+They are hand-supplied candidates, standing in for an extractor such as lesson
+69's relation extractor. The code below links their mentions, checks types and
+status, and applies population rules.
 
 ## Link mentions and keep offsets
 
@@ -324,7 +335,21 @@ candidates <- candidate_plan |>
   left_join(documents, by = "document_id") |>
   mutate(
     subject_link = map(subject_mention, link_mention),
-    object_link = map(object_mention, link_mention),
+    object_link = map2(
+      slot,
+      object_mention,
+      \(current_slot, current_mention) {
+        if (current_slot == "application_deadline") {
+          tibble(
+            linked_id = current_mention,
+            linked_type = "date literal",
+            link_status = "literal value (not linked)"
+          )
+        } else {
+          link_mention(current_mention)
+        }
+      }
+    ),
     subject_offsets = map2(text, subject_mention, locate_mention),
     object_offsets = map2(text, object_mention, locate_mention)
   ) |>
@@ -389,6 +414,11 @@ knitr::kable(
 stopifnot(
   identical(candidates$subject_link_status[candidates$candidate_id == "CAND-006"], "ambiguous"),
   identical(candidates$subject_link_status[candidates$candidate_id == "CAND-007"], "NIL"),
+  all(
+    candidates$object_link_status[candidates$slot == "application_deadline"] ==
+      "literal value (not linked)"
+  ),
+  !any(is.na(candidates$object_id[candidates$slot == "application_deadline"])),
   identical(candidates$subject_id[candidates$candidate_id == "CAND-007"], "NIL-0001"),
   str_detect(candidates$subject_id[candidates$candidate_id == "CAND-006"], "LOC-0001"),
   str_detect(candidates$subject_id[candidates$candidate_id == "CAND-006"], "LOC-0002"),
@@ -411,8 +441,10 @@ recall.
 schema_checks <- candidates |>
   left_join(slot_schema, by = "slot") |>
   mutate(
-    subject_type_ok = subject_type.x == subject_type.y,
+    declared_slot = !is.na(subject_type.y),
+    subject_type_ok = declared_slot & subject_type.x == subject_type.y,
     object_type_ok = case_when(
+      !declared_slot ~ FALSE,
       object_type.y == "date literal" ~ str_detect(object_mention, "^[A-Z][a-z]+ [0-9]+$"),
       TRUE ~ object_type.x == object_type.y
     ),
@@ -448,8 +480,10 @@ candidate_actions <- schema_checks |>
     single_value_count = coalesce(single_value_count, 0L),
     actual_action = case_when(
       status == "negated" ~ "reject negated",
+      status == "hedged" ~ "hold hedged",
       subject_link_status == "ambiguous" ~ "hold ambiguous",
       subject_link_status == "NIL" ~ "hold NIL",
+      !declared_slot ~ "reject undeclared slot",
       !type_check ~ "reject type",
       candidate_id != first_candidate_id ~ "merge duplicate",
       cardinality == "single-valued" &
@@ -460,8 +494,10 @@ candidate_actions <- schema_checks |>
     action_matches = actual_action == expected_action,
     action_reason = case_when(
       status == "negated" ~ "negated statements never become facts",
+      status == "hedged" ~ "hedged statements wait for review",
       subject_link_status == "ambiguous" ~ "alias maps to more than one ID",
       subject_link_status == "NIL" ~ "new name receives a provisional ID for review",
+      !declared_slot ~ "slot is not declared in the schema",
       !type_check ~ "slot type check failed",
       candidate_id != first_candidate_id ~ "same fact already exists; keep provenance",
       cardinality == "single-valued" &
@@ -496,6 +532,14 @@ stopifnot(
   identical(
     candidate_actions$actual_action[candidate_actions$candidate_id == "CAND-008"],
     "reject type"
+  ),
+  identical(
+    candidate_actions$actual_action[candidate_actions$candidate_id == "CAND-009"],
+    "hold hedged"
+  ),
+  identical(
+    candidate_actions$actual_action[candidate_actions$candidate_id == "CAND-010"],
+    "reject undeclared slot"
   )
 )
 ```
@@ -523,16 +567,13 @@ populated_facts <- accepted_candidates |>
   inner_join(fact_keys, by = c("slot", "subject_id", "object_value", "fact_key")) |>
   group_by(fact_id, slot, subject_id, object_value) |>
   summarise(
-    value_count = n_distinct(object_value),
     provenance_records = n(),
-    conflict_flag = any(actual_action == "flag conflict") |
-      (first(slot) == "application_deadline" &
-        n_distinct(object_value) > 0L &
-        n_distinct(candidate_actions$object_value[
-          candidate_actions$slot == first(slot) &
-            candidate_actions$subject_id == first(subject_id) &
-            candidate_actions$actual_action %in% c("add fact", "flag conflict")
-        ]) > 1L),
+    conflict_flag = first(cardinality) == "single-valued" &
+      n_distinct(candidate_actions$object_value[
+        candidate_actions$slot == first(slot) &
+          candidate_actions$subject_id == first(subject_id) &
+          candidate_actions$actual_action %in% c("add fact", "flag conflict")
+      ]) > 1L,
     .groups = "drop"
   ) |>
   arrange(fact_id)
@@ -549,7 +590,8 @@ fact_provenance <- accepted_candidates |>
     subject_end,
     object_start,
     object_end,
-    extractor_version
+    candidate_source = "hand-supplied candidate",
+    pipeline_rules_version = extractor_version
   ) |>
   arrange(fact_id, document_id)
 
@@ -568,7 +610,7 @@ knitr::kable(
   populated_facts,
   col.names = c(
     "Fact ID", "Slot", "Subject ID", "Object value",
-    "Distinct values in fact", "Provenance records", "Conflict flagged"
+    "Provenance records", "Conflict flagged"
   ),
   caption = "Populated facts after duplicate and conflict handling",
   row.names = FALSE
@@ -579,7 +621,8 @@ knitr::kable(
   col.names = c(
     "Fact ID", "Candidate ID", "Document ID", "Document date",
     "Evidence text", "Subject start", "Subject end",
-    "Object start", "Object end", "Extractor version"
+    "Object start", "Object end", "Candidate source",
+    "Pipeline rules version"
   ),
   caption = "Provenance records for every populated fact",
   row.names = FALSE
@@ -605,7 +648,8 @@ stopifnot(
   all(nzchar(fact_provenance$evidence_text)),
   all(!is.na(fact_provenance$subject_start)),
   all(!is.na(fact_provenance$object_start)),
-  all(!is.na(fact_provenance$extractor_version)),
+  all(fact_provenance$candidate_source == "hand-supplied candidate"),
+  all(!is.na(fact_provenance$pipeline_rules_version)),
   !any(fact_provenance$candidate_id == "CAND-005"),
   populated_facts$provenance_records[populated_facts$slot == "offers"] == 2L,
   all(populated_facts$conflict_flag[populated_facts$slot == "application_deadline"]),
@@ -616,27 +660,34 @@ stopifnot(
 One offer fact has two provenance records. The two deadline facts both remain,
 and both are flagged because a later document might be an update, an error, or a
 different session. The table records the conflict; it does not resolve it.
+The `FACT-` values here are display IDs minted during this render; a real
+knowledge base keeps issued fact IDs stable once it publishes them.
 
 ## Prepare the graph facts used in the visualization lesson
 
 Lesson 81 redraws a small graph from the same IDs. The table below is a compact
-edge view of the kept KB facts plus reference links that keep the two Riverton
-places separate.
+edge view of the populated facts. The two Riverton place IDs stay separate
+because entity IDs, not labels, are the keys.
 
 ```{r}
-graph_facts <- tribble(
-  ~subject_id, ~relation, ~object_id, ~source,
-  "ORG-0002", "offers", "CRD-0002", "populated fact",
-  "ORG-0002", "application_deadline", "DATE-2026-10-15", "populated fact",
-  "ORG-0002", "application_deadline", "DATE-2026-11-01", "populated fact",
-  "ORG-0002", "located_in", "LOC-0001", "reference link",
-  "ORG-0003", "serves", "LOC-0001", "reference link",
-  "LOC-0003", "near", "LOC-0001", "reference link"
-)
+graph_facts <- populated_facts |>
+  left_join(
+    fact_provenance |>
+      group_by(fact_id) |>
+      summarise(document_ids = paste(document_id, collapse = "; "), .groups = "drop"),
+    by = "fact_id"
+  ) |>
+  transmute(
+    subject_id,
+    relation = slot,
+    object_value,
+    document_ids,
+    source = "populated fact"
+  )
 
 knitr::kable(
   graph_facts,
-  col.names = c("Subject ID", "Relation", "Object ID", "Source"),
+  col.names = c("Subject ID", "Relation", "Object value", "Document IDs", "Source"),
   caption = "Fact edges rebuilt in the graph visualization lesson",
   row.names = FALSE
 )
@@ -647,17 +698,18 @@ knitr::kable(
 
 stopifnot(
   all(c("LOC-0001", "LOC-0002") %in% entities$entity_id),
-  "LOC-0002" %in% setdiff(entities$entity_id, c(graph_facts$subject_id, graph_facts$object_id)),
+  "LOC-0002" %in% setdiff(entities$entity_id, graph_facts$subject_id),
   any(graph_facts$relation == "offers"),
-  any(graph_facts$object_id == "DATE-2026-11-01"),
+  any(graph_facts$object_value == "November 1"),
   !any(graph_facts$subject_id == "NIL-0001"),
-  !any(graph_facts$relation == "shares_label_with")
+  all(graph_facts$source == "populated fact"),
+  all(graph_facts$document_ids %in% c("A001; A002", "A003", "A004"))
 )
 ```
 
 These graph edges are still KB records, not proof about the real world. The
-source column says whether an edge came from the constructed population step or
-from the local reference setting used for the drawing. The two `Riverton` place
+source column says they came from the constructed population step, and the
+document IDs point back to the provenance table above. The two `Riverton` place
 IDs remain in the entity table, but their shared label is a naming note for the
 visualization lesson rather than a factual relation.
 
@@ -674,7 +726,7 @@ helps a reviewer inspect a claim; it does not certify the claim as true.
 - Slot cardinality must be declared before merging facts.
 - Duplicate facts can share one fact ID with several provenance records.
 - Single-valued conflicts keep both dated values until review.
-- Negated statements do not become facts.
+- Negated and hedged statements do not become facts.
 - `Riverton` stays ambiguous, and a NIL organisation receives a provisional ID.
 
 Grace ends with fewer automatic facts than candidate statements. That is the

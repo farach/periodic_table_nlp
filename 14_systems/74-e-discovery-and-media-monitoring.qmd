@@ -5,9 +5,11 @@ description: "Learn how keyword terms, ranked review, an elusion sample, and a s
 categories: [systems, e-discovery, media monitoring]
 ---
 
-Marcus receives a fictional request for records about the Calder Yard contract. The request is not asking for a few good examples. It asks for the responsive records in a fixed collection, including the ones that do not use the words a searcher guesses first.
+A fictional request asks for records about the Calder Yard contract. It is not asking for a few good examples. It asks for the responsive records in a fixed collection, including the ones that do not use the words a searcher guesses first.
 
 **E-discovery** is electronic discovery: finding records that must be reviewed or produced for a legal request. **Technology-assisted review** uses a model to rank unreviewed records so people can review likely responsive records first. **Media monitoring** watches new items as they arrive and sends alerts for items that matter.
+
+Grossman and Cormack report that Blair and Maron's legal-search study found searchers believed they had found at least `r 75` percent of relevant documents, while average recall was about `r 20` percent for the studied requests. Lesson 9's active learning chooses uncertain examples to improve a model; ranked review here chooses high-scoring unreviewed records to find responsive material. A low elusion rate can still hide many misses: if a review found `r 70` of `r 100` responsive records in a `r format(10000, big.mark = ",")`-record collection, the unreviewed pile would have only `r sprintf("%.2f%%", 100 * 30 / 9400)` elusion but recall would be only `r sprintf("%.0f%%", 100 * 70 / 100)`.
 
 ::: {.callout-note}
 The records in this lesson are constructed teaching examples. They do not describe a real legal matter, company, person, news source, or monitoring target.
@@ -35,7 +37,7 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the constructed review collection
 
-The builder created 240 short review records for one request. It also wrote a monitoring stream and metadata fingerprints. Each row carries a fiction notice. The reference labels were written by the page author, so they are labels for this constructed collection rather than ground truth.
+The builder created a short review collection for one request. It also wrote a monitoring stream and metadata fingerprints. Each row carries a fiction notice. The reference labels were written by the page author, so they are labels for this constructed collection rather than ground truth.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -68,7 +70,7 @@ metadata_path <- "data/riverton/riverton-review-collection-metadata.csv"
 
 review_records <- read_csv(
   collection_path,
-  na = character(),
+  na = c("", "NA"),
   col_types = cols(
     doc_id = col_character(),
     record_type = col_character(),
@@ -90,7 +92,7 @@ review_records <- read_csv(
 
 monitoring_stream <- read_csv(
   stream_path,
-  na = character(),
+  na = c("", "NA"),
   col_types = cols(
     stream_id = col_character(),
     record_type = col_character(),
@@ -120,6 +122,7 @@ review_metadata <- read_csv(
     fingerprint = col_character(),
     rng_kind = col_character(),
     seed = col_character(),
+    effective_seeds = col_character(),
     review_request = col_character(),
     shortcut_sweep = col_character()
   )
@@ -144,6 +147,15 @@ knitr::kable(
   caption = "Constructed review collection labels for one fictional request",
   row.names = FALSE
 )
+
+knitr::kable(
+  tibble(review_request = review_metadata$review_request[[1]]),
+  format = "html",
+  escape = TRUE,
+  col.names = "Review request",
+  caption = "Fictional request used to define responsiveness",
+  row.names = FALSE
+)
 ```
 
 ```{r}
@@ -165,7 +177,7 @@ stopifnot(
 )
 ```
 
-The constructed prevalence is 15 percent, much higher than many legal-review matters. It was chosen so a small teaching page has enough responsive examples to inspect. The builder also swept superficial features such as length, punctuation, dates, pronouns, source type, and ID pattern, and refused to write if a single feature separated the classes too well.
+The constructed prevalence is `r sprintf("%.0f%%", 100 * mean(review_records$reference_responsive))`, much higher than many legal-review matters. It was chosen so a small teaching page has enough responsive examples to inspect. The builder also swept superficial features such as length, punctuation, dates, pronouns, source type, sentence frame, common non-topic words, file position, and ID pattern, and refused to write if a single feature separated the classes too well.
 
 ## Search predeclared keywords
 
@@ -184,7 +196,11 @@ keyword_terms <- c(
 )
 
 keyword_pattern <- regex(
-  paste(keyword_terms, collapse = "|"),
+  paste0(
+    "\\b(",
+    paste(keyword_terms[keyword_terms != "Calder Yard"], collapse = "|"),
+    ")\\b|\\bCalder Yard\\b"
+  ),
   ignore_case = TRUE
 )
 
@@ -206,10 +222,16 @@ keyword_metrics <- review_scored |>
     recall = responsive_hits / responsive_total
   )
 
-keyword_examples <- review_scored |>
-  filter(keyword_hit) |>
-  arrange(desc(reference_responsive), doc_id) |>
-  slice_head(n = 8) |>
+keyword_examples <- bind_rows(
+  review_scored |>
+    filter(keyword_hit, reference_responsive) |>
+    arrange(doc_id) |>
+    slice_head(n = 4),
+  review_scored |>
+    filter(keyword_hit, !reference_responsive) |>
+    arrange(doc_id) |>
+    slice_head(n = 4)
+) |>
   transmute(
     doc_id,
     reference_label = if_else(reference_responsive, "responsive", "not responsive"),
@@ -239,23 +261,23 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  identical(keyword_metrics$hits, 41L),
-  identical(keyword_metrics$responsive_hits, 23L),
+  identical(keyword_metrics$hits, 39L),
+  identical(keyword_metrics$responsive_hits, 22L),
   identical(keyword_metrics$responsive_total, 36L),
-  identical(round(keyword_metrics$precision, 3), 0.561),
-  identical(round(keyword_metrics$recall, 3), 0.639),
+  identical(round(keyword_metrics$precision, 3), 0.564),
+  identical(round(keyword_metrics$recall, 3), 0.611),
   keyword_metrics$responsive_hits >= 8L,
   keyword_metrics$hits - keyword_metrics$responsive_hits >= 8L
 )
 ```
 
-The terms find 37 records. Of those, 25 are responsive under the constructed labels. That precision, 25 divided by 37, is visible after reviewing the hits. The recall, 25 divided by 36, is not normally visible; the fictional labels let the lesson show what the keyword search missed.
+Precision is the share of reviewed hits that are responsive. Recall is the share of all responsive records that were found. The terms match whole words, plus the phrase `Calder Yard`; for example, `log` does not match `chronology`. In this fixture, the terms find `r keyword_metrics$hits` records. Of those, `r keyword_metrics$responsive_hits` are responsive under the constructed labels. That precision, `r keyword_metrics$responsive_hits` divided by `r keyword_metrics$hits`, is visible after reviewing the hits. The recall, `r keyword_metrics$responsive_hits` divided by `r keyword_metrics$responsive_total`, is not normally visible; the fictional labels let the lesson show what the keyword search missed.
 
 ## Rank the rest from the reviewed seed
 
 The reviewed seed is the keyword-hit set. It has at least eight records of each class, which avoids the `glmnet` warning for very small classes under `options(warn = 2)`. The model uses tf-idf features and penalized logistic regression. It trains only on reviewed records and scores only records not yet reviewed.
 
-The stopping rule is also fixed before the model runs: review the keyword-hit seed, then review two ranked batches of 10. That rule has no statistical guarantee. It is a budget rule, and the elusion sample is what estimates the remaining miss.
+The stopping rule is also fixed before the model runs: review the keyword-hit seed, then review two ranked batches of ten. That rule has no statistical guarantee. It is a budget rule, and the elusion sample is what estimates the remaining miss.
 
 ```{r}
 fit_review_model <- function(training_rows) {
@@ -286,6 +308,7 @@ unreviewed_records <- review_scored |>
 review_batches <- list()
 ranked_batches <- 2L
 batch_size <- 10L
+tie_rows <- integer(ranked_batches)
 
 for (batch_id in seq_len(ranked_batches)) {
   fitted_review <- fit_review_model(reviewed_records)
@@ -299,6 +322,11 @@ for (batch_id in seq_len(ranked_batches)) {
     ) |>
     mutate(score = .pred_responsive) |>
     arrange(desc(score), doc_id)
+
+  tie_rows[[batch_id]] <- sum(
+    duplicated(scored_pool$score) |
+      duplicated(scored_pool$score, fromLast = TRUE)
+  )
 
   batch_rows <- scored_pool |>
     slice_head(n = batch_size) |>
@@ -317,6 +345,16 @@ for (batch_id in seq_len(ranked_batches)) {
 }
 
 ranked_reviewed <- bind_rows(review_batches)
+
+ranked_review_display <- ranked_reviewed |>
+  transmute(
+    batch,
+    doc_id,
+    score = round(score, 3),
+    reference_label = if_else(reference_responsive, "responsive", "not responsive"),
+    construction_subtype,
+    text
+  )
 
 batch_summary <- ranked_reviewed |>
   count(batch, reference_responsive, name = "records") |>
@@ -358,6 +396,14 @@ review_stop <- tibble(
   fiction_known_missed = sum(unreviewed_records$reference_responsive)
 )
 
+missed_records <- unreviewed_records |>
+  filter(reference_responsive) |>
+  transmute(
+    doc_id,
+    construction_subtype,
+    text
+  )
+
 knitr::kable(
   batch_summary,
   col.names = c("Ranked batch", "Reference label", "Records"),
@@ -386,6 +432,31 @@ knitr::kable(
   caption = "Predeclared stopping point before the elusion sample",
   row.names = FALSE
 )
+
+knitr::kable(
+  ranked_review_display,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Batch",
+    "Document",
+    "Review score",
+    "Reference label",
+    "Construction note",
+    "Text"
+  ),
+  caption = "Ranked records reviewed after the keyword seed",
+  row.names = FALSE
+)
+
+knitr::kable(
+  missed_records,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Document", "Construction note", "Text"),
+  caption = "Fiction-only responsive records still unreviewed at the stop",
+  row.names = FALSE
+)
 ```
 
 ```{r}
@@ -394,21 +465,22 @@ knitr::kable(
 stopifnot(
   identical(ranked_batches, 2L),
   identical(batch_size, 10L),
-  identical(nrow(reviewed_records), 61L),
-  identical(sum(reviewed_records$reference_responsive), 31L),
-  identical(nrow(unreviewed_records), 179L),
-  identical(sum(unreviewed_records$reference_responsive), 5L),
+  identical(nrow(reviewed_records), 59L),
+  identical(sum(reviewed_records$reference_responsive), 33L),
+  identical(nrow(unreviewed_records), 181L),
+  identical(sum(unreviewed_records$reference_responsive), 3L),
+  identical(nrow(missed_records), 3L),
   all(table(review_scored$label[review_scored$keyword_hit]) >= 8L),
   !any(ranked_reviewed$doc_id %in% review_scored$doc_id[review_scored$keyword_hit])
 )
 ```
 
-The team can see how many responsive records it has found, because reviewers code those records as they review them. It cannot see recall in a real matter without more assessment. The recall column is labeled as fiction-only because it uses the hidden labels for records that were not reviewed.
+The team can see how many responsive records it has found, because reviewers code those records as they review them. It cannot see recall in a real matter without more assessment. The recall column is labeled as fiction-only because it uses the hidden labels for records that were not reviewed. In the two scoring rounds, `r sum(tie_rows)` scored-pool rows were part of exact score ties; ties are ordered by document ID so the run is reproducible, not because lower IDs are more relevant.
 
 ```{r}
 #| label: fig-review-gain
 #| fig-cap: "Responsive records found as review proceeds through the keyword seed and two ranked batches."
-#| fig-alt: "Line chart with three stages. Responsive records found rises from 23 at 41 reviewed records to 30 at 51 and 31 at 61."
+#| fig-alt: "Line chart starting at zero. Responsive records found rises from 22 at 39 reviewed records to 23 at 49 and 33 at 59."
 
 ggplot(
   review_progress,
@@ -416,8 +488,14 @@ ggplot(
 ) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 2) +
-  scale_x_continuous(breaks = review_progress$cumulative_reviewed) +
-  scale_y_continuous(breaks = review_progress$cumulative_responsive_found) +
+  scale_x_continuous(
+    breaks = c(0, review_progress$cumulative_reviewed),
+    limits = c(0, max(review_progress$cumulative_reviewed))
+  ) +
+  scale_y_continuous(
+    breaks = c(0, review_progress$cumulative_responsive_found),
+    limits = c(0, max(review_progress$cumulative_responsive_found))
+  ) +
   labs(
     x = "Records reviewed",
     y = "Responsive records found"
@@ -430,8 +508,8 @@ ggplot(
 
 stopifnot(
   identical(nrow(review_progress), 3L),
-  identical(review_progress$cumulative_reviewed, c(41L, 51L, 61L)),
-  identical(review_progress$cumulative_responsive_found, c(23L, 30L, 31L))
+  identical(review_progress$cumulative_reviewed, c(39L, 49L, 59L)),
+  identical(review_progress$cumulative_responsive_found, c(22L, 23L, 33L))
 )
 ```
 
@@ -550,17 +628,17 @@ stopifnot(
   identical(elusion_seed, 7401L),
   identical(elusion_n, 50L),
   identical(observed_missed_in_sample, 0L),
-  identical(unreviewed_total, 179L),
-  identical(found_total, 31L),
-  identical(missed_interval, c(0L, 10L)),
-  round(recall_interval[1], 3) == 0.756,
+  identical(unreviewed_total, 181L),
+  identical(found_total, 33L),
+  identical(missed_interval, c(0L, 11L)),
+  round(recall_interval[1], 3) == 0.75,
   round(recall_interval[2], 3) == 1,
-  round(known_recall, 3) == 0.861,
+  round(known_recall, 3) == 0.917,
   binomial_warning$printed_recall_low < recall_interval[1]
 )
 ```
 
-The elusion seed is the builder seed, `7401`, reused by rule before drawing the sample. The sample found `r observed_missed_in_sample` responsive records in 50. The point estimate reads as no missed records in the unreviewed pile, but the exact finite-population interval still allows `r missed_interval[1]` to `r missed_interval[2]` missed records. That becomes recall from about `r round(recall_interval[1], 3)` to `r round(recall_interval[2], 3)`. The fiction reveals that the true missed count is `r sum(unreviewed_records$reference_responsive)`.
+The predeclared elusion seed is `7401`, reused by rule before drawing the sample. The sample found `r observed_missed_in_sample` responsive records in `r elusion_n`. `r if (observed_missed_in_sample == 0L) "The point estimate reads as no missed records in the unreviewed pile, but" else sprintf("The point estimate scales that to about %.1f missed records in the unreviewed pile, and", point_missed)` the exact finite-population interval still allows `r missed_interval[1]` to `r missed_interval[2]` missed records. That becomes recall from about `r round(recall_interval[1], 3)` to `r round(recall_interval[2], 3)`. The fiction reveals that the true missed count is `r sum(unreviewed_records$reference_responsive)`.
 
 A binomial Clopper-Pearson interval treats the pile as if it were very large and samples with replacement. Here it gives a wider lower recall bound than the finite-population interval. Confidence intervals describe a repeated-sampling procedure; they are not a 95 percent chance statement about this one interval.
 
@@ -571,6 +649,8 @@ Repeatedly sampling, reviewing more records, and sampling again until the result
 Media monitoring has a different shape. Items arrive over time, duplicate wire copies appear, and a name like Riverton can refer to more than one place. This short stream watches organizations and program names, not individual people. It stores item IDs, decisions, and duplicate links; real review sets may contain personal or privileged material, which this lesson leaves out.
 
 This use of "monitoring" is not lesson 47's deployed-model monitoring, and it is not burst detection from lesson 56. It is an alerting rule over incoming text.
+
+The watch phrases below were written after reading this constructed stream, so the alert count shows bookkeeping rather than transferable precision. The pattern watches `Calder Yard`, `contract records`, `inspection messages`, `route notes`, and `missed check`. A repeated alert is suppressed only when its character-trigram Jaccard distance to a prior alert is at most 0.35.
 
 ```{r}
 normalize_stream_text <- function(text) {
@@ -594,6 +674,7 @@ stream_decisions <- monitoring_stream |>
   )
 
 previous_alerts <- character()
+previous_alert_ids <- character()
 duplicate_of <- rep(NA_character_, nrow(stream_decisions))
 send_alert <- rep(FALSE, nrow(stream_decisions))
 
@@ -605,6 +686,7 @@ for (row in seq_len(nrow(stream_decisions))) {
   if (length(previous_alerts) == 0L) {
     send_alert[[row]] <- TRUE
     previous_alerts <- c(previous_alerts, stream_decisions$normalized_text[[row]])
+    previous_alert_ids <- c(previous_alert_ids, stream_decisions$stream_id[[row]])
     next
   }
 
@@ -615,20 +697,21 @@ for (row in seq_len(nrow(stream_decisions))) {
     q = 3
   )
   if (min(distances) <= 0.35) {
-    duplicate_of[[row]] <- which.min(distances)
+    duplicate_of[[row]] <- previous_alert_ids[[which.min(distances)]]
   } else {
     send_alert[[row]] <- TRUE
     previous_alerts <- c(previous_alerts, stream_decisions$normalized_text[[row]])
+    previous_alert_ids <- c(previous_alert_ids, stream_decisions$stream_id[[row]])
   }
 }
 
 stream_decisions <- stream_decisions |>
   mutate(
-    duplicate_of_prior_alert = duplicate_of,
+    matched_prior_alert = duplicate_of,
     alert_sent = send_alert,
     decision = case_when(
       alert_sent ~ "alert sent",
-      raw_alert & !is.na(duplicate_of_prior_alert) ~ "suppressed duplicate",
+      raw_alert & !is.na(matched_prior_alert) ~ "suppressed duplicate",
       ambiguous_riverton ~ "needs review: ambiguous Riverton",
       TRUE ~ "no alert"
     )
@@ -638,8 +721,9 @@ monitoring_results <- tibble(
   alerts_sent = sum(stream_decisions$alert_sent),
   relevant_alerts = sum(stream_decisions$alert_sent & stream_decisions$reference_alert),
   false_alerts = sum(stream_decisions$alert_sent & !stream_decisions$reference_alert),
-  relevant_items_missed = sum(!stream_decisions$alert_sent & stream_decisions$reference_alert & is.na(stream_decisions$duplicate_of_prior_alert)),
-  suppressed_duplicates = sum(!is.na(stream_decisions$duplicate_of_prior_alert)),
+  relevant_items_missed = sum(!stream_decisions$alert_sent & stream_decisions$reference_alert & is.na(stream_decisions$matched_prior_alert)),
+  suppressed_duplicates = sum(!is.na(stream_decisions$matched_prior_alert)),
+  repeated_alerts = sum(stream_decisions$alert_sent & !is.na(stream_decisions$near_duplicate_of)),
   alert_precision = relevant_alerts / alerts_sent
 )
 
@@ -647,16 +731,22 @@ stream_display <- stream_decisions |>
   select(
     arrival_order,
     stream_id,
+    near_duplicate_of,
+    matched_prior_alert,
     text,
     decision,
     reference_alert
+  ) |>
+  mutate(
+    near_duplicate_of = coalesce(near_duplicate_of, "not a copy"),
+    matched_prior_alert = coalesce(matched_prior_alert, "not suppressed")
   )
 
 knitr::kable(
   stream_display,
   format = "html",
   escape = TRUE,
-  col.names = c("Arrival", "Item", "Text", "Rule decision", "Reference alert"),
+  col.names = c("Arrival", "Item", "Fixture duplicate of", "Matched prior alert", "Text", "Rule decision", "Reference alert"),
   caption = "Monitoring items are processed in arrival order",
   row.names = FALSE
 )
@@ -670,6 +760,7 @@ knitr::kable(
     "False alerts",
     "Relevant items missed",
     "Suppressed duplicates",
+    "Repeated alerts",
     "Alert precision"
   ),
   caption = "Alert precision uses alerts sent after duplicate suppression as the denominator",
@@ -693,6 +784,8 @@ stopifnot(
 
 Alert precision is `r monitoring_results$relevant_alerts` relevant alerts out of `r monitoring_results$alerts_sent` alerts sent. The denominator is alerts after duplicate suppression. Suppressed copies still count in the audit trail, but they do not consume a new alert slot. In a real stream, missed items are usually found by sampling non-alerts, the same idea as the elusion sample.
 
+The ambiguity rule is crude. It sends `r stream_decisions$stream_id[str_detect(stream_decisions$text, "Tidewater seafood")]`, the Tidewater seafood item, to review even though the text itself points away from Calder Yard.
+
 ## What this does not show
 
 This page does not give legal advice, prove a review is defensible, or estimate a real system's recall. It also leaves out privilege review, redaction, email threading, family coding, dense retrieval, and language-model relevance labeling. The labels are perfectly consistent because the author wrote them; real reviewers disagree.
@@ -708,7 +801,7 @@ The review model's scores are ranks for this workflow, not calibrated probabilit
 - A finite-population interval matches a fixed pile sampled without replacement.
 - Monitoring streams need arrival order, duplicate suppression, ambiguity handling, and a named precision denominator.
 
-Marcus sends the review log forward with one sampled miss and a wide interval. The uncomfortable range is the lesson: stopping review does not make the unreviewed pile disappear.
+The review log goes forward with `r if (observed_missed_in_sample == 0L) "no sampled responsive records" else paste(observed_missed_in_sample, "sampled responsive records")` and a wide interval. The uncomfortable range is the lesson: stopping review does not make the unreviewed pile disappear.
 
 ## Sources
 

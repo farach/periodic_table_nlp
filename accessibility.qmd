@@ -33,9 +33,9 @@ that a source supports the surrounding claim.
 ## Using the periodic table
 
 Tiles with a solid border and the words **Read lesson** are links. Every task
-on the map now has a lesson. If a planned task is ever added, its tile will
-have a dashed border, show **Planned**, and stay plain text rather than a
-disabled control.
+on the map has a lesson. If a planned task is ever added, its tile will have a
+dashed border, show **Planned**, and stay plain text rather than a disabled
+control.
 
 The table is wider than a phone screen. Touch users can swipe sideways.
 Keyboard users can focus the table and use the left and right arrow keys.

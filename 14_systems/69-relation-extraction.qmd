@@ -64,7 +64,7 @@ source("R/use-spacy.R")
 relation_schema <- tribble(
   ~relation, ~subject_type, ~object_type, ~direction, ~status_values, ~what_counts,
   "offers", "organisation", "credential",
-  "provider -> credential", "asserted, negated, hedged",
+  "organisation -> credential", "asserted, negated, hedged",
   "The sentence says the organisation offers, may offer, or does not offer the credential.",
   "requires", "organisation", "credential",
   "organisation -> credential", "asserted, negated, hedged",
@@ -164,13 +164,6 @@ alias_hash <- digest(
   serialize = FALSE
 )
 
-sentence_text_copy <- read_csv(
-  "data/workforce/workforce_sentences.csv",
-  na = character(),
-  col_types = cols(.default = col_character())
-) |>
-  pull(text)
-
 knitr::kable(
   aliases |>
     arrange(entity_id, alias) |>
@@ -186,7 +179,6 @@ knitr::kable(
 
 stopifnot(
   identical(nrow(sentences), 28L),
-  identical(sentences$text, sentence_text_copy),
   identical(nrow(entities), 8L),
   identical(
     alias_hash,
@@ -204,7 +196,7 @@ organisation and credential aliases that link to one ID.
 
 The job-board and flyer lines are useful for inspection, but they do not contain
 two distinct linked entity mentions in one sentence. The table below is the only
-place this lesson prints all 28 source sentences. It shows why most lines cannot
+place this lesson prints all 28 source sentences. It shows why none of these lines can
 produce complete relation triples.
 
 ```{r}
@@ -214,6 +206,15 @@ escape_regex <- function(value) {
 
 find_mentions <- function(document_id, sentence_id, text) {
   candidates <- aliases |>
+    mutate(normalized_alias = str_to_lower(alias, locale = "en")) |>
+    group_by(normalized_alias, alias) |>
+    summarise(
+      candidate_count = n_distinct(entity_id),
+      entity_id = paste(sort(unique(entity_id)), collapse = "; "),
+      canonical_name = paste(sort(unique(canonical_name)), collapse = "; "),
+      entity_type = paste(sort(unique(entity_type)), collapse = "; "),
+      .groups = "drop"
+    ) |>
     mutate(alias_length = nchar(alias)) |>
     arrange(desc(alias_length), alias)
 
@@ -245,6 +246,7 @@ find_mentions <- function(document_id, sentence_id, text) {
           entity_id = candidates$entity_id[[row]],
           canonical_name = candidates$canonical_name[[row]],
           entity_type = candidates$entity_type[[row]],
+          link_status = if_else(candidates$candidate_count[[row]] > 1L, "ambiguous", "linked"),
           mention = str_sub(text, span[1], span[2]),
           start = span[1],
           end = span[2]
@@ -261,6 +263,7 @@ find_mentions <- function(document_id, sentence_id, text) {
       entity_id = character(),
       canonical_name = character(),
       entity_type = character(),
+      link_status = character(),
       mention = character(),
       start = integer(),
       end = integer()
@@ -291,7 +294,13 @@ verbatim_inspection <- sentences |>
           "none"
         } else {
           paste(
-            paste0(rows$mention, " (", rows$entity_id, ")"),
+            paste0(
+              rows$mention,
+              " (",
+              rows$entity_id,
+              if_else(rows$link_status == "ambiguous", ", ambiguous", ""),
+              ")"
+            ),
             collapse = "; "
           )
         }
@@ -302,17 +311,15 @@ verbatim_inspection <- sentences |>
       str_detect(str_to_lower(text), "\\brequired|\\bmust|\\bneed") ~ "require-like wording",
       TRUE ~ "none"
     ),
-    polarity = case_when(
+    polarity_read_by_hand = case_when(
       sentence_id %in% c("s002", "s027") ~ "negated",
       TRUE ~ "asserted or not applicable"
     ),
-    modality = case_when(
+    modality_read_by_hand = case_when(
       sentence_id %in% c("s010", "s013") ~ "preferred, not asserted as required",
       uncertainty == "needs_review" ~ "needs review",
       TRUE ~ "plain"
-    ),
-    can_make_schema_edge = "no complete same-sentence entity pair",
-    page_subject_assumption = "not used"
+    )
   ) |>
   select(
     sentence_id,
@@ -320,10 +327,8 @@ verbatim_inspection <- sentences |>
     text,
     linked_mentions,
     schema_cue,
-    polarity,
-    modality,
-    can_make_schema_edge,
-    page_subject_assumption
+    polarity_read_by_hand,
+    modality_read_by_hand
   )
 
 knitr::kable(
@@ -332,8 +337,7 @@ knitr::kable(
   escape = TRUE,
   col.names = c(
     "Sentence ID", "Document ID", "Text", "Linked mentions",
-    "Schema cue", "Polarity", "Modality", "Schema edge?",
-    "Page subject assumption"
+    "Schema cue", "Polarity read by hand", "Modality read by hand"
   ),
   caption = "Inspection table for all 28 verbatim Riverton sentences",
   row.names = FALSE
@@ -347,25 +351,26 @@ stopifnot(
   identical(nrow(verbatim_inspection), 28L),
   identical(verbatim_inspection$text, sentences$text),
   identical(
-    verbatim_inspection$polarity[verbatim_inspection$sentence_id == "s002"],
+    verbatim_inspection$polarity_read_by_hand[verbatim_inspection$sentence_id == "s002"],
     "negated"
   ),
   identical(
-    verbatim_inspection$polarity[verbatim_inspection$sentence_id == "s027"],
+    verbatim_inspection$polarity_read_by_hand[verbatim_inspection$sentence_id == "s027"],
     "negated"
   ),
-  !any(str_detect(
-    verbatim_inspection$can_make_schema_edge,
-    regex("^yes", ignore_case = TRUE)
-  )),
-  all(verbatim_inspection$page_subject_assumption == "not used"),
+  identical(
+    verbatim_inspection$linked_mentions[verbatim_inspection$sentence_id == "s023"],
+    "RIVERTON (LOC-0001; LOC-0002, ambiguous)"
+  ),
   max(count(verbatim_mentions, sentence_id)$n, na.rm = TRUE) < 2L
 )
 ```
 
 The important negative result is concrete: these 28 lines do not give the
 extractor complete entity pairs. A page or posting could supply a missing
-employer, but that would be a page-structure assumption, not sentence evidence.
+employer, but that would be a page-structure assumption, not sentence evidence;
+this lesson does not use that assumption. The polarity and modality columns are
+read by hand so the table can flag lines worth inspecting.
 
 ## Write a same-author reference before extraction
 
@@ -435,7 +440,8 @@ stopifnot(
 
 The reference has no row for the bus sentence or the job-ad counting sentence.
 Both contain more than one linked mention, but neither states one of the schema
-relations between those mentions.
+relations between those mentions. The numbering has gaps because scratch parser
+checks were removed before this lesson file was committed.
 
 ## Parse and align mentions to tokens
 
@@ -539,17 +545,19 @@ The offsets are one-based character positions in the unmodified sentence text.
 That lets the triple point back to the exact evidence instead of to a rebuilt
 token string.
 
+In the head-relation column, `nsubj` marks an active subject, `dobj` a direct
+object, `nsubjpass` a passive subject, `pobj` an object of a preposition, and
+`conj` a coordinated item. Lesson 18 introduces these parser links in more
+detail.
+
 ## Extract directed triples
 
 The extractor looks for `offer` and `require` triggers. It handles active
 subjects, passive agents, coordinated objects, `not` on a verb, `No` on an
 argument, `no longer` under an adverb, and hedging from `may`. The reported
-requirement is kept in the reference so the scoring table can show a miss.
+requirement is a visible miss for this small pattern set.
 
 ```{r}
-children <- parsed |>
-  select(doc_id, token_id, child_id = token_id, child = token, child_lemma = lemma, child_dep = dep_rel, head_token_id)
-
 trigger_tokens <- parsed |>
   filter(lemma %in% c("offer", "require"), pos == "VERB") |>
   transmute(
@@ -564,7 +572,7 @@ trigger_tokens <- parsed |>
 argument_roles <- mention_heads |>
   left_join(
     parsed |>
-      transmute(sentence_id = doc_id, head_token_id = token_id, dep_rel, token_head_id = head_token_id),
+      transmute(sentence_id = doc_id, token_head_id = head_token_id, head_token_id = token_id, dep_rel),
     by = c("sentence_id", "head_token_id")
   ) |>
   select(
@@ -584,14 +592,6 @@ object_heads <- argument_roles |>
     object_head_id = head_token_id,
     object_dep = dep_rel,
     object_token_head_id = token_head_id
-  )
-
-conj_objects <- object_heads |>
-  filter(object_dep == "conj") |>
-  left_join(
-    object_heads |>
-      select(sentence_id, governing_object_head_id = object_head_id),
-    by = c("sentence_id", "object_token_head_id" = "governing_object_head_id")
   )
 
 active_triples <- trigger_tokens |>
@@ -667,9 +667,9 @@ raw_triples <- bind_rows(
     relation = recode(trigger_lemma, offer = "offers", require = "requires")
   )
 
-status_for_trigger <- function(sentence_id, trigger_token_id, subject_head_id, object_head_id) {
+status_for_trigger <- function(current_sentence_id, trigger_token_id, subject_head_id, object_head_id) {
   sentence_tokens <- parsed |>
-    filter(doc_id == sentence_id)
+    filter(doc_id == current_sentence_id)
 
   verb_negated <- any(
     sentence_tokens$head_token_id == trigger_token_id &
@@ -712,29 +712,12 @@ status_for_trigger <- function(sentence_id, trigger_token_id, subject_head_id, o
   )
 }
 
-extractor_cases <- reference_triples |>
-  filter(sentence_id != "c13")
-
-extracted_triples <- extractor_cases |>
-  left_join(
-    mention_heads |>
-      select(
-        sentence_id,
-        subject_id = entity_id,
-        subject_start = start,
-        subject_end = end
-      ),
-    by = c("sentence_id", "subject_id")
-  ) |>
-  left_join(
-    mention_heads |>
-      select(
-        sentence_id,
-        object_id = entity_id,
-        object_start = start,
-        object_end = end
-      ),
-    by = c("sentence_id", "object_id")
+extracted_triples <- raw_triples |>
+  mutate(
+    status = pmap_chr(
+      list(sentence_id, trigger_token_id, subject_head_id, object_head_id),
+      status_for_trigger
+    )
   ) |>
   left_join(
     constructed_sentences |>
@@ -742,8 +725,8 @@ extracted_triples <- extractor_cases |>
     by = "sentence_id"
   ) |>
   mutate(
-    evidence_start = pmin(subject_start, object_start),
-    evidence_end = pmax(subject_end, object_end),
+    evidence_start = 1L,
+    evidence_end = nchar(text),
     evidence_text = str_sub(text, evidence_start, evidence_end)
   ) |>
   select(
@@ -779,6 +762,7 @@ knitr::kable(
 #| include: false
 
 stopifnot(
+  nrow(raw_triples) > 0L,
   nrow(extracted_triples) >= 8L,
   all(!is.na(extracted_triples$document_id)),
   all(extracted_triples$status %in% c("asserted", "negated", "hedged")),
@@ -786,12 +770,22 @@ stopifnot(
   all(extracted_triples$object_start <= extracted_triples$object_end),
   any(extracted_triples$sentence_id == "c09" & extracted_triples$status == "negated"),
   any(extracted_triples$sentence_id == "c11" & extracted_triples$status == "negated"),
+  any(extracted_triples$sentence_id == "c03" & extracted_triples$status == "negated"),
+  any(extracted_triples$sentence_id == "c06" & extracted_triples$status == "hedged"),
   !any(extracted_triples$sentence_id == "c13"),
   !any(
     extracted_triples$sentence_id %in% c("s002", "s027") &
       extracted_triples$relation == "requires" &
       extracted_triples$status == "asserted"
-  )
+  ),
+  all(str_detect(
+    extracted_triples$evidence_text[extracted_triples$status == "negated"],
+    regex("\\b(no|not)\\b", ignore_case = TRUE)
+  )),
+  all(str_detect(
+    extracted_triples$evidence_text[extracted_triples$status == "hedged"],
+    regex("\\b(may|might|could|reported)\\b", ignore_case = TRUE)
+  ))
 )
 ```
 
@@ -961,8 +955,8 @@ scoring method, so this page does not make a performance claim about them.
 - This same-author score is a demonstration, not a benchmark.
 - Every triple needs sentence, document, and offset evidence.
 
-Tomas can now separate two tasks: finding candidate pairs for review and
-asserting a schema triple only when the sentence supports it.
+The safe habit is to treat candidate pairs as leads for review and schema
+triples as claims that need sentence evidence.
 
 ## Sources
 

@@ -10,3 +10,4 @@
 *.bin binary
 *.png binary
 renv/activate.R -whitespace
+renv.lock text eol=lf

@@ -43,6 +43,12 @@ keyword_terms <- c(
   "Calder Yard"
 )
 
+keyword_regex_text <- paste0(
+  "\\b(",
+  paste(keyword_terms[keyword_terms != "Calder Yard"], collapse = "|"),
+  ")\\b|\\bCalder Yard\\b"
+)
+
 roles <- c(
   "operations coordinator",
   "maintenance lead",
@@ -77,7 +83,7 @@ make_review_rows <- function(texts,
                              near_duplicate_of = NA_character_) {
   row_count <- length(texts)
   reference_reason <- if (responsive && str_detect(subtype, "keyword")) {
-    "mentions inspection records, delay, deletion, or logs tied to the request"
+    "contains at least one predeclared keyword and is responsive to the request"
   } else if (responsive) {
     "uses indirect wording about hiding the requested inspection problem"
   } else {
@@ -205,7 +211,7 @@ everyday_texts <- pmap_dfr(
     ) |>
       mutate(
         text = str_to_sentence(str_c(
-          "the ", area, " team ", action, " the ", item, " ", detail, "."
+          area, " ", action, " the ", item, " ", detail, "."
         ))
       ) |>
       select(text)
@@ -310,6 +316,11 @@ stopifnot(
   sum(review_collection$reference_responsive) == 36L
 )
 
+set.seed(7403)
+review_collection <- review_collection |>
+  slice_sample(n = nrow(review_collection)) |>
+  mutate(raw_construction_order = row_number())
+
 date_assignment <- NULL
 date_pool <- seq.Date(as.Date("2026-03-01"), as.Date("2026-05-31"), by = "day")
 for (candidate_seed in 7402:9000) {
@@ -328,6 +339,7 @@ stopifnot(!is.null(date_assignment))
 
 review_collection <- review_collection |>
   mutate(doc_date = date_assignment)
+date_seed <- candidate_seed
 
 label_numeric_for_id <- as.integer(review_collection$reference_responsive)
 id_assignment <- NULL
@@ -348,6 +360,7 @@ review_collection <- review_collection |>
     doc_id_number = id_assignment,
     doc_id = sprintf("RYD-%04d", doc_id_number)
   )
+id_seed <- candidate_seed
 
 construction_to_doc <- review_collection |>
   select(construction_id, original_doc_id = doc_id)
@@ -360,7 +373,10 @@ review_collection <- review_collection |>
   mutate(near_duplicate_of = original_doc_id) |>
   select(-original_doc_id, -doc_id_number) |>
   arrange(doc_id) |>
-  mutate(file_position = row_number()) |>
+  mutate(
+    file_position = row_number(),
+    construction_id = sprintf("RC-%04d", file_position)
+  ) |>
   select(
     doc_id,
     record_type,
@@ -376,7 +392,8 @@ review_collection <- review_collection |>
     text,
     author_note,
     construction_id,
-    file_position
+    file_position,
+    raw_construction_order
   )
 
 monitoring_text <- c(
@@ -471,6 +488,7 @@ monitoring_stream <- monitoring_stream |>
     author_note
   ) |>
   arrange(arrival_order)
+stream_seed <- candidate_seed
 
 collection_path <- file.path(out_dir, "riverton-review-collection.csv")
 stream_path <- file.path(out_dir, "riverton-monitoring-stream.csv")
@@ -557,9 +575,12 @@ review_features <- review_collection |>
     id_number_band = ntile(doc_id_number, 5),
     date_rank_band = ntile(as.numeric(doc_date), 5),
     file_position_band = ntile(file_position, 5),
+    sentence_frame = str_extract(text, "^[A-Za-z]+\\s+[A-Za-z]+\\s+[A-Za-z]+"),
+    first_word = word(text, 1),
+    raw_order_band = ntile(raw_construction_order, 5),
     construction_template = paste0(
       "template-",
-      as.integer(str_extract(construction_id, "\\d+")) %% 12L
+      raw_construction_order %% 12L
     ),
     source_type = source_type,
     sender_role = sender_role,
@@ -577,16 +598,53 @@ shortcut_features <- c(
   "id_number_band",
   "date_rank_band",
   "file_position_band",
+  "raw_order_band",
+  "sentence_frame",
+  "first_word",
   "construction_template",
   "source_type",
   "sender_role",
   "subject"
 )
 
+request_topic_terms <- c(
+  str_to_lower(keyword_terms, locale = "en"),
+  "hiding", "safety", "altering", "changing", "inspection",
+  "inspections", "information", "records", "record", "messages",
+  "calder", "yard", "contract", "delete", "deleted", "delay",
+  "delayed", "log", "logs"
+)
+
+frequent_non_topic_terms <- review_collection |>
+  transmute(
+    term = str_extract_all(str_to_lower(text, locale = "en"), "[a-z]+")
+  ) |>
+  unnest_longer(term, values_to = "term") |>
+  filter(!term %in% request_topic_terms) |>
+  count(term, sort = TRUE) |>
+  slice_head(n = 20) |>
+  pull(term)
+
+frequent_token_diagnostics <- map_dfr(
+  frequent_non_topic_terms,
+  \(term) {
+    feature_name <- paste0("token_", make.names(term))
+    token_data <- review_collection |>
+      mutate(
+        "{feature_name}" := str_detect(
+          str_to_lower(text, locale = "en"),
+          regex(paste0("\\b", term, "\\b"))
+        )
+      )
+    score_binary_feature(token_data, feature_name)
+  }
+)
+
 shortcut_diagnostics <- map_dfr(
   shortcut_features,
   \(feature) score_binary_feature(review_features, feature)
-)
+) |>
+  bind_rows(frequent_token_diagnostics)
 
 print(
   shortcut_diagnostics |>
@@ -598,7 +656,26 @@ print(
   width = Inf
 )
 
-keyword_regex <- regex(paste(keyword_terms, collapse = "|"), ignore_case = TRUE)
+keyword_regex <- regex(keyword_regex_text, ignore_case = TRUE)
+review_collection <- review_collection |>
+  mutate(
+    keyword_hit_for_subtype = str_detect(text, keyword_regex),
+    construction_subtype = case_when(
+      reference_responsive &
+        construction_subtype == "keyword responsive" &
+        !keyword_hit_for_subtype ~ "vocabulary mismatch responsive",
+      TRUE ~ construction_subtype
+    ),
+    reference_reason = case_when(
+      reference_responsive & keyword_hit_for_subtype ~
+        "contains at least one predeclared keyword and is responsive to the request",
+      reference_responsive ~
+        "uses indirect wording about hiding the requested inspection problem",
+      TRUE ~ reference_reason
+    )
+  ) |>
+  select(-keyword_hit_for_subtype)
+
 keyword_results <- review_collection |>
   mutate(keyword_hit = str_detect(text, keyword_regex))
 keyword_counts <- keyword_results |>
@@ -657,8 +734,13 @@ stopifnot(
   keyword_counts$hits <= 60L,
   keyword_counts$responsive_hits >= 8L,
   keyword_counts$hits - keyword_counts$responsive_hits >= 8L,
-  max(shortcut_diagnostics$positive_f1) < 0.60,
-  max(shortcut_diagnostics$balanced_accuracy) < 0.75,
+  max(shortcut_diagnostics$positive_f1, na.rm = TRUE) < 0.60,
+  max(shortcut_diagnostics$balanced_accuracy, na.rm = TRUE) < 0.75,
+  all(
+    keyword_results$keyword_hit[
+      keyword_results$construction_subtype == "keyword responsive"
+    ]
+  ),
   identical(nrow(monitoring_stream), 24L),
   identical(monitoring_stream$arrival_order, seq_len(nrow(monitoring_stream)))
 )
@@ -730,6 +812,12 @@ metadata <- tibble(
   fingerprint = c(hash_lines(collection_path), hash_lines(stream_path)),
   rng_kind = paste(RNGkind(), collapse = "; "),
   seed = "7401",
+  effective_seeds = paste(
+    paste0("date=", date_seed),
+    paste0("doc_id=", id_seed),
+    paste0("stream_id=", stream_seed),
+    sep = "; "
+  ),
   review_request = review_request,
   shortcut_sweep = paste(
     "Refuses to write if any audited superficial feature reaches positive",

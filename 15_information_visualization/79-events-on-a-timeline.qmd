@@ -5,9 +5,8 @@ description: "Learn how to draw a small event timeline without turning coarse or
 categories: [information visualization, timelines, temporal parsing]
 ---
 
-Nadia is cleaning up a short program log. Some entries report what happened.
-Others say what staff planned. A few lines mention a month or a season instead
-of a single day.
+`The pilot lasted six weeks` looks ready for a timeline until Nadia asks when
+the six weeks began. Other entries report a day, a month, or a season.
 
 **Events on a timeline** means placing event records on a time scale only as
 precisely as the text allows. A day can be a point. A month, season, or course
@@ -124,7 +123,7 @@ event_plan <- tribble(
   "entry-year month day",
   "EV03", "R02", "registration closes", "March 15", "day", "planned",
   "entry-year month day",
-  "EV04", "R03", "course starts", "September 14 for 12 weeks", "duration",
+  "EV04", "R03", "12-week course", "September 14 for 12 weeks", "duration",
   "planned", "entry-year month day plus weeks",
   "EV05", "R04", "applicant check-in", "last Monday", "day", "reported",
   "previous weekday from entry date",
@@ -256,14 +255,14 @@ event_rows <- event_plan |>
   ) |>
   select(
     event_id, entry_id, narrative_order, entry_date, trigger, time_text,
-    granularity, status, start, end, placed, reason_unplaced
+    granularity, status, rule, start, end, placed, reason_unplaced
   )
 
 kable(
   event_rows,
   col.names = c(
     "Event ID", "Entry ID", "Narrative order", "Entry date", "Event trigger",
-    "Time text", "Granularity", "Status", "Start", "End", "Placed",
+    "Time text", "Granularity", "Status", "Rule", "Start", "End", "Placed",
     "Reason unplaced"
   ),
   caption = "Normalized event records with separate document dates and event intervals",
@@ -286,6 +285,7 @@ stopifnot(
   identical(event_rows$start[event_rows$event_id == "EV05"], as.Date("2026-09-14")),
   identical(event_rows$start[event_rows$event_id == "EV08"], as.Date("2026-09-01")),
   identical(event_rows$end[event_rows$event_id == "EV08"], as.Date("2026-09-30")),
+  identical(event_rows$rule, event_plan$rule),
   identical(sum(event_rows$placed), 7L),
   identical(sum(!event_rows$placed), 1L),
   !any(is.na(event_rows$entry_date))
@@ -293,8 +293,9 @@ stopifnot(
 ```
 
 Seven events receive dates. One duration does not. The `start` and `end` columns
-make the difference visible: a day has the same start and end, while spring, a
-month, and a 12-week course span several days.
+make the difference visible: a day has the same start and end. The spring and
+September bars mark only the season or month named in the entry; only the
+12-week course bar is a known duration.
 
 ## Keep unplaced events visible
 
@@ -339,8 +340,8 @@ and reported distinction remains readable without color.
 
 ```{r}
 #| label: fig-event-timeline
-#| fig-cap: "Timeline of seven placed events from a constructed Riverton log in 2026; intervals show a season, a month, and a 12-week course, while four day-level events are points."
-#| fig-alt: "Timeline with seven placed events in chronological order. Three events are intervals: spring outreach from March 1 to May 31 2026, September work from September 1 to September 30 2026, and a 12-week course from September 14 to December 6 2026. Four day-level events are points on March 2, March 15, September 14, and October 22 2026. Each row label includes the event order and source entry number. The six-week pilot duration without a start date is left off the chart."
+#| fig-cap: "Timeline of seven placed events from a constructed Riverton log in 2026; range bars show a season, a named month, and one 12-week course duration, while four day-level events are points."
+#| fig-alt: "Timeline with seven placed events in chronological order. Three events are drawn as range bars: spring outreach can be placed only within March 1 to May 31 2026, September work can be placed only within September 1 to September 30 2026, and the 12-week course runs from September 14 to December 6 2026. Four day-level events are points on March 2, March 15, September 14, and October 22 2026. Each row label includes the event order and source entry number. The six-week pilot duration without a start date is left off the chart."
 #| fig-width: 8
 #| fig-height: 5.5
 
@@ -463,7 +464,7 @@ stopifnot(
 )
 ```
 
-## Where this fits
+## How this differs from parsing one date
 
 TimeML and related standards separate events, time expressions, and the
 document's creation time. This page does the same thing in a small table. It

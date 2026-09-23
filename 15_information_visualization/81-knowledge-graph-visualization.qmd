@@ -43,9 +43,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Rebuild the graph facts by ID
 
-The graph starts with the same edge facts named in the knowledge-base lesson.
-The two `Riverton` places have different IDs. That difference is the first thing
-the drawing must preserve.
+The graph starts with the populated fact edges named in the knowledge-base
+lesson. The two `Riverton` places have different IDs. That difference is the
+first thing the drawing must preserve.
 
 ```{r}
 library(dplyr)
@@ -69,18 +69,15 @@ nodes <- tribble(
   "LOC-0002", "Riverton", "place",
   "LOC-0003", "Bellhaven", "place",
   "CRD-0002", "Data Support Certificate", "credential",
-  "DATE-2026-10-15", "October 15, 2026", "date value",
-  "DATE-2026-11-01", "November 1, 2026", "date value"
+  "VALUE-October 15", "October 15", "date literal",
+  "VALUE-November 1", "November 1", "date literal"
 )
 
 edges <- tribble(
-  ~from, ~to, ~relation, ~source,
-  "ORG-0002", "CRD-0002", "offers", "populated fact",
-  "ORG-0002", "DATE-2026-10-15", "application_deadline", "populated fact",
-  "ORG-0002", "DATE-2026-11-01", "application_deadline", "populated fact",
-  "ORG-0002", "LOC-0001", "located_in", "reference link",
-  "ORG-0003", "LOC-0001", "serves", "reference link",
-  "LOC-0003", "LOC-0001", "near", "reference link"
+  ~from, ~to, ~relation, ~object_value, ~document_ids, ~source,
+  "ORG-0002", "CRD-0002", "offers", "CRD-0002", "A001; A002", "populated fact",
+  "ORG-0002", "VALUE-October 15", "application_deadline", "October 15", "A003", "populated fact",
+  "ORG-0002", "VALUE-November 1", "application_deadline", "November 1", "A004", "populated fact"
 )
 
 edge_list <- edges |>
@@ -97,6 +94,8 @@ edge_list <- edges |>
     from_label,
     from_type,
     relation = str_replace_all(relation, "_", " "),
+    object_value,
+    document_ids,
     to_id = to,
     to_label,
     to_type,
@@ -107,7 +106,7 @@ knitr::kable(
   edge_list,
   col.names = c(
     "From ID", "From label", "From type", "Relation",
-    "To ID", "To label", "To type", "Source"
+    "Object value", "Document IDs", "To ID", "To label", "To type", "Source"
   ),
   caption = "Every edge drawn in the Riverton knowledge graph",
   row.names = FALSE
@@ -119,9 +118,12 @@ knitr::kable(
 
 stopifnot(
   identical(nrow(nodes), 8L),
-  identical(nrow(edges), 6L),
+  identical(nrow(edges), 3L),
   all(edges$from %in% nodes$node_id),
   all(edges$to %in% nodes$node_id),
+  all(edges$source == "populated fact"),
+  all(edges$document_ids %in% c("A001; A002", "A003", "A004")),
+  !any(str_detect(nodes$label, "2026")),
   sum(nodes$label == "Riverton") == 2L,
   all(c("LOC-0001", "LOC-0002") %in% nodes$node_id)
 )
@@ -130,7 +132,9 @@ stopifnot(
 The table is the long description of the graph. It lists every drawn edge with
 IDs and labels, so the relation can be checked without seeing the picture. The
 two deadline values are both kept because the knowledge base flagged them as a
-dated conflict rather than choosing one automatically.
+dated conflict rather than choosing one automatically; no year is supplied in
+these graph labels because the announcements say only `October 15` and
+`November 1`.
 
 ## Show the label-keyed mistake
 
@@ -225,17 +229,19 @@ stopifnot(
 )
 ```
 
-## Compute a deterministic layout and draw arrows
+## Place nodes by hand and draw arrows
 
 The main figure uses fixed deterministic coordinates chosen so the labels are
 readable. That keeps the drawing stable while Chloe reads the arrows and labels.
 Up, down, left, right, rotation, and mirror image still do not carry data. Count
-links in the table if you need a number.
+links in the table if you need a number. Viewers tend to read a centrally drawn
+node as more prominent, so the drawing should not be used as an importance
+score.
 
 ```{r}
 #| label: fig-riverton-graph
 #| fig-cap: "ID-keyed Riverton knowledge graph with directed, labelled edges."
-#| fig-alt: "A node-link diagram of eight ID-labelled Riverton nodes and six directed relation edges. The exact edges are listed in the edge table above."
+#| fig-alt: !expr paste0("A node-link diagram of ", nrow(nodes), " nodes, each labelled with a name and an entity ID, and ", nrow(edges), " directed relation edges. The exact edges are listed in the edge table above.")
 #| fig-width: 9
 #| fig-height: 6.5
 
@@ -252,8 +258,8 @@ layout_fixed <- tribble(
   ~node_id, ~x, ~y,
   "ORG-0002", 0.0, 0.0,
   "CRD-0002", -2.2, 1.5,
-  "DATE-2026-10-15", 2.2, 1.5,
-  "DATE-2026-11-01", 2.2, -1.1,
+  "VALUE-October 15", 2.2, 1.5,
+  "VALUE-November 1", 2.2, -1.1,
   "LOC-0001", -0.2, -2.2,
   "ORG-0003", -2.4, -3.3,
   "LOC-0003", 1.8, -3.3,
@@ -264,11 +270,8 @@ layout_fixed <- tribble(
 edge_label_positions <- tribble(
   ~from, ~to, ~label_x, ~label_y,
   "ORG-0002", "CRD-0002", -1.25, 0.95,
-  "ORG-0002", "DATE-2026-10-15", 1.30, 0.95,
-  "ORG-0002", "DATE-2026-11-01", 1.35, -0.55,
-  "ORG-0002", "LOC-0001", -0.55, -1.05,
-  "ORG-0003", "LOC-0001", -1.45, -2.65,
-  "LOC-0003", "LOC-0001", 0.95, -2.65
+  "ORG-0002", "VALUE-October 15", 1.30, 0.95,
+  "ORG-0002", "VALUE-November 1", 1.35, -0.55
 )
 
 shorten_segments <- function(edge_positions, amount = 0.20) {
@@ -392,9 +395,10 @@ caption and table make the same information available outside the image.
 ## Check seed dependence without reading coordinates
 
 Force-directed layouts are useful for many graphs, but their coordinates depend
-on random starting positions. The check below runs two seeded
-Fruchterman-Reingold layouts and compares graph properties rather than
-coordinate literals.
+on random starting positions. A layout cannot change the graph's edges or
+degrees; it only assigns positions. The check below runs two seeded
+Fruchterman-Reingold layouts and compares the node IDs and coordinates rather
+than coordinate literals.
 
 ```{r}
 layout_for_seed <- function(graph, seed) {
@@ -408,24 +412,10 @@ layout_for_seed <- function(graph, seed) {
 layout_seed_17 <- layout_for_seed(id_graph, 17L)
 layout_seed_29 <- layout_for_seed(id_graph, 29L)
 
-edge_set_seed_17 <- edges |>
-  transmute(edge = paste(from, relation, to, sep = "|")) |>
-  arrange(edge) |>
-  pull(edge)
-
-edge_set_seed_29 <- edge_set_seed_17
-
-degree_table_seed_17 <- degree_table |>
-  arrange(node_id)
-
-degree_table_seed_29 <- degree_table |>
-  arrange(node_id)
-
 seed_comparison <- tibble(
-  check = c("same edge set", "same degree table", "coordinates identical"),
+  check = c("same node IDs", "coordinates identical"),
   result = c(
-    identical(edge_set_seed_17, edge_set_seed_29),
-    identical(degree_table_seed_17, degree_table_seed_29),
+    setequal(layout_seed_17$node_id, layout_seed_29$node_id),
     identical(
       layout_seed_17 |> arrange(node_id) |> select(x, y),
       layout_seed_29 |> arrange(node_id) |> select(x, y)
@@ -445,8 +435,7 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  seed_comparison$result[seed_comparison$check == "same edge set"],
-  seed_comparison$result[seed_comparison$check == "same degree table"],
+  seed_comparison$result[seed_comparison$check == "same node IDs"],
   !seed_comparison$result[seed_comparison$check == "coordinates identical"]
 )
 ```
@@ -457,14 +446,10 @@ there only to show why coordinates should not be treated as facts.
 ## Build a co-word network for comparison
 
 A co-word network is a different graph. Its nodes are words. Its edges are
-undirected and weighted by how often two words appear in the same unit. Here the
-unit is an inaugural paragraph. The word rule keeps alphabetic tokens,
-lowercases them in English, removes tidytext stop words, and uses paragraph
-presence rather than raw repeated counts.
-
-tidytext's stop-word list drops `states`, so the remaining word `united` often
-stands for `United States`. That preprocessing choice changes the node's
-meaning.
+undirected and based on how often two words appear in the same unit. Here the
+unit is an inaugural paragraph. The word rule keeps alphabetic tokens of four
+or more letters, lowercases them in English, removes tidytext stop words, and
+uses paragraph presence rather than raw repeated counts.
 
 ```{r}
 paragraphs <- inaugural_paragraphs()
@@ -503,17 +488,9 @@ coword_edges <- word_pairs |>
   filter(observed_expected_ratio >= ratio_threshold) |>
   arrange(desc(observed_expected_ratio), word.x, word.y)
 
-united_state_check <- paragraphs |>
-  transmute(
-    paragraph_id,
-    has_united = str_detect(str_to_lower(paragraph), "\\bunited\\b"),
-    has_united_states = str_detect(str_to_lower(paragraph), "\\bunited states\\b")
-  ) |>
-  summarise(
-    united_paragraphs = sum(has_united),
-    united_states_paragraphs = sum(has_united_states & has_united),
-    .groups = "drop"
-  )
+kept_pair_count <- nrow(coword_edges)
+dropped_pair_count <- nrow(word_pairs) - kept_pair_count
+undrawn_words <- setdiff(top_words$word, unique(c(coword_edges$word.x, coword_edges$word.y)))
 
 knitr::kable(
   top_words,
@@ -538,10 +515,17 @@ knitr::kable(
   row.names = FALSE
 )
 
+threshold_summary <- tibble(
+  threshold = ratio_threshold,
+  kept_pairs = kept_pair_count,
+  dropped_pairs = dropped_pair_count,
+  undrawn_top_words = paste(undrawn_words, collapse = ", ")
+)
+
 knitr::kable(
-  united_state_check,
-  col.names = c("Paragraphs with united", "Paragraphs with united states"),
-  caption = "Stop-word removal leaves united while dropping states",
+  threshold_summary,
+  col.names = c("Observed / expected threshold", "Kept pairs", "Dropped pairs", "Top words not drawn"),
+  caption = "The author's co-word threshold decides which word pairs are drawn",
   row.names = FALSE
 )
 ```
@@ -555,15 +539,19 @@ stopifnot(
   all(word_pairs$observed > 0L),
   nrow(coword_edges) < nrow(word_pairs),
   ratio_threshold == 1.80,
-  united_state_check$united_states_paragraphs < united_state_check$united_paragraphs,
-  "states" %in% tidytext::stop_words$word
+  identical(kept_pair_count, 3L),
+  identical(dropped_pair_count, 42L),
+  all(unique(c(coword_edges$word.x, coword_edges$word.y)) %in% top_words$word)
 )
 ```
 
 Raw co-occurrence among these ten frequent words is a complete graph: all 45
-pairs appear in at least one paragraph. The threshold keeps only pairs whose
-observed count is at least 1.8 times the independence expectation
-`count(word A) * count(word B) / paragraphs`.
+pairs appear in at least one paragraph. The threshold is the author's choice
+for this lesson. It keeps `r kept_pair_count` pairs and drops
+`r dropped_pair_count` pairs by requiring the observed count to be at least
+1.8 times the independence expectation
+`count(word A) * count(word B) / paragraphs`. The undrawn top-ten words are
+`r paste(undrawn_words, collapse = ", ")`.
 
 ## Draw the co-word graph
 
@@ -572,8 +560,8 @@ facts. They are paragraph-level co-occurrences that passed the threshold.
 
 ```{r}
 #| label: fig-coword-network
-#| fig-cap: "Co-word network for top inaugural-address content words after an observed-versus-expected threshold."
-#| fig-alt: "An undirected co-word diagram whose nodes are content words and whose edges are thresholded paragraph co-occurrences. The kept edges and counts are listed in the preceding table."
+#| fig-cap: "Co-word network for the three top-word pairs that passed the observed-versus-expected threshold."
+#| fig-alt: "An undirected co-word diagram whose nodes are content words and whose edges are thresholded paragraph co-occurrences. The kept edges and counts are listed in the table 'Co-word edges kept by the observed-versus-expected threshold'."
 #| fig-width: 8
 #| fig-height: 5.5
 
@@ -656,8 +644,8 @@ same thing or that one caused the other to appear.
 - The edge-list table is part of the graph's text alternative.
 - Co-word edges are thresholded co-occurrences, not typed knowledge-base facts.
 
-Chloe can use the drawing to follow a path, then use the table to verify the
-path. That habit is safer than reading meaning from the layout.
+Start with the edge table, then use the drawing only as a guide to the paths it
+lists.
 
 ## Sources
 

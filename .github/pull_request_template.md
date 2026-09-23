@@ -45,6 +45,9 @@
       diagnostic before outputs are interpreted.
 - [ ] Nulls preserve nuisance structure that could otherwise create the
       statistic being tested.
+- [ ] Every displayed result comes from the method the page names, never from
+      the reference answers or hand-typed values; constructed collections pass a
+      shortcut sweep that includes record ID, position, and sentence frame.
 - [ ] The full site rendered without unexplained warnings or errors.
 - [ ] Links, keyboard navigation, focus, zoom, and small screens were checked.
 - [ ] Periodic-table tests passed when its data, links, or styles changed.

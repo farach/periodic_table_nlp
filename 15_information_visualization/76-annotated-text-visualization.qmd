@@ -167,6 +167,72 @@ The model labels `HOUSE` as `ORG`. That wrong span stays visible. Lesson 27
 checks the named-entity output; this lesson only shows how to draw labels
 without losing the source positions.
 
+The entity tags use `B` for the first token in a span and `I` for later tokens
+inside the same span. In `s001`, the three tagged tokens start at character 5,
+7, and 8; together they make the span from 5 up to, but not including, 12.
+
+```{r}
+s001_token_offsets <- parsed |>
+  filter(doc_id == "s001") |>
+  transmute(
+    token,
+    start = idx,
+    end = idx + nchar(token, type = "chars"),
+    entity_tag = if_else(nzchar(entity), entity, "outside")
+  )
+
+kable(
+  s001_token_offsets,
+  col.names = c("Token", "Start", "End", "Entity tag"),
+  caption = "spaCy token offsets and entity tags for sentence s001",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(s001_token_offsets$token[2:4], c("12", "-", "week")),
+  identical(s001_token_offsets$start[2:4], c(5L, 7L, 8L)),
+  identical(s001_token_offsets$end[2:4], c(7L, 8L, 12L)),
+  identical(s001_token_offsets$entity_tag[2:4], c("DATE_B", "DATE_I", "DATE_I"))
+)
+```
+
+Searching for an entity string rebuilt with spaces can fail even when the
+offsets are right.
+
+```{r}
+s001_source <- display_sentences |>
+  filter(sentence_id == "s001") |>
+  pull(source_text)
+
+offset_slice <- model_spans |>
+  filter(sentence_id == "s001") |>
+  transmute(
+    search_text = "12 - week",
+    search_found = !is.na(str_locate(s001_source, fixed(search_text))[, 1]),
+    offset_slice = substr(s001_source, start + 1L, end)
+  )
+
+kable(
+  offset_slice,
+  col.names = c("Searched text", "Search found", "Offset slice"),
+  caption = "Offset slicing recovers the span when a searched string fails",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  isFALSE(offset_slice$search_found[[1]]),
+  identical(offset_slice$offset_slice, "12-week")
+)
+```
+
 ## Check code-point units with an accented name
 
 Offsets need a counting rule. spaCy's Python strings count Unicode code points,
@@ -194,12 +260,22 @@ accent_person <- accent_parsed |>
     .groups = "drop"
   )
 
+person_byte_end <- nchar(accent_person$text, type = "bytes")
+wrong_byte_as_character_slice <- substr(
+  accent_text,
+  accent_person$start + 1L,
+  person_byte_end
+)
+
 accent_units <- tibble(
   example = "accented constructed sentence",
   characters = nchar(accent_text, type = "chars"),
   bytes = nchar(accent_text, type = "bytes"),
   person_start = accent_person$start,
   person_end = accent_person$end,
+  byte_start = accent_person$start,
+  byte_end = person_byte_end,
+  wrong_slice_if_bytes_are_positions = wrong_byte_as_character_slice,
   sliced_text = accent_person$text
 )
 
@@ -211,6 +287,9 @@ kable(
     "Bytes",
     "Start",
     "End",
+    "Byte start",
+    "Byte end",
+    "Wrong slice if bytes are used as positions",
     "Sliced text"
   ),
   caption = "Character offsets still slice the accented name correctly",
@@ -226,13 +305,17 @@ stopifnot(
   identical(accent_units$bytes, 78L),
   identical(accent_units$person_start, 0L),
   identical(accent_units$person_end, 10L),
+  identical(accent_units$byte_start, 0L),
+  identical(accent_units$byte_end, 12L),
+  identical(accent_units$wrong_slice_if_bytes_are_positions, "Renée Díaz r"),
   identical(accent_units$sliced_text, "Renée Díaz"),
   accent_units$bytes > accent_units$characters
 )
 ```
 
-Do not use byte offsets as character offsets. In this example, that would point
-inside the accented name.
+Do not use byte offsets as character offsets. In this example, the byte offsets
+would take two extra characters (`Renée Díaz r`), and every later span in the
+sentence would slide to the right.
 
 ## Draw one layer only when spans do not overlap
 
@@ -376,9 +459,9 @@ depend on color or inline layout.
 ## Keep a table of every span
 
 Sam also wants to show a reviewer layer for a constructed nested example:
-`Riverton` can be a place name inside `Riverton Skills Centre`, an organisation
-name. The two annotations are kept in separate layers so each line can be drawn
-without overlap.
+`Riverton` can be a `GPE`, spaCy's label for a geopolitical place such as a
+town, inside `Riverton Skills Centre`, an organisation name. The two annotations
+are kept in separate layers so each line can be drawn without overlap.
 
 ```{r}
 review_sentence <- tibble(
@@ -517,6 +600,20 @@ kable(
 stopifnot(
   has_layer_overlap(overlap_spans),
   all(str_detect(overlap_report$inline_display, fixed("table view only")))
+)
+
+overlap_error <- tryCatch(
+  render_annotation_layer(
+    sentence_id = "constructed-01",
+    layer_name = "combined reviewer layer",
+    spans = overlap_spans,
+    source_text = review_sentence$source_text[[1]]
+  ),
+  error = conditionMessage
+)
+
+stopifnot(
+  identical(overlap_error, "This layer has overlapping spans; show it as a table.")
 )
 ```
 

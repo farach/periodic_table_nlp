@@ -314,6 +314,12 @@ planned_instruction <- if (nrow(planned) > 0L) {
   ""
 }
 
+route_prompt <- if (nrow(planned) > 0L) {
+  "task 1</a>, or enter an available group:</strong> "
+} else {
+  "task 1</a>, or enter a group:</strong> "
+}
+
 cat(
   '<div class="task-map-key">',
   '<span class="task-map-key-item">',
@@ -348,7 +354,7 @@ cat(
   '<nav class="available-routes" aria-label="Available lesson routes">',
   '<strong>Start with ',
   '<a href="1_source_data_loading/01-bits-to-character-encoding.html">',
-  'task 1</a>, or enter an available group:</strong> ',
+  route_prompt,
   route_html,
   '.',
   '</nav>',
@@ -426,11 +432,12 @@ where each transformation helps and what information it can lose.
 
 Lessons 43 through 68 train, test, and explain models, then use them to
 classify, discover, compare, and generate text, keeping a baseline or a stated
-limit beside each result. Lessons 69 through 74 join those parts into systems
-that extract facts, answer questions, hold a conversation, search by meaning,
-and review large collections. Lessons 75 through 81 show results to people
-through an app, annotated text, charts, maps, and graphs, and ask what each
-picture can honestly claim.
+limit beside each result. Lessons 69 through 74 combine those parts into small
+systems: a relation extractor, a knowledge base filled from announcements, a
+question answerer that cites a handbook, a scripted enrollment conversation, a
+search index, and a document review with a recall estimate. Lessons 75 through
+81 show results to people through an app, annotated text, charts, maps, and
+graphs, and ask what each picture can honestly claim.
 
 ## About this site
 

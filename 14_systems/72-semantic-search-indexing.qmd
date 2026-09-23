@@ -5,9 +5,9 @@ description: "Learn how a small search index stores terms, vectors, metadata, an
 categories: [systems, semantic search, retrieval]
 ---
 
-Hana looks back at the handbook question that failed in the question-answering lesson. A parent asked, "Where can my kid stay while I study at night?" The answer lived in passage H13, but the wording did not say `child care`.
+A parent asked the handbook, "Where can my kid stay while I study at night?" The answer lived in passage H13, but the wording did not say `child care`.
 
-This lesson uses a related search query, `somewhere for my kid during night class`. With the policy below, BM25 ranks H13 second because it shares only the function words `for` and `during`; the class-related distractor H15 shares `class`. That rank does not come from the meaning of `kid` or `night`. If stop words were removed, H13 would receive no lexical score for this query.
+This lesson uses a related search query, `somewhere for my kid during night class`. With the exact term policy used later, H13 ranks second because it shares only the function words `for` and `during`; the class-related distractor H15 shares `class`. That rank does not come from the meaning of `kid` or `night`. If stop words were removed, H13 would receive no lexical score for this query.
 
 **Semantic search indexing** prepares a searchable structure before the next query arrives. A lexical index stores terms and counts. A dense index stores one vector for each passage, using the same local embedding model for passages and queries. Both indexes can return a ranked list; neither can decide by itself that the top passage is relevant.
 
@@ -115,12 +115,35 @@ miss_context <- handbook |>
   filter(passage_id %in% c("H13", "H15")) |>
   select(passage_id, topic, text)
 
+judgment_summary <- judgments |>
+  group_by(query_id, query, probe_type) |>
+  summarise(
+    relevant_passage = {
+      relevant_ids <- passage_id[relevant == 1L]
+      if (length(relevant_ids) == 0L) {
+        "not applicable"
+      } else {
+        paste(relevant_ids, collapse = ", ")
+      }
+    },
+    .groups = "drop"
+  )
+
 knitr::kable(
   miss_context,
   format = "html",
   escape = TRUE,
   col.names = c("Passage", "Topic", "Text"),
   caption = "The child-care passage and a nearby class-related distractor",
+  row.names = FALSE
+)
+
+knitr::kable(
+  judgment_summary,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Query", "Query text", "Probe type", "Relevant passage"),
+  caption = "Author-written relevance judgments used for the search checks",
   row.names = FALSE
 )
 ```
@@ -148,6 +171,10 @@ stopifnot(
       pull(relevant) |>
       sum(),
     0L
+  ),
+  identical(
+    judgment_summary$relevant_passage[judgment_summary$query_id == "S8"],
+    "not applicable"
   )
 )
 ```
@@ -381,9 +408,11 @@ BM25 handles `DSC-104` cleanly because the tokenizer kept the identifier. With d
 
 ## Make dense passage vectors
 
-The dense index uses the pinned `sentence-transformers/all-MiniLM-L6-v2` model. The local Hugging Face feature-extraction pipeline returns one vector per real token, including the `[CLS]` and `[SEP]` special tokens. The check below compares that count with the tokenizer's attention mask. There are no padding tokens in the single-text output, so the mean is mask-aware for this call; the lesson still asserts the mask length before pooling.
+The dense index uses the pinned `sentence-transformers/all-MiniLM-L6-v2` model. The local Hugging Face feature-extraction pipeline returns one vector per word piece. For each text, this lesson averages those vectors, then scales the result to length 1.
 
-The model's own files say the sentence-transformer wrapper uses mean pooling and a normalization module. The model card says sentence-transformers truncates inputs longer than 256 word pieces by default and that training used sequences of at most 128 tokens. The page applies the model's pooling steps in R and refuses passages or queries over 256 word pieces before embedding.
+The model's own files say the sentence-transformer wrapper uses mean pooling and a normalization module. The model card says sentence-transformers truncates inputs longer than 256 word pieces by default and that training used sequences of at most 128 tokens. The page applies the model's pooling steps one text at a time, so the pipeline output has no padding tokens; the helper is valid only for that one-text call pattern.
+
+The model manifest records an Apache-2.0 license. This lesson uses English (`en`) handbook text and does not claim the same behavior for other languages or domains.
 
 ```{r}
 embedder <- load_nlg_pipeline(
@@ -447,17 +476,6 @@ passage_embeddings <- map(handbook$text, embed_one_text)
 embedding_matrix <- do.call(rbind, passage_embeddings)
 rownames(embedding_matrix) <- handbook$passage_id
 
-batch_check_text <- handbook$text[1:2]
-batch_output <- embedder$pipeline(as.list(batch_check_text))
-batch_embeddings <- do.call(
-  rbind,
-  map(batch_output, mean_pool_l2)
-)
-single_embeddings <- do.call(
-  rbind,
-  map(batch_check_text, embed_one_text)
-)
-
 dense_metadata <- tibble(
   field = c(
     "model",
@@ -516,18 +534,17 @@ stopifnot(
   identical(as.integer(sentence_config$max_seq_length), 256L),
   max(token_counts$model_tokens) <= 256L,
   length(first_output[[1]]) == sum(unlist(first_attention)),
-  max(abs(batch_embeddings - single_embeddings)) < 1e-6,
   all(abs(embedding_norms - 1) < 1e-6),
   identical(ncol(embedding_matrix), 384L),
   identical(bert_config$hidden_size, 384L)
 )
 ```
 
-All passages are short enough to embed without truncation. The batched and one-text calls agree for the first two passages, so the lesson embeds one text at a time for clarity and uses the batch check as a guard.
+All passages are short enough to embed without truncation. The lesson embeds one text at a time, so the pooling helper never averages padding tokens.
 
 ## Record stale-index checks
 
-An index is tied to its passages and model conventions. The embedding dimension alone cannot detect a swap: all three small candidate models checked by the council had 384-dimensional vectors. The safer record includes model revision, pooling, prefixes, tokenizer behavior, library versions, and passage fingerprints.
+An index is tied to its passages and model conventions. The embedding dimension alone cannot detect a swap: several small English embedding models can produce 384-dimensional vectors. The safer record includes model revision, pooling, prefixes, tokenizer behavior, library versions, lexical settings, and passage fingerprints.
 
 ```{r}
 passage_fingerprints <- handbook |>
@@ -543,36 +560,56 @@ index_record <- tibble(
   key = c(
     "model_id",
     "revision",
+    "license",
     "pooling",
     "normalization",
     "query_prefix",
     "passage_prefix",
     "max_seq_length",
+    "training_sequence_length",
     "tokenizer_casing",
+    "lexical_token_pattern",
+    "lexical_stop_words",
+    "lexical_stemming",
+    "bm25_idf",
+    "bm25_k1",
+    "bm25_b",
+    "handbook_fingerprint",
+    "passage_fingerprint_count",
     "similarity",
     "search_type",
     "huggingfaceR",
     "reticulate",
     "transformers",
     "torch",
-    "tokenizers"
+    "python_tokenizers"
   ),
   value = c(
     embedder$metadata$model_id,
     embedder$metadata$revision,
+    embedder$metadata$license,
     "mean pooling over real token vectors",
     "L2 normalization",
     "none",
     "none",
     as.character(sentence_config$max_seq_length),
+    "at most 128 tokens",
     paste0("do_lower_case=", tokenizer_config$do_lower_case),
+    "[a-z]+-\\d+|[a-z]+|\\d+",
+    "kept",
+    "none",
+    "Lucene positive idf",
+    as.character(k1),
+    as.character(b),
+    actual_hashes$fingerprint[actual_hashes$artifact == "riverton-handbook.csv"],
+    as.character(nrow(passage_fingerprints)),
     "cosine, computed as dot product of unit vectors",
     "exact scan over 15 passages",
     as.character(packageVersion("huggingfaceR")),
     as.character(packageVersion("reticulate")),
     as.character(reticulate::py_to_r(reticulate::import("transformers")$`__version__`)),
     as.character(reticulate::py_to_r(reticulate::import("torch")$`__version__`)),
-    as.character(packageVersion("tokenizers"))
+    as.character(reticulate::py_to_r(reticulate::import("tokenizers")$`__version__`))
   )
 )
 
@@ -657,6 +694,13 @@ stopifnot(
   identical(edited_passage_check$fingerprint_matches, FALSE),
   identical(edited_passage_check$action, "re-embed this passage"),
   "dimension" %in% dense_metadata$field,
+  all(c(
+    "license",
+    "lexical_token_pattern",
+    "handbook_fingerprint",
+    "passage_fingerprint_count",
+    "python_tokenizers"
+  ) %in% index_record$key),
   nrow(index_record) >= 15L
 )
 ```
@@ -708,9 +752,9 @@ rrf_ranks <- bind_rows(
   ungroup()
 
 top_hits <- bind_rows(
-  bm25_ranks |> mutate(method = "BM25 lexical"),
-  dense_ranks |> mutate(method = "dense"),
-  rrf_ranks |> mutate(method = "RRF hybrid")
+  bm25_ranks |> mutate(method = "BM25 lexical", score_type = "BM25"),
+  dense_ranks |> mutate(method = "dense", score_type = "cosine"),
+  rrf_ranks |> mutate(method = "RRF hybrid", score_type = "RRF")
 ) |>
   filter(rank == 1L) |>
   left_join(
@@ -721,15 +765,30 @@ top_hits <- bind_rows(
     handbook |> select(passage_id, topic),
     by = join_by(passage_id)
   ) |>
-  select(method, query_id, query, passage_id, topic, score)
+  select(method, query_id, query, passage_id, topic, score_type, score)
+
+bm25_no_match_rows <- queries |>
+  filter(!query_id %in% unique(bm25_ranks$query_id)) |>
+  transmute(
+    method = "BM25 lexical",
+    query_id,
+    query,
+    passage_id = "no lexical match",
+    topic = "no lexical match",
+    score_type = "BM25",
+    score = NA_real_
+  )
+
+top_hits_display <- bind_rows(top_hits, bm25_no_match_rows) |>
+  arrange(query_id, method)
 
 knitr::kable(
-  top_hits |>
-    mutate(score = round(score, 3)),
+  top_hits_display |>
+    mutate(score = if_else(is.na(score), "not applicable", sprintf("%.3f", score))),
   format = "html",
   escape = TRUE,
-  col.names = c("Method", "Query", "Query text", "Top passage", "Top topic", "Score"),
-  caption = "Every method returns a top passage for every query",
+  col.names = c("Method", "Query", "Query text", "Top passage", "Top topic", "Score type", "Score"),
+  caption = "Top passage per method; BM25 returns no lexical match for S3 and S8",
   row.names = FALSE
 )
 ```
@@ -739,10 +798,16 @@ knitr::kable(
 
 stopifnot(
   identical(rrf_k, 60),
-  nrow(top_hits) == 22L,
+  nrow(top_hits_display) == 24L,
   !any(
     top_hits$method == "BM25 lexical" &
       top_hits$query_id %in% c("S3", "S8")
+  ),
+  identical(
+    top_hits_display |>
+      filter(method == "BM25 lexical", query_id == "S3") |>
+      pull(passage_id),
+    "no lexical match"
   ),
   top_margin(dense_ranks, "S1") > 1e-3,
   identical(
@@ -859,7 +924,13 @@ paired_summary <- rank_evaluation |>
   summarise(
     dense_above_bm25 = sum(dense > `BM25 lexical`),
     tied = sum(dense == `BM25 lexical`),
-    bm25_above_dense = sum(dense < `BM25 lexical`)
+    bm25_above_dense = sum(dense < `BM25 lexical`),
+    rrf_above_dense = sum(`RRF hybrid` > dense),
+    rrf_tied_dense = sum(`RRF hybrid` == dense),
+    dense_above_rrf = sum(`RRF hybrid` < dense),
+    rrf_above_bm25 = sum(`RRF hybrid` > `BM25 lexical`),
+    rrf_tied_bm25 = sum(`RRF hybrid` == `BM25 lexical`),
+    bm25_above_rrf = sum(`RRF hybrid` < `BM25 lexical`)
   )
 
 miss_table <- rank_evaluation |>
@@ -873,14 +944,67 @@ miss_table <- rank_evaluation |>
     recall_at_3 = if_else(is.na(recall_at_3), NA_real_, recall_at_3)
   )
 
-knitr::kable(
-  rank_evaluation |>
-    mutate(
-      across(
-        c(recall_at_1, recall_at_3, reciprocal_rank),
-        \(value) if_else(is.na(value), NA_character_, sprintf("%.3f", value))
-      )
+display_metric <- function(value) {
+  case_when(
+    is.na(value) ~ "not applicable",
+    TRUE ~ sprintf("%.3f", value)
+  )
+}
+
+display_rank <- function(value, relevant_total) {
+  case_when(
+    relevant_total == 0L ~ "not applicable",
+    is.na(value) ~ "not retrieved",
+    TRUE ~ as.character(value)
+  )
+}
+
+display_top <- function(value) {
+  if_else(is.na(value), "no lexical match", value)
+}
+
+rank_evaluation_display <- rank_evaluation |>
+  left_join(
+    judgments |>
+      group_by(query_id) |>
+      summarise(relevant_total = sum(relevant), .groups = "drop"),
+    by = join_by(query_id)
+  ) |>
+  mutate(
+    relevant_rank = display_rank(relevant_rank, relevant_total),
+    top_passage = case_when(
+      relevant_total == 0L & method == "BM25 lexical" ~ "no lexical match",
+      relevant_total == 0L ~ top_passage,
+      TRUE ~ display_top(top_passage)
     ),
+    recall_at_1 = display_metric(recall_at_1),
+    recall_at_3 = display_metric(recall_at_3),
+    reciprocal_rank = display_metric(reciprocal_rank)
+  ) |>
+  select(-relevant_total)
+
+miss_table_display <- miss_table |>
+  left_join(
+    judgments |>
+      group_by(query_id) |>
+      summarise(relevant_total = sum(relevant), .groups = "drop"),
+    by = join_by(query_id)
+  ) |>
+  mutate(
+    relevant_rank = display_rank(relevant_rank, relevant_total),
+    top_passage = case_when(
+      relevant_total == 0L & method == "BM25 lexical" ~ "no lexical match",
+      relevant_total == 0L ~ top_passage,
+      TRUE ~ display_top(top_passage)
+    ),
+    recall_at_1 = display_metric(recall_at_1),
+    recall_at_3 = display_metric(recall_at_3),
+    reciprocal_rank = display_metric(reciprocal_rank)
+  ) |>
+  select(-relevant_total)
+
+knitr::kable(
+  rank_evaluation_display,
   col.names = c(
     "Method",
     "Query",
@@ -896,13 +1020,7 @@ knitr::kable(
 )
 
 knitr::kable(
-  miss_table |>
-    mutate(
-      across(
-        c(recall_at_1, recall_at_3, reciprocal_rank),
-        \(value) if_else(is.na(value), NA_character_, sprintf("%.3f", value))
-      )
-    ),
+  miss_table_display,
   col.names = c(
     "Method",
     "Query",
@@ -919,8 +1037,18 @@ knitr::kable(
 
 knitr::kable(
   paired_summary,
-  col.names = c("Dense above BM25", "Ties", "BM25 above dense"),
-  caption = "Paired reciprocal-rank counts for dense versus BM25 on the seven judged queries",
+  col.names = c(
+    "Dense above BM25",
+    "Dense-BM25 ties",
+    "BM25 above dense",
+    "RRF above dense",
+    "RRF-dense ties",
+    "Dense above RRF",
+    "RRF above BM25",
+    "RRF-BM25 ties",
+    "BM25 above RRF"
+  ),
+  caption = "Paired reciprocal-rank counts on the seven judged queries",
   row.names = FALSE
 )
 ```
@@ -952,11 +1080,15 @@ stopifnot(
     rep(NA_integer_, 3L)
   ),
   sum(is.na(rank_evaluation$reciprocal_rank)) == 3L,
-  sum(paired_summary) == 7L
+  sum(paired_summary) == 21L,
+  !any(str_detect(unlist(rank_evaluation_display), "^NA$")),
+  !any(str_detect(unlist(miss_table_display), "^NA$"))
 )
 ```
 
-Dense search fixes the child-care wording mismatch in S1 and the stipend wording mismatch in S3. It misses the transit query at the top three. BM25 does well on identifiers and exact wording, but it has no nonzero score for some paraphrases. RRF helps S1 and S3 and keeps several exact hits, yet it still misses the transit query at the top three. These are paired demonstrations on seven author-written probes, not a benchmark.
+Dense search fixes the child-care wording mismatch in S1 and the stipend wording mismatch in S3. It misses the transit query at the top three. BM25 does well on identifiers and exact wording, but it has no nonzero score for some paraphrases. RRF helps S1 and S3 and keeps several exact hits, yet it still misses the transit query at the top three. For S4, dense ranks the relevant H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "dense" & rank_evaluation$query_id == "S4"]`, while RRF ranks it at `r rank_evaluation$relevant_rank[rank_evaluation$method == "RRF hybrid" & rank_evaluation$query_id == "S4"]` because H05 appears only in the dense list and receives no BM25 rank contribution. These are paired demonstrations on seven author-written probes, not a benchmark.
+
+Larger evaluations do not give one method a permanent crown. BEIR reported BM25 as a strong zero-shot baseline across varied retrieval tasks, while dense passage retrieval reported large gains on open-domain question answering; entity-question work found dense retrievers can miss rare names and identifiers. One `DSC-104` probe in a 15-passage handbook cannot show that dense search handles identifiers.
 
 ## What approximate search would change
 
@@ -973,7 +1105,7 @@ An index of private text is private data. Embeddings can leak information about 
 - Similarity search returns a ranked row even when no relevant passage exists.
 - Recall from relevance judgments and ANN recall answer different questions.
 
-Hana keeps both lists in her review notes. The dense list rescued the child-care query, but the no-menu query showed why every search result still needs a relevance check.
+The dense list rescued the child-care query, but the no-menu query showed why every search result still needs a relevance check.
 
 ## Sources
 

@@ -5,9 +5,12 @@ description: "Learn how naive place-name matches can mislead a map, and how revi
 categories: [information visualization, maps, place names]
 ---
 
-Ben wants a map from presidential speeches, but the first name he checks is
-`Washington`. In these speeches it often means a person, a city, or the federal
-government. It does not mean Washington State.
+`Washington` is the first problem in this map. In presidential speeches it can
+mean a person, a city, the federal government, or the state. The review below
+has to decide which readings are present.
+
+Ben still wants a map from the speeches, but the name match is only the first
+step.
 
 **Locations on a map** means more than finding a name. The reader has to decide
 whether the name really refers to a place, what place it means, what unit is
@@ -127,7 +130,7 @@ state_matches <- paragraphs |>
   ) |>
   unnest(matches) |>
   mutate(
-    match_id = row_number(),
+    match_key = str_c(paragraph_id, state, start, sep = ":"),
     context = str_squish(str_sub(
       paragraph,
       pmax(1L, start - 70L),
@@ -214,28 +217,89 @@ category_table <- tribble(
   "uncertain", "the author could not assign a safer category after reading the context"
 )
 
+review_labels <- tribble(
+  ~match_key, ~reading_category,
+  "1805-Jefferson-p06:Louisiana:317", "territory or republic before statehood",
+  "1805-Jefferson-p06:Mississippi:671", "river",
+  "1821-Monroe-p13:Florida:562", "territory or republic before statehood",
+  "1821-Monroe-p14:Mississippi:490", "river",
+  "1821-Monroe-p14:Florida:630", "territory or republic before statehood",
+  "1821-Monroe-p14:Mississippi:1229", "river",
+  "1821-Monroe-p26:Mississippi:86", "river",
+  "1821-Monroe-p26:Louisiana:404", "territory or republic before statehood",
+  "1825-Adams-p04:Mississippi:102", "river",
+  "1845-Polk-p21:Texas:17", "territory or republic before statehood",
+  "1845-Polk-p21:Texas:194", "territory or republic before statehood",
+  "1845-Polk-p22:Texas:87", "territory or republic before statehood",
+  "1845-Polk-p22:Texas:916", "territory or republic before statehood",
+  "1845-Polk-p23:Texas:4", "territory or republic before statehood",
+  "1845-Polk-p24:Louisiana:329", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:67", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:260", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:719", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:1052", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:1646", "territory or republic before statehood",
+  "1845-Polk-p26:Oregon:231", "territory or republic before statehood",
+  "1845-Polk-p26:Mississippi:627", "river",
+  "1845-Polk-p26:Missouri:667", "river",
+  "1849-Taylor-p07:Washington:216", "person",
+  "1853-Pierce-p03:North Carolina:342", "state or its people",
+  "1853-Pierce-p14:Washington:578", "person",
+  "1857-Buchanan-p06:Kansas:83", "territory or republic before statehood",
+  "1857-Buchanan-p08:Nebraska:425", "law or organisation name",
+  "1857-Buchanan-p08:Kansas:434", "law or organisation name",
+  "1857-Buchanan-p17:California:696", "state or its people",
+  "1857-Buchanan-p18:Washington:939", "person",
+  "1857-Buchanan-p19:Texas:169", "territory or republic before statehood",
+  "1877-Hayes-p01:Washington:78", "person",
+  "1885-Cleveland-p11:Washington:687", "person",
+  "1889-Harrison-p03:Washington:184", "person",
+  "1889-Harrison-p03:New York:209", "city or federal government",
+  "1889-Harrison-p03:New York:599", "city or federal government",
+  "1889-Harrison-p05:Washington:203", "person",
+  "1889-Harrison-p06:Virginia:94", "state or its people",
+  "1889-Harrison-p10:Pennsylvania:349", "state or its people",
+  "1889-Harrison-p29:Montana:116", "territory or republic before statehood",
+  "1889-Harrison-p29:Washington:128", "territory or republic before statehood",
+  "1897-McKinley-p14:Washington:321", "person",
+  "1897-McKinley-p14:Washington:1622", "city or federal government",
+  "1905-Roosevelt-p04:Washington:1135", "person",
+  "1909-Taft-p14:Ohio:956", "river",
+  "1909-Taft-p14:Mississippi:971", "river",
+  "1925-Coolidge-p07:Washington:190", "event name",
+  "1941-Roosevelt-p23:Washington:118", "person",
+  "1953-Eisenhower-p21:Iowa:156", "state or its people",
+  "1973-Nixon-p17:Washington:216", "city or federal government",
+  "1981-Reagan-p22:Massachusetts:155", "law or organisation name",
+  "1981-Reagan-p31:Washington:67", "person",
+  "1985-Reagan-p01:Louisiana:80", "state or its people",
+  "1985-Reagan-p03:Washington:144", "person",
+  "1985-Reagan-p13:Virginia:64", "state or its people",
+  "1989-Bush-p02:Washington:61", "person",
+  "1989-Bush-p02:Washington:195", "person",
+  "1989-Bush-p02:Washington:292", "person",
+  "1993-Clinton-p04:Washington:13", "person",
+  "2001-Bush-p28:Virginia:51", "state or its people",
+  "2017-Trump-p03:Washington:207", "city or federal government",
+  "2017-Trump-p18:Nebraska:87", "state or its people",
+  "2025-Trump-p10:North Carolina:118", "state or its people",
+  "2025-Trump-p17:Pennsylvania:39", "state or its people",
+  "2025-Trump-p56:New York:6", "city or federal government",
+  "2025-Trump-p56:Washington:114", "city or federal government"
+)
+
 review_matches <- state_matches |>
+  left_join(
+    review_labels,
+    by = join_by(match_key),
+    relationship = "one-to-one"
+  ) |>
   mutate(
-    reading_category = case_when(
-      match_id %in% c(
-        24L, 26L, 31L, 33L, 34L, 35L, 38L, 43L, 45L,
-        49L, 53L, 55L, 57L, 58L, 59L, 60L
-      ) ~ "person",
-      match_id %in% c(36L, 37L, 44L, 51L, 62L, 66L, 67L) ~
-        "city or federal government",
-      match_id == 48L ~ "event name",
-      match_id %in% c(2L, 4L, 6L, 7L, 9L, 22L, 23L, 46L, 47L) ~ "river",
-      match_id %in% c(
-        1L, 3L, 5L, 8L, 10L, 11L, 12L, 13L, 14L, 15L,
-        16L, 17L, 18L, 19L, 20L, 21L, 27L, 28L, 32L, 41L, 42L
-      ) ~ "territory or republic before statehood",
-      match_id %in% c(29L, 52L) ~ "law or organisation name",
-      match_id %in% c(25L, 30L, 39L, 40L, 50L, 54L, 56L, 61L, 63L, 64L, 65L) ~
-        "state or its people",
-      TRUE ~ "uncertain"
-    ),
     reviewed_state_reading = reading_category == "state or its people"
   )
+
+label_preview <- review_labels |>
+  slice_head(n = 8)
 
 category_counts <- category_table |>
   left_join(
@@ -244,6 +308,13 @@ category_counts <- category_table |>
     by = join_by(category == reading_category)
   ) |>
   mutate(matches = coalesce(matches, 0L))
+
+kable(
+  label_preview,
+  col.names = c("Match key", "Reviewed category"),
+  caption = "First keyed review-label decisions",
+  row.names = FALSE
+)
 
 kable(
   category_counts,
@@ -258,10 +329,37 @@ kable(
 
 stopifnot(
   identical(nrow(category_table), 8L),
+  identical(nrow(review_labels), 67L),
+  !anyDuplicated(review_labels$match_key),
+  !anyDuplicated(state_matches$match_key),
+  identical(nrow(anti_join(state_matches, review_labels, by = join_by(match_key))), 0L),
+  identical(nrow(anti_join(review_labels, state_matches, by = join_by(match_key))), 0L),
   identical(sum(category_counts$matches), 67L),
+  identical(
+    category_counts$matches,
+    c(16L, 7L, 1L, 9L, 20L, 3L, 11L, 0L)
+  ),
   identical(sum(review_matches$reviewed_state_reading), 11L),
   identical(category_counts$matches[category_counts$category == "uncertain"], 0L),
-  all(review_matches$reading_category %in% category_table$category)
+  all(review_matches$reading_category %in% category_table$category),
+  identical(
+    state_matches |>
+      arrange(desc(paragraph_id), desc(start), state) |>
+      left_join(review_labels, by = join_by(match_key), relationship = "one-to-one") |>
+      select(match_key, reading_category) |>
+      arrange(match_key),
+    review_matches |>
+      select(match_key, reading_category) |>
+      arrange(match_key)
+  ),
+  all(
+    review_matches |>
+      filter(
+        paragraph_id == "1857-Buchanan-p08",
+        state %in% c("Nebraska", "Kansas")
+      ) |>
+      pull(reading_category) == "law or organisation name"
+  )
 )
 ```
 
@@ -351,7 +449,8 @@ The full review table is long because every non-state reading remains visible.
 ```{r}
 review_table <- review_matches |>
   transmute(
-    match_id,
+    paragraph_id,
+    start,
     state,
     speech_id,
     year,
@@ -360,13 +459,13 @@ review_table <- review_matches |>
     reviewed_state_reading,
     context
   ) |>
-  arrange(match_id)
+  arrange(paragraph_id, start, state)
 
 kable(
   review_table,
   col.names = c(
-    "Match ID", "Matched name", "Speech ID", "Year", "President",
-    "Reviewed category", "Mapped as state", "Reading context"
+    "Paragraph ID", "Character start", "Matched name", "Speech ID", "Year",
+    "President", "Reviewed category", "Mapped as state", "Reading context"
   ),
   caption = "All reviewed state-name matches with author-written categories",
   row.names = FALSE,
@@ -380,7 +479,6 @@ kable(
 
 stopifnot(
   identical(nrow(review_table), 67L),
-  identical(review_table$match_id, seq_len(67L)),
   identical(sum(review_table$reviewed_state_reading), 11L),
   !any(is.na(review_table$reading_category)),
   !any(is.na(review_table$context))
@@ -415,6 +513,17 @@ state_count_table <- map_points |>
   select(state, reviewed_state_speeches, longitude, latitude) |>
   arrange(desc(reviewed_state_speeches), state)
 
+map_alt_text <- sprintf(
+  paste(
+    "Lower-48 U.S. map with proportional circles for seven reviewed state readings.",
+    "Virginia appears in 3 speeches; North Carolina and Pennsylvania appear in 2 each;",
+    "California, Iowa, Louisiana, and Nebraska appear in 1 each.",
+    "Washington State is not plotted because its %d matches in %d speeches were reviewed as non-state readings."
+  ),
+  washington_summary$matches,
+  washington_summary$speeches
+)
+
 kable(
   state_count_table,
   col.names = c(
@@ -439,18 +548,21 @@ stopifnot(
   ),
   identical(max(map_points$reviewed_state_speeches), 3L),
   identical(sum(map_points$reviewed_state_speeches), 11L),
+  str_detect(map_alt_text, fixed("22 matches in 17 speeches")),
   !any(str_detect(state_matches$paragraph, fixed("Riverton")))
 )
 ```
 
 The coordinates are approximate state centers. A symbol at a center is a count
-marker, not the place where a speech event happened. Pre-statehood references
-such as the Republic of Texas were not counted as state readings.
+marker, not the place where a speech event happened. A choropleth shades whole
+areas by value; this map uses circles instead because the values are small
+counts of speeches, not rates or attention. Pre-statehood references such as the
+Republic of Texas were not counted as state readings.
 
 ```{r}
 #| label: fig-state-reading-map
 #| fig-cap: "Reviewed state readings in inaugural speeches on a lower-48 basemap; seven states remain after review."
-#| fig-alt: "Lower-48 U.S. map with proportional circles for seven reviewed state readings. Virginia appears in 3 speeches; North Carolina and Pennsylvania appear in 2 each; California, Iowa, Louisiana, and Nebraska appear in 1 each. Washington State is not plotted because its 17 speech matches were reviewed as non-state readings."
+#| fig-alt: !expr map_alt_text
 #| fig-width: 8
 #| fig-height: 5
 
@@ -477,7 +589,7 @@ ggplot() +
   scale_size_area(
     breaks = legend_breaks,
     max_size = 10,
-    name = "Speeches"
+    name = "Reviewed speeches"
   ) +
   coord_fixed(ratio = fixed_ratio) +
   labs(
@@ -485,7 +597,10 @@ ggplot() +
     y = "Latitude"
   ) +
   theme_void() +
-  theme(legend.position = "right")
+  theme(
+    legend.position = "right",
+    plot.margin = margin(5.5, 24, 5.5, 5.5)
+  )
 ```
 
 ```{r}
@@ -502,10 +617,13 @@ stopifnot(
 )
 ```
 
-The coordinate ratio is `1 / cos(mean latitude in radians)`. It stretches the
-longitude and latitude plot so one degree east-west and one degree north-south
-look similar near the middle of the country. It does not preserve area. The
-circle areas encode the speech counts; exact values belong in the table.
+The coordinate ratio is `1 / cos(mean latitude in radians)`, which is
+`r round(fixed_ratio, 2)` in this render. One degree of latitude is drawn about
+`r round(fixed_ratio, 2)` times as long as one degree of longitude, because a
+degree of longitude covers less ground away from the equator. Near the middle of
+the country, a mile east-west and a mile north-south then look about the same
+length. This does not preserve area. The circle areas encode the speech counts;
+exact values belong in the table.
 
 ## Where this fits
 

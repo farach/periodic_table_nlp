@@ -318,47 +318,7 @@ passage_vectors <- passage_terms |>
   left_join(document_frequency, by = "term") |>
   mutate(weight = term_frequency * idf)
 
-retrieve_one <- function(question_id, question, top_k = 3L) {
-  question_terms <- tibble(term = tokenize_text(question)) |>
-    filter(!term %in% stop_words) |>
-    count(term, name = "term_frequency") |>
-    inner_join(document_frequency, by = "term") |>
-    mutate(question_weight = term_frequency * idf)
-
-  if (nrow(question_terms) == 0L) {
-    return(tibble(
-      question_id = question_id,
-      passage_id = character(),
-      rank = integer(),
-      score = numeric()
-    ))
-  }
-
-  question_norm <- sqrt(sum(question_terms$question_weight^2))
-  passage_norms <- passage_vectors |>
-    group_by(passage_id) |>
-    summarise(passage_norm = sqrt(sum(weight^2)), .groups = "drop")
-
-  passage_vectors |>
-    inner_join(question_terms |> select(term, question_weight), by = "term") |>
-    group_by(passage_id) |>
-    summarise(dot_product = sum(weight * question_weight), .groups = "drop") |>
-    left_join(passage_norms, by = "passage_id") |>
-    mutate(score = dot_product / (passage_norm * question_norm)) |>
-    filter(score > 0) |>
-    arrange(desc(score), passage_id) |>
-    mutate(rank = row_number(), question_id = question_id) |>
-    filter(rank <= top_k) |>
-    select(question_id, passage_id, rank, score)
-}
-
-retrieved <- map2_dfr(
-  questions$question_id,
-  questions$question,
-  retrieve_one
-)
-
-rank_all_passages <- function(question_id, question) {
+rank_question_passages <- function(question_id, question) {
   question_terms <- tibble(term = tokenize_text(question)) |>
     filter(!term %in% stop_words) |>
     count(term, name = "term_frequency") |>
@@ -393,20 +353,36 @@ rank_all_passages <- function(question_id, question) {
     select(question_id, passage_id, score)
 }
 
-gold_ranks <- map2_dfr(
+ranked_passages <- map2_dfr(
   questions$question_id,
   questions$question,
-  rank_all_passages
+  rank_question_passages
 ) |>
   arrange(question_id, desc(score), passage_id) |>
   group_by(question_id) |>
-  mutate(gold_rank = row_number()) |>
-  ungroup() |>
+  mutate(display_rank = if_else(score > 0, row_number(), NA_integer_)) |>
+  ungroup()
+
+retrieved <- ranked_passages |>
+  filter(score > 0, display_rank <= 3L) |>
+  transmute(question_id, passage_id, rank = display_rank, score)
+
+gold_ranks <- ranked_passages |>
   right_join(
     questions |> select(question_id, gold_passage_id),
     by = c("question_id", "passage_id" = "gold_passage_id")
   ) |>
-  select(question_id, gold_rank, gold_score = score)
+  transmute(
+    question_id,
+    gold_rank = display_rank,
+    gold_score = score,
+    gold_retrieval_label = case_when(
+      is.na(passage_id) ~ "not applicable",
+      coalesce(gold_score, 0) == 0 ~ "not retrieved (all scores 0)",
+      !is.na(gold_rank) ~ paste0("rank ", gold_rank),
+      TRUE ~ "not retrieved"
+    )
+  )
 
 retrieval_display <- questions |>
   select(question_id, question, expected_action, gold_passage_id) |>
@@ -427,13 +403,12 @@ retrieval_display <- questions |>
   mutate(
     retrieved_ids = if_else(is.na(retrieved_ids), "no lexical match", retrieved_ids),
     retrieved_ranks = if_else(is.na(retrieved_ranks), "no lexical match", retrieved_ranks),
-    gold_passage_id = coalesce(gold_passage_id, "not applicable"),
-    gold_rank = if_else(is.na(gold_rank), NA_integer_, gold_rank)
+    gold_passage_id = coalesce(gold_passage_id, "not applicable")
   )
 
 kable(
   retrieval_display |>
-    select(question_id, question, retrieved_ranks, gold_passage_id, gold_rank),
+    select(question_id, question, retrieved_ranks, gold_passage_id, gold_retrieval_label),
   format = "html",
   escape = TRUE,
   col.names = c(
@@ -441,9 +416,9 @@ kable(
     "Question text",
     "Retrieved candidates",
     "Gold evidence",
-    "Gold rank"
+    "Gold evidence retrieval"
   ),
-  caption = "Tf-idf retrieval results with gold passage rank",
+  caption = "Tf-idf retrieval results with gold evidence status",
   row.names = FALSE
 )
 ```
@@ -455,8 +430,9 @@ stopifnot(
   all(retrieved$score > 0),
   all(retrieved$rank <= 3L),
   identical(retrieval_display$retrieved_ids[[3]], "no lexical match"),
-  retrieval_display$gold_rank[[3]] > 3L,
-  is.na(retrieval_display$gold_rank[[5]]),
+  identical(retrieval_display$gold_retrieval_label[[3]], "not retrieved (all scores 0)"),
+  identical(retrieval_display$gold_score[[3]], 0),
+  identical(retrieval_display$gold_retrieval_label[[5]], "not applicable"),
   all(
     retrieved |>
       group_by(question_id) |>
@@ -480,7 +456,7 @@ sentence contains one acceptable answer variant.
 normalize_answer <- function(text) {
   text |>
     str_to_lower(locale = "en") |>
-    str_replace_all("[\\p{P}\\p{S}]", " ") |>
+    str_replace_all("[\\p{P}\\p{S}]", "") |>
     str_replace_all("\\b(a|an|the)\\b", " ") |>
     str_squish()
 }
@@ -522,8 +498,13 @@ extractive_baseline <- questions |>
     ),
     contains_acceptable_answer = if_else(
       expected_action == "answer",
-      contains_acceptable_answer,
+      coalesce(contains_acceptable_answer, FALSE),
       NA
+    ),
+    baseline_sentence = if_else(
+      expected_action == "answer" & is.na(baseline_sentence),
+      "no sentence (no lexical match)",
+      baseline_sentence
     )
   ) |>
   select(question_id, baseline_sentence, contains_acceptable_answer)
@@ -547,7 +528,8 @@ kable(
 
 stopifnot(
   identical(extractive_baseline$question_id, questions$question_id),
-  is.na(extractive_baseline$baseline_sentence[[3]]),
+  identical(extractive_baseline$baseline_sentence[[3]], "no sentence (no lexical match)"),
+  identical(extractive_baseline$contains_acceptable_answer[[3]], FALSE),
   all(is.na(extractive_baseline$contains_acceptable_answer[5:6])),
   all(extractive_baseline$contains_acceptable_answer[1:2] %in% c(TRUE, FALSE))
 )
@@ -640,9 +622,9 @@ stopifnot(
 Greedy decoding chooses the highest-scoring next token at each step. The helper
 sets `do_sample = FALSE`. This lesson passes a repetition penalty of 1.05,
 which overrides the checkpoint's generation-config value of 1.1.
-Exact generated text can differ across machines, so the hidden checks below
-assert structure, token caps, parsed actions, and screen columns rather than
-literal wording.
+Exact generated text can differ across machines, so the render asserts
+structure, token caps, parsed actions, and screen columns rather than literal
+wording.
 
 ```{r}
 reader_results <- reader_inputs |>
@@ -667,17 +649,18 @@ reader_results <- reader_inputs |>
 
 kable(
   reader_results |>
-    select(question_id, raw_output, output_tokens, ended_by_eos, hit_token_cap),
+    mutate(raw_output_visible = str_replace_all(raw_output, "\\r?\\n", " ⏎ ")) |>
+    select(question_id, raw_output_visible, output_tokens, ended_by_eos, hit_token_cap),
   format = "html",
   escape = TRUE,
   col.names = c(
     "Question",
-    "Raw two-line reader output",
+    "Raw reader output (`⏎` marks a line break)",
     "Output tokens",
     "EOS emitted",
     "Hit token cap"
   ),
-  caption = "Raw local model output and stopping diagnostics",
+  caption = "Raw local model output with visible line-break markers and stopping diagnostics",
   row.names = FALSE
 )
 ```
@@ -695,8 +678,9 @@ stopifnot(
 
 ## Parse without repairing
 
-A strict parser accepts only the two requested lines. If the model adds a third
-line or omits `Sources:`, the row is a parse failure.
+A strict parser accepts only the two requested lines. In this render every
+output parsed; if a later output adds a third line or omits `Sources:`, the
+lesson stops before publishing a malformed row.
 
 ```{r}
 parse_reader_output <- function(text) {
@@ -784,10 +768,14 @@ stopifnot(
 
 ## Score answers, actions, and retrieval
 
-Exact match and token F1 use a stated normalization rule: lowercase, remove
-Unicode punctuation and symbols with stringr's ICU engine, remove English
-articles, and squeeze spaces. This mirrors the SQuAD script's steps, with a
-wider Unicode punctuation-and-symbol class than the ASCII script.
+**Exact match** is 1 only when the normalized prediction exactly equals one
+acceptable answer. **Token F1** balances shared-token precision and recall after
+normalization. SQuAD is a widely used question-answering benchmark; this lesson
+copies its scoring steps: lowercase, delete punctuation and symbols, remove
+English articles, and squeeze spaces. The only difference is that stringr's ICU
+class removes Unicode punctuation and symbols, not only ASCII punctuation. The
+retrieval score above is cosine similarity between tf-idf vectors, so it ranges
+from 0 to 1.
 
 ```{r}
 answer_f1 <- function(prediction, reference) {
@@ -864,6 +852,12 @@ score_table <- parsed_results |>
   mutate(
     action_correct = observed_action == expected_action,
     reader_action = observed_action,
+    reader_given_passages = case_when(
+      expected_action == "answer" & recall_at_3 %in% FALSE & observed_action == "abstain" ~
+        "reasonable abstention from retrieved passages",
+      action_correct ~ "expected action",
+      TRUE ~ "unexpected action"
+    ),
     end_to_end_outcome = case_when(
       expected_action == "answer" & recall_at_3 %in% FALSE ~ "failed before reading",
       action_correct ~ "expected action",
@@ -888,6 +882,7 @@ kable(
       reader_action,
       expected_action,
       action_correct,
+      reader_given_passages,
       reference_agreement,
       recall_at_3_label,
       end_to_end_outcome
@@ -897,6 +892,7 @@ kable(
     "Reader action",
     "Expected action",
     "Action correct",
+    "Reader given retrieved passages",
     "Reference agreement",
     "Retrieval recall at 3",
     "End-to-end outcome"
@@ -914,6 +910,10 @@ stopifnot(
   all(score_table$action_correct %in% c(TRUE, FALSE)),
   identical(score_table$recall_at_3_label[[5]], "not applicable"),
   identical(score_table$recall_at_3[[3]], FALSE),
+  identical(
+    score_table$reader_given_passages[[3]],
+    "reasonable abstention from retrieved passages"
+  ),
   all(score_table$reference_agreement[5:6] == "not applicable"),
   all(score_table$exact_match[score_table$expected_action != "answer"] |> is.na()),
   identical(score_table$reader_action[[3]], "abstain"),
@@ -931,6 +931,14 @@ qa_action_summary <- score_table |>
     retrieval_failures = sum(end_to_end_outcome == "failed before reading"),
     .groups = "drop"
   )
+
+right_action_em_zero <- score_table |>
+  filter(expected_action == "answer", action_correct, exact_match == 0) |>
+  summarise(
+    rows = paste(question_id, collapse = ", "),
+    count = n(),
+    .groups = "drop"
+  )
 ```
 
 In this render, the parsed reader actions include
@@ -944,15 +952,19 @@ F1 only when the expected action is `answer`; parsed abstentions and parse
 failures count as empty predictions, so they receive EM 0 and F1 0 on
 answerable questions. The sentence baseline used a different unit, whether the
 copied sentence contained an acceptable answer. These numbers should not be read
-as a model comparison.
+as a model comparison. In this render, `r right_action_em_zero$count` correctly
+handled answer row has exact match 0 (`r right_action_em_zero$rows`), because
+the generated answer includes extra words beyond the short acceptable variants.
 
 ## Screen citations and surface support
 
-The support screen checks mechanical facts: the row parsed, cited IDs exist,
-cited IDs were retrieved, answer numerals appear in cited passages after
-citation tokens are removed, and the false-premise row does not answer as if
-the premise were true. A screen can miss number words and wrong attachments,
-such as using the right number for the wrong item.
+The support screen checks six mechanical facts: the row parsed, cited IDs
+exist, cited IDs were retrieved, an answered row has a citation, an abstention
+cites no passages, and answer numerals appear in cited passages after citation
+tokens are removed. False-premise handling is scored in the action table using
+the author's reference; no screen on this page detects a false premise from text
+alone. A screen can miss number words and wrong attachments, such as using the
+right number for the wrong item.
 
 ```{r}
 strip_citation_tokens <- function(text) {
@@ -960,13 +972,13 @@ strip_citation_tokens <- function(text) {
 }
 
 numbers_in <- function(text) {
-  str_extract_all(strip_citation_tokens(coalesce(text, "")), "\\b\\d+\\b")[[1]]
+  str_extract_all(
+    strip_citation_tokens(coalesce(text, "")),
+    "(?<![\\p{L}\\p{N}])\\d+"
+  )[[1]]
 }
 
-screen_one <- function(question_id, answer, sources, parse_ok, observed_action) {
-  retrieved_ids <- retrieved |>
-    filter(.data$question_id == .env$question_id) |>
-    pull(passage_id)
+screen_one <- function(answer, sources, parse_ok, observed_action, retrieved_ids) {
   cited_text <- handbook |>
     filter(passage_id %in% sources) |>
     pull(text) |>
@@ -992,11 +1004,6 @@ screen_one <- function(question_id, answer, sources, parse_ok, observed_action) 
   } else {
     all(answer_numbers %in% cited_numbers)
   }
-  premise_screen <- if (question_id == "Q6") {
-    observed_action != "answer"
-  } else {
-    TRUE
-  }
 
   c(
     parsed = parsed,
@@ -1004,18 +1011,31 @@ screen_one <- function(question_id, answer, sources, parse_ok, observed_action) 
     cited_retrieved = cited_retrieved,
     answer_has_citation = answer_has_citation,
     abstain_sources_ok = abstain_sources_ok,
-    numbers_supported = numbers_supported,
-    premise_screen = premise_screen
+    numbers_supported = numbers_supported
   )
 }
 
 screen_results <- parsed_results |>
+  left_join(
+    retrieved |>
+      group_by(question_id) |>
+      summarise(retrieved_ids = list(passage_id), .groups = "drop"),
+    by = "question_id"
+  ) |>
   mutate(
+    retrieved_ids = map(retrieved_ids, \(ids) if (is.null(ids)) character() else ids),
     screen_values = pmap(
-      list(question_id, parsed_answer, parsed_sources, parse_ok, observed_action),
+      list(parsed_answer, parsed_sources, parse_ok, observed_action, retrieved_ids),
       screen_one
     ),
     surface_support_screen = map_lgl(screen_values, all),
+    failed_checks = map_chr(
+      screen_values,
+      \(values) {
+        failed <- names(values)[!values]
+        if (length(failed) == 0L) "none" else paste(failed, collapse = ", ")
+      }
+    ),
     screen_label = nlg_screen_label(surface_support_screen),
     human_support_review = "pending"
   )
@@ -1038,6 +1058,7 @@ screen_display <- screen_results |>
         if (length(text) == 0L) "none" else paste(text, collapse = " ")
       }
     ),
+    failed_checks,
     screen_label,
     human_support_review
   )
@@ -1051,6 +1072,7 @@ kable(
     "Parsed answer",
     "Cited IDs",
     "Cited passage text",
+    "Failed screen checks",
     "Surface support screen",
     "Human support review"
   ),
@@ -1076,10 +1098,18 @@ stopifnot(
       "cited_retrieved",
       "answer_has_citation",
       "abstain_sources_ok",
-      "numbers_supported",
-      "premise_screen"
+      "numbers_supported"
     ))
-  }))
+  })),
+  identical(numbers_in("October 16th"), "16"),
+  length(numbers_in("See H08 and H14.")) == 0L,
+  !screen_one(
+    "Applications close on October 16th.",
+    c("H14"),
+    TRUE,
+    "answer",
+    c("H14")
+  )[["numbers_supported"]]
 )
 
 qa_screen_summary <- screen_results |>
@@ -1110,18 +1140,31 @@ control_outputs <- tibble(
   question_id = c("Q1", "Q1"),
   parsed_answer = c(
     "The weekly training stipend is $200.",
-    "The weekly training stipend is $150."
+    "The stipend is paid weekly."
   ),
   parsed_sources = list(c("H08"), c("H14")),
   parse_ok = TRUE,
   observed_action = "answer"
 ) |>
+  left_join(
+    retrieved |>
+      group_by(question_id) |>
+      summarise(retrieved_ids = list(passage_id), .groups = "drop"),
+    by = "question_id"
+  ) |>
   mutate(
     screen_values = pmap(
-      list(question_id, parsed_answer, parsed_sources, parse_ok, observed_action),
+      list(parsed_answer, parsed_sources, parse_ok, observed_action, retrieved_ids),
       screen_one
     ),
     surface_support_screen = map_lgl(screen_values, all),
+    failed_checks = map_chr(
+      screen_values,
+      \(values) {
+        failed <- names(values)[!values]
+        if (length(failed) == 0L) "none" else paste(failed, collapse = ", ")
+      }
+    ),
     screen_label = nlg_screen_label(surface_support_screen)
   )
 
@@ -1131,11 +1174,12 @@ kable(
       control_id,
       parsed_answer,
       cited_passages = map_chr(parsed_sources, paste, collapse = ", "),
+      failed_checks,
       screen_label
     ),
   format = "html",
   escape = TRUE,
-  col.names = c("Control", "Control answer", "Cited IDs", "Screen label"),
+  col.names = c("Control", "Control answer", "Cited IDs", "Failed screen checks", "Screen label"),
   caption = "Author-written control strings that the support screen holds for review",
   row.names = FALSE
 )
@@ -1149,6 +1193,8 @@ stopifnot(
     control_outputs$screen_label,
     c("held for human review", "held for human review")
   ),
+  identical(control_outputs$failed_checks[[1]], "numbers_supported"),
+  identical(control_outputs$failed_checks[[2]], "cited_retrieved"),
   !any(control_outputs$surface_support_screen)
 )
 ```
@@ -1175,6 +1221,19 @@ action_table <- score_table |>
 
 always_answer_exact <- sum(questions$expected_action == "answer")
 always_abstain_exact <- sum(questions$expected_action == "abstain")
+observed_reader_exact <- sum(score_table$action_correct)
+
+policy_misses <- bind_rows(
+  score_table |>
+    filter(!action_correct) |>
+    summarise(policy = "observed reader", misses = paste(question_id, collapse = ", ")),
+  questions |>
+    filter(expected_action != "answer") |>
+    summarise(policy = "always answer", misses = paste(question_id, collapse = ", ")),
+  questions |>
+    filter(expected_action != "abstain") |>
+    summarise(policy = "always abstain", misses = paste(question_id, collapse = ", "))
+)
 
 kable(
   action_table,
@@ -1185,12 +1244,17 @@ kable(
 
 kable(
   tibble(
-    baseline = c("always answer", "always abstain"),
-    exact_action_matches = c(always_answer_exact, always_abstain_exact),
+    baseline = c("observed reader", "always answer", "always abstain"),
+    exact_action_matches = c(
+      observed_reader_exact,
+      always_answer_exact,
+      always_abstain_exact
+    ),
     total_questions = nrow(questions)
-  ),
-  col.names = c("Simple policy", "Exact action matches", "Questions"),
-  caption = "Simple abstention baselines on the same six questions",
+  ) |>
+    left_join(policy_misses, by = c("baseline" = "policy")),
+  col.names = c("Policy", "Exact action matches", "Questions", "Rows missed"),
+  caption = "Observed reader and simple policies scored on the same six questions",
   row.names = FALSE
 )
 ```
@@ -1200,6 +1264,7 @@ kable(
 
 stopifnot(
   sum(action_table$questions) == 6L,
+  identical(observed_reader_exact, 4L),
   identical(always_answer_exact, 4L),
   identical(always_abstain_exact, 1L),
   all(action_table$expected_action %in% c("answer", "abstain", "flag premise")),
@@ -1209,9 +1274,12 @@ stopifnot(
 
 The abstention row matters because an unanswerable question alone can flatter a
 system that refuses everything. The premise row matters too: a false assumption
-needs a correction, not just a generic refusal.
+needs a correction, not just a generic refusal. The observed reader and the
+always-answer policy both match `r observed_reader_exact` of 6 actions, but they
+miss different rows: the reader misses `r policy_misses$misses[policy_misses$policy == "observed reader"]`,
+while always-answer misses `r policy_misses$misses[policy_misses$policy == "always answer"]`.
 
-## Where this fits
+## How to use this pattern
 
 This is a retrieve-then-read demonstration over a small English (`en`)
 handbook. The term retrieval-augmented generation, or RAG, usually refers to a
@@ -1233,9 +1301,6 @@ rather than trusting retrieved or typed text.
 - A citation is a clue to inspect, not proof that the answer follows.
 - Screens can hold obvious failures, but human support review stays pending.
 - Abstention must be checked on answerable and unanswerable questions.
-
-Amara can use the table as a triage aid. She still reads the cited passage
-before giving a caller a deadline, stipend, or eligibility answer.
 
 ## Sources
 

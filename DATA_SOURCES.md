@@ -39,18 +39,31 @@ before any lesson retrieves or generates anything:
   search queries and 15 passages.
 
 Lesson 74 reads `riverton-review-collection.csv`, a constructed collection of
-240 records for one fictional review request, and `riverton-monitoring-stream.csv`,
-a short dated stream for the monitoring example. `data-raw/build-riverton-review-collection.R`
-writes both. Record IDs are assigned after a seeded random permutation, and a
+240 fictional records for one review request (records about hiding Calder Yard
+inspection delays, changing inspection logs, or deleting related messages; 36
+are author-labelled responsive), and `riverton-monitoring-stream.csv`, 24
+fictional dated items with arrival order, explicit syndicated near-duplicates,
+and ambiguous Riverton mentions. `data-raw/build-riverton-review-collection.R`
+writes both. Every row carries an `author_note` marking it as fictional, and a
 `near_duplicate_of` column names the original of each deliberate near-duplicate.
-The builder refuses to write the files when a superficial feature, such as
-length, punctuation, template, date, record ID, or file position, separates the
-reference classes.
+Record IDs are assigned after seeded permutations and never appear in the text.
+The builder refuses to write the files when base-text variety falls below its
+declared threshold or when a superficial feature separates the reference
+classes. Its sweep covers length, punctuation, sentence frame, first word,
+construction order, record ID, date, file position, and frequent tokens, with
+the review request's own topic words excluded by a rule written before the
+final rebuild.
 
 The same person wrote these records, their questions, their reference answers,
 their relevance judgments, and the lessons that score against them. They are
-disclosed teaching fixtures written before the methods were run, not
-independent benchmarks or ground truth. `riverton-handbook-metadata.csv` and
+disclosed teaching fixtures, not independent benchmarks or ground truth. The
+handbook, its questions, and its judgments were written and fingerprinted before
+any lesson retrieved or generated anything. The review collection was not: it
+was rebuilt three times after early drafts of lesson 74 had run, to remove a
+record-ID shortcut, then repeated templates, then a dominant sentence frame. Its
+metadata records the base seed 7401 and the effective seeds the builder uses
+for dates, record IDs, and stream IDs, and the lesson's single elusion sample
+uses the predeclared seed 7401. `riverton-handbook-metadata.csv` and
 `riverton-review-collection-metadata.csv` record row counts, class counts, and
 line-normalised SHA-256 fingerprints that `scripts/check-data-fingerprints.R`
 verifies.

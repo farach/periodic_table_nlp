@@ -24,13 +24,14 @@ Future revisions should continue to test their claims against current
 tokenizers, prompted or structured-output extraction, and normalization-aware
 linking rather than treating publication as permanent completion.
 
-All 81 tiles now have lessons. The systems lessons, 69 through 74, teach
+All 81 tiles have lessons. The systems lessons, 69 through 74, teach relation
+extraction with a stated schema, knowledge base population with provenance,
 retrieve-then-read question answering with citation screens, a dialogue state
-kept outside the model, dense and lexical search indexes, and review workflows
-that estimate what was missed. They use small constructed fixtures and local
-models, so they demonstrate mechanisms rather than measure current systems.
-Revisit them when citation-faithfulness evaluation, prompt-injection defenses,
-or embedding-model practice changes.
+kept outside the model, lexical and embedding search indexes, and review
+workflows that estimate what was missed. They use small constructed fixtures
+and local models, so they demonstrate mechanisms rather than measure current
+systems. Revisit them when citation-faithfulness evaluation, prompt-injection
+defenses, or embedding-model practice changes.
 
 ## Areas to keep reviewing
 
