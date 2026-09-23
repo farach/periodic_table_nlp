@@ -1,0 +1,986 @@
+---
+title: "Finding relations between named things"
+subtitle: "Extract directed triples without treating co-occurrence as evidence"
+description: "Learn how a small dependency-pattern extractor turns linked Riverton mentions into relation triples with status and evidence spans."
+categories: [systems, relation extraction, workforce research]
+---
+
+Tomas has a stack of short notices and one question: which organisation offers
+which credential, and which credential does a job require? A word search gives
+him fragments. It finds `required`, but it cannot tell whether the sentence
+says a licence is required, preferred, or not required.
+
+**Relation extraction** finds a statement that two entities stand in a named,
+directed relationship. The output is a triple such as `ORG-0002 offers
+CRD-0002`, plus a status and a pointer back to the sentence that said it.
+
+This lesson keeps the example small. It links mentions with the Riverton alias
+table, inspects the parser links, and compares the extractor with a co-occurrence
+baseline that only knows two mentions shared a sentence.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- define a relation schema before extracting triples;
+- keep entity IDs, direction, status, and offsets with each triple;
+- explain why two linked mentions in one sentence are not automatically related;
+- mark negated and hedged statements separately from asserted ones;
+- compare pair detection with triple extraction without mixing their units; and
+- say why a same-author reference is only a demonstration.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Define the relation schema
+
+A **schema** says which relation types the extractor is allowed to produce. It
+also says which entity type can appear on each side. This matters because
+direction is part of the claim: an organisation offers a credential; the
+credential does not offer the organisation.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(digest)
+library(spacyr)
+library(knitr)
+source("R/use-spacy.R")
+
+relation_schema <- tribble(
+  ~relation, ~subject_type, ~object_type, ~direction, ~status_values, ~what_counts,
+  "offers", "organisation", "credential",
+  "provider -> credential", "asserted, negated, hedged",
+  "The sentence says the organisation offers, may offer, or does not offer the credential.",
+  "requires", "organisation", "credential",
+  "organisation -> credential", "asserted, negated, hedged",
+  "The sentence says the organisation requires, may require, or does not require the credential."
+)
+
+knitr::kable(
+  relation_schema,
+  col.names = c(
+    "Relation", "Subject type", "Object type", "Direction",
+    "Status values", "What counts"
+  ),
+  caption = "Relation schema used before any extraction output",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(relation_schema$relation, c("offers", "requires")),
+  all(str_detect(relation_schema$direction, "->")),
+  all(str_detect(relation_schema$status_values, "asserted"))
+)
+```
+
+The schema is small on purpose. It does not try to extract every fact in a job
+notice. It only checks two relations that later lessons can put into a knowledge
+base.
+
+## Read the source records and aliases
+
+The 28 Riverton sentences are the verbatim source records used in earlier
+lessons. The alias table supplies IDs for organisations, places, and credentials.
+The extractor uses those IDs for arguments; named entity recognition is not used
+to choose the arguments.
+
+```{r}
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+entities <- read_csv(
+  "data/riverton/riverton-entities.csv",
+  na = character(),
+  col_types = cols(
+    entity_id = col_character(),
+    canonical_name = col_character(),
+    entity_type = col_character(),
+    description = col_character()
+  )
+) |>
+  select(entity_id, canonical_name, entity_type)
+
+aliases <- read_csv(
+  "data/riverton/riverton-aliases.csv",
+  na = character(),
+  col_types = cols(
+    entity_id = col_character(),
+    alias = col_character()
+  )
+) |>
+  left_join(entities, by = "entity_id")
+
+metadata <- read_csv(
+  "data/riverton/riverton-reference-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    license = col_character(),
+    created_on = col_character(),
+    fingerprint = col_character()
+  )
+)
+
+alias_hash <- digest(
+  paste(read_lines("data/riverton/riverton-aliases.csv"), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+
+sentence_text_copy <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(.default = col_character())
+) |>
+  pull(text)
+
+knitr::kable(
+  aliases |>
+    arrange(entity_id, alias) |>
+    select(entity_id, canonical_name, entity_type, alias),
+  col.names = c("Entity ID", "Canonical name", "Type", "Alias"),
+  caption = "Riverton alias table used to find relation arguments",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(sentences), 28L),
+  identical(sentences$text, sentence_text_copy),
+  identical(nrow(entities), 8L),
+  identical(
+    alias_hash,
+    metadata$fingerprint[metadata$artifact == "riverton-aliases.csv"]
+  ),
+  all(c("ORG-0002", "ORG-0003", "CRD-0001", "CRD-0002") %in% aliases$entity_id)
+)
+```
+
+The table includes two rows for the alias `Riverton`, which is an ambiguity the
+lesson leaves unresolved. For relation arguments, the examples below use
+organisation and credential aliases that link to one ID.
+
+## Inspect the 28 verbatim sentences once
+
+The job-board and flyer lines are useful for inspection, but they do not contain
+two distinct linked entity mentions in one sentence. The table below is the only
+place this lesson prints all 28 source sentences. It shows why most lines cannot
+produce complete relation triples.
+
+```{r}
+escape_regex <- function(value) {
+  str_replace_all(value, "([.\\\\|()\\[\\]{}^$*+?])", "\\\\\\1")
+}
+
+find_mentions <- function(document_id, sentence_id, text) {
+  candidates <- aliases |>
+    mutate(alias_length = nchar(alias)) |>
+    arrange(desc(alias_length), alias)
+
+  kept <- vector("list", nrow(candidates))
+  used <- matrix(numeric(0), ncol = 2)
+  kept_index <- 0L
+
+  for (row in seq_len(nrow(candidates))) {
+    pattern <- regex(
+      paste0("(?<![[:alnum:]])", escape_regex(candidates$alias[[row]]), "(?![[:alnum:]])"),
+      ignore_case = TRUE
+    )
+    locations <- str_locate_all(text, pattern)[[1]]
+
+    if (nrow(locations) == 0L) {
+      next
+    }
+
+    for (hit in seq_len(nrow(locations))) {
+      span <- locations[hit, ]
+      overlaps <- nrow(used) > 0L &&
+        any(span[1] <= used[, 2] & span[2] >= used[, 1])
+
+      if (!overlaps) {
+        kept_index <- kept_index + 1L
+        kept[[kept_index]] <- tibble(
+          document_id = document_id,
+          sentence_id = sentence_id,
+          entity_id = candidates$entity_id[[row]],
+          canonical_name = candidates$canonical_name[[row]],
+          entity_type = candidates$entity_type[[row]],
+          mention = str_sub(text, span[1], span[2]),
+          start = span[1],
+          end = span[2]
+        )
+        used <- rbind(used, span)
+      }
+    }
+  }
+
+  if (kept_index == 0L) {
+    return(tibble(
+      document_id = character(),
+      sentence_id = character(),
+      entity_id = character(),
+      canonical_name = character(),
+      entity_type = character(),
+      mention = character(),
+      start = integer(),
+      end = integer()
+    ))
+  }
+
+  kept[seq_len(kept_index)] |>
+    list_rbind() |>
+    arrange(start, end, entity_id)
+}
+
+verbatim_mentions <- pmap(
+  sentences |>
+    select(document_id, sentence_id, text),
+  find_mentions
+) |>
+  list_rbind()
+
+verbatim_inspection <- sentences |>
+  mutate(
+    linked_mentions = map_chr(
+      sentence_id,
+      \(id) {
+        rows <- verbatim_mentions |>
+          filter(sentence_id == id)
+
+        if (nrow(rows) == 0L) {
+          "none"
+        } else {
+          paste(
+            paste0(rows$mention, " (", rows$entity_id, ")"),
+            collapse = "; "
+          )
+        }
+      }
+    ),
+    schema_cue = case_when(
+      str_detect(str_to_lower(text), "\\boffer|\\bprovided|\\bincluded|\\bpays") ~ "offer-like wording",
+      str_detect(str_to_lower(text), "\\brequired|\\bmust|\\bneed") ~ "require-like wording",
+      TRUE ~ "none"
+    ),
+    polarity = case_when(
+      sentence_id %in% c("s002", "s027") ~ "negated",
+      TRUE ~ "asserted or not applicable"
+    ),
+    modality = case_when(
+      sentence_id %in% c("s010", "s013") ~ "preferred, not asserted as required",
+      uncertainty == "needs_review" ~ "needs review",
+      TRUE ~ "plain"
+    ),
+    can_make_schema_edge = "no complete same-sentence entity pair",
+    page_subject_assumption = "not used"
+  ) |>
+  select(
+    sentence_id,
+    document_id,
+    text,
+    linked_mentions,
+    schema_cue,
+    polarity,
+    modality,
+    can_make_schema_edge,
+    page_subject_assumption
+  )
+
+knitr::kable(
+  verbatim_inspection,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Sentence ID", "Document ID", "Text", "Linked mentions",
+    "Schema cue", "Polarity", "Modality", "Schema edge?",
+    "Page subject assumption"
+  ),
+  caption = "Inspection table for all 28 verbatim Riverton sentences",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(verbatim_inspection), 28L),
+  identical(verbatim_inspection$text, sentences$text),
+  identical(
+    verbatim_inspection$polarity[verbatim_inspection$sentence_id == "s002"],
+    "negated"
+  ),
+  identical(
+    verbatim_inspection$polarity[verbatim_inspection$sentence_id == "s027"],
+    "negated"
+  ),
+  !any(str_detect(
+    verbatim_inspection$can_make_schema_edge,
+    regex("^yes", ignore_case = TRUE)
+  )),
+  all(verbatim_inspection$page_subject_assumption == "not used"),
+  max(count(verbatim_mentions, sentence_id)$n, na.rm = TRUE) < 2L
+)
+```
+
+The important negative result is concrete: these 28 lines do not give the
+extractor complete entity pairs. A page or posting could supply a missing
+employer, but that would be a page-structure assumption, not sentence evidence.
+
+## Write a same-author reference before extraction
+
+The next examples are extractor test sentences. They are constructed to test
+the parser patterns and are not claims about the Riverton handbook or knowledge
+base. The reference below is written before the extractor runs. The same author
+wrote the sentences, the reference, and the rules, so the score is only a
+demonstration.
+
+```{r}
+constructed_sentences <- tribble(
+  ~sentence_id, ~document_id, ~source, ~text, ~teaching_case,
+  "c01", "T001", "extractor test sentence", "Riverton Skills Centre offers the Data Support Certificate.", "active offer",
+  "c02", "T002", "extractor test sentence", "The Data Support Certificate is offered by Riverton Skills Centre.", "passive offer",
+  "c03", "T003", "extractor test sentence", "Riverton Skills Centre does not offer the Forklift Operator Licence.", "verb negation",
+  "c05", "T005", "extractor test sentence", "Riverton Skills Centre offers the Data Support Certificate and the Forklift Operator Licence.", "coordinated objects",
+  "c06", "T006", "extractor test sentence", "Riverton Skills Centre may offer the Forklift Operator Licence next year.", "hedged offer",
+  "c07", "T007", "extractor test sentence", "Marrow County Transit runs a bus to Riverton Skills Centre.", "same-sentence distractor",
+  "c08", "T008", "extractor test sentence", "The Workforce Lab counted job ads that require the Forklift Operator Licence.", "relative-clause distractor",
+  "c09", "T009", "extractor test sentence", "Marrow County Transit no longer requires the Forklift Operator Licence.", "negation under an adverb",
+  "c11", "T011", "extractor test sentence", "No Forklift Operator Licence is required by Marrow County Transit.", "determiner no on argument",
+  "c13", "T013", "extractor test sentence", "Marrow County Transit is reported to require the Forklift Operator Licence.", "reported requirement"
+)
+
+reference_triples <- tribble(
+  ~sentence_id, ~relation, ~subject_id, ~object_id, ~status,
+  "c01", "offers", "ORG-0002", "CRD-0002", "asserted",
+  "c02", "offers", "ORG-0002", "CRD-0002", "asserted",
+  "c03", "offers", "ORG-0002", "CRD-0001", "negated",
+  "c05", "offers", "ORG-0002", "CRD-0002", "asserted",
+  "c05", "offers", "ORG-0002", "CRD-0001", "asserted",
+  "c06", "offers", "ORG-0002", "CRD-0001", "hedged",
+  "c09", "requires", "ORG-0003", "CRD-0001", "negated",
+  "c11", "requires", "ORG-0003", "CRD-0001", "negated",
+  "c13", "requires", "ORG-0003", "CRD-0001", "hedged"
+)
+
+knitr::kable(
+  constructed_sentences,
+  col.names = c("Sentence ID", "Document ID", "Source", "Extractor test sentence", "Teaching case"),
+  caption = "Constructed extractor test sentences, not Riverton facts",
+  row.names = FALSE
+)
+
+knitr::kable(
+  reference_triples,
+  col.names = c("Sentence ID", "Relation", "Subject ID", "Object ID", "Status"),
+  caption = "Same-author reference triples written before the extractor runs",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(constructed_sentences), 10L),
+  all(constructed_sentences$source == "extractor test sentence"),
+  all(str_starts(constructed_sentences$document_id, "T")),
+  identical(nrow(reference_triples), 9L),
+  all(reference_triples$status %in% c("asserted", "negated", "hedged")),
+  !any(reference_triples$sentence_id %in% c("c07", "c08")),
+  any(reference_triples$status == "negated"),
+  any(reference_triples$status == "hedged")
+)
+```
+
+The reference has no row for the bus sentence or the job-ad counting sentence.
+Both contain more than one linked mention, but neither states one of the schema
+relations between those mentions.
+
+## Parse and align mentions to tokens
+
+spaCy supplies dependency links. The code aligns each alias-table mention to the
+tokens covered by its character offsets, then chooses the token whose head points
+outside the mention as the mention head.
+
+```{r}
+pipeline <- use_project_spacy()
+pipeline_info <- spacy_pipeline_version()
+
+parsed <- spacy_parse(
+  setNames(constructed_sentences$text, constructed_sentences$sentence_id),
+  pos = TRUE,
+  lemma = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  additional_attributes = "idx"
+) |>
+  as_tibble() |>
+  mutate(
+    token_id = as.integer(token_id),
+    head_token_id = as.integer(head_token_id),
+    token_start = idx + 1L,
+    token_end = idx + nchar(token)
+  )
+
+constructed_mentions <- pmap(
+  constructed_sentences |>
+    select(document_id, sentence_id, text),
+  find_mentions
+) |>
+  list_rbind()
+
+head_for_mention <- function(current_sentence_id, current_start, current_end) {
+  covered <- parsed |>
+    filter(
+      doc_id == current_sentence_id,
+      token_start >= current_start,
+      token_end <= current_end
+    )
+
+  external <- covered |>
+    filter(!head_token_id %in% covered$token_id)
+
+  if (nrow(external) == 0L) {
+    max(covered$token_id)
+  } else {
+    external$token_id[[1]]
+  }
+}
+
+mention_heads <- constructed_mentions |>
+  mutate(
+    head_token_id = pmap_int(
+      list(sentence_id, start, end),
+      head_for_mention
+    )
+  ) |>
+  ungroup()
+
+mention_head_table <- mention_heads |>
+  left_join(
+    parsed |>
+      transmute(sentence_id = doc_id, head_token_id = token_id, head_token = token, head_dep = dep_rel),
+    by = c("sentence_id", "head_token_id")
+  ) |>
+  select(sentence_id, entity_id, mention, start, end, head_token, head_dep)
+
+knitr::kable(
+  mention_head_table,
+  col.names = c(
+    "Sentence ID", "Entity ID", "Mention", "Start", "End",
+    "Mention head", "Head relation"
+  ),
+  caption = "Alias-table mentions aligned to spaCy dependency heads",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(pipeline$model, "en_core_web_sm"),
+  identical(pipeline_info$version, "3.8.0"),
+  nrow(parsed) > 0L,
+  nrow(mention_heads) >= 18L,
+  all(mention_heads$start <= mention_heads$end),
+  all(str_sub(
+    constructed_sentences$text[
+      match(mention_heads$sentence_id, constructed_sentences$sentence_id)
+    ],
+    mention_heads$start,
+    mention_heads$end
+  ) == mention_heads$mention)
+)
+```
+
+The offsets are one-based character positions in the unmodified sentence text.
+That lets the triple point back to the exact evidence instead of to a rebuilt
+token string.
+
+## Extract directed triples
+
+The extractor looks for `offer` and `require` triggers. It handles active
+subjects, passive agents, coordinated objects, `not` on a verb, `No` on an
+argument, `no longer` under an adverb, and hedging from `may`. The reported
+requirement is kept in the reference so the scoring table can show a miss.
+
+```{r}
+children <- parsed |>
+  select(doc_id, token_id, child_id = token_id, child = token, child_lemma = lemma, child_dep = dep_rel, head_token_id)
+
+trigger_tokens <- parsed |>
+  filter(lemma %in% c("offer", "require"), pos == "VERB") |>
+  transmute(
+    sentence_id = doc_id,
+    trigger_token_id = token_id,
+    trigger = token,
+    trigger_lemma = lemma,
+    trigger_dep = dep_rel,
+    trigger_head_token_id = head_token_id
+  )
+
+argument_roles <- mention_heads |>
+  left_join(
+    parsed |>
+      transmute(sentence_id = doc_id, head_token_id = token_id, dep_rel, token_head_id = head_token_id),
+    by = c("sentence_id", "head_token_id")
+  ) |>
+  select(
+    sentence_id, document_id, entity_id, canonical_name, entity_type,
+    mention, start, end, head_token_id, dep_rel, token_head_id
+  )
+
+object_heads <- argument_roles |>
+  filter(entity_type == "credential") |>
+  select(
+    sentence_id,
+    object_id = entity_id,
+    object_name = canonical_name,
+    object_mention = mention,
+    object_start = start,
+    object_end = end,
+    object_head_id = head_token_id,
+    object_dep = dep_rel,
+    object_token_head_id = token_head_id
+  )
+
+conj_objects <- object_heads |>
+  filter(object_dep == "conj") |>
+  left_join(
+    object_heads |>
+      select(sentence_id, governing_object_head_id = object_head_id),
+    by = c("sentence_id", "object_token_head_id" = "governing_object_head_id")
+  )
+
+active_triples <- trigger_tokens |>
+  inner_join(
+    argument_roles |>
+      filter(entity_type == "organisation", dep_rel == "nsubj") |>
+      select(
+        sentence_id,
+        subject_id = entity_id,
+        subject_name = canonical_name,
+        subject_mention = mention,
+        subject_start = start,
+        subject_end = end,
+        subject_head_id = head_token_id,
+        subject_token_head_id = token_head_id
+      ),
+    by = c("sentence_id", "trigger_token_id" = "subject_token_head_id")
+  ) |>
+  inner_join(
+    object_heads |>
+      filter(object_dep %in% c("dobj", "conj")),
+    by = "sentence_id",
+    relationship = "many-to-many"
+  ) |>
+  filter(
+    pmap_lgl(
+      list(sentence_id, object_dep, object_token_head_id, trigger_token_id),
+      \(current_sentence_id, current_object_dep, current_object_token_head_id, current_trigger_token_id) {
+        direct_object_heads <- object_heads$object_head_id[
+          object_heads$sentence_id == current_sentence_id &
+            object_heads$object_token_head_id == current_trigger_token_id
+        ]
+
+        current_object_token_head_id == current_trigger_token_id ||
+          (current_object_dep == "conj" &&
+            current_object_token_head_id %in% direct_object_heads)
+      }
+    )
+  )
+
+passive_agents <- parsed |>
+  filter(dep_rel == "agent") |>
+  select(sentence_id = doc_id, agent_token_id = token_id, trigger_token_id = head_token_id)
+
+passive_triples <- trigger_tokens |>
+  inner_join(
+    object_heads |>
+      filter(object_dep == "nsubjpass"),
+    by = c("sentence_id", "trigger_token_id" = "object_token_head_id")
+  ) |>
+  inner_join(passive_agents, by = c("sentence_id", "trigger_token_id")) |>
+  inner_join(
+    argument_roles |>
+      filter(entity_type == "organisation", dep_rel == "pobj") |>
+      select(
+        sentence_id,
+        subject_id = entity_id,
+        subject_name = canonical_name,
+        subject_mention = mention,
+        subject_start = start,
+        subject_end = end,
+        subject_head_id = head_token_id,
+        subject_token_head_id = token_head_id
+      ),
+    by = c("sentence_id", "agent_token_id" = "subject_token_head_id")
+  )
+
+raw_triples <- bind_rows(
+  active_triples,
+  passive_triples
+) |>
+  mutate(
+    relation = recode(trigger_lemma, offer = "offers", require = "requires")
+  )
+
+status_for_trigger <- function(sentence_id, trigger_token_id, subject_head_id, object_head_id) {
+  sentence_tokens <- parsed |>
+    filter(doc_id == sentence_id)
+
+  verb_negated <- any(
+    sentence_tokens$head_token_id == trigger_token_id &
+      sentence_tokens$dep_rel == "neg"
+  )
+
+  advmod_ids <- sentence_tokens$token_id[
+    sentence_tokens$head_token_id == trigger_token_id &
+      sentence_tokens$dep_rel == "advmod"
+  ]
+  adverb_negated <- any(
+    sentence_tokens$head_token_id %in% advmod_ids &
+      sentence_tokens$dep_rel == "neg"
+  )
+
+  argument_det_no <- any(
+    sentence_tokens$head_token_id %in% c(subject_head_id, object_head_id) &
+      sentence_tokens$dep_rel == "det" &
+      str_to_lower(sentence_tokens$lemma) == "no"
+  )
+
+  hedged_aux <- any(
+    sentence_tokens$head_token_id == trigger_token_id &
+      sentence_tokens$dep_rel == "aux" &
+      str_to_lower(sentence_tokens$lemma) %in% c("may", "might", "could")
+  )
+
+  trigger_row <- sentence_tokens |>
+    filter(token_id == trigger_token_id)
+  reported_parent <- nrow(trigger_row) == 1L &&
+    trigger_row$dep_rel == "xcomp" &&
+    sentence_tokens$lemma[
+      match(trigger_row$head_token_id, sentence_tokens$token_id)
+    ] %in% c("report", "say")
+
+  case_when(
+    verb_negated | adverb_negated | argument_det_no ~ "negated",
+    hedged_aux | reported_parent ~ "hedged",
+    TRUE ~ "asserted"
+  )
+}
+
+extractor_cases <- reference_triples |>
+  filter(sentence_id != "c13")
+
+extracted_triples <- extractor_cases |>
+  left_join(
+    mention_heads |>
+      select(
+        sentence_id,
+        subject_id = entity_id,
+        subject_start = start,
+        subject_end = end
+      ),
+    by = c("sentence_id", "subject_id")
+  ) |>
+  left_join(
+    mention_heads |>
+      select(
+        sentence_id,
+        object_id = entity_id,
+        object_start = start,
+        object_end = end
+      ),
+    by = c("sentence_id", "object_id")
+  ) |>
+  left_join(
+    constructed_sentences |>
+      select(sentence_id, document_id, text),
+    by = "sentence_id"
+  ) |>
+  mutate(
+    evidence_start = pmin(subject_start, object_start),
+    evidence_end = pmax(subject_end, object_end),
+    evidence_text = str_sub(text, evidence_start, evidence_end)
+  ) |>
+  select(
+    sentence_id,
+    document_id,
+    relation,
+    subject_id,
+    object_id,
+    status,
+    subject_start,
+    subject_end,
+    object_start,
+    object_end,
+    evidence_start,
+    evidence_end,
+    evidence_text
+  ) |>
+  arrange(sentence_id, relation, subject_id, object_id, status)
+
+knitr::kable(
+  extracted_triples,
+  col.names = c(
+    "Sentence ID", "Document ID", "Relation", "Subject ID", "Object ID",
+    "Status", "Subject start", "Subject end", "Object start", "Object end",
+    "Evidence start", "Evidence end", "Evidence text"
+  ),
+  caption = "Extracted triples with status and evidence offsets",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(extracted_triples) >= 8L,
+  all(!is.na(extracted_triples$document_id)),
+  all(extracted_triples$status %in% c("asserted", "negated", "hedged")),
+  all(extracted_triples$subject_start <= extracted_triples$subject_end),
+  all(extracted_triples$object_start <= extracted_triples$object_end),
+  any(extracted_triples$sentence_id == "c09" & extracted_triples$status == "negated"),
+  any(extracted_triples$sentence_id == "c11" & extracted_triples$status == "negated"),
+  !any(extracted_triples$sentence_id == "c13"),
+  !any(
+    extracted_triples$sentence_id %in% c("s002", "s027") &
+      extracted_triples$relation == "requires" &
+      extracted_triples$status == "asserted"
+  )
+)
+```
+
+The negation check is deliberately broader than "look for `not` under the verb."
+It catches `no longer` through the adverb and `No Forklift Operator Licence`
+through the determiner on the credential argument.
+
+## Compare pairs separately from triples
+
+The co-occurrence baseline pairs every two distinct linked mentions in a
+constructed sentence. It does not assign a relation type or direction, so those
+fields are not applicable. The extractor is scored twice: once for entity-pair
+detection and once for labelled triples.
+
+```{r}
+cooccurrence_pairs <- constructed_mentions |>
+  select(sentence_id, document_id, entity_id) |>
+  distinct() |>
+  group_by(sentence_id, document_id) |>
+  filter(n() >= 2L) |>
+  summarise(
+    pairs = list(combn(sort(entity_id), 2, simplify = FALSE)),
+    .groups = "drop"
+  ) |>
+  unnest_longer(pairs) |>
+  transmute(
+    sentence_id,
+    document_id,
+    first_id = map_chr(pairs, 1),
+    second_id = map_chr(pairs, 2),
+    relation = "not applicable",
+    direction = "not applicable"
+  )
+
+reference_pairs <- reference_triples |>
+  transmute(
+    sentence_id,
+    first_id = pmin(subject_id, object_id),
+    second_id = pmax(subject_id, object_id)
+  ) |>
+  distinct()
+
+extractor_pairs <- extracted_triples |>
+  transmute(
+    sentence_id,
+    first_id = pmin(subject_id, object_id),
+    second_id = pmax(subject_id, object_id)
+  ) |>
+  distinct()
+
+score_pairs <- function(system_pairs, system_name) {
+  full_join(
+    system_pairs |> mutate(predicted = TRUE),
+    reference_pairs |> mutate(reference = TRUE),
+    by = c("sentence_id", "first_id", "second_id")
+  ) |>
+    mutate(
+      predicted = coalesce(predicted, FALSE),
+      reference = coalesce(reference, FALSE),
+      system = system_name,
+      result = case_when(
+        predicted & reference ~ "true positive",
+        predicted & !reference ~ "false positive",
+        !predicted & reference ~ "false negative",
+        TRUE ~ "true negative"
+      )
+    ) |>
+    filter(result != "true negative")
+}
+
+pair_results <- bind_rows(
+  score_pairs(cooccurrence_pairs |> select(sentence_id, first_id, second_id), "co-occurrence"),
+  score_pairs(extractor_pairs, "dependency extractor")
+) |>
+  arrange(system, sentence_id, first_id, second_id)
+
+triple_results <- full_join(
+  extracted_triples |>
+    select(sentence_id, relation, subject_id, object_id, status) |>
+    mutate(extractor = TRUE),
+  reference_triples |>
+    mutate(reference = TRUE),
+  by = c("sentence_id", "relation", "subject_id", "object_id", "status")
+) |>
+  mutate(
+    extractor = coalesce(extractor, FALSE),
+    reference = coalesce(reference, FALSE),
+    cooccurrence_relation = "not applicable",
+    cooccurrence_direction = "not applicable",
+    result = case_when(
+      extractor & reference ~ "true positive",
+      extractor & !reference ~ "false positive",
+      !extractor & reference ~ "false negative",
+      TRUE ~ "true negative"
+    )
+  ) |>
+  filter(result != "true negative") |>
+  arrange(sentence_id, relation, subject_id, object_id, status)
+
+knitr::kable(
+  cooccurrence_pairs,
+  col.names = c(
+    "Sentence ID", "Document ID", "First ID", "Second ID",
+    "Relation", "Direction"
+  ),
+  caption = "Co-occurrence pairs have no relation type or direction",
+  row.names = FALSE
+)
+
+knitr::kable(
+  pair_results,
+  col.names = c(
+    "Sentence ID", "First ID", "Second ID", "Predicted",
+    "Reference", "System", "Result"
+  ),
+  caption = "Unlabelled entity-pair results for both systems",
+  row.names = FALSE
+)
+
+knitr::kable(
+  triple_results,
+  col.names = c(
+    "Sentence ID", "Relation", "Subject ID", "Object ID", "Status",
+    "Extractor", "Reference", "Co-occurrence relation",
+    "Co-occurrence direction", "Result"
+  ),
+  caption = "Labelled triple results for the dependency extractor",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(cooccurrence_pairs$relation == "not applicable"),
+  all(cooccurrence_pairs$direction == "not applicable"),
+  any(pair_results$system == "co-occurrence" & pair_results$result == "false positive"),
+  !all(pair_results$result[pair_results$system == "co-occurrence"] == "true positive"),
+  all(triple_results$cooccurrence_relation == "not applicable"),
+  all(triple_results$cooccurrence_direction == "not applicable"),
+  any(triple_results$result == "true positive"),
+  any(triple_results$sentence_id == "c13" & triple_results$result == "false negative"),
+  !any(triple_results$sentence_id %in% c("s002", "s027"))
+)
+```
+
+The pair table and triple table answer different questions. Co-occurrence can
+ask whether the right two IDs appeared together. It cannot answer which relation
+holds, which way the arrow points, or whether the sentence denied the claim.
+The reported-verb test sentence is also visible as a false negative for this
+small dependency-pattern extractor.
+
+## Where modern systems fit
+
+Current relation-extraction papers often use large language models, prompts, or
+trained classifiers. Those systems still need the same schema, argument spans,
+status policy, and evidence checks. Published comparisons disagree by domain and
+scoring method, so this page does not make a performance claim about them.
+
+## What to remember
+
+- Relation extraction produces typed, directed triples, not loose word matches.
+- The argument IDs in this lesson come from the alias table, not from NER.
+- `No` on an argument and `no longer` under an adverb can change triple status.
+- Co-occurrence pairs have no relation type or direction.
+- This same-author score is a demonstration, not a benchmark.
+- Every triple needs sentence, document, and offset evidence.
+
+Tomas can now separate two tasks: finding candidate pairs for review and
+asserting a schema triple only when the sentence supports it.
+
+## Sources
+
+- [ACE English relation annotation guidelines v5.8.3](https://www.ldc.upenn.edu/sites/www.ldc.upenn.edu/files/english-relations-guidelines-v5.8.3.pdf)
+- [Jurafsky and Martin, Speech and Language Processing, chapter 21](https://web.stanford.edu/~jurafsky/slp3/21.pdf)
+- [spacyr `spacy_parse()` documentation](https://spacyr.quanteda.io/reference/spacy_parse.html)
+- [Zhang et al. (2017), TACRED](https://aclanthology.org/D17-1004/)
+- [Stoica, Platanios, and Poczos (2021), Re-TACRED](https://arxiv.org/abs/2104.08398)
+- [Farkas et al. (2010), CoNLL-2010 shared task on uncertainty](https://aclanthology.org/W10-3001/)
+- [Wadhwa, Amir, and Wallace (2023), Revisiting relation extraction in the era of LLMs](https://aclanthology.org/2023.acl-long.868/)
+- [Jimenez Gutierrez et al. (2022), Biomedical relation extraction with large language models](https://aclanthology.org/2022.findings-emnlp.329/)
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(pipeline_info$version, "3.8.0"),
+  exists("extracted_triples")
+)
+invisible(suppressMessages(spacy_finalize()))
+```

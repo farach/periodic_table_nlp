@@ -26,13 +26,16 @@ check:
 - reduced motion when that preference is active.
 
 The build also checks headings, table captions, local link destinations, page
-language, and the difference between available and planned lessons. External
+language, and that every tile's status matches the task map. External
 sources are reviewed separately because a successful response does not prove
 that a source supports the surrounding claim.
 
 ## Using the periodic table
 
-Tiles with a solid border and the words **Read lesson** are links. Dashed tiles show **Planned** and are plain text, not disabled controls.
+Tiles with a solid border and the words **Read lesson** are links. Every task
+on the map now has a lesson. If a planned task is ever added, its tile will
+have a dashed border, show **Planned**, and stay plain text rather than a
+disabled control.
 
 The table is wider than a phone screen. Touch users can swipe sideways.
 Keyboard users can focus the table and use the left and right arrow keys.

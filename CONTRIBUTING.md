@@ -179,10 +179,10 @@ during a render. Call `spacy_finalize()` when the lesson is done with it.
 
 ## Set up local generation models once
 
-Lessons 65 through 68 use public Hugging Face models through the pinned
-`huggingfaceR` and `reticulate` packages. They use a separate Python environment
-because a single R session cannot switch safely between the spaCy and generation
-interpreters after Python has initialized.
+Lessons 65 through 68, 70, 71, and 72 use public Hugging Face models through
+the pinned `huggingfaceR` and `reticulate` packages. They use a separate Python
+environment because a single R session cannot switch safely between the spaCy
+and generation interpreters after Python has initialized.
 
 ```powershell
 python -m venv .venv-nlg
@@ -213,6 +213,13 @@ library(reticulate)
 source("R/use-nlg.R")
 model <- load_nlg_pipeline("qwen_1_5b_instruct", "text-generation")
 ```
+
+The sentence-embedding model used for search indexing loads the same way with
+`load_nlg_pipeline("minilm_l6_v2", "feature-extraction")`. Its pipeline returns
+one vector per token; the lesson averages them and scales the result to unit
+length, which is the pooling and normalization recorded in the model's own
+`1_Pooling/config.json` and `modules.json`. Do not use `hf_embed()` or other
+helpers that call a hosted inference service.
 
 The helper selects `.venv-nlg`, verifies every runtime file again before model
 loading, forces offline access during rendering, and stops with a path-specific
@@ -315,7 +322,7 @@ Do not add a new map tile when a method already has a home:
   (keyword extraction and keyness).
 - Document clustering belongs in lesson 55 (topic modeling and clustering).
 - Burst detection belongs in lesson 56 (trend and burst detection).
-- Co-word or citation networks belong in planned lesson 81 as one use of
+- Co-word or citation networks belong in lesson 81 as one use of
   knowledge-graph visualisation, not as a bibliometrics tile.
 - Publisher TDM licences belong in research notes and
   [RESEARCH_STANDARDS.md](RESEARCH_STANDARDS.md), not on the map.

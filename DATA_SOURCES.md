@@ -17,10 +17,43 @@ The files below are fictional and were created for this project:
 - `data/workforce/training-flyer-degraded-ocr-5.3.2.txt`
 - `data/workforce/training-flyer-metadata.csv`
 - `data/workforce/training-flyer.png`
+- `data/riverton/`, including the reference entities, aliases, gazetteer,
+  language samples, inbox, handbook, question-answering probes, search
+  judgments, review collection, and monitoring stream
 
 They contain no real workers, applicants, employers, customers, or research
 participants. Their purpose is to make code and research-design problems small
 enough to inspect. They must not be used to make claims about a population.
+
+### Riverton handbook, review collection, and monitoring stream
+
+Lessons 70 to 72 read one invented fall-program handbook for the Riverton
+Skills Centre. `data-raw/build-riverton-handbook.R` writes three files together,
+before any lesson retrieves or generates anything:
+
+- `riverton-handbook.csv`: 15 short passages with durable passage IDs;
+- `riverton-handbook-questions.csv`: six question-answering probes with an
+  expected action (answer, abstain, or flag a false premise), a gold passage,
+  and acceptable short answers; and
+- `riverton-search-judgments.csv`: a relevance judgment for every pair of 8
+  search queries and 15 passages.
+
+Lesson 74 reads `riverton-review-collection.csv`, a constructed collection of
+240 records for one fictional review request, and `riverton-monitoring-stream.csv`,
+a short dated stream for the monitoring example. `data-raw/build-riverton-review-collection.R`
+writes both. Record IDs are assigned after a seeded random permutation, and a
+`near_duplicate_of` column names the original of each deliberate near-duplicate.
+The builder refuses to write the files when a superficial feature, such as
+length, punctuation, template, date, record ID, or file position, separates the
+reference classes.
+
+The same person wrote these records, their questions, their reference answers,
+their relevance judgments, and the lessons that score against them. They are
+disclosed teaching fixtures written before the methods were run, not
+independent benchmarks or ground truth. `riverton-handbook-metadata.csv` and
+`riverton-review-collection-metadata.csv` record row counts, class counts, and
+line-normalised SHA-256 fingerprints that `scripts/check-data-fingerprints.R`
+verifies.
 
 ## Bing Liu opinion lexicon
 
@@ -81,9 +114,10 @@ treating OCR output as correct by default.
 
 ## United States presidential inaugural addresses
 Tasks 43 to 64 use `quanteda::data_corpus_inaugural`, the 60 inaugural addresses
-delivered between 1789 and 2025. The speeches are works of the United States
-federal government and are in the public domain; quanteda packages and
-distributes them, and quanteda itself is GPL-3.
+delivered between 1789 and 2025. Tasks 75, 77, 80, and 81 read the same
+paragraphs, and task 78 plots the word2vec model trained on them. The speeches
+are works of the United States federal government and are in the public domain;
+quanteda packages and distributes them, and quanteda itself is GPL-3.
 
 `R/inaugural-corpus.R` is the only place the corpus is reshaped. It splits each
 speech on blank lines, keeps blocks of at least 25 words, and returns 1,377
@@ -135,6 +169,23 @@ source, license, and SHA-256 fingerprints for those four artifacts.
 Party labels in this corpus span 236 years and do not describe a stable thing
 across that range. Lessons use them only as a data column, never as a
 description of any party, president, or policy.
+
+## United States state names, centres, and boundaries
+
+Task 80 matches state names from `datasets::state.name` and places reviewed
+state symbols at `datasets::state.center`. Both are distributed with R's
+`datasets` package. The R documentation gives the source as the U.S.
+Department of Commerce, Bureau of the Census, *Statistical Abstract of the
+United States* (1977) and *County and City Data Book*. The centres are
+approximate, the documentation says Alaska and Hawaii are placed just off the
+West Coast for compact map drawing, and the data have no District of Columbia
+entry. The lesson therefore draws no Alaska or Hawaii symbol.
+
+The basemap comes from the `maps` package state database (maps 3.4.3, GPL-2),
+read through `ggplot2::map_data("state")` without attaching `maps`. Its
+documentation says the database was generated from U.S. Census data. It covers
+the lower 48 states and the District of Columbia; the boundary vintage is not
+stated. The lesson does not use it for historical boundaries or exact areas.
 
 ## O*NET attribution
 
@@ -248,10 +299,10 @@ applicable terms before downloading or transmitting data.
 
 ## Local generation models
 
-Lessons 65 through 68 prepare two public model snapshots before rendering.
-`data/nlg-models.csv` records their immutable revisions, task scope, model-card
-links, and review date. `data/nlg-model-files.csv` binds every runtime-loaded
-weight, tokenizer, vocabulary/merge, SentencePiece, configuration, and
+Lessons 65 through 68, 70, 71, and 72 prepare three public model snapshots
+before rendering. `data/nlg-models.csv` records their immutable revisions, task
+scope, model-card links, and review date. `data/nlg-model-files.csv` binds every
+recorded weight, tokenizer, vocabulary/merge, SentencePiece, configuration, and
 generation-configuration file to the same model ID and revision, with its
 exact byte count and SHA-256 fingerprint.
 
@@ -261,8 +312,17 @@ exact byte count and SHA-256 fingerprint.
 - `Qwen/Qwen2.5-1.5B-Instruct` at revision
   `989aa7980e4cf806f80c7fef2b1adb7bc71aa306` is an instruction-tuned
   causal language model under Apache-2.0. The lessons use it for small,
-  constructed summarization, paraphrasing, and multi-section generation
-  demonstrations.
+  constructed summarization, paraphrasing, multi-section generation,
+  question-answering, and dialogue demonstrations.
+- `sentence-transformers/all-MiniLM-L6-v2` at revision
+  `1110a243fdf4706b3f48f1d95db1a4f5529b4d41` is a six-layer sentence-embedding
+  model under Apache-2.0. Its model card says it was fine-tuned with a
+  contrastive objective on a concatenation of public datasets totalling more
+  than one billion sentence pairs, that training sequences were limited to 128
+  tokens, and that input longer than 256 word pieces is truncated by default.
+  Lesson 72 uses it to embed the constructed handbook passages. Besides the
+  weights and tokenizer, the manifest records the model's pooling, module, and
+  sequence-length configuration files because the lesson reads them.
 
 The model cards document software provenance and intended use, but they do not
 establish that generated lesson outputs are correct. The lessons preserve

@@ -1,0 +1,989 @@
+---
+title: "Building a semantic search index"
+subtitle: "Compare lexical, dense, and fused rankings without pretending a top hit is an answer"
+description: "Learn how a small search index stores terms, vectors, metadata, and relevance checks for one fictional handbook."
+categories: [systems, semantic search, retrieval]
+---
+
+Hana looks back at the handbook question that failed in the question-answering lesson. A parent asked, "Where can my kid stay while I study at night?" The answer lived in passage H13, but the wording did not say `child care`.
+
+This lesson uses a related search query, `somewhere for my kid during night class`. With the policy below, BM25 ranks H13 second because it shares only the function words `for` and `during`; the class-related distractor H15 shares `class`. That rank does not come from the meaning of `kid` or `night`. If stop words were removed, H13 would receive no lexical score for this query.
+
+**Semantic search indexing** prepares a searchable structure before the next query arrives. A lexical index stores terms and counts. A dense index stores one vector for each passage, using the same local embedding model for passages and queries. Both indexes can return a ranked list; neither can decide by itself that the top passage is relevant.
+
+::: {.callout-note}
+The Riverton handbook in this lesson is an invented teaching fixture about fictional programs and policies.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- build a lexical inverted index with explicit identifier tokenization;
+- score the index with a fixed BM25 formula;
+- mean-pool local MiniLM token vectors into one passage vector;
+- record index metadata so stale vectors are caught;
+- fuse lexical and dense ranks with reciprocal rank fusion; and
+- read recall and reciprocal rank without naming a winner.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the frozen handbook and judgments
+
+The handbook, queries, and relevance judgments were written before this page ran any search code. The judgments cover every query against every passage. They are page-author reference labels, not ground truth.
+
+```{r}
+suppressPackageStartupMessages({
+  library(digest)
+  library(dplyr)
+  library(huggingfaceR)
+  library(jsonlite)
+  library(knitr)
+  library(purrr)
+  library(readr)
+  library(reticulate)
+  library(stringr)
+  library(tibble)
+  library(tidyr)
+  library(tokenizers)
+})
+
+source("R/use-nlg.R")
+
+hash_lines <- function(path) {
+  digest(
+    paste(read_lines(path), collapse = "\n"),
+    algo = "sha256",
+    serialize = FALSE
+  )
+}
+
+handbook_path <- "data/riverton/riverton-handbook.csv"
+judgments_path <- "data/riverton/riverton-search-judgments.csv"
+
+handbook <- read_csv(
+  handbook_path,
+  na = character(),
+  col_types = cols(
+    passage_id = col_character(),
+    topic = col_character(),
+    text = col_character(),
+    source = col_character(),
+    author_note = col_character()
+  )
+)
+
+judgments <- read_csv(
+  judgments_path,
+  na = character(),
+  col_types = cols(
+    query_id = col_character(),
+    query = col_character(),
+    probe_type = col_character(),
+    passage_id = col_character(),
+    relevant = col_integer(),
+    judged_by = col_character()
+  )
+)
+
+handbook_metadata <- read_csv(
+  "data/riverton/riverton-handbook-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    license = col_character(),
+    created_on = col_character(),
+    rows = col_integer(),
+    fingerprint = col_character()
+  )
+)
+
+queries <- judgments |>
+  distinct(query_id, query, probe_type) |>
+  arrange(query_id)
+
+miss_context <- handbook |>
+  filter(passage_id %in% c("H13", "H15")) |>
+  select(passage_id, topic, text)
+
+knitr::kable(
+  miss_context,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Passage", "Topic", "Text"),
+  caption = "The child-care passage and a nearby class-related distractor",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+expected_hashes <- handbook_metadata |>
+  select(artifact, fingerprint)
+
+actual_hashes <- tibble(
+  artifact = c("riverton-handbook.csv", "riverton-search-judgments.csv"),
+  fingerprint = c(hash_lines(handbook_path), hash_lines(judgments_path))
+)
+
+stopifnot(
+  identical(nrow(handbook), 15L),
+  identical(nrow(judgments), 120L),
+  identical(sum(judgments$relevant), 7L),
+  identical(queries$query_id, paste0("S", 1:8)),
+  all(actual_hashes$fingerprint %in% expected_hashes$fingerprint),
+  identical(
+    judgments |>
+      filter(query_id == "S8") |>
+      pull(relevant) |>
+      sum(),
+    0L
+  )
+)
+```
+
+The example starts with H13 because it answers Hana's question. H15 is a distractor about laptops and class. A search method that always returns a top row can still put a distractor first.
+
+## Build terms for a lexical inverted index
+
+An **inverted index** stores, for each term, the passages that contain it. The tokenizer matters. A common word tokenizer splits `DSC-104` into `dsc` and `104`; that makes it share `104` with Room 104. This lesson keeps course-like identifiers as one term with the pattern `[a-z]+-\d+|[a-z]+|\d+`. It lowercases text, keeps stop words, and does no stemming, so `class` and `classes` remain different terms.
+
+```{r}
+tokenize_index_terms <- function(text) {
+  str_extract_all(
+    str_to_lower(text, locale = "en"),
+    "[a-z]+-\\d+|[a-z]+|\\d+"
+  )
+}
+
+identifier_example <- tibble(
+  text = c("Course DSC-104 meets in Room 104."),
+  common_word_tokens = list(tokenizers::tokenize_words(text)[[1]]),
+  index_terms = list(tokenize_index_terms(text)[[1]])
+) |>
+  summarise(
+    text = first(text),
+    common_word_tokens = map_chr(common_word_tokens, paste, collapse = ", "),
+    index_terms = map_chr(index_terms, paste, collapse = ", ")
+  )
+
+passage_terms <- handbook |>
+  transmute(
+    passage_id,
+    term = tokenize_index_terms(text)
+  ) |>
+  unnest_longer(term, values_to = "term")
+
+posting_preview <- passage_terms |>
+  filter(term %in% c("dsc-104", "104", "dsc-105")) |>
+  count(term, passage_id, name = "count") |>
+  arrange(term, passage_id)
+
+knitr::kable(
+  identifier_example,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Example text", "Common word tokens", "Index terms"),
+  caption = "Explicit tokenization keeps an identifier together",
+  row.names = FALSE
+)
+
+knitr::kable(
+  posting_preview,
+  col.names = c("Term", "Passage", "Count"),
+  caption = "Identifier and room-number postings under the lesson tokenizer",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  str_detect(identifier_example$index_terms, fixed("dsc-104")),
+  str_detect(identifier_example$common_word_tokens, "dsc"),
+  str_detect(identifier_example$common_word_tokens, "104"),
+  any(posting_preview$term == "dsc-104" & posting_preview$passage_id == "H09"),
+  any(posting_preview$term == "104" & posting_preview$passage_id == "H13")
+)
+```
+
+The index terms are the units that BM25 sees. If a system needs exact course-code search, `dsc-104` must be a term, not an accident of two smaller terms.
+
+## Score query terms with BM25
+
+BM25 gives more weight to rare query terms, discounts long passages, and lets repeated terms help less each time. This lesson uses Lucene's positive idf form, with `k1 = 1.2` and `b = 0.75`, fixed before any query runs.
+
+```{r}
+k1 <- 1.2
+b <- 0.75
+document_count <- nrow(handbook)
+
+passage_lengths <- passage_terms |>
+  count(passage_id, name = "dl")
+average_length <- mean(passage_lengths$dl)
+
+document_frequency <- passage_terms |>
+  distinct(passage_id, term) |>
+  count(term, name = "df") |>
+  mutate(
+    idf = log(1 + (document_count - df + 0.5) / (df + 0.5))
+  )
+
+postings <- passage_terms |>
+  count(passage_id, term, name = "tf") |>
+  left_join(passage_lengths, by = join_by(passage_id)) |>
+  left_join(document_frequency, by = join_by(term)) |>
+  mutate(
+    bm25_weight = idf *
+      (tf * (k1 + 1)) /
+      (tf + k1 * (1 - b + b * dl / average_length))
+  )
+
+rank_bm25 <- function(query_id, query) {
+  query_terms <- tibble(term = tokenize_index_terms(query)[[1]]) |>
+    count(term, name = "query_tf")
+
+  postings |>
+    inner_join(query_terms, by = join_by(term)) |>
+    group_by(passage_id) |>
+    summarise(score = sum(bm25_weight * query_tf), .groups = "drop") |>
+    filter(score > 0) |>
+    arrange(desc(score), passage_id) |>
+    mutate(query_id = query_id, rank = row_number())
+}
+
+bm25_ranks <- pmap_dfr(
+  list(queries$query_id, queries$query),
+  rank_bm25
+)
+
+default_passage_terms <- handbook |>
+  transmute(
+    passage_id,
+    term = tokenizers::tokenize_words(text)
+  ) |>
+  unnest_longer(term, values_to = "term")
+
+default_lengths <- default_passage_terms |>
+  count(passage_id, name = "dl")
+default_average_length <- mean(default_lengths$dl)
+default_document_frequency <- default_passage_terms |>
+  distinct(passage_id, term) |>
+  count(term, name = "df") |>
+  mutate(
+    idf = log(1 + (document_count - df + 0.5) / (df + 0.5))
+  )
+default_postings <- default_passage_terms |>
+  count(passage_id, term, name = "tf") |>
+  left_join(default_lengths, by = join_by(passage_id)) |>
+  left_join(default_document_frequency, by = join_by(term)) |>
+  mutate(
+    bm25_weight = idf *
+      (tf * (k1 + 1)) /
+      (tf + k1 * (1 - b + b * dl / default_average_length))
+  )
+default_s2_terms <- tibble(
+  term = tokenizers::tokenize_words("DSC-104")[[1]]
+) |>
+  count(term, name = "query_tf")
+default_s2_preview <- default_postings |>
+  inner_join(default_s2_terms, by = join_by(term)) |>
+  group_by(passage_id) |>
+  summarise(score = sum(bm25_weight * query_tf), .groups = "drop") |>
+  filter(score > 0) |>
+  left_join(handbook |> select(passage_id, topic), by = join_by(passage_id)) |>
+  arrange(desc(score), passage_id) |>
+  mutate(rank = row_number()) |>
+  slice_head(n = 3) |>
+  select(passage_id, topic, rank, score)
+
+bm25_preview <- bm25_ranks |>
+  filter(query_id %in% c("S1", "S2")) |>
+  slice_min(rank, n = 3, by = query_id) |>
+  left_join(
+    handbook |> select(passage_id, topic),
+    by = join_by(passage_id)
+  ) |>
+  select(query_id, rank, passage_id, topic, score)
+
+top_margin <- function(ranks, query) {
+  scores <- ranks |>
+    filter(query_id == query) |>
+    arrange(rank) |>
+    pull(score)
+  if (length(scores) < 2L) {
+    return(Inf)
+  }
+  scores[[1]] - scores[[2]]
+}
+
+knitr::kable(
+  bm25_preview |>
+    mutate(score = round(score, 3)),
+  col.names = c("Query", "Rank", "Passage", "Topic", "BM25 score"),
+  caption = "BM25 top passages for the child-care and course-code probes",
+  row.names = FALSE
+)
+
+knitr::kable(
+  default_s2_preview |>
+    mutate(score = round(score, 3)),
+  col.names = c("Passage", "Topic", "Default-tokenizer rank", "BM25 score"),
+  caption = "Default word splitting keeps the right course-code passage first but fills the rest of the top three with partial matches",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(k1, 1.2),
+  identical(b, 0.75),
+  all(postings$bm25_weight >= 0),
+  all(bm25_ranks$score > 0),
+  all(default_s2_preview$score > 0),
+  top_margin(bm25_ranks, "S2") > 1e-3,
+  top_margin(bm25_ranks, "S1") > 1e-3,
+  identical(default_s2_preview$passage_id, c("H09", "H13", "H10")),
+  identical(
+    bm25_ranks |>
+      filter(query_id == "S1", passage_id == "H13") |>
+      pull(rank),
+    2L
+  ),
+  identical(
+    bm25_ranks |>
+      filter(query_id == "S2", rank == 1L) |>
+      pull(passage_id),
+    "H09"
+  ),
+  !("H08" %in% (
+    bm25_ranks |>
+      filter(query_id == "S3", rank <= 3L) |>
+      pull(passage_id)
+  ))
+)
+```
+
+BM25 handles `DSC-104` cleanly because the tokenizer kept the identifier. With default word splitting, the right passage still stays first in this render, but Room 104 and `DSC-105` become partial matches that fill the rest of the top three. BM25 still struggles when the query says "money while I train" and the passage says "training stipend."
+
+## Make dense passage vectors
+
+The dense index uses the pinned `sentence-transformers/all-MiniLM-L6-v2` model. The local Hugging Face feature-extraction pipeline returns one vector per real token, including the `[CLS]` and `[SEP]` special tokens. The check below compares that count with the tokenizer's attention mask. There are no padding tokens in the single-text output, so the mean is mask-aware for this call; the lesson still asserts the mask length before pooling.
+
+The model's own files say the sentence-transformer wrapper uses mean pooling and a normalization module. The model card says sentence-transformers truncates inputs longer than 256 word pieces by default and that training used sequences of at most 128 tokens. The page applies the model's pooling steps in R and refuses passages or queries over 256 word pieces before embedding.
+
+```{r}
+embedder <- load_nlg_pipeline(
+  "minilm_l6_v2",
+  "feature-extraction"
+)
+
+model_dir <- file.path(
+  "data-raw",
+  ".cache",
+  "nlg-models",
+  embedder$metadata$local_directory
+)
+modules_config <- fromJSON(file.path(model_dir, "modules.json"))
+pooling_config <- fromJSON(file.path(model_dir, "1_Pooling", "config.json"))
+sentence_config <- fromJSON(file.path(model_dir, "sentence_bert_config.json"))
+bert_config <- fromJSON(file.path(model_dir, "config.json"))
+tokenizer_config <- fromJSON(file.path(model_dir, "tokenizer_config.json"))
+
+extract_token_matrix <- function(feature_item) {
+  item <- feature_item
+  if (
+    length(item) == 1L &&
+      is.list(item[[1]]) &&
+      !is.numeric(item[[1]])
+  ) {
+    item <- item[[1]]
+  }
+  do.call(rbind, item)
+}
+
+mean_pool_l2 <- function(feature_item) {
+  token_matrix <- extract_token_matrix(feature_item)
+  vector <- colMeans(token_matrix)
+  vector / sqrt(sum(vector^2))
+}
+
+embed_one_text <- function(text) {
+  output <- embedder$pipeline(text)
+  mean_pool_l2(output[[1]])
+}
+
+token_counts <- tibble(
+  passage_id = handbook$passage_id,
+  model_tokens = map_int(
+    handbook$text,
+    \(text) nlg_token_count(embedder$tokenizer, text)
+  )
+)
+
+stopifnot(max(token_counts$model_tokens) <= 256L)
+
+first_output <- embedder$pipeline(handbook$text[[1]])
+first_attention <- embedder$tokenizer(
+  handbook$text[[1]],
+  add_special_tokens = TRUE,
+  return_attention_mask = TRUE
+)$attention_mask
+
+passage_embeddings <- map(handbook$text, embed_one_text)
+embedding_matrix <- do.call(rbind, passage_embeddings)
+rownames(embedding_matrix) <- handbook$passage_id
+
+batch_check_text <- handbook$text[1:2]
+batch_output <- embedder$pipeline(as.list(batch_check_text))
+batch_embeddings <- do.call(
+  rbind,
+  map(batch_output, mean_pool_l2)
+)
+single_embeddings <- do.call(
+  rbind,
+  map(batch_check_text, embed_one_text)
+)
+
+dense_metadata <- tibble(
+  field = c(
+    "model",
+    "revision",
+    "pooling",
+    "normalization",
+    "prefix",
+    "runtime length checked here",
+    "training sequence length on model card",
+    "casing",
+    "dimension"
+  ),
+  value = c(
+    embedder$metadata$model_id,
+    embedder$metadata$revision,
+    "mean over returned token vectors",
+    "L2 unit length",
+    "none",
+    as.character(sentence_config$max_seq_length),
+    "at most 128 tokens",
+    paste0("uncased: ", tokenizer_config$do_lower_case),
+    as.character(ncol(embedding_matrix))
+  )
+)
+
+knitr::kable(
+  dense_metadata,
+  col.names = c("Metadata field", "Recorded value"),
+  caption = "Dense index metadata that must match at query time",
+  row.names = FALSE
+)
+
+knitr::kable(
+  token_counts |>
+    arrange(desc(model_tokens)) |>
+    slice_head(n = 5),
+  col.names = c("Passage", "Word-piece tokens"),
+  caption = "Longest handbook passages remain inside the 256-word-piece runtime limit",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+embedding_norms <- sqrt(rowSums(embedding_matrix^2))
+
+stopifnot(
+  identical(embedder$metadata$model_id, "sentence-transformers/all-MiniLM-L6-v2"),
+  identical(
+    embedder$metadata$revision,
+    "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+  ),
+  isTRUE(pooling_config$pooling_mode_mean_tokens),
+  any(str_detect(modules_config$type, "Normalize")),
+  identical(as.integer(sentence_config$max_seq_length), 256L),
+  max(token_counts$model_tokens) <= 256L,
+  length(first_output[[1]]) == sum(unlist(first_attention)),
+  max(abs(batch_embeddings - single_embeddings)) < 1e-6,
+  all(abs(embedding_norms - 1) < 1e-6),
+  identical(ncol(embedding_matrix), 384L),
+  identical(bert_config$hidden_size, 384L)
+)
+```
+
+All passages are short enough to embed without truncation. The batched and one-text calls agree for the first two passages, so the lesson embeds one text at a time for clarity and uses the batch check as a guard.
+
+## Record stale-index checks
+
+An index is tied to its passages and model conventions. The embedding dimension alone cannot detect a swap: all three small candidate models checked by the council had 384-dimensional vectors. The safer record includes model revision, pooling, prefixes, tokenizer behavior, library versions, and passage fingerprints.
+
+```{r}
+passage_fingerprints <- handbook |>
+  transmute(
+    passage_id,
+    passage_sha256 = map_chr(
+      text,
+      \(value) digest(value, algo = "sha256", serialize = FALSE)
+    )
+  )
+
+index_record <- tibble(
+  key = c(
+    "model_id",
+    "revision",
+    "pooling",
+    "normalization",
+    "query_prefix",
+    "passage_prefix",
+    "max_seq_length",
+    "tokenizer_casing",
+    "similarity",
+    "search_type",
+    "huggingfaceR",
+    "reticulate",
+    "transformers",
+    "torch",
+    "tokenizers"
+  ),
+  value = c(
+    embedder$metadata$model_id,
+    embedder$metadata$revision,
+    "mean pooling over real token vectors",
+    "L2 normalization",
+    "none",
+    "none",
+    as.character(sentence_config$max_seq_length),
+    paste0("do_lower_case=", tokenizer_config$do_lower_case),
+    "cosine, computed as dot product of unit vectors",
+    "exact scan over 15 passages",
+    as.character(packageVersion("huggingfaceR")),
+    as.character(packageVersion("reticulate")),
+    as.character(reticulate::py_to_r(reticulate::import("transformers")$`__version__`)),
+    as.character(reticulate::py_to_r(reticulate::import("torch")$`__version__`)),
+    as.character(packageVersion("tokenizers"))
+  )
+)
+
+metadata_matches <- function(record, model_id, revision, pooling) {
+  expected <- c(model_id = model_id, revision = revision, pooling = pooling)
+  actual <- record |>
+    filter(key %in% names(expected)) |>
+    select(key, value) |>
+    deframe()
+  identical(actual[names(expected)], expected)
+}
+
+metadata_check <- tibble(
+  check = c("current model", "changed pooling example"),
+  ok_to_query = c(
+    metadata_matches(
+      index_record,
+      embedder$metadata$model_id,
+      embedder$metadata$revision,
+      "mean pooling over real token vectors"
+    ),
+    metadata_matches(
+      index_record,
+      embedder$metadata$model_id,
+      embedder$metadata$revision,
+      "CLS pooling"
+    )
+  )
+)
+
+edited_passage_check <- passage_fingerprints |>
+  filter(passage_id == "H13") |>
+  mutate(
+    edited_sha256 = digest(
+      paste0(
+        handbook$text[handbook$passage_id == "H13"],
+        " Extra sentence."
+      ),
+      algo = "sha256",
+      serialize = FALSE
+    ),
+    fingerprint_matches = passage_sha256 == edited_sha256,
+    action = if_else(
+      fingerprint_matches,
+      "reuse stored vector",
+      "re-embed this passage"
+    )
+  )
+
+knitr::kable(
+  index_record,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Index key", "Value"),
+  caption = "Index metadata needed before reusing stored vectors",
+  row.names = FALSE
+)
+
+knitr::kable(
+  metadata_check,
+  col.names = c("Check", "Safe to query"),
+  caption = "A changed pooling convention fails closed before search",
+  row.names = FALSE
+)
+
+knitr::kable(
+  edited_passage_check |>
+    select(passage_id, fingerprint_matches, action),
+  col.names = c("Passage", "Fingerprint matches", "Index action"),
+  caption = "A changed passage fingerprint triggers re-embedding for that passage",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(passage_fingerprints) == nrow(handbook),
+  all(nchar(passage_fingerprints$passage_sha256) == 64L),
+  identical(metadata_check$ok_to_query, c(TRUE, FALSE)),
+  identical(edited_passage_check$fingerprint_matches, FALSE),
+  identical(edited_passage_check$action, "re-embed this passage"),
+  "dimension" %in% dense_metadata$field,
+  nrow(index_record) >= 15L
+)
+```
+
+If a passage fingerprint changes, only that passage needs a new vector. If the model revision or pooling changes, the stored vectors cannot be mixed with new query vectors.
+
+## Rank queries with dense vectors and fusion
+
+Dense search embeds the query with the same model and ranks passages by cosine similarity. The hybrid below uses reciprocal rank fusion, or **RRF**. It adds `1 / (k + rank)` from each ranked list, with `k = 60`. RRF uses ranks because BM25 scores and cosine scores are on different scales.
+
+```{r}
+query_token_counts <- tibble(
+  query_id = queries$query_id,
+  model_tokens = map_int(
+    queries$query,
+    \(text) nlg_token_count(embedder$tokenizer, text)
+  )
+)
+stopifnot(max(query_token_counts$model_tokens) <= 256L)
+
+query_embeddings <- map(queries$query, embed_one_text)
+query_matrix <- do.call(rbind, query_embeddings)
+rownames(query_matrix) <- queries$query_id
+
+dense_scores <- query_matrix %*% t(embedding_matrix)
+
+dense_ranks <- as_tibble(as.data.frame(dense_scores), rownames = "query_id") |>
+  pivot_longer(
+    -query_id,
+    names_to = "passage_id",
+    values_to = "score"
+  ) |>
+  arrange(query_id, desc(score), passage_id) |>
+  group_by(query_id) |>
+  mutate(rank = row_number()) |>
+  ungroup()
+
+rrf_k <- 60
+rrf_ranks <- bind_rows(
+  bm25_ranks |> transmute(query_id, passage_id, method = "BM25", rank),
+  dense_ranks |> transmute(query_id, passage_id, method = "dense", rank)
+) |>
+  mutate(rrf_component = 1 / (rrf_k + rank)) |>
+  group_by(query_id, passage_id) |>
+  summarise(score = sum(rrf_component), .groups = "drop") |>
+  arrange(query_id, desc(score), passage_id) |>
+  group_by(query_id) |>
+  mutate(rank = row_number()) |>
+  ungroup()
+
+top_hits <- bind_rows(
+  bm25_ranks |> mutate(method = "BM25 lexical"),
+  dense_ranks |> mutate(method = "dense"),
+  rrf_ranks |> mutate(method = "RRF hybrid")
+) |>
+  filter(rank == 1L) |>
+  left_join(
+    queries |> select(query_id, query),
+    by = join_by(query_id)
+  ) |>
+  left_join(
+    handbook |> select(passage_id, topic),
+    by = join_by(passage_id)
+  ) |>
+  select(method, query_id, query, passage_id, topic, score)
+
+knitr::kable(
+  top_hits |>
+    mutate(score = round(score, 3)),
+  format = "html",
+  escape = TRUE,
+  col.names = c("Method", "Query", "Query text", "Top passage", "Top topic", "Score"),
+  caption = "Every method returns a top passage for every query",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(rrf_k, 60),
+  nrow(top_hits) == 22L,
+  !any(
+    top_hits$method == "BM25 lexical" &
+      top_hits$query_id %in% c("S3", "S8")
+  ),
+  top_margin(dense_ranks, "S1") > 1e-3,
+  identical(
+    top_hits |>
+      filter(method == "dense", query_id == "S1") |>
+      pull(passage_id),
+    "H13"
+  ),
+  all(query_token_counts$model_tokens <= 256L),
+  all(abs(sqrt(rowSums(query_matrix^2)) - 1) < 1e-6)
+)
+```
+
+S8 asks for a cafeteria lunch menu. The judgments say no passage is relevant. BM25 returns no lexical match after zero-score rows are excluded, while dense search and RRF still return a top passage. That is a property of similarity search, not evidence that the handbook contains a lunch-menu answer.
+
+## Evaluate the ranks query by query
+
+The table below reports each method on each query. **Recall at 1** asks whether the relevant passage appears first. **Recall at 3** asks whether it appears in the first three. Because these probes have at most one relevant passage, recall at *k* is the same as success at *k*. **Reciprocal rank** is `1 / rank` for the first relevant passage. S8 has no relevant passage, so these columns are not applicable.
+
+```{r}
+evaluate_ranks <- function(ranks, method_name) {
+  judgments |>
+    left_join(
+      ranks |> select(query_id, passage_id, rank, score),
+      by = join_by(query_id, passage_id)
+    ) |>
+    group_by(query_id, query, probe_type) |>
+    summarise(
+      relevant_total = sum(relevant),
+      relevant_rank = {
+        relevant_ranks <- rank[relevant == 1L]
+        relevant_ranks <- relevant_ranks[!is.na(relevant_ranks)]
+        if (length(relevant_ranks) == 0L) {
+          NA_integer_
+        } else {
+          min(relevant_ranks)
+        }
+      },
+      top_passage = {
+        scored_passages <- passage_id[!is.na(rank)]
+        scored_ranks <- rank[!is.na(rank)]
+        if (length(scored_ranks) == 0L) {
+          NA_character_
+        } else {
+          scored_passages[which.min(scored_ranks)]
+        }
+      },
+      top_score = {
+        scored_scores <- score[!is.na(rank)]
+        scored_ranks <- rank[!is.na(rank)]
+        if (length(scored_ranks) == 0L) {
+          NA_real_
+        } else {
+          scored_scores[which.min(scored_ranks)]
+        }
+      },
+      recall_at_1 = {
+        relevant_passages <- passage_id[relevant == 1L]
+        top_passages <- passage_id[!is.na(rank) & rank <= 1L]
+        if (length(relevant_passages) == 0L) {
+          NA_real_
+        } else {
+          sum(relevant_passages %in% top_passages) /
+            length(relevant_passages)
+        }
+      },
+      recall_at_3 = {
+        relevant_passages <- passage_id[relevant == 1L]
+        top_passages <- passage_id[!is.na(rank) & rank <= 3L]
+        if (length(relevant_passages) == 0L) {
+          NA_real_
+        } else {
+          sum(relevant_passages %in% top_passages) /
+            length(relevant_passages)
+        }
+      },
+      reciprocal_rank = if_else(
+        relevant_total == 0L,
+        NA_real_,
+        if_else(is.na(relevant_rank), 0, 1 / relevant_rank)
+      ),
+      .groups = "drop"
+    ) |>
+    mutate(method = method_name)
+}
+
+rank_evaluation <- bind_rows(
+  evaluate_ranks(bm25_ranks, "BM25 lexical"),
+  evaluate_ranks(dense_ranks, "dense"),
+  evaluate_ranks(rrf_ranks, "RRF hybrid")
+) |>
+  select(
+    method,
+    query_id,
+    probe_type,
+    relevant_rank,
+    top_passage,
+    recall_at_1,
+    recall_at_3,
+    reciprocal_rank
+  ) |>
+  arrange(query_id, method)
+
+paired_summary <- rank_evaluation |>
+  filter(!is.na(reciprocal_rank)) |>
+  select(query_id, method, reciprocal_rank) |>
+  pivot_wider(names_from = method, values_from = reciprocal_rank) |>
+  mutate(
+    across(
+      c(`BM25 lexical`, dense, `RRF hybrid`),
+      \(value) coalesce(value, 0)
+    )
+  ) |>
+  summarise(
+    dense_above_bm25 = sum(dense > `BM25 lexical`),
+    tied = sum(dense == `BM25 lexical`),
+    bm25_above_dense = sum(dense < `BM25 lexical`)
+  )
+
+miss_table <- rank_evaluation |>
+  filter(
+    is.na(relevant_rank) |
+      recall_at_1 == 0 |
+      recall_at_3 == 0
+  ) |>
+  mutate(
+    recall_at_1 = if_else(is.na(recall_at_1), NA_real_, recall_at_1),
+    recall_at_3 = if_else(is.na(recall_at_3), NA_real_, recall_at_3)
+  )
+
+knitr::kable(
+  rank_evaluation |>
+    mutate(
+      across(
+        c(recall_at_1, recall_at_3, reciprocal_rank),
+        \(value) if_else(is.na(value), NA_character_, sprintf("%.3f", value))
+      )
+    ),
+  col.names = c(
+    "Method",
+    "Query",
+    "Probe type",
+    "Relevant rank",
+    "Top passage",
+    "Recall at 1",
+    "Recall at 3",
+    "Reciprocal rank"
+  ),
+  caption = "Per-query retrieval results from exhaustive author-written judgments",
+  row.names = FALSE
+)
+
+knitr::kable(
+  miss_table |>
+    mutate(
+      across(
+        c(recall_at_1, recall_at_3, reciprocal_rank),
+        \(value) if_else(is.na(value), NA_character_, sprintf("%.3f", value))
+      )
+    ),
+  col.names = c(
+    "Method",
+    "Query",
+    "Probe type",
+    "Relevant rank",
+    "Top passage",
+    "Recall at 1",
+    "Recall at 3",
+    "Reciprocal rank"
+  ),
+  caption = "Every miss and every no-relevant-passage query remains visible",
+  row.names = FALSE
+)
+
+knitr::kable(
+  paired_summary,
+  col.names = c("Dense above BM25", "Ties", "BM25 above dense"),
+  caption = "Paired reciprocal-rank counts for dense versus BM25 on the seven judged queries",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(rank_evaluation) == 24L,
+  !("H08" %in% (
+    bm25_ranks |>
+      filter(query_id == "S3", rank <= 3L) |>
+      pull(passage_id)
+  )),
+  !("H05" %in% (
+    dense_ranks |>
+      filter(query_id == "S4", rank <= 3L) |>
+      pull(passage_id)
+  )),
+  !("H05" %in% (
+    rrf_ranks |>
+      filter(query_id == "S4", rank <= 3L) |>
+      pull(passage_id)
+  )),
+  identical(
+    rank_evaluation |>
+      filter(query_id == "S8") |>
+      pull(relevant_rank),
+    rep(NA_integer_, 3L)
+  ),
+  sum(is.na(rank_evaluation$reciprocal_rank)) == 3L,
+  sum(paired_summary) == 7L
+)
+```
+
+Dense search fixes the child-care wording mismatch in S1 and the stipend wording mismatch in S3. It misses the transit query at the top three. BM25 does well on identifiers and exact wording, but it has no nonzero score for some paraphrases. RRF helps S1 and S3 and keeps several exact hits, yet it still misses the transit query at the top three. These are paired demonstrations on seven author-written probes, not a benchmark.
+
+## What approximate search would change
+
+This lesson scans all 15 passage vectors exactly. A larger system may use approximate nearest neighbour search to avoid comparing a query with every vector. In that context, **ANN recall** means agreement with exact nearest-neighbour search. It is not the same as relevance recall, which asks whether a human-judged relevant passage was retrieved. A fast ANN index can match exact search well and still retrieve an irrelevant passage.
+
+An index of private text is private data. Embeddings can leak information about their source text, so storing vectors does not anonymize the handbook or any real collection.
+
+## What to remember
+
+- A lexical index stores terms, counts, document frequency, and passage length.
+- Identifier tokenization has to be explicit before BM25 can match codes.
+- Dense search stores model-specific vectors, not free-standing meanings.
+- Query-time metadata must match the stored index metadata.
+- Similarity search returns a ranked row even when no relevant passage exists.
+- Recall from relevance judgments and ANN recall answer different questions.
+
+Hana keeps both lists in her review notes. The dense list rescued the child-care query, but the no-menu query showed why every search result still needs a relevance check.
+
+## Sources
+
+- [Dense Passage Retrieval for Open-Domain Question Answering](https://aclanthology.org/2020.emnlp-main.550/)
+- [Robertson and Zaragoza on BM25](https://doi.org/10.1561/1500000019)
+- [Sentence-BERT](https://aclanthology.org/D19-1410/)
+- [all-MiniLM-L6-v2 model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
+- [Sentence-Transformers semantic search documentation](https://sbert.net/examples/sentence_transformer/applications/semantic-search/README.html)
+- [BEIR benchmark paper](https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/hash/65b9eea6e1cc6bb9f0cd2a47751a186f-Abstract-round2.html)
+- [Simple Entity-Centric Questions Challenge Dense Retrievers](https://aclanthology.org/2021.emnlp-main.496/)
+- [Reciprocal Rank Fusion](https://doi.org/10.1145/1571941.1572114)
+- [HNSW approximate nearest-neighbour search](https://doi.org/10.1109/TPAMI.2018.2889473)
+- [Text Embeddings Reveal Almost As Much As Text](https://aclanthology.org/2023.emnlp-main.765/)

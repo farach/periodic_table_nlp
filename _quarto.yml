@@ -18,6 +18,8 @@ project:
     - 11_signals_and_discovery/*.qmd
     - 12_similarity/*.qmd
     - 13_natural_language_generation/*.qmd
+    - 14_systems/*.qmd
+    - 15_information_visualization/*.qmd
 
 website:
   title: "Periodic Table of NLP Tasks in R"
@@ -172,6 +174,32 @@ website:
         text: Rewriting without changing meaning
       - href: 13_natural_language_generation/68-long-text-generation.qmd
         text: Building a document in sections
+      - href: 14_systems/69-relation-extraction.qmd
+        text: Finding relations between named things
+      - href: 14_systems/70-question-answering.qmd
+        text: Answering questions from retrieved passages
+      - href: 14_systems/71-chatbot-dialogue.qmd
+        text: Keeping dialogue state outside the model
+      - href: 14_systems/72-semantic-search-indexing.qmd
+        text: Building a semantic search index
+      - href: 14_systems/73-knowledge-base-population.qmd
+        text: Adding facts to a knowledge base
+      - href: 14_systems/74-e-discovery-and-media-monitoring.qmd
+        text: Reviewing documents for discovery and alerts
+      - href: 15_information_visualization/75-interactive-app-creation.qmd
+        text: Creating a small text app
+      - href: 15_information_visualization/76-annotated-text-visualization.qmd
+        text: Drawing labels on text spans
+      - href: 15_information_visualization/77-word-clouds.qmd
+        text: Reading a word cloud carefully
+      - href: 15_information_visualization/78-word-embedding-visualization.qmd
+        text: Projecting word vectors into two dimensions
+      - href: 15_information_visualization/79-events-on-a-timeline.qmd
+        text: Putting events on a timeline
+      - href: 15_information_visualization/80-locations-on-a-map.qmd
+        text: Mapping place mentions
+      - href: 15_information_visualization/81-knowledge-graph-visualization.qmd
+        text: Drawing a knowledge graph
       - href: accessibility.qmd
         text: Accessibility
   page-footer:

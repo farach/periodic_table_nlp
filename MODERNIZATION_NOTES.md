@@ -1,6 +1,6 @@
 # Modernization notes
 
-**Research checked:** 2026-08-28
+**Research checked:** 2026-09-23
 
 The 81-tile map is a mnemonic inherited from an earlier view of NLP. It remains
 useful as a list of questions, but it is not a settled taxonomy. The map mixes
@@ -24,9 +24,17 @@ Future revisions should continue to test their claims against current
 tokenizers, prompted or structured-output extraction, and normalization-aware
 linking rather than treating publication as permanent completion.
 
-## Future lessons
+All 81 tiles now have lessons. The systems lessons, 69 through 74, teach
+retrieve-then-read question answering with citation screens, a dialogue state
+kept outside the model, dense and lexical search indexes, and review workflows
+that estimate what was missed. They use small constructed fixtures and local
+models, so they demonstrate mechanisms rather than measure current systems.
+Revisit them when citation-faithfulness evaluation, prompt-injection defenses,
+or embedding-model practice changes.
 
-Future research should give extra attention to:
+## Areas to keep reviewing
+
+Later research should give extra attention to:
 
 - Tasks 43 through 47, model development: distinguish pretraining, task
   training, instruction tuning, preference-based post-training, evaluation,

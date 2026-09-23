@@ -80,6 +80,16 @@ sources <- list(
     hash_column = "fingerprint", dir = "data/riverton", algo = "sha256"
   ),
   list(
+    metadata = "data/riverton/riverton-handbook-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/riverton", algo = "sha256"
+  ),
+  list(
+    metadata = "data/riverton/riverton-review-collection-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/riverton", algo = "sha256"
+  ),
+  list(
     metadata = "data/wordnet/wordnet-metadata.csv",
     shape = "field_value", dir = "data/wordnet", algo = "sha256",
     map = c(

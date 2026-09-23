@@ -15,8 +15,8 @@ assert spec.loader is not None
 spec.loader.exec_module(setup_nlg_models)
 
 models, files = setup_nlg_models.load_manifests()
-assert len(models) == 2
-assert len(files) == 14
+assert len(models) == 3
+assert len(files) == 23
 assert all(len(row["sha256"]) == 64 for row in files)
 assert all(int(row["bytes"]) > 0 for row in files)
 
