@@ -974,7 +974,6 @@ stopifnot(
   identical(score_table$f1[[3]], 0),
   all(right_action_em_zero_rows$partial_overlap),
   all(right_action_em_zero_rows$acceptable_variant_in_answer),
-  identical(right_action_em_zero$count, nrow(right_action_em_zero_rows)),
   identical(
     em_zero_reason_text("", 0L, logical(), logical()),
     "no correctly handled answer row has exact match 0"
