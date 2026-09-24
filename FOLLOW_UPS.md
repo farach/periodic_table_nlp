@@ -83,3 +83,10 @@ so each render states its own value:
 - **Lesson 78:** the t-SNE neighbour percentages change slightly.
 
 Do not pin these values in a hidden check.
+
+## Other open work in the repository
+
+- **Pull request #9** ("Offer three ways into the map, and size it from its
+  container", branch `guidance-routes`) is open from 2026-08-29. It now
+  conflicts with `main` in `index.qmd` and `periodic-table.css`, because the
+  finished map dropped the planned-tile key. Rebase it or close it.
