@@ -56,7 +56,8 @@ the builder splits the notes into those that match the keyword rule and the
 rest, and it places the matching notes first. Each group is taken in order of
 the SHA-256 digest of the note's text. Each note gets the frame that has the
 fewest notes from its group so far. A tie goes to the lower-numbered frame, and a
-frame that already holds its full share for the class is skipped. A
+frame without room left in the class for the note, or for both notes of a pair,
+is skipped. A
 near-duplicate pair is placed as one unit, at the position of its member with the
 smaller digest, and shares one frame. In the committed collection, the frame
 counts within each group differ by at most one.
@@ -74,7 +75,8 @@ checks cover:
 - the first word, first two words, first three tokens, and colon of each
   record's core note, and the frame itself;
 - each frame paired with the first word of the core note, both as label-free
-  rules that flag rare pairs and as a pair ranker learned on half the records;
+  rules that flag rare pairs and as a held-out pair ranker scored by stratified
+  five-fold cross-validation under the three fold seeds;
 - the frames among records that match the keyword rule and among records that
   do not, judged on balanced accuracy;
 - the 20 most frequent tokens outside the review request's own topic words;
@@ -92,6 +94,9 @@ checks cover:
 collection: the ones committed at `0a5a5af9`, `a3478085`, and `49a9b67a`, and an
 intermediate version from the final revision, which the function-word ranker
 refuses.
+
+Run the builder in a UTF-8 locale; in the C locale its frame-reading check stops
+the build before it writes anything.
 
 The same person wrote these records, their questions, their reference answers,
 their relevance judgments, and the lessons that score against them. They are
