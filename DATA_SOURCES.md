@@ -106,6 +106,10 @@ The intermediate version is not in the repository, so a clone cannot run
 `--sweep-only` on that file; each of the three is refused. Both check-only modes
 need their file argument: without it, the script runs the full build, which
 rewrites the collection, stream and metadata files.
+The `git show` route needs the commits `0a5a5af9`, `a3478085` and `49a9b67a` to
+be present in the clone. In Windows PowerShell 5.1, `>` saves that output as
+UTF-16, and `--sweep-only` then stops with an error instead of refusing the
+file; on Windows, run the `git show` step from `cmd`.
 
 Run the builder in a UTF-8 locale; in the C locale its frame-reading check stops
 the build before it writes anything.
