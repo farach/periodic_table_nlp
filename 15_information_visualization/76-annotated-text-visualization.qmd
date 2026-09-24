@@ -183,6 +183,8 @@ s001_token_offsets <- parsed |>
 
 kable(
   s001_token_offsets,
+  format = "html",
+  escape = TRUE,
   col.names = c("Token", "Start", "End", "Entity tag"),
   caption = "spaCy token offsets and entity tags for sentence s001",
   row.names = FALSE
@@ -218,6 +220,8 @@ offset_slice <- model_spans |>
 
 kable(
   offset_slice,
+  format = "html",
+  escape = TRUE,
   col.names = c("Searched text", "Search found", "Offset slice"),
   caption = "Offset slicing recovers the span when a searched string fails",
   row.names = FALSE
@@ -260,7 +264,16 @@ accent_person <- accent_parsed |>
     .groups = "drop"
   )
 
-person_byte_end <- nchar(accent_person$text, type = "bytes")
+byte_offset <- function(text, position) {
+  if (position == 0L) {
+    return(0L)
+  }
+
+  nchar(substr(text, 1L, position), type = "bytes")
+}
+
+person_byte_start <- byte_offset(accent_text, accent_person$start)
+person_byte_end <- byte_offset(accent_text, accent_person$end)
 wrong_byte_as_character_slice <- substr(
   accent_text,
   accent_person$start + 1L,
@@ -273,7 +286,7 @@ accent_units <- tibble(
   bytes = nchar(accent_text, type = "bytes"),
   person_start = accent_person$start,
   person_end = accent_person$end,
-  byte_start = accent_person$start,
+  byte_start = person_byte_start,
   byte_end = person_byte_end,
   wrong_slice_if_bytes_are_positions = wrong_byte_as_character_slice,
   sliced_text = accent_person$text
@@ -310,6 +323,25 @@ stopifnot(
   identical(accent_units$wrong_slice_if_bytes_are_positions, "Renée Díaz r"),
   identical(accent_units$sliced_text, "Renée Díaz"),
   accent_units$bytes > accent_units$characters
+)
+
+riverton_span <- accent_parsed |>
+  filter(token %in% c("Riverton", "Skills", "Centre")) |>
+  summarise(
+    start = min(idx),
+    end = max(idx + nchar(token, type = "chars")),
+    byte_start = byte_offset(accent_text, start),
+    byte_end = byte_offset(accent_text, end),
+    text = substr(accent_text, start + 1L, end),
+    .groups = "drop"
+  )
+
+stopifnot(
+  identical(riverton_span$text, "Riverton Skills Centre"),
+  identical(riverton_span$start, 42L),
+  identical(riverton_span$end, 64L),
+  identical(riverton_span$byte_start, 44L),
+  identical(riverton_span$byte_end, 66L)
 )
 ```
 

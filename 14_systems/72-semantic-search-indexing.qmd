@@ -7,7 +7,7 @@ categories: [systems, semantic search, retrieval]
 
 A parent asked the handbook, "Where can my kid stay while I study at night?" The answer lived in passage H13, but the wording did not say `child care`.
 
-This lesson uses a related search query, `somewhere for my kid during night class`. With the exact term policy used later, H13 ranks second because it shares only the function words `for` and `during`; the class-related distractor H15 shares `class`. That rank does not come from the meaning of `kid` or `night`. If stop words were removed, H13 would receive no lexical score for this query.
+This lesson uses a related search query, `somewhere for my kid during night class`. Under the lexical scoring used later in this lesson, which keeps stop words and does no stemming, H13 ranks second because it shares only the function words `for` and `during`; the class-related distractor H15 shares `class`. That rank does not come from the meaning of `kid` or `night`. If stop words were removed, H13 would receive no lexical score for this query.
 
 **Semantic search indexing** prepares a searchable structure before the next query arrives. A lexical index stores terms and counts. A dense index stores one vector for each passage, using the same local embedding model for passages and queries. Both indexes can return a ranked list; neither can decide by itself that the top passage is relevant.
 
@@ -137,7 +137,19 @@ knitr::kable(
   caption = "The child-care passage and a nearby class-related distractor",
   row.names = FALSE
 )
+```
 
+```{r}
+#| include: false
+
+stopifnot(
+  identical(miss_context$passage_id, c("H13", "H15"))
+)
+```
+
+The table above starts with H13 because it answers the parent's question. H15 is a distractor about laptops and class. A search method that always returns a top row can still put a distractor first.
+
+```{r}
 knitr::kable(
   judgment_summary,
   format = "html",
@@ -178,8 +190,6 @@ stopifnot(
   )
 )
 ```
-
-The example starts with H13 because it answers Hana's question. H15 is a distractor about laptops and class. A search method that always returns a top row can still put a distractor first.
 
 ## Build terms for a lexical inverted index
 
@@ -245,7 +255,7 @@ stopifnot(
 )
 ```
 
-The index terms are the units that BM25 sees. If a system needs exact course-code search, `dsc-104` must be a term, not an accident of two smaller terms.
+These index terms are what the scoring formula in the next section counts. If a system needs exact course-code search, `dsc-104` must be a term, not an accident of two smaller terms.
 
 ## Score query terms with BM25
 
@@ -410,7 +420,7 @@ BM25 handles `DSC-104` cleanly because the tokenizer kept the identifier. With d
 
 The dense index uses the pinned `sentence-transformers/all-MiniLM-L6-v2` model. The local Hugging Face feature-extraction pipeline returns one vector per word piece. For each text, this lesson averages those vectors, then scales the result to length 1.
 
-The model's own files say the sentence-transformer wrapper uses mean pooling and a normalization module. The model card says sentence-transformers truncates inputs longer than 256 word pieces by default and that training used sequences of at most 128 tokens. The page applies the model's pooling steps one text at a time, so the pipeline output has no padding tokens; the helper is valid only for that one-text call pattern.
+The model's own files say the sentence-transformer wrapper uses mean pooling and a normalization module. The model card says sentence-transformers truncates inputs longer than 256 word pieces by default and that training used sequences of at most 128 tokens. The page applies the model's pooling steps one text at a time, so the pipeline output has no padding tokens (filler tokens that a batch adds so every text in it has the same length); the helper is valid only for that one-text call pattern.
 
 The model manifest records an Apache-2.0 license. This lesson uses English (`en`) handbook text and does not claim the same behavior for other languages or domains.
 
@@ -556,6 +566,8 @@ passage_fingerprints <- handbook |>
     )
   )
 
+handbook_fingerprint <- hash_lines(handbook_path)
+
 index_record <- tibble(
   key = c(
     "model_id",
@@ -601,7 +613,7 @@ index_record <- tibble(
     "Lucene positive idf",
     as.character(k1),
     as.character(b),
-    actual_hashes$fingerprint[actual_hashes$artifact == "riverton-handbook.csv"],
+    handbook_fingerprint,
     as.character(nrow(passage_fingerprints)),
     "cosine, computed as dot product of unit vectors",
     "exact scan over 15 passages",
@@ -694,13 +706,14 @@ stopifnot(
   identical(edited_passage_check$fingerprint_matches, FALSE),
   identical(edited_passage_check$action, "re-embed this passage"),
   "dimension" %in% dense_metadata$field,
-  all(c(
-    "license",
-    "lexical_token_pattern",
-    "handbook_fingerprint",
-    "passage_fingerprint_count",
-    "python_tokenizers"
-  ) %in% index_record$key),
+  identical(
+    index_record$value[index_record$key == "handbook_fingerprint"],
+    handbook_metadata$fingerprint[handbook_metadata$artifact == "riverton-handbook.csv"]
+  ),
+  identical(
+    index_record$value[index_record$key == "passage_fingerprint_count"],
+    as.character(nrow(handbook))
+  ),
   nrow(index_record) >= 15L
 )
 ```
@@ -798,7 +811,8 @@ knitr::kable(
 
 stopifnot(
   identical(rrf_k, 60),
-  nrow(top_hits_display) == 24L,
+  nrow(top_hits) == 22L,
+  identical(bm25_no_match_rows$query_id, c("S3", "S8")),
   !any(
     top_hits$method == "BM25 lexical" &
       top_hits$query_id %in% c("S3", "S8")
@@ -1088,7 +1102,7 @@ stopifnot(
 
 Dense search fixes the child-care wording mismatch in S1 and the stipend wording mismatch in S3. It misses the transit query at the top three. BM25 does well on identifiers and exact wording, but it has no nonzero score for some paraphrases. RRF helps S1 and S3 and keeps several exact hits, yet it still misses the transit query at the top three. For S4, dense ranks the relevant H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "dense" & rank_evaluation$query_id == "S4"]`, while RRF ranks it at `r rank_evaluation$relevant_rank[rank_evaluation$method == "RRF hybrid" & rank_evaluation$query_id == "S4"]` because H05 appears only in the dense list and receives no BM25 rank contribution. These are paired demonstrations on seven author-written probes, not a benchmark.
 
-Larger evaluations do not give one method a permanent crown. BEIR reported BM25 as a strong zero-shot baseline across varied retrieval tasks, while dense passage retrieval reported large gains on open-domain question answering; entity-question work found dense retrievers can miss rare names and identifiers. One `DSC-104` probe in a 15-passage handbook cannot show that dense search handles identifiers.
+Larger evaluations do not give one method a permanent crown. BEIR reported BM25 as a strong zero-shot baseline across varied retrieval tasks, while dense passage retrieval reported large gains on open-domain question answering; entity-question work found dense retrievers can miss questions about rarely seen named entities. One `DSC-104` probe in a 15-passage handbook cannot show that dense search handles identifiers.
 
 ## What approximate search would change
 

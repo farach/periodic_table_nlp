@@ -595,9 +595,8 @@ fixed_reply <- function(action, program = "unknown", contact_channel = "unknown"
       "Should staff contact you by phone or by email?",
     action == "confirm" ~
       paste0(
-        "I have ", program_display(program),
-        " with contact by ", contact_channel,
-        ". Staff should review this before taking action."
+        "I have noted the ", program_display(program),
+        ", with contact by ", contact_channel, "."
       ),
     action == "inform" ~
       "The handbook fact needs staff review before I reply.",
@@ -718,7 +717,6 @@ cat(realizer_requests$naive_prompt[[4]])
 displayed_naive_prompt <- realizer_requests$naive_prompt[[4]]
 
 stopifnot(
-  identical(displayed_naive_prompt, realizer_requests$naive_prompt[[4]]),
   str_detect(displayed_naive_prompt, fixed("<|im_start|>system")),
   str_detect(displayed_naive_prompt, fixed("<|im_start|>user")),
   str_detect(displayed_naive_prompt, fixed("<|im_start|>assistant")),
@@ -744,13 +742,8 @@ displayed_realizer_prompt <- realizer_requests$realizer_prompt[
   realizer_requests$conversation_id == "C1" &
     realizer_requests$turn_id == 3L
 ][[1]]
-expected_realizer_prompt <- realizer_requests$realizer_prompt[
-  realizer_requests$conversation_id == "C1" &
-    realizer_requests$turn_id == 3L
-][[1]]
 
 stopifnot(
-  identical(displayed_realizer_prompt, expected_realizer_prompt),
   str_detect(displayed_realizer_prompt, fixed("ACTION: inform")),
   str_detect(displayed_realizer_prompt, fixed("ACTION MEANING:")),
   str_detect(displayed_realizer_prompt, fixed("H06:")),
@@ -937,9 +930,7 @@ stopifnot(
 Greedy decoding means the model chooses the highest-scoring next token at each
 step. This lesson passes a repetition penalty of 1.05, which overrides the
 checkpoint's generation-config value of 1.1. The page does not depend on exact
-generated wording. Exact replies may vary across CPU settings, so the
-assertions check call counts, token caps, EOS or cap flags, leakage, and screen
-columns.
+generated wording.
 
 ## Screen generated replies and use a fixed fallback
 
@@ -948,11 +939,12 @@ not present in allowed facts, missing action-specific slot values, requests
 for personal details (`age`, `birth`, `address`, `phone number`, child-name
 phrases, and `specific needs`), promise words (`guarantee`, `guaranteed`,
 `approved`, `promise`, `scheduled`, `reach out`, `will follow up`, and `will be
-accepted`), and bracketed placeholders. Several of these screen patterns were
-added after reading rendered replies in this repair pass; they are guardrails
-for this lesson, not proof of a general detector. A flagged generated reply is
-replaced by a fixed fallback. Fixed refusal and hand-off text is not a model
-screen result.
+accepted`), and bracketed placeholders. Several of these patterns, for example
+`will follow up`, `reach out`, `scheduled`, and bracketed placeholders, were
+written after reading replies from this same model and prompt, so they fit these
+replies and are not a general detector. A flagged generated reply is replaced
+by a fixed fallback. Fixed refusal and hand-off text is not a model screen
+result.
 
 ```{r}
 allowed_fact_text <- function(action, program) {
@@ -973,7 +965,7 @@ screen_generated_reply <- function(reply, action, program, contact_channel, allo
     return(tibble(
       numerals_ok = NA,
       program_names_ok = NA,
-      confirm_slots_ok = NA,
+      action_slots_ok = NA,
       personal_details_ok = NA,
       promise_words_ok = NA,
       generated_screen_ok = NA
@@ -988,13 +980,14 @@ screen_generated_reply <- function(reply, action, program, contact_channel, allo
     str_detect(reply, fixed(allowed_program_names, ignore_case = TRUE))
   ]
   allowed_program_ok <- case_when(
+    action == "request_program" ~ all(mentioned_programs %in% allowed_program_names),
     length(mentioned_programs) == 0L ~ TRUE,
     program == "data_support" ~ all(mentioned_programs == "Data Support Certificate"),
     program == "forklift" ~ all(mentioned_programs == "Forklift Operator Licence"),
     TRUE ~ FALSE
   )
 
-  confirm_slots_ok <- case_when(
+  action_slots_ok <- case_when(
     action == "confirm" ~
       str_detect(reply, regex(program_alias_pattern(program), ignore_case = TRUE)) &&
         str_detect(reply, fixed(contact_channel, ignore_case = TRUE)),
@@ -1025,13 +1018,13 @@ screen_generated_reply <- function(reply, action, program, contact_channel, allo
   tibble(
     numerals_ok = numeral_ok,
     program_names_ok = allowed_program_ok,
-    confirm_slots_ok = confirm_slots_ok,
+    action_slots_ok = action_slots_ok,
     personal_details_ok = personal_details_ok,
     promise_words_ok = promise_ok,
     generated_screen_ok = all(c(
       numeral_ok,
       allowed_program_ok,
-      confirm_slots_ok,
+      action_slots_ok,
       personal_details_ok,
       promise_ok
     ))
@@ -1062,16 +1055,16 @@ screened_replies <- reply_trace |>
       list(
         numerals_ok,
         program_names_ok,
-        confirm_slots_ok,
+        action_slots_ok,
         personal_details_ok,
         promise_words_ok
       ),
-      \(numerals_ok, program_names_ok, confirm_slots_ok,
+      \(numerals_ok, program_names_ok, action_slots_ok,
         personal_details_ok, promise_words_ok) {
         checks <- c(
           numerals = numerals_ok,
           program_names = program_names_ok,
-          confirmation_slots = confirm_slots_ok,
+          action_slots = action_slots_ok,
           personal_details = personal_details_ok,
           promise_words = promise_words_ok
         )
@@ -1111,7 +1104,7 @@ kable(
       raw_reply,
       numerals_ok,
       program_names_ok,
-      confirm_slots_ok,
+      action_slots_ok,
       personal_details_ok,
       promise_words_ok,
       screens_that_fired,
@@ -1166,13 +1159,21 @@ stopifnot(
     regex("\\bphone\\b.*\\bemail\\b|\\bemail\\b.*\\bphone\\b", ignore_case = TRUE)
   )
 )
+```
 
+The labeled control replies below test the screens without depending on model
+output. The table shows seven controls: a correct action-slots row, a
+wrong-program row, two incomplete action-slots rows, a request-program row, a
+personal-detail request, and a promise-word reply.
+
+```{r}
 screen_controls <- tibble(
   control_id = c(
-    "correct-confirmation",
-    "wrong-program-confirmation",
-    "program-only-confirmation",
-    "channel-only-confirmation",
+    "correct-action-slots",
+    "wrong-program-action-slots",
+    "program-only-action-slots",
+    "channel-only-action-slots",
+    "request-program-options",
     "personal-detail-request",
     "promise-word"
   ),
@@ -1181,17 +1182,25 @@ screen_controls <- tibble(
     "You are confirmed for the Forklift Operator Licence, and email is your contact channel.",
     "You are asking about the Data Support Certificate.",
     "Email is your contact channel.",
+    "Which program would you like: the Data Support Certificate or the Forklift Operator Licence course?",
     "Please provide the child's age and any specific needs.",
     "Your seat is guaranteed and approved."
   ),
-  action = c("confirm", "confirm", "confirm", "confirm", "request_program", "confirm"),
-  program = c("data_support", "data_support", "data_support", "data_support", "unknown", "data_support"),
-  contact_channel = c("email", "email", "email", "email", "unknown", "email"),
+  action = c(
+    "confirm", "confirm", "confirm", "confirm",
+    "request_program", "request_program", "confirm"
+  ),
+  program = c(
+    "data_support", "data_support", "data_support", "data_support",
+    "unknown", "unknown", "data_support"
+  ),
+  contact_channel = c("email", "email", "email", "email", "unknown", "unknown", "email"),
   allowed_text = c(
     allowed_fact_text("confirm", "data_support"),
     allowed_fact_text("confirm", "data_support"),
     allowed_fact_text("confirm", "data_support"),
     allowed_fact_text("confirm", "data_support"),
+    allowed_fact_text("request_program", "unknown"),
     allowed_fact_text("request_program", "unknown"),
     allowed_fact_text("confirm", "data_support")
   ),
@@ -1216,7 +1225,7 @@ kable(
       contact_channel,
       numerals_ok,
       program_names_ok,
-      confirm_slots_ok,
+      action_slots_ok,
       personal_details_ok,
       promise_words_ok,
       screen_label
@@ -1239,14 +1248,28 @@ kable(
   caption = "Labeled control replies for deterministic screen checks",
   row.names = FALSE
 )
+```
+
+```{r}
+#| include: false
 
 stopifnot(
-  screen_controls$generated_screen_ok[screen_controls$control_id == "correct-confirmation"],
-  !screen_controls$program_names_ok[screen_controls$control_id == "wrong-program-confirmation"],
-  !screen_controls$confirm_slots_ok[screen_controls$control_id == "program-only-confirmation"],
-  !screen_controls$confirm_slots_ok[screen_controls$control_id == "channel-only-confirmation"],
+  identical(nrow(screen_controls), 7L),
+  screen_controls$generated_screen_ok[screen_controls$control_id == "correct-action-slots"],
+  screen_controls$generated_screen_ok[screen_controls$control_id == "request-program-options"],
+  !screen_controls$program_names_ok[screen_controls$control_id == "wrong-program-action-slots"],
+  !screen_controls$action_slots_ok[screen_controls$control_id == "program-only-action-slots"],
+  !screen_controls$action_slots_ok[screen_controls$control_id == "channel-only-action-slots"],
   !screen_controls$personal_details_ok[screen_controls$control_id == "personal-detail-request"],
-  !screen_controls$promise_words_ok[screen_controls$control_id == "promise-word"]
+  !screen_controls$promise_words_ok[screen_controls$control_id == "promise-word"],
+  screen_generated_reply(
+    fixed_reply("request_program"),
+    "request_program",
+    "unknown",
+    "unknown",
+    allowed_fact_text("request_program", "unknown"),
+    TRUE
+  )$generated_screen_ok
 )
 
 dialogue_screen_summary <- screened_replies |>
@@ -1266,16 +1289,29 @@ fallback_reply_count <- sum(
   screened_replies$uses_model &
     screened_replies$final_reply != screened_replies$raw_reply
 )
+fallback_screen_count <- sum(
+  screened_replies$uses_model &
+    !screened_replies$generated_screen_ok
+)
+fallback_stop_count <- sum(
+  screened_replies$uses_model &
+    screened_replies$generated_screen_ok &
+    (screened_replies$hit_token_cap | !screened_replies$ended_by_eos)
+)
 screen_hold_summary <- screened_replies |>
   filter(uses_model) |>
   summarise(
     numerals = sum(numerals_ok %in% FALSE),
     program_names = sum(program_names_ok %in% FALSE),
-    confirmation_slots = sum(confirm_slots_ok %in% FALSE),
+    action_slots = sum(action_slots_ok %in% FALSE),
     personal_details = sum(personal_details_ok %in% FALSE),
     promise_words = sum(promise_words_ok %in% FALSE),
     .groups = "drop"
   )
+
+stopifnot(
+  identical(fallback_reply_count, fallback_screen_count + fallback_stop_count)
+)
 
 fallback_interpretation <- if (fallback_reply_count > 0L) {
   paste(
@@ -1288,53 +1324,6 @@ fallback_interpretation <- if (fallback_reply_count > 0L) {
     "would still be only a preliminary condition for review."
   )
 }
-```
-
-The labeled control replies below test the screens without depending on model
-output. A correct data-program confirmation passes. A confirmation for the wrong
-program, a request for child details, and a promise all fail their intended
-screens.
-
-```{r}
-kable(
-  screen_controls |>
-    select(
-      control_id,
-      reply,
-      numerals_ok,
-      program_names_ok,
-      confirm_slots_ok,
-      personal_details_ok,
-      promise_words_ok,
-      screen_label
-    ),
-  format = "html",
-  escape = TRUE,
-  col.names = c(
-    "Control",
-    "Control reply",
-    "Numerals",
-    "Program names",
-    "Confirmation slots",
-    "Personal details",
-    "Promise words",
-    "Screen label"
-  ),
-  caption = "Labeled control replies for deterministic screen checks",
-  row.names = FALSE
-)
-```
-
-```{r}
-#| include: false
-
-stopifnot(
-  identical(nrow(screen_controls), 6L),
-  screen_controls$generated_screen_ok[screen_controls$control_id == "correct-confirmation"],
-  !screen_controls$program_names_ok[screen_controls$control_id == "wrong-program-confirmation"],
-  !screen_controls$personal_details_ok[screen_controls$control_id == "personal-detail-request"],
-  !screen_controls$promise_words_ok[screen_controls$control_id == "promise-word"]
-)
 ```
 
 ```{r}
@@ -1363,6 +1352,10 @@ stopifnot(
 )
 ```
 
+Replies that pass every screen can still add claims the handbook does not
+support, or speak to staff instead of the user, which is why a person must
+review them.
+
 The label "not flagged by screen" is conservative. It does not mean the reply is
 approved. In this render, the reply table has
 `r dialogue_screen_summary$turns[dialogue_screen_summary$reply_source == "Qwen realization" & dialogue_screen_summary$screen_label == "held for human review"]`
@@ -1370,12 +1363,14 @@ generated turns held for review, while the fixed-text refusal, hand-off, and
 abstention turns have `not applicable` screen status. The generated-reply
 screens held `r screen_hold_summary$numerals` rows for numerals,
 `r screen_hold_summary$program_names` for program names,
-`r screen_hold_summary$confirmation_slots` for confirmation slots,
+`r screen_hold_summary$action_slots` for action slots,
 `r screen_hold_summary$personal_details` for personal details, and
 `r screen_hold_summary$promise_words` for promise words. In this render,
 `r fallback_reply_count` of `r generated_reply_count` generated replies were
-replaced by the fixed fallback. `r fallback_interpretation` Passing every
-screen is necessary, not sufficient. Human review still stays pending.
+replaced by the fixed fallback: `r fallback_screen_count` because a screen held
+the reply and `r fallback_stop_count` because the reply hit the token cap or did
+not end with EOS after passing the screens. `r fallback_interpretation` Passing
+every screen is necessary, not sufficient. Human review still stays pending.
 
 ## Retain less text
 

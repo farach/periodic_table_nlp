@@ -204,6 +204,10 @@ person, the city, or the state. That is the next step.
 The categories below were written after reading the 67 matches. Any residue that
 the rules do not explain is assigned to `uncertain`, not to the map.
 
+Each review key combines the paragraph ID, the matched name, and the 1-based
+character start returned for that paragraph, so a label stays with its sentence
+when rows are reordered.
+
 ```{r}
 category_table <- tribble(
   ~category, ~meaning,

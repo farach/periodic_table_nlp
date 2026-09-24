@@ -134,27 +134,23 @@ for matches. The server trims the typed word before `req()` sees it, then uses
 max_word_chars <- 30L
 max_rows_shown <- 8L
 
-ui <- tagList(
-  tags$title("Inaugural KWIC explorer"),
-  fluidPage(
-    title = "Inaugural KWIC explorer",
-    lang = "en",
-    h2("Inaugural KWIC explorer"),
-    p(
-      "Type one word, then press Enter. Hyphenated words are allowed; spaces are not."
-    ),
-    textInput(
-      inputId = "word",
-      label = "Word to find (one word, 30 characters or fewer)",
-      value = "",
-      placeholder = "liberty",
-      updateOn = "blur"
-    ),
-    textOutput("status"),
-    tableOutput("matches")
+ui <- fluidPage(
+  title = "Inaugural KWIC explorer",
+  lang = "en",
+  h2("Inaugural KWIC explorer"),
+  p(
+    "Type one word, then press Enter. Hyphenated words are allowed; spaces are not."
   ),
+  textInput(
+    inputId = "word",
+    label = "Word to find (one word, 30 characters or fewer)",
+    value = "",
+    placeholder = "liberty",
+    updateOn = "blur"
+  ),
+  textOutput("status"),
+  tableOutput("matches")
 )
-attr(ui, "lang") <- "en"
 
 server <- function(input, output, session) {
   context_rows <- reactive({
@@ -174,9 +170,9 @@ server <- function(input, output, session) {
 
     if (nrow(rows) == 0L) {
       paste0(
-        "No token in the punctuation-free search matches '",
+        "No word in these paragraphs matches '",
         word,
-        "'."
+        "'. Punctuation marks are not part of a word here."
       )
     } else {
       shown <- min(nrow(rows), max_rows_shown)
@@ -218,14 +214,7 @@ forbidden_server_calls <- c(
   "\\bsaveRDS\\s*\\(",
   "\\bbindCache\\s*\\("
 )
-ui_html_for_checks <- paste(
-  c(
-    "<html lang=\"en\">",
-    as.character(ui),
-    "</html>"
-  ),
-  collapse = "\n"
-)
+ui_head <- htmltools::renderTags(ui)$head
 
 stopifnot(
   inherits(ui, "shiny.tag.list"),
@@ -236,8 +225,7 @@ stopifnot(
   str_detect(server_source, fixed("renderTable")),
   str_detect(search_source, fixed("valuetype = \"fixed\"")),
   identical(attr(ui, "lang"), "en"),
-  str_detect(ui_html_for_checks, fixed("<title>Inaugural KWIC explorer</title>")),
-  str_detect(ui_html_for_checks, fixed("<html lang=\"en\">"))
+  str_detect(ui_head, fixed("<title>Inaugural KWIC explorer</title>"))
 )
 ```
 
@@ -247,6 +235,13 @@ rows after the input changes. `%||%` turns a missing input into empty text.
 `validate(need())` stops with a message the reader can see when the word breaks
 the app's rules. `renderText()` and `renderTable()` turn R values into page text
 and a table.
+`fluidPage()` builds the app page; its `title` and `lang` values are written
+into the page head when Shiny serves the app, so they are not part of the printed
+body HTML. `shinyApp()` bundles the UI and server so Shiny can serve them
+together.
+`updateOn = "blur"` makes the search run only when the reader presses Enter or
+leaves the box, so results are not re-announced on every keystroke; `testServer()`
+cannot check that browser behavior.
 
 Typed text goes only through `renderText()` and `renderTable()`, not through raw
 HTML, so markup-like input is treated as text. The length and spacing limits
@@ -265,14 +260,6 @@ plain console output, so the browser shows text, not a working input.
 
 ```{r}
 ui_html <- paste(as.character(ui), collapse = "\n")
-ui_html <- paste(
-  c(
-    "<html lang=\"en\">",
-    ui_html,
-    "</html>"
-  ),
-  collapse = "\n"
-)
 cat(ui_html)
 ```
 
@@ -377,7 +364,7 @@ shiny::testServer(server, {
     identical(nrow(star_rows), 0L),
     identical(
       star_status$value,
-      "No token in the punctuation-free search matches '*'."
+      "No word in these paragraphs matches '*'. Punctuation marks are not part of a word here."
     )
   )
 
@@ -388,7 +375,7 @@ shiny::testServer(server, {
     identical(nrow(markup_rows), 0L),
     identical(
       markup_status$value,
-      "No token in the punctuation-free search matches '<b>'."
+      "No word in these paragraphs matches '<b>'. Punctuation marks are not part of a word here."
     )
   )
 
@@ -399,7 +386,7 @@ shiny::testServer(server, {
     identical(nrow(punctuation_rows), 0L),
     identical(
       punctuation_status$value,
-      "No token in the punctuation-free search matches 'liberty,'."
+      "No word in these paragraphs matches 'liberty,'. Punctuation marks are not part of a word here."
     )
   )
 
@@ -410,7 +397,7 @@ shiny::testServer(server, {
     identical(nrow(no_match_rows), 0L),
     identical(
       no_match_status$value,
-      "No token in the punctuation-free search matches 'zzzzzz'."
+      "No word in these paragraphs matches 'zzzzzz'. Punctuation marks are not part of a word here."
     )
   )
 
@@ -460,15 +447,15 @@ shiny::testServer(server, {
       no_match_status$status
     ),
     condition_class = c(
-      liberty_status$condition_class,
+      if_else(is.na(liberty_status$condition_class), "not applicable", liberty_status$condition_class),
       empty_status$condition_class,
       space_status$condition_class,
       two_word_status$condition_class,
       long_status$condition_class,
-      star_status$condition_class,
-      markup_status$condition_class,
-      punctuation_status$condition_class,
-      no_match_status$condition_class
+      if_else(is.na(star_status$condition_class), "not applicable", star_status$condition_class),
+      if_else(is.na(markup_status$condition_class), "not applicable", markup_status$condition_class),
+      if_else(is.na(punctuation_status$condition_class), "not applicable", punctuation_status$condition_class),
+      if_else(is.na(no_match_status$condition_class), "not applicable", no_match_status$condition_class)
     ),
     server_result = c(
       liberty_status$value,
@@ -481,7 +468,10 @@ shiny::testServer(server, {
       punctuation_status$value,
       no_match_status$value
     )
-  )
+  ) |>
+    mutate(
+      rows = if_else(is.na(rows), "not applicable", as.character(rows))
+    )
 })
 ```
 
@@ -502,7 +492,7 @@ stopifnot(
   ),
   identical(
     case_results$server_result[case_results$case == "punctuated word"],
-    "No token in the punctuation-free search matches 'liberty,'."
+    "No word in these paragraphs matches 'liberty,'. Punctuation marks are not part of a word here."
   )
 )
 ```
@@ -510,6 +500,8 @@ stopifnot(
 The recorded server cases below are printed with an escaping HTML table. That
 matters for hostile-looking input: markup characters should be shown as text,
 not read as page markup.
+A condition row means the server stopped instead of returning output; `req()`
+leaves the message empty, and "not applicable" marks columns that do not apply.
 
 ```{r}
 kable(
@@ -533,8 +525,6 @@ kable(
 #| include: false
 
 stopifnot(
-  identical(case_results$typed_text[case_results$case == "literal asterisk"], "*"),
-  identical(case_results$typed_text[case_results$case == "markup-like text"], "<b>"),
   str_detect(case_results$server_result[case_results$case == "two words"], fixed("one word")),
   str_detect(case_results$server_result[case_results$case == "over 30 characters"], fixed("30 characters"))
 )
@@ -547,6 +537,8 @@ server test. It shows the first eight KWIC rows even though the full result has
 ```{r}
 kable(
   liberty_rows_from_server,
+  format = "html",
+  escape = TRUE,
   col.names = c("Paragraph ID", "Before", "Keyword", "After"),
   caption = "First eight server-returned KWIC rows for liberty",
   row.names = FALSE

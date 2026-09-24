@@ -29,7 +29,7 @@ By the end of this lesson, you will be able to:
 - key graph nodes by entity ID instead of display label;
 - show how label-keyed data wrongly merges two Riverton places;
 - draw directed, labelled edges with igraph and ggplot2;
-- explain what a force-directed layout can and cannot show;
+- explain why layout coordinates can change and are not data;
 - give a captioned edge table as the text alternative; and
 - compare a co-word network with a typed knowledge graph.
 :::
@@ -139,7 +139,8 @@ these graph labels because the announcements say only `October 15` and
 ## Show the label-keyed mistake
 
 If the graph used labels as node keys, both `Riverton` records would collapse
-into one node. That would create a false path through a single place label.
+into one node. That would merge two different places, so any later fact about
+one Riverton would appear to belong to the other.
 
 ```{r}
 id_graph <- igraph::graph_from_data_frame(
@@ -229,6 +230,40 @@ stopifnot(
 )
 ```
 
+```{r}
+unconnected_nodes <- nodes |>
+  filter(!node_id %in% unique(c(edges$from, edges$to))) |>
+  select(node_id, label, node_type)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  setequal(unconnected_nodes$node_id, c("ORG-0003", "LOC-0001", "LOC-0002", "LOC-0003"))
+)
+```
+
+`r nrow(unconnected_nodes)` drawn nodes have no populated fact yet. The figure
+places them in its bottom row, and the table below names them.
+
+```{r}
+knitr::kable(
+  unconnected_nodes,
+  col.names = c("Node ID", "Label", "Type"),
+  caption = "Nodes drawn without a populated-fact edge",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(unconnected_nodes), 4L)
+)
+```
+
 ## Place nodes by hand and draw arrows
 
 The main figure uses fixed deterministic coordinates chosen so the labels are
@@ -236,12 +271,12 @@ readable. That keeps the drawing stable while Chloe reads the arrows and labels.
 Up, down, left, right, rotation, and mirror image still do not carry data. Count
 links in the table if you need a number. Viewers tend to read a centrally drawn
 node as more prominent, so the drawing should not be used as an importance
-score.
+score; the bottom row holds nodes with no populated fact.
 
 ```{r}
 #| label: fig-riverton-graph
 #| fig-cap: "ID-keyed Riverton knowledge graph with directed, labelled edges."
-#| fig-alt: !expr paste0("A node-link diagram of ", nrow(nodes), " nodes, each labelled with a name and an entity ID, and ", nrow(edges), " directed relation edges. The exact edges are listed in the edge table above.")
+#| fig-alt: !expr paste0("A node-link diagram of ", nrow(nodes), " nodes, each labelled with a name and an ID, and ", nrow(edges), " directed relation edges. The exact edges are listed in the edge table above.")
 #| fig-width: 9
 #| fig-height: 6.5
 
@@ -260,10 +295,10 @@ layout_fixed <- tribble(
   "CRD-0002", -2.2, 1.5,
   "VALUE-October 15", 2.2, 1.5,
   "VALUE-November 1", 2.2, -1.1,
-  "LOC-0001", -0.2, -2.2,
-  "ORG-0003", -2.4, -3.3,
-  "LOC-0003", 1.8, -3.3,
-  "LOC-0002", -2.4, -0.8
+  "LOC-0001", -3.0, -3.6,
+  "LOC-0002", -1.0, -3.6,
+  "ORG-0003", 1.0, -3.6,
+  "LOC-0003", 3.0, -3.6
 ) |>
   left_join(nodes, by = "node_id")
 
@@ -325,7 +360,7 @@ graph_plot <- ggplot() +
     size = 3
   ) +
   coord_equal(clip = "off") +
-  expand_limits(x = c(-3.2, 3.0), y = c(-3.9, 2.2)) +
+  expand_limits(x = c(-3.7, 3.7), y = c(-4.1, 2.2)) +
   theme_void() +
   theme(plot.margin = margin(15, 15, 15, 15))
 
@@ -397,8 +432,7 @@ caption and table make the same information available outside the image.
 Force-directed layouts are useful for many graphs, but their coordinates depend
 on random starting positions. A layout cannot change the graph's edges or
 degrees; it only assigns positions. The check below runs two seeded
-Fruchterman-Reingold layouts and compares the node IDs and coordinates rather
-than coordinate literals.
+Fruchterman-Reingold layouts and compares only their coordinates.
 
 ```{r}
 layout_for_seed <- function(graph, seed) {
@@ -413,20 +447,17 @@ layout_seed_17 <- layout_for_seed(id_graph, 17L)
 layout_seed_29 <- layout_for_seed(id_graph, 29L)
 
 seed_comparison <- tibble(
-  check = c("same node IDs", "coordinates identical"),
-  result = c(
-    setequal(layout_seed_17$node_id, layout_seed_29$node_id),
-    identical(
-      layout_seed_17 |> arrange(node_id) |> select(x, y),
-      layout_seed_29 |> arrange(node_id) |> select(x, y)
-    )
+  check = "coordinates identical",
+  result = identical(
+    layout_seed_17 |> arrange(node_id) |> select(x, y),
+    layout_seed_29 |> arrange(node_id) |> select(x, y)
   )
 )
 
 knitr::kable(
   seed_comparison,
   col.names = c("Layout check", "Result"),
-  caption = "Two layout seeds preserve graph structure while changing coordinates",
+  caption = "Two force-directed layout seeds produce different coordinates",
   row.names = FALSE
 )
 ```
@@ -435,7 +466,6 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  seed_comparison$result[seed_comparison$check == "same node IDs"],
   !seed_comparison$result[seed_comparison$check == "coordinates identical"]
 )
 ```

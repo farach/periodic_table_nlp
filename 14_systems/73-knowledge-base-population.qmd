@@ -158,13 +158,7 @@ slot_schema <- tribble(
   "requires", "organisation", "credential", "list-valued",
   "One fact per subject-object pair; negated or hedged statements stay out of facts.",
   "application_deadline", "organisation", "date literal", "single-valued",
-  "Keep each dated value, flag conflict, and let review decide.",
-  "located_in", "organisation", "place", "single-valued",
-  "Keep source and date; do not infer a new location from an ambiguous name.",
-  "serves", "organisation", "place", "list-valued",
-  "One fact per served place.",
-  "near", "place", "place", "list-valued",
-  "One directional reference edge for this teaching graph."
+  "Keep each dated value, flag conflict, and let review decide."
 )
 
 knitr::kable(
@@ -192,8 +186,8 @@ error.
 
 ## Prepare dated announcements
 
-The documents below are constructed announcements. They cover one new fact, one
-duplicate, one single-valued conflict, one negated statement, one hedged
+The documents below are constructed announcements. They include one duplicate,
+one single-valued conflict, one negated statement, one hedged
 statement, an ambiguous `Riverton` mention, one NIL organisation, one
 undeclared slot, and one visible type-check failure.
 
@@ -269,9 +263,10 @@ status, and applies population rules.
 ## Link mentions and keep offsets
 
 The linker below accepts an alias only when it has one candidate. If the mention
-is absent from the alias table, the code creates a provisional NIL ID. If the
-alias has several candidates, the candidate goes to review instead of choosing a
-nearby name.
+is absent from the alias table, the code creates a provisional NIL ID for a
+subject mention; a candidate whose object is not in the table is held for
+review. If the alias has several candidates, the candidate goes to review
+instead of choosing a nearby name.
 
 ```{r}
 normalize_text <- function(value) {
@@ -484,6 +479,7 @@ candidate_actions <- schema_checks |>
       subject_link_status == "ambiguous" ~ "hold ambiguous",
       subject_link_status == "NIL" ~ "hold NIL",
       !declared_slot ~ "reject undeclared slot",
+      object_link_status == "NIL" | is.na(type_check) ~ "hold NIL",
       !type_check ~ "reject type",
       candidate_id != first_candidate_id ~ "merge duplicate",
       cardinality == "single-valued" &
@@ -498,6 +494,7 @@ candidate_actions <- schema_checks |>
       subject_link_status == "ambiguous" ~ "alias maps to more than one ID",
       subject_link_status == "NIL" ~ "new name receives a provisional ID for review",
       !declared_slot ~ "slot is not declared in the schema",
+      object_link_status == "NIL" | is.na(type_check) ~ "object mention is not linked",
       !type_check ~ "slot type check failed",
       candidate_id != first_candidate_id ~ "same fact already exists; keep provenance",
       cardinality == "single-valued" &
@@ -651,6 +648,7 @@ stopifnot(
   all(fact_provenance$candidate_source == "hand-supplied candidate"),
   all(!is.na(fact_provenance$pipeline_rules_version)),
   !any(fact_provenance$candidate_id == "CAND-005"),
+  !anyNA(populated_facts$object_value),
   populated_facts$provenance_records[populated_facts$slot == "offers"] == 2L,
   all(populated_facts$conflict_flag[populated_facts$slot == "application_deadline"]),
   any(review_queue$provisional_or_candidate_id == "NIL-0001")
@@ -659,7 +657,9 @@ stopifnot(
 
 One offer fact has two provenance records. The two deadline facts both remain,
 and both are flagged because a later document might be an update, an error, or a
-different session. The table records the conflict; it does not resolve it.
+different session. The candidate set adds `r nrow(populated_facts)` populated
+facts after the review rules run. The table records the conflict; it does not
+resolve it.
 The `FACT-` values here are display IDs minted during this render; a real
 knowledge base keeps issued fact IDs stable once it publishes them.
 

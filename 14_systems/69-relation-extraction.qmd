@@ -440,8 +440,8 @@ stopifnot(
 
 The reference has no row for the bus sentence or the job-ad counting sentence.
 Both contain more than one linked mention, but neither states one of the schema
-relations between those mentions. The numbering has gaps because scratch parser
-checks were removed before this lesson file was committed.
+relations between those mentions. The test-sentence IDs skip some numbers; no
+test sentence was removed after the extractor ran.
 
 ## Parse and align mentions to tokens
 
@@ -547,8 +547,7 @@ token string.
 
 In the head-relation column, `nsubj` marks an active subject, `dobj` a direct
 object, `nsubjpass` a passive subject, `pobj` an object of a preposition, and
-`conj` a coordinated item. Lesson 18 introduces these parser links in more
-detail.
+`conj` a coordinated item. Lesson 18 introduces dependency parses.
 
 ## Extract directed triples
 

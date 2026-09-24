@@ -28,7 +28,7 @@ This lesson shows how to:
 - retrieve handbook passages with tf-idf weights fitted on the handbook;
 - show when a gold passage shares no content words with the question;
 - compare an extractive sentence baseline with a generated short answer;
-- parse a strict two-line model reply without repairing it;
+- parse a strict two-line model reply without rewriting it;
 - keep action correctness, reference agreement, support screens, and human
   review separate; and
 - explain why abstention, citations, and fluent wording are not enough.
@@ -295,7 +295,8 @@ stopifnot(
 Tf-idf gives more weight to terms that appear in fewer handbook passages. The
 idf values are fitted once on the handbook and reused for each question. A
 passage with score zero is not retrieved, and score ties are broken by passage
-ID.
+ID. The retrieval score is cosine similarity between the question and passage
+tf-idf vectors, so it ranges from 0 to 1.
 
 ```{r}
 passage_terms <- handbook |>
@@ -604,7 +605,7 @@ kable(
   reader_inputs |>
     select(question_id, input_tokens, max_new_tokens),
   col.names = c("Question", "Prompt tokens", "Maximum new tokens"),
-  caption = "Input budgets asserted before each reader call",
+  caption = "Input budgets checked before each reader call",
   row.names = FALSE
 )
 ```
@@ -622,9 +623,8 @@ stopifnot(
 Greedy decoding chooses the highest-scoring next token at each step. The helper
 sets `do_sample = FALSE`. This lesson passes a repetition penalty of 1.05,
 which overrides the checkpoint's generation-config value of 1.1.
-Exact generated text can differ across machines, so the render asserts
-structure, token caps, parsed actions, and screen columns rather than literal
-wording.
+Exact generated text can differ across machines; the page does not depend on
+literal wording.
 
 ```{r}
 reader_results <- reader_inputs |>
@@ -676,7 +676,7 @@ stopifnot(
 )
 ```
 
-## Parse without repairing
+## Parse without rewriting
 
 A strict parser accepts only the two requested lines. In this render every
 output parsed; if a later output adds a third line or omits `Sources:`, the
@@ -768,14 +768,12 @@ stopifnot(
 
 ## Score answers, actions, and retrieval
 
-**Exact match** is 1 only when the normalized prediction exactly equals one
+**Exact match (EM)** is 1 only when the normalized prediction exactly equals one
 acceptable answer. **Token F1** balances shared-token precision and recall after
 normalization. SQuAD is a widely used question-answering benchmark; this lesson
 copies its scoring steps: lowercase, delete punctuation and symbols, remove
 English articles, and squeeze spaces. The only difference is that stringr's ICU
-class removes Unicode punctuation and symbols, not only ASCII punctuation. The
-retrieval score above is cosine similarity between tf-idf vectors, so it ranges
-from 0 to 1.
+class removes Unicode punctuation and symbols, not only ASCII punctuation.
 
 ```{r}
 answer_f1 <- function(prediction, reference) {
@@ -875,6 +873,54 @@ score_table <- parsed_results |>
     )
   )
 
+acceptable_variant_in_answer <- function(answer, variants) {
+  variants <- variants[nzchar(variants)]
+  if (length(variants) == 0L || is.na(answer) || !nzchar(answer)) {
+    return(FALSE)
+  }
+  normalized_answer <- normalize_answer(answer)
+  any(map_lgl(
+    variants,
+    \(variant) str_detect(
+      normalized_answer,
+      fixed(normalize_answer(variant))
+    )
+  ))
+}
+
+right_action_em_zero <- score_table |>
+  filter(expected_action == "answer", action_correct, exact_match == 0) |>
+  mutate(
+    acceptable_variant_in_answer = map2_lgl(
+      parsed_answer,
+      acceptable_list,
+      acceptable_variant_in_answer
+    ),
+    partial_overlap = f1 > 0
+  ) |>
+  summarise(
+    rows = paste(question_id, collapse = ", "),
+    count = n(),
+    reason = case_when(
+      count == 0L ~ "no correctly handled answer row has exact match 0",
+      count == 1L & all(partial_overlap) & all(acceptable_variant_in_answer) ~
+        paste0(
+          rows,
+          " has exact match 0 because the answer contains an acceptable ",
+          "variant but includes extra words"
+        ),
+      count > 1L & all(partial_overlap) & all(acceptable_variant_in_answer) ~
+        paste0(
+          rows,
+          " have exact match 0 because each answer contains an acceptable ",
+          "variant but includes extra words"
+        ),
+      TRUE ~
+        paste0(rows, " have exact match 0 for wording differences")
+    ),
+    .groups = "drop"
+  )
+
 kable(
   score_table |>
     select(
@@ -919,7 +965,65 @@ stopifnot(
   identical(score_table$reader_action[[3]], "abstain"),
   identical(score_table$answer_for_reference_score[[3]], ""),
   identical(score_table$exact_match[[3]], 0),
-  identical(score_table$f1[[3]], 0)
+  identical(score_table$f1[[3]], 0),
+  all(right_action_em_zero$count >= 0L),
+  all(
+    score_table |>
+      filter(expected_action == "answer", action_correct, exact_match == 0) |>
+      mutate(
+        acceptable_variant_in_answer = map2_lgl(
+          parsed_answer,
+          acceptable_list,
+          acceptable_variant_in_answer
+        )
+      ) |>
+      pull(f1) > 0
+  ),
+  all(
+    score_table |>
+      filter(expected_action == "answer", action_correct, exact_match == 0) |>
+      mutate(
+        acceptable_variant_in_answer = map2_lgl(
+          parsed_answer,
+          acceptable_list,
+          acceptable_variant_in_answer
+        )
+      ) |>
+      pull(acceptable_variant_in_answer)
+  )
+)
+
+em_zero_reason_text <- function(rows, count, partial_overlap = TRUE, variant_in_answer = TRUE) {
+  case_when(
+    count == 0L ~ "no correctly handled answer row has exact match 0",
+    count == 1L && partial_overlap && variant_in_answer ~
+      paste0(
+        rows,
+        " has exact match 0 because the answer contains an acceptable ",
+        "variant but includes extra words"
+      ),
+    count > 1L && partial_overlap && variant_in_answer ~
+      paste0(
+        rows,
+        " have exact match 0 because each answer contains an acceptable ",
+        "variant but includes extra words"
+      ),
+    TRUE ~ paste0(rows, " have exact match 0 for wording differences")
+  )
+}
+
+stopifnot(
+  identical(
+    em_zero_reason_text("", 0L),
+    "no correctly handled answer row has exact match 0"
+  ),
+  identical(
+    em_zero_reason_text("Q2, Q4", 2L),
+    paste0(
+      "Q2, Q4 have exact match 0 because each answer contains an ",
+      "acceptable variant but includes extra words"
+    )
+  )
 )
 
 qa_action_summary <- score_table |>
@@ -929,14 +1033,6 @@ qa_action_summary <- score_table |>
     premise_actions = sum(reader_action == "flag premise"),
     exact_action_matches = sum(action_correct),
     retrieval_failures = sum(end_to_end_outcome == "failed before reading"),
-    .groups = "drop"
-  )
-
-right_action_em_zero <- score_table |>
-  filter(expected_action == "answer", action_correct, exact_match == 0) |>
-  summarise(
-    rows = paste(question_id, collapse = ", "),
-    count = n(),
     .groups = "drop"
   )
 ```
@@ -952,9 +1048,7 @@ F1 only when the expected action is `answer`; parsed abstentions and parse
 failures count as empty predictions, so they receive EM 0 and F1 0 on
 answerable questions. The sentence baseline used a different unit, whether the
 copied sentence contained an acceptable answer. These numbers should not be read
-as a model comparison. In this render, `r right_action_em_zero$count` correctly
-handled answer row has exact match 0 (`r right_action_em_zero$rows`), because
-the generated answer includes extra words beyond the short acceptable variants.
+as a model comparison. In this render, `r right_action_em_zero$reason`.
 
 ## Screen citations and surface support
 

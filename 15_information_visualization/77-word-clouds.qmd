@@ -58,9 +58,14 @@ source("R/inaugural-corpus.R")
 
 paragraphs <- inaugural_paragraphs()
 
-word_tokens <- paragraphs |>
+all_word_tokens <- paragraphs |>
   select(paragraph_id, speech_id, paragraph) |>
-  unnest_tokens(word, paragraph) |>
+  unnest_tokens(word, paragraph)
+
+dropped_by_letters_filter <- all_word_tokens |>
+  filter(!str_detect(word, "^[a-z]+$"))
+
+word_tokens <- all_word_tokens |>
   filter(str_detect(word, "^[a-z]+$"))
 
 onix_stop_words <- stop_words |>
@@ -140,6 +145,8 @@ kable(
 
 stopifnot(
   identical(nrow(paragraphs), 1377L),
+  identical(nrow(dropped_by_letters_filter), 369L),
+  "america's" %in% dropped_by_letters_filter$word,
   n_distinct(word_tokens$paragraph_id) == 1377L,
   identical(stopword_note$removes_states, TRUE),
   identical(stopword_note$removes_united, FALSE),
@@ -172,9 +179,12 @@ The onix lexicon removes `states` but keeps `united`, so a phrase such as
 produce a different table.
 
 `unnest_tokens()` lowercases the paragraphs and splits punctuation away from
-words. The `^[a-z]+$` filter keeps only letters; after that filter and the onix
-stop-word list, `so` survives with `r inaugural_word_counts$count[inaugural_word_counts$word_key == "so"]`
-counts because `so` is not in the onix list.
+words. The `^[a-z]+$` filter keeps only tokens made entirely of letters, so it
+drops whole tokens such as `america's`; in this corpus it drops
+`r nrow(dropped_by_letters_filter)` tokens. After that filter and the onix
+stop-word list, `so` survives
+`r inaugural_word_counts$count[inaugural_word_counts$word_key == "so"]` times
+because `so` is not in the onix list.
 
 ## Show the counts before the cloud
 
