@@ -294,6 +294,8 @@ accent_units <- tibble(
 
 kable(
   accent_units,
+  format = "html",
+  escape = TRUE,
   col.names = c(
     "Example",
     "Characters",

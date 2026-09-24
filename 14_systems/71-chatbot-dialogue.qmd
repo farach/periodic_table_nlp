@@ -929,8 +929,8 @@ stopifnot(
 
 Greedy decoding means the model chooses the highest-scoring next token at each
 step. This lesson passes a repetition penalty of 1.05, which overrides the
-checkpoint's generation-config value of 1.1. The page does not depend on exact
-generated wording.
+checkpoint's generation-config value of 1.1. Exact replies may vary across CPU
+settings, and the page does not depend on exact generated wording.
 
 ## Screen generated replies and use a fixed fallback
 
@@ -941,10 +941,10 @@ phrases, and `specific needs`), promise words (`guarantee`, `guaranteed`,
 `approved`, `promise`, `scheduled`, `reach out`, `will follow up`, and `will be
 accepted`), and bracketed placeholders. Several of these patterns, for example
 `will follow up`, `reach out`, `scheduled`, and bracketed placeholders, were
-written after reading replies from this same model and prompt, so they fit these
-replies and are not a general detector. A flagged generated reply is replaced
-by a fixed fallback. Fixed refusal and hand-off text is not a model screen
-result.
+written after reading replies from this same model and an earlier version of
+this prompt, so they fit these replies and are not a general detector. A
+flagged generated reply is replaced by a fixed fallback. Fixed refusal and
+hand-off text is not a model screen result.
 
 ```{r}
 allowed_fact_text <- function(action, program) {

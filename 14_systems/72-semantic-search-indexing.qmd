@@ -712,7 +712,7 @@ stopifnot(
   ),
   identical(
     index_record$value[index_record$key == "passage_fingerprint_count"],
-    as.character(nrow(handbook))
+    as.character(handbook_metadata$rows[handbook_metadata$artifact == "riverton-handbook.csv"])
   ),
   nrow(index_record) >= 15L
 )

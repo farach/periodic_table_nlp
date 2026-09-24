@@ -172,7 +172,7 @@ server <- function(input, output, session) {
       paste0(
         "No word in these paragraphs matches '",
         word,
-        "'. Punctuation marks are not part of a word here."
+        "'. Marks at the start or end of a word, such as commas, are not part of the word here."
       )
     } else {
       shown <- min(nrow(rows), max_rows_shown)
@@ -235,10 +235,13 @@ rows after the input changes. `%||%` turns a missing input into empty text.
 `validate(need())` stops with a message the reader can see when the word breaks
 the app's rules. `renderText()` and `renderTable()` turn R values into page text
 and a table.
-`fluidPage()` builds the app page; its `title` and `lang` values are written
-into the page head when Shiny serves the app, so they are not part of the printed
-body HTML. `shinyApp()` bundles the UI and server so Shiny can serve them
-together.
+
+`fluidPage()` builds the app page. Its `title` names the browser tab, and
+`lang = "en"` tells screen readers that the page is in English. When Shiny
+serves the app, it puts the title in the page head and the language on the
+`<html>` element, so neither appears in the printed body HTML. `shinyApp()`
+bundles the UI and server so Shiny can serve them together.
+
 `updateOn = "blur"` makes the search run only when the reader presses Enter or
 leaves the box, so results are not re-announced on every keystroke; `testServer()`
 cannot check that browser behavior.
@@ -311,6 +314,10 @@ status_result <- function(expr) {
 case_results <- NULL
 liberty_rows_from_server <- NULL
 
+rows_result <- function(rows_expr) {
+  tryCatch(nrow(rows_expr), error = function(error) NA_integer_)
+}
+
 shiny::testServer(server, {
   session$setInputs(word = "liberty")
   liberty_status <- status_result(output$status)
@@ -327,6 +334,7 @@ shiny::testServer(server, {
 
   session$setInputs(word = "")
   empty_status <- status_result(output$status)
+  empty_rows <- rows_result(context_rows())
   stopifnot(
     identical(empty_status$condition_class, "shiny.silent.error"),
     identical(empty_status$value, "")
@@ -334,6 +342,7 @@ shiny::testServer(server, {
 
   session$setInputs(word = "   ")
   space_status <- status_result(output$status)
+  space_rows <- rows_result(context_rows())
   stopifnot(
     identical(space_status$condition_class, "shiny.silent.error"),
     identical(space_status$value, "")
@@ -341,6 +350,7 @@ shiny::testServer(server, {
 
   session$setInputs(word = "free people")
   two_word_status <- status_result(output$status)
+  two_word_rows <- rows_result(context_rows())
   stopifnot(
     identical(
       two_word_status$value,
@@ -350,6 +360,7 @@ shiny::testServer(server, {
 
   session$setInputs(word = strrep("a", 31L))
   long_status <- status_result(output$status)
+  long_rows <- rows_result(context_rows())
   stopifnot(
     identical(
       long_status$value,
@@ -364,7 +375,7 @@ shiny::testServer(server, {
     identical(nrow(star_rows), 0L),
     identical(
       star_status$value,
-      "No word in these paragraphs matches '*'. Punctuation marks are not part of a word here."
+      "No word in these paragraphs matches '*'. Marks at the start or end of a word, such as commas, are not part of the word here."
     )
   )
 
@@ -375,7 +386,7 @@ shiny::testServer(server, {
     identical(nrow(markup_rows), 0L),
     identical(
       markup_status$value,
-      "No word in these paragraphs matches '<b>'. Punctuation marks are not part of a word here."
+      "No word in these paragraphs matches '<b>'. Marks at the start or end of a word, such as commas, are not part of the word here."
     )
   )
 
@@ -386,7 +397,7 @@ shiny::testServer(server, {
     identical(nrow(punctuation_rows), 0L),
     identical(
       punctuation_status$value,
-      "No word in these paragraphs matches 'liberty,'. Punctuation marks are not part of a word here."
+      "No word in these paragraphs matches 'liberty,'. Marks at the start or end of a word, such as commas, are not part of the word here."
     )
   )
 
@@ -397,7 +408,7 @@ shiny::testServer(server, {
     identical(nrow(no_match_rows), 0L),
     identical(
       no_match_status$value,
-      "No word in these paragraphs matches 'zzzzzz'. Punctuation marks are not part of a word here."
+      "No word in these paragraphs matches 'zzzzzz'. Marks at the start or end of a word, such as commas, are not part of the word here."
     )
   )
 
@@ -426,10 +437,10 @@ shiny::testServer(server, {
     ),
     rows = c(
       nrow(liberty_rows),
-      NA_integer_,
-      NA_integer_,
-      NA_integer_,
-      NA_integer_,
+      empty_rows,
+      space_rows,
+      two_word_rows,
+      long_rows,
       nrow(star_rows),
       nrow(markup_rows),
       nrow(punctuation_rows),
@@ -445,17 +456,6 @@ shiny::testServer(server, {
       markup_status$status,
       punctuation_status$status,
       no_match_status$status
-    ),
-    condition_class = c(
-      if_else(is.na(liberty_status$condition_class), "not applicable", liberty_status$condition_class),
-      empty_status$condition_class,
-      space_status$condition_class,
-      two_word_status$condition_class,
-      long_status$condition_class,
-      if_else(is.na(star_status$condition_class), "not applicable", star_status$condition_class),
-      if_else(is.na(markup_status$condition_class), "not applicable", markup_status$condition_class),
-      if_else(is.na(punctuation_status$condition_class), "not applicable", punctuation_status$condition_class),
-      if_else(is.na(no_match_status$condition_class), "not applicable", no_match_status$condition_class)
     ),
     server_result = c(
       liberty_status$value,
@@ -492,7 +492,11 @@ stopifnot(
   ),
   identical(
     case_results$server_result[case_results$case == "punctuated word"],
-    "No word in these paragraphs matches 'liberty,'. Punctuation marks are not part of a word here."
+    "No word in these paragraphs matches 'liberty,'. Marks at the start or end of a word, such as commas, are not part of the word here."
+  ),
+  identical(
+    case_results$result_type == "condition",
+    case_results$rows == "not applicable"
   )
 )
 ```
@@ -500,8 +504,12 @@ stopifnot(
 The recorded server cases below are printed with an escaping HTML table. That
 matters for hostile-looking input: markup characters should be shown as text,
 not read as page markup.
-A condition row means the server stopped instead of returning output; `req()`
-leaves the message empty, and "not applicable" marks columns that do not apply.
+
+A condition row means the server stopped instead of returning output. `req()`
+stops with an empty message, while `validate(need())` stops with the message
+shown. Shiny reports both kinds of stop under the same first condition class,
+`shiny.silent.error`, so the table does not repeat it. "Not applicable" marks a
+Rows cell where the server stopped before returning any rows.
 
 ```{r}
 kable(
@@ -513,7 +521,6 @@ kable(
     "Typed text",
     "Rows",
     "Result type",
-    "Condition class",
     "Server result"
   ),
   caption = "Server cases recorded by testServer during the render",

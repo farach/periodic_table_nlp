@@ -888,7 +888,24 @@ acceptable_variant_in_answer <- function(answer, variants) {
   ))
 }
 
-right_action_em_zero <- score_table |>
+em_zero_reason_text <- function(rows, count, partial_overlap, variant_in_answer) {
+  if (count == 0L) {
+    return("no correctly handled answer row has exact match 0")
+  }
+  verb <- if (count == 1L) " has" else " have"
+  if (all(partial_overlap) && all(variant_in_answer)) {
+    return(paste0(
+      rows,
+      verb,
+      " exact match 0 because ",
+      if (count == 1L) "the answer contains" else "each answer contains",
+      " an acceptable variant but includes extra words"
+    ))
+  }
+  paste0(rows, verb, " exact match 0 for wording differences")
+}
+
+right_action_em_zero_rows <- score_table |>
   filter(expected_action == "answer", action_correct, exact_match == 0) |>
   mutate(
     acceptable_variant_in_answer = map2_lgl(
@@ -897,29 +914,18 @@ right_action_em_zero <- score_table |>
       acceptable_variant_in_answer
     ),
     partial_overlap = f1 > 0
-  ) |>
-  summarise(
-    rows = paste(question_id, collapse = ", "),
-    count = n(),
-    reason = case_when(
-      count == 0L ~ "no correctly handled answer row has exact match 0",
-      count == 1L & all(partial_overlap) & all(acceptable_variant_in_answer) ~
-        paste0(
-          rows,
-          " has exact match 0 because the answer contains an acceptable ",
-          "variant but includes extra words"
-        ),
-      count > 1L & all(partial_overlap) & all(acceptable_variant_in_answer) ~
-        paste0(
-          rows,
-          " have exact match 0 because each answer contains an acceptable ",
-          "variant but includes extra words"
-        ),
-      TRUE ~
-        paste0(rows, " have exact match 0 for wording differences")
-    ),
-    .groups = "drop"
   )
+
+right_action_em_zero <- tibble(
+  rows = paste(right_action_em_zero_rows$question_id, collapse = ", "),
+  count = nrow(right_action_em_zero_rows),
+  reason = em_zero_reason_text(
+    rows,
+    count,
+    right_action_em_zero_rows$partial_overlap,
+    right_action_em_zero_rows$acceptable_variant_in_answer
+  )
+)
 
 kable(
   score_table |>
@@ -966,59 +972,22 @@ stopifnot(
   identical(score_table$answer_for_reference_score[[3]], ""),
   identical(score_table$exact_match[[3]], 0),
   identical(score_table$f1[[3]], 0),
-  all(right_action_em_zero$count >= 0L),
-  all(
-    score_table |>
-      filter(expected_action == "answer", action_correct, exact_match == 0) |>
-      mutate(
-        acceptable_variant_in_answer = map2_lgl(
-          parsed_answer,
-          acceptable_list,
-          acceptable_variant_in_answer
-        )
-      ) |>
-      pull(f1) > 0
-  ),
-  all(
-    score_table |>
-      filter(expected_action == "answer", action_correct, exact_match == 0) |>
-      mutate(
-        acceptable_variant_in_answer = map2_lgl(
-          parsed_answer,
-          acceptable_list,
-          acceptable_variant_in_answer
-        )
-      ) |>
-      pull(acceptable_variant_in_answer)
-  )
-)
-
-em_zero_reason_text <- function(rows, count, partial_overlap = TRUE, variant_in_answer = TRUE) {
-  case_when(
-    count == 0L ~ "no correctly handled answer row has exact match 0",
-    count == 1L && partial_overlap && variant_in_answer ~
-      paste0(
-        rows,
-        " has exact match 0 because the answer contains an acceptable ",
-        "variant but includes extra words"
-      ),
-    count > 1L && partial_overlap && variant_in_answer ~
-      paste0(
-        rows,
-        " have exact match 0 because each answer contains an acceptable ",
-        "variant but includes extra words"
-      ),
-    TRUE ~ paste0(rows, " have exact match 0 for wording differences")
-  )
-}
-
-stopifnot(
+  all(right_action_em_zero_rows$partial_overlap),
+  all(right_action_em_zero_rows$acceptable_variant_in_answer),
+  identical(right_action_em_zero$count, nrow(right_action_em_zero_rows)),
   identical(
-    em_zero_reason_text("", 0L),
+    em_zero_reason_text("", 0L, logical(), logical()),
     "no correctly handled answer row has exact match 0"
   ),
   identical(
-    em_zero_reason_text("Q2, Q4", 2L),
+    em_zero_reason_text("Q2", 1L, TRUE, TRUE),
+    paste0(
+      "Q2 has exact match 0 because the answer contains an ",
+      "acceptable variant but includes extra words"
+    )
+  ),
+  identical(
+    em_zero_reason_text("Q2, Q4", 2L, c(TRUE, TRUE), c(TRUE, TRUE)),
     paste0(
       "Q2, Q4 have exact match 0 because each answer contains an ",
       "acceptable variant but includes extra words"

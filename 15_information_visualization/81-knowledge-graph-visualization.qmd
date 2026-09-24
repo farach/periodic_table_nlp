@@ -244,8 +244,8 @@ stopifnot(
 )
 ```
 
-`r nrow(unconnected_nodes)` drawn nodes have no populated fact yet. The figure
-places them in its bottom row, and the table below names them.
+The figure draws `r nrow(unconnected_nodes)` nodes that have no populated fact
+yet. It places them in its bottom row, and the table below names them.
 
 ```{r}
 knitr::kable(
@@ -268,10 +268,10 @@ stopifnot(
 
 The main figure uses fixed deterministic coordinates chosen so the labels are
 readable. That keeps the drawing stable while Chloe reads the arrows and labels.
-Up, down, left, right, rotation, and mirror image still do not carry data. Count
-links in the table if you need a number. Viewers tend to read a centrally drawn
-node as more prominent, so the drawing should not be used as an importance
-score; the bottom row holds nodes with no populated fact.
+The bottom row holds the nodes with no populated fact. Apart from that row, up,
+down, left, right, rotation, and mirror image do not carry data. Count links in
+the table if you need a number. Viewers tend to read a centrally drawn node as
+more prominent, so the drawing should not be used as an importance score.
 
 ```{r}
 #| label: fig-riverton-graph
@@ -412,6 +412,14 @@ label_box_pairs <- label_boxes |>
     boxes_overlap = x_overlap & y_overlap
   )
 
+unconnected_positions <- layout_fixed |>
+  mutate(
+    unconnected = node_id %in% unconnected_nodes$node_id,
+    distance_from_hub = sqrt(
+      (x - x[node_id == "ORG-0002"])^2 + (y - y[node_id == "ORG-0002"])^2
+    )
+  )
+
 stopifnot(
   nrow(layout_fixed) == igraph::vcount(id_graph),
   nrow(edge_positions) == igraph::ecount(id_graph),
@@ -420,7 +428,11 @@ stopifnot(
   all(!is.na(edge_positions$label_x)),
   !any(label_box_pairs$boxes_overlap),
   all(edge_set == sort(edge_set)),
-  !("weight" %in% names(igraph::edge_attr(id_graph)))
+  !("weight" %in% names(igraph::edge_attr(id_graph))),
+  all(unconnected_positions$y[unconnected_positions$unconnected] == min(unconnected_positions$y)),
+  all(unconnected_positions$y[!unconnected_positions$unconnected] > min(unconnected_positions$y)),
+  min(unconnected_positions$distance_from_hub[unconnected_positions$unconnected]) >
+    max(unconnected_positions$distance_from_hub[!unconnected_positions$unconnected])
 )
 ```
 
