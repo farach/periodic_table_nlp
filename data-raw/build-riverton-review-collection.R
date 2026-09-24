@@ -11,8 +11,8 @@
 # The two check-only modes write nothing. --sweep-only runs the record-level
 # surface sweep on any collection CSV and exits 1 if a check refuses it.
 # --negative-controls runs the same sweep on the collections committed at
-# 0a5a5af9 and a3478085 and on a quarantined intermediate collection, and exits
-# 0 only if all three are refused.
+# 0a5a5af9, a3478085 and 49a9b67a and on a quarantined intermediate
+# collection, and exits 0 only if all four are refused.
 
 suppressPackageStartupMessages({
   library(readr)
@@ -310,6 +310,176 @@ record_level_features <- function(data) {
     )
 }
 
+# ---- Frames, and the frame checks CK-D1 and CK-D2 -----------------------------
+# The 12 record frames (moved here from the collection section so that the
+# check-only modes can identify frames from committed text). A record's frame
+# is read from its text by prefix and suffix; the builder asserts that this
+# reading equals its own frame assignment.
+
+record_frames <- tibble(
+  frame_id = sprintf("F%02d", 1:12),
+  frame_template = c(
+    "{core}",
+    "Reminder: {core}",
+    "Ticket note: {core}",
+    "Forwarding from intake: {core}",
+    "Per scheduling: {core}",
+    "Monday update: {core}",
+    "Chat at noon: {core}",
+    "{core} Thanks.",
+    "{core} Call me if anything is unclear.",
+    "Following up: {core}",
+    "Please note: {core}",
+    "For today: {core}"
+  )
+)
+
+frame_parts <- record_frames |>
+  mutate(
+    prefix = str_replace(frame_template, fixed("{core}"), "\u0001") |> str_remove("\u0001.*$"),
+    suffix = str_replace(frame_template, fixed("{core}"), "\u0001") |> str_remove("^.*\u0001")
+  )
+
+split_frame <- function(text) {
+  affixed <- frame_parts |>
+    filter(frame_id != "F01") |>
+    arrange(desc(nchar(prefix) + nchar(suffix)))
+  map_dfr(text, \(record) {
+    match <- affixed |>
+      filter(
+        startsWith(record, prefix),
+        endsWith(record, suffix),
+        nchar(record) > nchar(prefix) + nchar(suffix)
+      )
+    if (nrow(match) == 0L) {
+      return(tibble(frame_id = "F01", core = record))
+    }
+    tibble(
+      frame_id = match$frame_id[[1]],
+      core = substr(record, nchar(match$prefix[[1]]) + 1L, nchar(record) - nchar(match$suffix[[1]]))
+    )
+  })
+}
+
+# Expected-value metrics at a top-n cut: records above the cut count as
+# predicted responsive; when the cut falls inside a block of tied scores, each
+# tied record counts with probability (slots left) / (block size).
+expected_cut_metrics <- function(scores, truth, top_n = sum(truth)) {
+  threshold <- sort(scores, decreasing = TRUE)[[top_n]]
+  above <- scores > threshold
+  tied <- scores == threshold
+  slots_left <- top_n - sum(above)
+  prob <- as.numeric(above)
+  prob[tied] <- slots_left / sum(tied)
+  tp <- sum(prob[truth])
+  fp <- sum(prob[!truth])
+  fn <- sum(1 - prob[truth])
+  tn <- sum(1 - prob[!truth])
+  tibble(
+    positive_f1 = if (tp == 0) 0 else 2 * tp / (2 * tp + fp + fn),
+    balanced_accuracy = (tp / (tp + fn) + tn / (tn + fp)) / 2
+  )
+}
+
+# Held-out value ranker: stratified 5-fold under the fixed fold seeds; a
+# record's score is its value's smoothed responsive rate in the training
+# folds, (n_pos + 2p) / (n + 2), and an unseen value scores the training
+# prevalence p.
+held_out_value_ranker <- function(values, truth, feature_name, seeds = ranker_fold_seeds) {
+  map_dfr(seeds, \(seed) {
+    outer_fold <- stratified_folds(truth, seed)
+    scores <- numeric(length(truth))
+    for (fold in sort(unique(outer_fold))) {
+      fit_rows <- outer_fold != fold
+      prevalence <- mean(truth[fit_rows])
+      rates <- tibble(value = values[fit_rows], is_positive = truth[fit_rows]) |>
+        group_by(value) |>
+        summarise(score = (sum(is_positive) + 2 * prevalence) / (n() + 2), .groups = "drop")
+      held <- values[!fit_rows]
+      scores[!fit_rows] <- coalesce(rates$score[match(held, rates$value)], prevalence)
+    }
+    expected_cut_metrics(scores, truth) |>
+      mutate(
+        feature = feature_name,
+        feature_value = paste0("fold seed ", seed),
+        positive_when_feature_is = paste0("top ", sum(truth), " held-out scores, expected-value ties"),
+        auc = auc_from_scores(scores, truth)
+      )
+  })
+}
+
+# CK-D1: the pair (frame, first word of the core), lowercased.
+frame_opening_checks <- function(frame_id, core, truth) {
+  opening <- str_to_lower(coalesce(word(core, 1), "no word"), locale = "en")
+  pair <- paste(frame_id, opening, sep = " | ")
+  pair_count <- as.integer(table(pair)[pair])
+  rarity <- map_dfr(1:4, \(k) {
+    metric_from_prediction(pair_count <= k, truth) |>
+      mutate(
+        feature = "frame_opening_rarity",
+        feature_value = paste0("pair occurs at most ", k, " times (no labels used)"),
+        positive_when_feature_is = "rare pair",
+        auc = NA_real_
+      )
+  })
+  bind_rows(
+    rarity,
+    held_out_value_ranker(pair, truth, "frame_opening_pair_ranker")
+  ) |>
+    mutate(
+      check = "CK-D1 frame and core opening",
+      refuses = positive_f1 >= refusal_f1 | balanced_accuracy >= refusal_ba
+    )
+}
+
+# CK-D2: the frame within keyword strata (whole-word rule on the core). Fixed
+# rules are scored in both directions; only balanced accuracy is thresholded.
+frame_keyword_strata_checks <- function(frame_id, core, truth) {
+  keyword_match <- str_detect(core, regex(keyword_regex_text, ignore_case = TRUE))
+  strata <- map_dfr(c(TRUE, FALSE), \(stratum) {
+    rows <- which(keyword_match == stratum)
+    frames <- frame_id[rows]
+    stratum_truth <- truth[rows]
+    stopifnot(length(rows) >= 10L, any(stratum_truth), any(!stratum_truth))
+    stratum_label <- if (stratum) "keyword-match stratum" else "no-match stratum"
+    rules <- c(
+      list("has an affix" = frames != "F01"),
+      setNames(
+        lapply(sort(unique(frames)), \(frame) frames == frame),
+        paste("frame", sort(unique(frames)))
+      )
+    )
+    fixed_rules <- imap_dfr(rules, \(predicted, rule_name) {
+      forward <- metric_from_prediction(predicted, stratum_truth)
+      reverse <- metric_from_prediction(!predicted, stratum_truth)
+      best <- if (forward$balanced_accuracy >= reverse$balanced_accuracy) forward else reverse
+      best |>
+        mutate(
+          feature = paste0("frame_rule, ", stratum_label),
+          feature_value = rule_name,
+          positive_when_feature_is = "better direction, max(BA, 1 - BA)",
+          auc = NA_real_
+        )
+    })
+    ranker <- held_out_value_ranker(frames, stratum_truth, paste0("frame_ranker, ", stratum_label))
+    bind_rows(fixed_rules, ranker)
+  }) |>
+    mutate(
+      check = "CK-D2 frame within keyword strata",
+      refuses = balanced_accuracy >= refusal_ba
+    )
+  conjunction <- metric_from_prediction(keyword_match & frame_id != "F01", truth) |>
+    mutate(
+      check = "CK-D2 reported only",
+      feature = "keyword_match_and_affixed",
+      feature_value = "whole collection",
+      positive_when_feature_is = "keyword match and affixed frame",
+      auc = NA_real_,
+      refuses = FALSE
+    )
+  bind_rows(strata, conjunction)
+}
+
 surface_sweep <- function(data, extra_features = character()) {
   stopifnot(all(c("doc_id", "doc_date", "text", "reference_responsive") %in% names(data)))
   data <- data |>
@@ -358,8 +528,13 @@ surface_sweep <- function(data, extra_features = character()) {
   ) |>
     mutate(check = "held-out format-cue ranker")
 
+  framed <- split_frame(data$text)
+  frame_opening <- frame_opening_checks(framed$frame_id, framed$core, data$reference_responsive)
+  frame_within_keyword <- frame_keyword_strata_checks(framed$frame_id, framed$core, data$reference_responsive)
+
   result <- bind_rows(single_value, heldout, frequent_tokens, function_words, format_cues) |>
     mutate(refuses = positive_f1 >= refusal_f1 | balanced_accuracy >= refusal_ba) |>
+    bind_rows(frame_opening, frame_within_keyword) |>
     select(check, feature, feature_value, positive_when_feature_is, positive_f1, balanced_accuracy, auc, refuses)
   stopifnot(!anyNA(result$positive_f1), !anyNA(result$balanced_accuracy), !anyNA(result$refuses))
   result
@@ -412,24 +587,30 @@ if (length(args) == 2L && identical(args[[1]], "--sweep-only")) {
 }
 
 # Negative controls: the sweep must refuse the collections committed at
-# 0a5a5af9 and a3478085 and the quarantined intermediate collection whose path
-# is given, and the function-word ranker must be among the checks that refuse
-# the intermediate collection. Writes nothing; exits 0 only if all hold.
+# 0a5a5af9, a3478085 and 49a9b67a and the quarantined intermediate collection
+# whose path is given. The function-word ranker must be among the checks that
+# refuse the intermediate collection, and CK-D1 and CK-D2 must each be among
+# the checks that refuse 49a9b67a. Writes nothing; exits 0 only if all hold.
 if (length(args) == 2L && identical(args[[1]], "--negative-controls")) {
   controls <- list(
     "committed at 0a5a5af9" = read_committed_collection("0a5a5af9"),
     "committed at a3478085" = read_committed_collection("a3478085"),
-    "intermediate collection" = read_csv(args[[2]], show_col_types = FALSE, na = c("", "NA"))
+    "intermediate collection" = read_csv(args[[2]], show_col_types = FALSE, na = c("", "NA")),
+    "committed at 49a9b67a" = read_committed_collection("49a9b67a")
   )
   control_results <- imap(controls, \(data, label) print_sweep(surface_sweep(data), label))
   refused <- map_lgl(control_results, \(result) any(result$refuses))
-  function_word_refuses <- any(
-    control_results[["intermediate collection"]]$refuses &
-      control_results[["intermediate collection"]]$check == "held-out function-word ranker"
-  )
+  refused_by <- function(label, check_name) {
+    any(control_results[[label]]$refuses & control_results[[label]]$check == check_name)
+  }
+  function_word_refuses <- refused_by("intermediate collection", "held-out function-word ranker")
+  ck_d1_refuses <- refused_by("committed at 49a9b67a", "CK-D1 frame and core opening")
+  ck_d2_refuses <- refused_by("committed at 49a9b67a", "CK-D2 frame within keyword strata")
   cat("\nRefused:", paste(names(refused), refused, sep = " = ", collapse = "; "), "\n")
   cat("Function-word ranker refuses the intermediate collection:", function_word_refuses, "\n")
-  quit(status = if (all(refused) && function_word_refuses) 0L else 1L)
+  cat("CK-D1 refuses 49a9b67a:", ck_d1_refuses, "\n")
+  cat("CK-D2 refuses 49a9b67a:", ck_d2_refuses, "\n")
+  quit(status = if (all(refused) && function_word_refuses && ck_d1_refuses && ck_d2_refuses) 0L else 1L)
 }
 
 set.seed(7401)
@@ -470,23 +651,7 @@ subject_pool <- c(
   "transit update"
 )
 
-record_frames <- tibble(
-  frame_id = sprintf("F%02d", 1:12),
-  frame_template = c(
-    "{core}",
-    "Reminder: {core}",
-    "Ticket note: {core}",
-    "Forwarding from intake: {core}",
-    "Per scheduling: {core}",
-    "Monday update: {core}",
-    "Chat at noon: {core}",
-    "{core} Thanks.",
-    "{core} Call me if anything is unclear.",
-    "Following up: {core}",
-    "Please note: {core}",
-    "For today: {core}"
-  )
-)
+# record_frames is defined with the frame checks at the top of this file.
 
 make_review_rows <- function(texts,
                              responsive,
@@ -1174,6 +1339,14 @@ review_collection_for_sweep <- review_collection |>
     core_has_colon = str_detect(core_text, fixed(":"))
   )
 
+# The check-only modes read frames from text; confirm that reading equals the
+# builder's own frame assignment, so CK-D1 and CK-D2 see the same frames here.
+frames_read_from_text <- split_frame(review_collection$text)
+stopifnot(
+  identical(frames_read_from_text$frame_id, review_collection$frame_id),
+  identical(frames_read_from_text$core, review_collection$core_text)
+)
+
 review_sweep <- surface_sweep(
   review_collection_for_sweep,
   extra_features = c(
@@ -1424,8 +1597,11 @@ metadata <- tibble(
     "tokens; out-of-fold glmnet ridge and lasso rankers over snowball",
     "stop-word counts and over format cues (length, punctuation,",
     "capitalization, digits), stratified 5-fold under three fold seeds, top",
-    "36; a frame-only ranker; and a 15 percent cap on any frame or core",
-    "opening among non-responsive records."
+    "36; a frame-only ranker; a 15 percent cap on any frame or core opening",
+    "among non-responsive records; CK-D1, label-free rarity rules (k = 1 to 4)",
+    "and a held-out ranker over the pair of frame and core opening word; and",
+    "CK-D2, frame rules and a held-out frame ranker within the keyword-match",
+    "and no-match strata, thresholded on balanced accuracy."
   )
 )
 
