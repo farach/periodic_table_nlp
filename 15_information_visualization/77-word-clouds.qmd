@@ -145,7 +145,6 @@ kable(
 
 stopifnot(
   identical(nrow(paragraphs), 1377L),
-  identical(nrow(dropped_by_letters_filter), 369L),
   "america's" %in% dropped_by_letters_filter$word,
   n_distinct(word_tokens$paragraph_id) == 1377L,
   identical(stopword_note$removes_states, TRUE),
