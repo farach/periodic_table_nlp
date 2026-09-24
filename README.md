@@ -133,6 +133,8 @@ published examples executable.
   and skeptical-review requirements.
 - [MODERNIZATION_NOTES.md](MODERNIZATION_NOTES.md) maps transformer- and
   LLM-era changes onto the lessons and their later revisions.
+- [FOLLOW_UPS.md](FOLLOW_UPS.md) lists the open review items and the next
+  steps for the finished lessons.
 - [accessibility.qmd](accessibility.qmd) explains the accessibility target,
   automated checks, and remaining manual tests.
 - [DATA_SOURCES.md](DATA_SOURCES.md) records teaching fixtures, external
