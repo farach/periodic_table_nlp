@@ -2,7 +2,7 @@ source("R/use-nlg.R")
 
 file_manifest <- nlg_model_file_manifest()
 stopifnot(
-  nrow(file_manifest) == 14L,
+  nrow(file_manifest) == 23L,
   all(nchar(file_manifest$sha256) == 64L),
   all(file_manifest$bytes > 0)
 )
@@ -265,6 +265,26 @@ stopifnot(
   nzchar(translation_probe$text)
 )
 rm(translation_model)
+gc()
+
+embedding_model <- load_nlg_pipeline("minilm_l6_v2", "feature-extraction")
+embedding_texts <- c(
+  "Free child care is available during evening classes.",
+  "Can I bring my kid to class at night?"
+)
+embedding_rows <- lapply(embedding_texts, function(text) {
+  token_vectors <- embedding_model$pipeline(text)[[1]]
+  pooled <- colMeans(do.call(rbind, lapply(token_vectors, unlist)))
+  pooled / sqrt(sum(pooled^2))
+})
+embedding_matrix <- do.call(rbind, embedding_rows)
+stopifnot(
+  is.null(embedding_model$pipeline$model$generation_config),
+  identical(dim(embedding_matrix), c(2L, 384L)),
+  all(abs(rowSums(embedding_matrix^2) - 1) < 1e-6),
+  sum(embedding_matrix[1, ] * embedding_matrix[2, ]) > 0
+)
+rm(embedding_model)
 gc()
 
 generation_model <- load_nlg_pipeline(

@@ -67,16 +67,16 @@ task_number,symbol,title,item_type,group_id,group_name,stage,lesson_path,status,
 66,Asu,Abstractive summarization,task,13,Natural language generation,generation,13_natural_language_generation/66-abstractive-summarization.html,available,2026-09-06
 67,Prp,Paraphrasing,task,13,Natural language generation,generation,13_natural_language_generation/67-paraphrasing.html,available,2026-09-06
 68,Lon,Long-text generation,task,13,Natural language generation,generation,13_natural_language_generation/68-long-text-generation.html,available,2026-09-06
-69,Rel,Relation extraction,task,14,Systems,systems,,planned,
-70,Qan,Question answering,task,14,Systems,systems,,planned,
-71,Cha,Chatbot dialogue,application,14,Systems,systems,,planned,
-72,Sem,Semantic search indexing,application,14,Systems,systems,,planned,
-73,Kno,Knowledge base population,task,14,Systems,systems,,planned,
-74,Edi,E-discovery and media monitoring,application,14,Systems,systems,,planned,
-75,App,Interactive app creation,application,15,Information visualization,visualization,,planned,
-76,Ann,Annotated text visualization,application,15,Information visualization,visualization,,planned,
-77,Wcl,Word clouds,application,15,Information visualization,visualization,,planned,
-78,Emb,Word embedding visualization,application,15,Information visualization,visualization,,planned,
-79,Tim,Events on a timeline,application,15,Information visualization,visualization,,planned,
-80,Map,Locations on a map,application,15,Information visualization,visualization,,planned,
-81,Gra,Knowledge graph visualization,application,15,Information visualization,visualization,,planned,
+69,Rel,Relation extraction,task,14,Systems,systems,14_systems/69-relation-extraction.html,available,2026-09-23
+70,Qan,Question answering,task,14,Systems,systems,14_systems/70-question-answering.html,available,2026-09-23
+71,Cha,Chatbot dialogue,application,14,Systems,systems,14_systems/71-chatbot-dialogue.html,available,2026-09-23
+72,Sem,Semantic search indexing,application,14,Systems,systems,14_systems/72-semantic-search-indexing.html,available,2026-09-23
+73,Kno,Knowledge base population,task,14,Systems,systems,14_systems/73-knowledge-base-population.html,available,2026-09-23
+74,Edi,E-discovery and media monitoring,application,14,Systems,systems,14_systems/74-e-discovery-and-media-monitoring.html,available,2026-09-23
+75,App,Interactive app creation,application,15,Information visualization,visualization,15_information_visualization/75-interactive-app-creation.html,available,2026-09-23
+76,Ann,Annotated text visualization,application,15,Information visualization,visualization,15_information_visualization/76-annotated-text-visualization.html,available,2026-09-23
+77,Wcl,Word clouds,application,15,Information visualization,visualization,15_information_visualization/77-word-clouds.html,available,2026-09-23
+78,Emb,Word embedding visualization,application,15,Information visualization,visualization,15_information_visualization/78-word-embedding-visualization.html,available,2026-09-23
+79,Tim,Events on a timeline,application,15,Information visualization,visualization,15_information_visualization/79-events-on-a-timeline.html,available,2026-09-23
+80,Map,Locations on a map,application,15,Information visualization,visualization,15_information_visualization/80-locations-on-a-map.html,available,2026-09-23
+81,Gra,Knowledge graph visualization,application,15,Information visualization,visualization,15_information_visualization/81-knowledge-graph-visualization.html,available,2026-09-23

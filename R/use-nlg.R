@@ -270,9 +270,13 @@ load_nlg_pipeline <- function(model_key, task) {
     task = task,
     device = -1L
   )
-  pipeline$model$generation_config$temperature <- NULL
-  pipeline$model$generation_config$top_p <- NULL
-  pipeline$model$generation_config$top_k <- NULL
+  # Encoder-only models such as sentence embedders cannot generate, so they
+  # carry no generation configuration to clear.
+  if (!is.null(pipeline$model$generation_config)) {
+    pipeline$model$generation_config$temperature <- NULL
+    pipeline$model$generation_config$top_p <- NULL
+    pipeline$model$generation_config$top_k <- NULL
+  }
 
   list(
     pipeline = pipeline,

@@ -1,0 +1,4 @@
+artifact,description,source,license,created_on,rows,fingerprint
+riverton-handbook.csv,"Invented fall-program handbook passages shared by tasks 70, 71, and 72",Created for this project,"MIT, same as this repository",2026-09-23,15,e8f6bd47e297f4ecc489169f5ca6e2154a1d3316136bfb5f7be26dcc39725a64
+riverton-handbook-questions.csv,"Six question-answering probes with expected actions, gold passages, and acceptable short answers",Created for this project,"MIT, same as this repository",2026-09-23,6,67ecea96a98c104fb6f3c82221cde3231df93ca696712ac79303f658322c9d1f
+riverton-search-judgments.csv,Exhaustive query-by-passage relevance judgments written before any search index was built,Created for this project,"MIT, same as this repository",2026-09-23,120,2be24f3b58b101b8cc04bf1fe44302b4021ca1da20c3006c977f9f37169e2e3a

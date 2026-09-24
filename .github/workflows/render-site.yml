@@ -42,6 +42,7 @@ jobs:
             libsodium-dev \
             libglpk-dev \
             libpng-dev \
+            libjpeg-dev \
             libx11-dev \
             cmake \
             poppler-data \

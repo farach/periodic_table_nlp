@@ -39,6 +39,19 @@ available <- task_map |>
 
 planned <- task_map |>
   filter(status == "planned")
+
+availability_sentence <- if (nrow(planned) == 0L) {
+  sprintf("All %d lessons are written.", nrow(task_map))
+} else {
+  sprintf(
+    paste(
+      "%d of the %d lessons are written. The rest are planned, and their",
+      "tiles stay visible so you can see what is coming."
+    ),
+    nrow(available),
+    nrow(task_map)
+  )
+}
 ```
 
 Computers work with human language constantly and mostly out of sight: a search
@@ -55,8 +68,7 @@ on the left, through cutting it into usable pieces, to models, generation,
 systems, and visual explanation. The arrangement is editorial: position tells
 you what a task is filed near and nothing else about it. Laying the field out
 at once means a lesson can be found by where it sits rather than by remembering
-its name. `r nrow(available)` of the `r nrow(task_map)` lessons are written. The
-rest are planned, and their tiles stay visible so you can see what is coming.
+its name. `r availability_sentence`
 
 ::: {.callout-tip}
 ## Start here
@@ -90,7 +102,10 @@ stopifnot(
   identical(task_map$task_number, 1:81),
   identical(sort(unique(task_map$group_id)), 1:15),
   identical(group_sizes, expected_group_sizes),
-  identical(which(task_map$status == "available"), 1:68),
+  identical(
+    which(task_map$status == "available"),
+    seq_len(nrow(available))
+  ),
   identical(length(unique(task_map$symbol)), 81L),
   all(task_map$status %in% c("available", "planned")),
   all(nzchar(available$lesson_path)),
@@ -271,16 +286,39 @@ route_html <- paste(
 
 stopifnot(
   identical(length(groups), 15L),
-  identical(length(route_links), 13L),
+  identical(length(route_links), length(unique(available$group_id))),
   identical(
     str_count(table_html, fixed('class="element-slot"')),
     81L
   ),
   identical(
     str_count(table_html, fixed('class="nlp-element is-available"')),
-    68L
+    nrow(available)
   )
 )
+
+planned_key <- if (nrow(planned) > 0L) {
+  paste0(
+    '<span class="task-map-key-item">',
+    '<span class="task-map-key-swatch" aria-hidden="true"></span>',
+    "Lesson planned",
+    "</span>"
+  )
+} else {
+  ""
+}
+
+planned_instruction <- if (nrow(planned) > 0L) {
+  "Dashed tiles are planned. "
+} else {
+  ""
+}
+
+route_prompt <- if (nrow(planned) > 0L) {
+  "task 1</a>, or enter an available group:</strong> "
+} else {
+  "task 1</a>, or enter a group:</strong> "
+}
 
 cat(
   '<div class="task-map-key">',
@@ -288,17 +326,15 @@ cat(
   '<span class="task-map-key-swatch available" aria-hidden="true"></span>',
   'Read lesson',
   '</span>',
-  '<span class="task-map-key-item">',
-  '<span class="task-map-key-swatch" aria-hidden="true"></span>',
-  'Lesson planned',
-  '</span>',
+  planned_key,
   '</div>',
   '<div class="task-map-stage-key" aria-label="Task stages">',
   stage_key,
   '</div>',
   '<p class="task-map-instructions" id="task-map-instructions">',
   'Select a solid-bordered tile to open its lesson. ',
-  'Dashed tiles are planned. If the map is wider than the window, ',
+  planned_instruction,
+  'If the map is wider than the window, ',
   'use the buttons, arrow keys, or horizontal scrolling.',
   '</p>',
   '<div class="task-map-scroll-controls" ',
@@ -318,7 +354,7 @@ cat(
   '<nav class="available-routes" aria-label="Available lesson routes">',
   '<strong>Start with ',
   '<a href="1_source_data_loading/01-bits-to-character-encoding.html">',
-  'task 1</a>, or enter an available group:</strong> ',
+  route_prompt,
   route_html,
   '.',
   '</nav>',
@@ -393,6 +429,15 @@ follow the text through tokens and vocabularies, word forms and grammar links,
 phrases and entities, sentence and paragraph boundaries, and whole-document
 cleaning, comparison, metadata, and language identification. Together they show
 where each transformation helps and what information it can lose.
+
+Lessons 43 through 68 train, test, and explain models, then use them to
+classify, discover, compare, and generate text, keeping a baseline or a stated
+limit beside each result. Lessons 69 through 74 combine those parts into small
+systems: a relation extractor, a knowledge base filled from announcements, a
+question answerer that cites a handbook, a scripted enrollment conversation, a
+search index, and a document review with a recall estimate. Lessons 75 through
+81 show results to people through an app, annotated text, charts, maps, and
+graphs, and ask what each picture can honestly claim.
 
 ## About this site
 

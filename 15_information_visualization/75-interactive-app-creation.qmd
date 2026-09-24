@@ -1,0 +1,610 @@
+---
+title: "Creating a small text app"
+subtitle: "Wrap a keyword-in-context search without embedding a dead form"
+description: "Learn how a Shiny app separates its visible controls from server logic and how to test the text search without running the app on the lesson page."
+categories: [information visualization, Shiny, interactive apps]
+---
+
+Leila helps a local history class inspect inaugural speeches. The class wants a
+search box: type a word, see the nearby words, and decide whether the passages
+are worth reading.
+
+That request calls for **interactive app creation**: building a small interface
+so another person can use an NLP function without writing R code. In Shiny, the
+**UI** is the page people see. The **server** is the R function that reads the
+input and computes the output.
+
+This lesson builds the app object and tests its server logic during render. It
+does not run the app inside this static page. A printed text box here would look
+interactive, but there would be no Shiny process behind it.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- define a small Shiny UI, server function, and app object;
+- wrap a keyword-in-context search from quanteda;
+- trim and validate text input on the server;
+- test Shiny server logic with `testServer()`;
+- show UI HTML as text without putting live controls on the page; and
+- state what is and is not checked by a server-only test.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Build the search job first
+
+The app will search paragraphs from the inaugural-address corpus bundled with
+quanteda. A **keyword-in-context** display, or **KWIC**, puts the matched word in
+the middle and a few nearby words on each side. Lesson 25 introduced KWIC as an
+inspection tool; here it is the function placed behind an app.
+
+```{r}
+library(dplyr)
+library(knitr)
+library(quanteda)
+library(shiny)
+library(stringr)
+library(tibble)
+
+source("R/inaugural-corpus.R")
+
+paragraphs <- inaugural_paragraphs()
+inaugural_tokens <- paragraphs |>
+  select(paragraph_id, paragraph) |>
+  tibble::deframe() |>
+  corpus() |>
+  tokens(remove_punct = TRUE)
+
+find_in_context <- function(word, window = 5L) {
+  kwic(
+    inaugural_tokens,
+    pattern = word,
+    window = window,
+    valuetype = "fixed",
+    case_insensitive = TRUE
+  ) |>
+    as.data.frame() |>
+    as_tibble() |>
+    transmute(
+      paragraph_id = docname,
+      before = pre,
+      keyword,
+      after = post
+    )
+}
+
+search_setup <- tibble(
+  item = c(
+    "paragraphs",
+    "speeches",
+    "Shiny version",
+    "matching rule"
+  ),
+  value = c(
+    as.character(nrow(paragraphs)),
+    as.character(n_distinct(paragraphs$speech_id)),
+    as.character(packageVersion("shiny")),
+    "fixed, case-insensitive token matching"
+  )
+)
+
+kable(
+  search_setup,
+  col.names = c("Item", "Value"),
+  caption = "Inputs and package version for the small app",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c("dplyr", "knitr", "quanteda", "shiny", "stringr", "tibble") %in%
+    loadedNamespaces()),
+  identical(nrow(paragraphs), 1377L),
+  identical(n_distinct(paragraphs$speech_id), 60L),
+  identical(as.character(packageVersion("shiny")), "1.14.0"),
+  identical(nrow(find_in_context("liberty")), 118L),
+  identical(nrow(find_in_context("Liberty")), 118L),
+  identical(nrow(find_in_context("*")), 0L),
+  identical(nrow(find_in_context("(")), 0L),
+  identical(nrow(find_in_context("self-government")), 28L)
+)
+```
+
+The important choice is `valuetype = "fixed"`. Without it, quanteda treats the
+pattern as glob syntax by default. In this app, a typed asterisk is a literal
+asterisk, not a request to match every token.
+
+## Define the app without running it
+
+The UI has one visible label, one text input, a short status line, and a table
+for matches. The server trims the typed word before `req()` sees it, then uses
+`validate(need())` for invalid input that deserves a visible message.
+
+```{r}
+max_word_chars <- 30L
+max_rows_shown <- 8L
+
+ui <- fluidPage(
+  title = "Inaugural KWIC explorer",
+  lang = "en",
+  h2("Inaugural KWIC explorer"),
+  p(
+    "Type one word, then press Enter. Hyphenated words are allowed; spaces are not."
+  ),
+  textInput(
+    inputId = "word",
+    label = "Word to find (one word, 30 characters or fewer)",
+    value = "",
+    placeholder = "liberty",
+    updateOn = "blur"
+  ),
+  textOutput("status"),
+  tableOutput("matches")
+)
+
+server <- function(input, output, session) {
+  context_rows <- reactive({
+    word <- str_trim(input$word %||% "")
+    req(nzchar(word))
+    validate(
+      need(nchar(word) <= max_word_chars, "Enter at most 30 characters."),
+      need(!str_detect(word, "\\s"), "Enter one word, with no spaces.")
+    )
+
+    find_in_context(word)
+  })
+
+  output$status <- renderText({
+    rows <- context_rows()
+    word <- str_trim(input$word %||% "")
+
+    if (nrow(rows) == 0L) {
+      paste0(
+        "No word in these paragraphs matches '",
+        word,
+        "'. Marks at the start or end of a word, such as commas, are not part of the word here."
+      )
+    } else {
+      shown <- min(nrow(rows), max_rows_shown)
+      paste0(
+        "Found ",
+        nrow(rows),
+        if_else(nrow(rows) == 1L, " line", " lines"),
+        " for '",
+        word,
+        "'; showing the first ",
+        shown,
+        "."
+      )
+    }
+  })
+
+  output$matches <- renderTable({
+    context_rows() |>
+      slice_head(n = max_rows_shown)
+  })
+}
+
+app <- shinyApp(ui = ui, server = server)
+```
+
+```{r}
+#| include: false
+
+server_source <- paste(deparse(body(server)), collapse = "\n")
+search_source <- paste(deparse(body(find_in_context)), collapse = "\n")
+forbidden_server_calls <- c(
+  "\\bHTML\\s*\\(",
+  "\\brenderUI\\s*\\(",
+  "\\bprint\\s*\\(",
+  "\\bmessage\\s*\\(",
+  "\\bcat\\s*\\(",
+  "\\bwrite\\s*\\(",
+  "\\bwriteLines\\s*\\(",
+  "\\bsaveRDS\\s*\\(",
+  "\\bbindCache\\s*\\("
+)
+ui_head <- htmltools::renderTags(ui)$head
+
+stopifnot(
+  inherits(ui, "shiny.tag.list"),
+  is.function(server),
+  inherits(app, "shiny.appobj"),
+  all(!str_detect(server_source, regex(str_c(forbidden_server_calls, collapse = "|")))),
+  str_detect(server_source, fixed("renderText")),
+  str_detect(server_source, fixed("renderTable")),
+  str_detect(search_source, fixed("valuetype = \"fixed\"")),
+  identical(attr(ui, "lang"), "en"),
+  str_detect(ui_head, fixed("<title>Inaugural KWIC explorer</title>"))
+)
+```
+
+`reactive()` wraps the KWIC calculation so both outputs can use the same current
+rows after the input changes. `%||%` turns a missing input into empty text.
+`req()` stops without a displayed message until a word exists, and
+`validate(need())` stops with a message the reader can see when the word breaks
+the app's rules. `renderText()` and `renderTable()` turn R values into page text
+and a table.
+
+`fluidPage()` builds the app page. Its `title` names the browser tab, and
+`lang = "en"` tells screen readers that the page is in English. When Shiny
+serves the app, it puts the title in the page head and the language on the
+`<html>` element, so neither appears in the printed body HTML. `shinyApp()`
+bundles the UI and server so Shiny can serve them together.
+
+`updateOn = "blur"` makes the search run only when the reader presses Enter or
+leaves the box, so results are not re-announced on every keystroke; `testServer()`
+cannot check that browser behavior.
+
+Typed text goes only through `renderText()` and `renderTable()`, not through raw
+HTML, so markup-like input is treated as text. The length and spacing limits
+live on the server because browser-side checks can be bypassed.
+
+The server keeps the typed word only in the current Shiny session's memory. It
+writes nothing to disk, prints nothing, logs nothing, and uses no cache. That
+does not make every hosted app private. A hosting service still has process logs,
+and a developer could add logging later. The boundary here is narrower: this
+example app does not store or log the user's word.
+
+## Show the UI as text
+
+The lesson page must not contain a live Shiny form. The UI HTML is printed as
+plain console output, so the browser shows text, not a working input.
+
+```{r}
+ui_html <- paste(as.character(ui), collapse = "\n")
+cat(ui_html)
+```
+
+```{r}
+#| include: false
+
+label_for <- str_match(ui_html, "for=\"([^\"]+)\"")[, 2]
+input_id <- str_match(ui_html, "<input[^>]+id=\"([^\"]+)\"")[, 2]
+
+stopifnot(
+  identical(label_for, "word"),
+  identical(input_id, "word"),
+  identical(label_for, input_id),
+  str_detect(ui_html, fixed("Word to find")),
+  str_detect(ui_html, fixed("data-update-on=\"blur\""))
+)
+```
+
+The text output lets a reader inspect the generated label and input. In the
+printed HTML, the label's `for="word"` matches the input's `id="word"`; that
+link is how a screen reader names the box, and the placeholder `liberty` is
+only a hint. It is not an invitation to type in this page.
+
+## Test server behavior
+
+`testServer()` runs the server function without starting a browser. The
+`session$setInputs()` calls below play the part of a person typing into the app.
+
+```{r}
+status_result <- function(expr) {
+  tryCatch(
+    {
+      list(
+        status = "output",
+        value = force(expr),
+        condition_class = NA_character_
+      )
+    },
+    error = function(error) {
+      list(
+        status = "condition",
+        value = conditionMessage(error),
+        condition_class = class(error)[[1]]
+      )
+    }
+  )
+}
+
+case_results <- NULL
+liberty_rows_from_server <- NULL
+
+rows_result <- function(rows_expr) {
+  tryCatch(nrow(rows_expr), error = function(error) NA_integer_)
+}
+
+shiny::testServer(server, {
+  session$setInputs(word = "liberty")
+  liberty_status <- status_result(output$status)
+  liberty_rows <- context_rows()
+  liberty_rows_from_server <<- liberty_rows |>
+    slice_head(n = max_rows_shown)
+  stopifnot(
+    identical(nrow(liberty_rows), 118L),
+    identical(
+      liberty_status$value,
+      "Found 118 lines for 'liberty'; showing the first 8."
+    )
+  )
+
+  session$setInputs(word = "")
+  empty_status <- status_result(output$status)
+  empty_rows <- rows_result(context_rows())
+  stopifnot(
+    identical(empty_status$condition_class, "shiny.silent.error"),
+    identical(empty_status$value, "")
+  )
+
+  session$setInputs(word = "   ")
+  space_status <- status_result(output$status)
+  space_rows <- rows_result(context_rows())
+  stopifnot(
+    identical(space_status$condition_class, "shiny.silent.error"),
+    identical(space_status$value, "")
+  )
+
+  session$setInputs(word = "free people")
+  two_word_status <- status_result(output$status)
+  two_word_rows <- rows_result(context_rows())
+  stopifnot(
+    identical(
+      two_word_status$value,
+      "Enter one word, with no spaces."
+    )
+  )
+
+  session$setInputs(word = strrep("a", 31L))
+  long_status <- status_result(output$status)
+  long_rows <- rows_result(context_rows())
+  stopifnot(
+    identical(
+      long_status$value,
+      "Enter at most 30 characters."
+    )
+  )
+
+  session$setInputs(word = "*")
+  star_status <- status_result(output$status)
+  star_rows <- context_rows()
+  stopifnot(
+    identical(nrow(star_rows), 0L),
+    identical(
+      star_status$value,
+      "No word in these paragraphs matches '*'. Marks at the start or end of a word, such as commas, are not part of the word here."
+    )
+  )
+
+  session$setInputs(word = "<b>")
+  markup_status <- status_result(output$status)
+  markup_rows <- context_rows()
+  stopifnot(
+    identical(nrow(markup_rows), 0L),
+    identical(
+      markup_status$value,
+      "No word in these paragraphs matches '<b>'. Marks at the start or end of a word, such as commas, are not part of the word here."
+    )
+  )
+
+  session$setInputs(word = "liberty,")
+  punctuation_status <- status_result(output$status)
+  punctuation_rows <- context_rows()
+  stopifnot(
+    identical(nrow(punctuation_rows), 0L),
+    identical(
+      punctuation_status$value,
+      "No word in these paragraphs matches 'liberty,'. Marks at the start or end of a word, such as commas, are not part of the word here."
+    )
+  )
+
+  session$setInputs(word = "zzzzzz")
+  no_match_status <- status_result(output$status)
+  no_match_rows <- context_rows()
+  stopifnot(
+    identical(nrow(no_match_rows), 0L),
+    identical(
+      no_match_status$value,
+      "No word in these paragraphs matches 'zzzzzz'. Marks at the start or end of a word, such as commas, are not part of the word here."
+    )
+  )
+
+  case_results <<- tibble(
+    case = c(
+      "known word",
+      "empty text",
+      "three spaces",
+      "two words",
+      "over 30 characters",
+      "literal asterisk",
+      "markup-like text",
+      "punctuated word",
+      "no matching word"
+    ),
+    typed_text = c(
+      "liberty",
+      "\"\"",
+      "\"   \"",
+      "free people",
+      strrep("a", 31L),
+      "*",
+      "<b>",
+      "liberty,",
+      "zzzzzz"
+    ),
+    rows = c(
+      nrow(liberty_rows),
+      empty_rows,
+      space_rows,
+      two_word_rows,
+      long_rows,
+      nrow(star_rows),
+      nrow(markup_rows),
+      nrow(punctuation_rows),
+      nrow(no_match_rows)
+    ),
+    result_type = c(
+      liberty_status$status,
+      empty_status$status,
+      space_status$status,
+      two_word_status$status,
+      long_status$status,
+      star_status$status,
+      markup_status$status,
+      punctuation_status$status,
+      no_match_status$status
+    ),
+    server_result = c(
+      liberty_status$value,
+      empty_status$value,
+      space_status$value,
+      two_word_status$value,
+      long_status$value,
+      star_status$value,
+      markup_status$value,
+      punctuation_status$value,
+      no_match_status$value
+    )
+  ) |>
+    mutate(
+      rows = if_else(is.na(rows), "not applicable", as.character(rows))
+    )
+})
+```
+
+The test returns `NULL` when it passes. Its value is not a report; the checks
+are the important part.
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(status_result("ok")$value, "ok"),
+  identical(nrow(find_in_context("zzzzzz")), 0L),
+  identical(nrow(case_results), 9L),
+  identical(nrow(liberty_rows_from_server), 8L),
+  identical(
+    case_results$server_result[case_results$case == "known word"],
+    "Found 118 lines for 'liberty'; showing the first 8."
+  ),
+  identical(
+    case_results$server_result[case_results$case == "punctuated word"],
+    "No word in these paragraphs matches 'liberty,'. Marks at the start or end of a word, such as commas, are not part of the word here."
+  ),
+  identical(
+    case_results$result_type == "condition",
+    case_results$rows == "not applicable"
+  )
+)
+```
+
+The recorded server cases below are printed with an escaping HTML table. That
+matters for hostile-looking input: markup characters should be shown as text,
+not read as page markup.
+
+A condition row means the server stopped instead of returning output. `req()`
+stops with an empty message, while `validate(need())` stops with the message
+shown. Shiny reports both kinds of stop under the same first condition class,
+`shiny.silent.error`, so the table does not repeat it. "Not applicable" marks a
+Rows cell where the server stopped before returning any rows.
+
+```{r}
+kable(
+  case_results,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Case",
+    "Typed text",
+    "Rows",
+    "Result type",
+    "Server result"
+  ),
+  caption = "Server cases recorded by testServer during the render",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  str_detect(case_results$server_result[case_results$case == "two words"], fixed("one word")),
+  str_detect(case_results$server_result[case_results$case == "over 30 characters"], fixed("30 characters"))
+)
+```
+
+The table below is the first app table for `liberty`, captured from the same
+server test. It shows the first eight KWIC rows even though the full result has
+118 lines.
+
+```{r}
+kable(
+  liberty_rows_from_server,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Paragraph ID", "Before", "Keyword", "After"),
+  caption = "First eight server-returned KWIC rows for liberty",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(liberty_rows_from_server), 8L),
+  identical(liberty_rows_from_server$keyword, rep("liberty", 8L)),
+  identical(liberty_rows_from_server, find_in_context("liberty") |> slice_head(n = 8L))
+)
+```
+
+## What this page cannot test
+
+Server tests do not exercise layout, browser JavaScript, focus order, keyboard
+use, or screen-reader output. They also cannot check the live-region behavior
+Shiny adds in a running browser. A real app needs a browser test and manual
+accessibility review before anyone treats it as ready for public use.
+
+To try the app locally, run the code chunks in "Build the search job first" and
+"Define the app without running it" from the project root, then run
+`shiny::runApp(app)`. The app will run only while that R session is serving it.
+
+## What question does this app answer?
+
+The app helps a reader inspect context lines. It does not say a word is
+important, estimate a topic, or deploy a model. KWIC counts depend on the token
+rules, punctuation handling, and case policy. Here the unit is the token stream
+created from reconstructed paragraphs, and matching is fixed and
+case-insensitive.
+
+## What to remember
+
+- A Shiny app has a UI object, a server function, and an app object.
+- A static lesson page should not print a live-looking Shiny input with no
+  server behind it.
+- Trim text before `req()` so whitespace-only input pauses instead of searching.
+- Use server-side `need()` checks for invalid values such as spaces or too many
+  characters.
+- Fixed matching keeps `*` and `(` from becoming pattern syntax.
+- `testServer()` checks server logic, not the browser experience.
+
+The static lesson page shows how the app is built and checked; the running app
+belongs in a local R session.
+
+## Sources
+
+- [Mastering Shiny: Your first Shiny app](https://mastering-shiny.org/basic-app.html)
+- [Mastering Shiny: Testing](https://mastering-shiny.org/scaling-testing.html)
+- [Shiny reference for `req()`](https://shiny.posit.co/r/reference/shiny/latest/req.html)
+- [Shiny reference for `validate()` and `need()`](https://shiny.posit.co/r/reference/shiny/latest/validate.html)
+- [Shiny article on server function testing](https://shiny.posit.co/r/articles/improve/server-function-testing/)
+- [Mastering Shiny: Security](https://mastering-shiny.org/scaling-security.html)
+- [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)
+- [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/)
+- [W3C WAI forms tutorial on labels and instructions](https://www.w3.org/WAI/tutorials/forms/instructions/)
+- [UK Government Digital Service accessibility tools audit](https://accessibility.blog.gov.uk/2017/02/24/what-we-found-when-we-tested-tools-on-the-worlds-least-accessible-webpage/)
+- [quanteda `kwic()` reference](https://quanteda.io/reference/kwic.html)

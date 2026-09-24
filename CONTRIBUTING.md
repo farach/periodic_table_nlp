@@ -179,10 +179,10 @@ during a render. Call `spacy_finalize()` when the lesson is done with it.
 
 ## Set up local generation models once
 
-Lessons 65 through 68 use public Hugging Face models through the pinned
-`huggingfaceR` and `reticulate` packages. They use a separate Python environment
-because a single R session cannot switch safely between the spaCy and generation
-interpreters after Python has initialized.
+Lessons 65 through 68, 70, 71, and 72 use public Hugging Face models through
+the pinned `huggingfaceR` and `reticulate` packages. They use a separate Python
+environment because a single R session cannot switch safely between the spaCy
+and generation interpreters after Python has initialized.
 
 ```powershell
 python -m venv .venv-nlg
@@ -213,6 +213,13 @@ library(reticulate)
 source("R/use-nlg.R")
 model <- load_nlg_pipeline("qwen_1_5b_instruct", "text-generation")
 ```
+
+The sentence-embedding model used for search indexing loads the same way with
+`load_nlg_pipeline("minilm_l6_v2", "feature-extraction")`. Its pipeline returns
+one vector per token; the lesson averages them and scales the result to unit
+length, which is the pooling and normalization recorded in the model's own
+`1_Pooling/config.json` and `modules.json`. Do not use `hf_embed()` or other
+helpers that call a hosted inference service.
 
 The helper selects `.venv-nlg`, verifies every runtime file again before model
 loading, forces offline access during rendering, and stops with a path-specific
@@ -305,6 +312,52 @@ evidence.
   `aria-disabled`, or click handlers. Stage and status must never depend on
   color alone.
 
+## Rules from the systems and visualization lessons
+
+- A displayed result must come from the method the page names. Never build an
+  "extracted", "server", or "graph" table by copying or filtering the reference
+  answers, and never type a result by hand beside computed ones without saying
+  so. Add a hidden assertion on the method's own output.
+- Constructed labeled collections need permuted IDs, real variety, and a sweep
+  that can fail. Assign record IDs after a seeded permutation, keep no column
+  that encodes construction order, and include record ID, date, file position,
+  sentence frame, first word, and frequent non-topical tokens in the builder's
+  superficial-feature sweep. Do not append filler text to make records unique;
+  name deliberate near-duplicates in their own column.
+- A sampling seed is part of the design. Fix it by a stated rule before the
+  first draw, draw once, and report whatever the sample shows. Every number in
+  prose that depends on the sample is computed inline.
+- Pandoc parses Markdown inside default `knitr::kable()` pipe-table cells: an
+  apostrophe turns curly, `*text*` becomes emphasis, and raw HTML is read as
+  markup. Tables that show verbatim source text, model output, user input, or
+  markup-bearing strings use `knitr::kable(format = "html", escape = TRUE)`.
+  Build inline annotation markup with `htmltools` tag objects, never with
+  `HTML()`, `paste0()`, or `cat()` of markup.
+- Never print a Shiny app object in a lesson; printing calls `runApp()` and the
+  render waits forever. Test server logic with `shiny::testServer()`, build any
+  table of server results from the test's recorded values, and show the UI as
+  text rather than live controls.
+- Do not attach `maps` with `library(maps)` after purrr; it masks `purrr::map()`.
+  Call `ggplot2::map_data()` instead. `datasets::state.center` places Alaska and
+  Hawaii off the West Coast, so neither may be drawn on a lower-48 basemap.
+- Stochastic or chaotic layouts (t-SNE, force-directed graphs, word clouds) get
+  seeds and single threads, but assertions and prose must not depend on their
+  coordinates. When labels would collide, redesign the figure with small
+  multiples, a deterministic layout, or a key table; do not drop labels with
+  `check_overlap = TRUE`.
+- A retrieval result with a score of zero was not retrieved, so never fill a
+  top-k list by ID order. Score an abstention or a parse failure as an empty
+  answer, and never let a screen read the answer key.
+- Batch model calls only with pooling that ignores padding tokens; a check that
+  compares two code paths that are identical by construction is not evidence.
+- Generated text can differ between Windows and Linux. Show raw model output in
+  tables, assert only its structure, and write any sentence about what the model
+  did with inline R computed from the parsed result.
+- Safety and routing rules belong in code that runs before any model call. A
+  system prompt is not a control.
+- Keys, not positions: label hand-reviewed rows by a stable key such as
+  paragraph ID plus offset, never by `row_number()`.
+
 ## Keep later methods on existing tiles
 
 Do not add a new map tile when a method already has a home:
@@ -315,7 +368,7 @@ Do not add a new map tile when a method already has a home:
   (keyword extraction and keyness).
 - Document clustering belongs in lesson 55 (topic modeling and clustering).
 - Burst detection belongs in lesson 56 (trend and burst detection).
-- Co-word or citation networks belong in planned lesson 81 as one use of
+- Co-word or citation networks belong in lesson 81 as one use of
   knowledge-graph visualisation, not as a bibliometrics tile.
 - Publisher TDM licences belong in research notes and
   [RESEARCH_STANDARDS.md](RESEARCH_STANDARDS.md), not on the map.

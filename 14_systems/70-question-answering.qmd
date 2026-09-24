@@ -1,0 +1,1378 @@
+---
+title: "Answering questions from retrieved passages"
+subtitle: "Find candidate evidence first, then ask whether the answer is supported"
+description: "Learn how question answering differs from search, and why a cited answer still needs support checks."
+categories: [systems, question answering, retrieval]
+---
+
+Amara helps at the Riverton Skills Centre desk on days when staff are away from
+the phone. A short handbook answers many routine questions, but callers do not
+ask in handbook language. One person asks about a "kid" during night class;
+another asks a question that assumes a Saturday forklift class exists.
+
+**Question answering** returns a short answer, an abstention, or a correction of
+a false premise. Retrieval is only the first step. The system has to choose
+passages, read only those passages, cite what it used, and say when the passages
+do not answer the question.
+
+::: {.callout-note}
+The Riverton Skills Centre handbook is an invented teaching fixture. It does
+not describe a real school, program, deadline, stipend, or policy.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- retrieve handbook passages with tf-idf weights fitted on the handbook;
+- show when a gold passage shares no content words with the question;
+- compare an extractive sentence baseline with a generated short answer;
+- parse a strict two-line model reply without rewriting it;
+- keep action correctness, reference agreement, support screens, and human
+  review separate; and
+- explain why abstention, citations, and fluent wording are not enough.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the local reader and handbook
+
+The handbook, questions, and answer variants were written before this lesson
+retrieves or generates anything. The same author wrote all three, so they are a
+teaching fixture rather than an independent benchmark.
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(huggingfaceR)
+  library(knitr)
+  library(purrr)
+  library(readr)
+  library(reticulate)
+  library(stringr)
+  library(tibble)
+  library(tidyr)
+})
+
+source("R/use-nlg.R")
+
+handbook <- read_csv(
+  "data/riverton/riverton-handbook.csv",
+  na = character(),
+  col_types = cols(
+    passage_id = col_character(),
+    topic = col_character(),
+    text = col_character(),
+    source = col_character(),
+    author_note = col_character()
+  )
+)
+
+questions <- read_csv(
+  "data/riverton/riverton-handbook-questions.csv",
+  na = c("", "NA"),
+  col_types = cols(
+    question_id = col_character(),
+    question = col_character(),
+    probe_type = col_character(),
+    expected_action = col_character(),
+    gold_passage_id = col_character(),
+    acceptable_answers = col_character(),
+    author_note = col_character()
+  )
+) |>
+  mutate(
+    acceptable_list = str_split(coalesce(acceptable_answers, ""), "\\|")
+  )
+
+metadata <- read_csv(
+  "data/riverton/riverton-handbook-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    license = col_character(),
+    created_on = col_date(),
+    rows = col_integer(),
+    fingerprint = col_character()
+  )
+)
+
+qa_model <- load_nlg_pipeline(
+  "qwen_1_5b_instruct",
+  "text-generation"
+)
+
+model_record <- qa_model$metadata |>
+  select(model_id, revision, license, task_scope)
+
+kable(
+  model_record,
+  col.names = c("Model", "Revision", "License", "Use in this course"),
+  caption = "Pinned local model used as the passage reader",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c(
+    "dplyr", "huggingfaceR", "knitr", "purrr", "readr",
+    "reticulate", "stringr", "tibble", "tidyr"
+  ) %in% loadedNamespaces()),
+  identical(nrow(handbook), 15L),
+  identical(nrow(questions), 6L),
+  identical(
+    questions$expected_action,
+    c("answer", "answer", "answer", "answer", "abstain", "flag premise")
+  ),
+  identical(model_record$model_id, "Qwen/Qwen2.5-1.5B-Instruct"),
+  identical(model_record$license, "Apache-2.0"),
+  all(metadata$artifact %in% c(
+    "riverton-handbook.csv",
+    "riverton-handbook-questions.csv",
+    "riverton-search-judgments.csv"
+  ))
+)
+```
+
+## Read the handbook once
+
+Each passage keeps its passage ID. Later tables cite these IDs instead of row
+positions.
+
+```{r}
+kable(
+  handbook |>
+    select(passage_id, topic, text),
+  format = "html",
+  escape = TRUE,
+  col.names = c("Passage ID", "Topic", "Handbook text"),
+  caption = "The complete fictional handbook used for retrieve-then-read question answering",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(handbook$passage_id, sprintf("H%02d", 1:15)),
+  !anyDuplicated(handbook$passage_id),
+  all(str_detect(handbook$text, "\\S")),
+  all(handbook$passage_id %in% c(questions$gold_passage_id, handbook$passage_id))
+)
+```
+
+## Declare the questions and reference answers
+
+The expected action is defined before retrieval and generation. A gold passage
+is the passage that answers the question or contradicts its false premise. The
+unanswerable parking question has no gold passage.
+
+```{r}
+reference_table <- questions |>
+  transmute(
+    question_id,
+    question,
+    expected_action,
+    gold_passage_id = coalesce(gold_passage_id, "not applicable"),
+    acceptable_answers = coalesce(acceptable_answers, "not applicable")
+  )
+
+kable(
+  reference_table,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Question",
+    "Question text",
+    "Expected action",
+    "Gold evidence",
+    "Acceptable short answers"
+  ),
+  caption = "Author-written reference actions and answer variants",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(reference_table$question_id, paste0("Q", 1:6)),
+  identical(reference_table$expected_action, questions$expected_action),
+  identical(reference_table$gold_passage_id[[5]], "not applicable"),
+  all(
+    questions$gold_passage_id[!is.na(questions$gold_passage_id)] %in%
+      handbook$passage_id
+  )
+)
+```
+
+## Check overlap before retrieval
+
+The retriever below uses simple English content tokens and removes the small
+stop-word list printed in the code, including `at`, `while`, and other function
+words. This choice matters. If stop words stayed in, Q3 would retrieve unrelated
+passages because of `at`; with this rule, Q3 has no content-word match and
+follows the `no lexical match` path.
+
+```{r}
+stop_words <- c(
+  "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "does",
+  "for", "from", "how", "i", "in", "is", "it", "my", "of", "on", "or",
+  "the", "there", "this", "to", "when", "where", "while", "with", "your"
+)
+
+tokenize_text <- function(text) {
+  str_extract_all(
+    str_to_lower(text, locale = "en"),
+    "[\\p{L}\\p{N}][\\p{L}\\p{N}-]*"
+  )[[1]]
+}
+
+content_words <- function(text) {
+  tokenize_text(text) |>
+    setdiff(stop_words) |>
+    unique() |>
+    sort()
+}
+
+gold_overlap <- questions |>
+  left_join(
+    handbook |>
+      select(gold_passage_id = passage_id, gold_text = text),
+    by = "gold_passage_id"
+  ) |>
+  mutate(
+    question_words = map(question, content_words),
+    gold_words = map(gold_text, \(text) {
+      if (is.na(text)) character() else content_words(text)
+    }),
+    shared_words = map2(question_words, gold_words, intersect),
+    shared_content_words = map_chr(
+      shared_words,
+      \(words) if (length(words) == 0L) "none" else paste(words, collapse = ", ")
+    )
+  ) |>
+  select(question_id, gold_passage_id, shared_content_words)
+
+kable(
+  gold_overlap,
+  col.names = c("Question", "Gold evidence", "Shared content words"),
+  caption = "Content-word overlap between each question and its gold passage",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(gold_overlap$question_id, questions$question_id),
+  identical(gold_overlap$shared_content_words[[3]], "none"),
+  identical(gold_overlap$gold_passage_id[[5]], NA_character_),
+  "at" %in% stop_words,
+  length(intersect(
+    content_words(questions$question[[3]]),
+    content_words(handbook$text[handbook$passage_id == "H13"])
+  )) == 0L
+)
+```
+
+## Retrieve candidate passages
+
+Tf-idf gives more weight to terms that appear in fewer handbook passages. The
+idf values are fitted once on the handbook and reused for each question. A
+passage with score zero is not retrieved, and score ties are broken by passage
+ID. The retrieval score is cosine similarity between the question and passage
+tf-idf vectors, so it ranges from 0 to 1.
+
+```{r}
+passage_terms <- handbook |>
+  transmute(
+    passage_id,
+    term = map(text, tokenize_text)
+  ) |>
+  unnest(term) |>
+  filter(!term %in% stop_words)
+
+document_frequency <- passage_terms |>
+  distinct(passage_id, term) |>
+  count(term, name = "document_frequency") |>
+  mutate(
+    idf = log(nrow(handbook) / document_frequency)
+  )
+
+passage_vectors <- passage_terms |>
+  count(passage_id, term, name = "term_frequency") |>
+  left_join(document_frequency, by = "term") |>
+  mutate(weight = term_frequency * idf)
+
+rank_question_passages <- function(question_id, question) {
+  question_terms <- tibble(term = tokenize_text(question)) |>
+    filter(!term %in% stop_words) |>
+    count(term, name = "term_frequency") |>
+    inner_join(document_frequency, by = "term") |>
+    mutate(question_weight = term_frequency * idf)
+
+  if (nrow(question_terms) == 0L) {
+    return(handbook |>
+      transmute(question_id = question_id, passage_id, score = 0))
+  }
+
+  question_norm <- sqrt(sum(question_terms$question_weight^2))
+  passage_norms <- passage_vectors |>
+    group_by(passage_id) |>
+    summarise(passage_norm = sqrt(sum(weight^2)), .groups = "drop")
+
+  scored <- passage_vectors |>
+    inner_join(question_terms |> select(term, question_weight), by = "term") |>
+    group_by(passage_id) |>
+    summarise(dot_product = sum(weight * question_weight), .groups = "drop") |>
+    left_join(passage_norms, by = "passage_id") |>
+    mutate(score = dot_product / (passage_norm * question_norm)) |>
+    select(passage_id, score)
+
+  handbook |>
+    select(passage_id) |>
+    left_join(scored, by = "passage_id") |>
+    mutate(
+      score = coalesce(score, 0),
+      question_id = question_id
+    ) |>
+    select(question_id, passage_id, score)
+}
+
+ranked_passages <- map2_dfr(
+  questions$question_id,
+  questions$question,
+  rank_question_passages
+) |>
+  arrange(question_id, desc(score), passage_id) |>
+  group_by(question_id) |>
+  mutate(display_rank = if_else(score > 0, row_number(), NA_integer_)) |>
+  ungroup()
+
+retrieved <- ranked_passages |>
+  filter(score > 0, display_rank <= 3L) |>
+  transmute(question_id, passage_id, rank = display_rank, score)
+
+gold_ranks <- ranked_passages |>
+  right_join(
+    questions |> select(question_id, gold_passage_id),
+    by = c("question_id", "passage_id" = "gold_passage_id")
+  ) |>
+  transmute(
+    question_id,
+    gold_rank = display_rank,
+    gold_score = score,
+    gold_retrieval_label = case_when(
+      is.na(passage_id) ~ "not applicable",
+      coalesce(gold_score, 0) == 0 ~ "not retrieved (all scores 0)",
+      !is.na(gold_rank) ~ paste0("rank ", gold_rank),
+      TRUE ~ "not retrieved"
+    )
+  )
+
+retrieval_display <- questions |>
+  select(question_id, question, expected_action, gold_passage_id) |>
+  left_join(
+    retrieved |>
+      group_by(question_id) |>
+      summarise(
+        retrieved_ids = paste(passage_id, collapse = ", "),
+        retrieved_ranks = paste(
+          paste0(passage_id, " (#", rank, ", ", sprintf("%.3f", score), ")"),
+          collapse = "; "
+        ),
+        .groups = "drop"
+      ),
+    by = "question_id"
+  ) |>
+  left_join(gold_ranks, by = "question_id") |>
+  mutate(
+    retrieved_ids = if_else(is.na(retrieved_ids), "no lexical match", retrieved_ids),
+    retrieved_ranks = if_else(is.na(retrieved_ranks), "no lexical match", retrieved_ranks),
+    gold_passage_id = coalesce(gold_passage_id, "not applicable")
+  )
+
+kable(
+  retrieval_display |>
+    select(question_id, question, retrieved_ranks, gold_passage_id, gold_retrieval_label),
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Question",
+    "Question text",
+    "Retrieved candidates",
+    "Gold evidence",
+    "Gold evidence retrieval"
+  ),
+  caption = "Tf-idf retrieval results with gold evidence status",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(retrieved$score > 0),
+  all(retrieved$rank <= 3L),
+  identical(retrieval_display$retrieved_ids[[3]], "no lexical match"),
+  identical(retrieval_display$gold_retrieval_label[[3]], "not retrieved (all scores 0)"),
+  identical(retrieval_display$gold_score[[3]], 0),
+  identical(retrieval_display$gold_retrieval_label[[5]], "not applicable"),
+  all(
+    retrieved |>
+      group_by(question_id) |>
+      summarise(ok = all(order(rank) == seq_along(rank)), .groups = "drop") |>
+      pull(ok)
+  )
+)
+```
+
+Q3 shows the retrieval problem. The correct evidence is H13, but a lexical
+retriever that shares no content word with the question gives the reader no
+passage to read.
+
+## Add a sentence baseline
+
+An extractive baseline returns one sentence from the highest-ranked passage.
+It is scored by a different unit from the generated answer: whether that
+sentence contains one acceptable answer variant.
+
+```{r}
+normalize_answer <- function(text) {
+  text |>
+    str_to_lower(locale = "en") |>
+    str_replace_all("[\\p{P}\\p{S}]", "") |>
+    str_replace_all("\\b(a|an|the)\\b", " ") |>
+    str_squish()
+}
+
+contains_variant <- function(text, variants) {
+  variants <- variants[nzchar(variants)]
+  if (length(variants) == 0L || is.na(text)) {
+    return(NA)
+  }
+  normalized_text <- normalize_answer(text)
+  any(map_lgl(
+    variants,
+    \(variant) str_detect(
+      normalized_text,
+      fixed(normalize_answer(variant))
+    )
+  ))
+}
+
+top_passage <- retrieved |>
+  filter(rank == 1L) |>
+  left_join(handbook |> select(passage_id, text), by = "passage_id") |>
+  mutate(
+    baseline_sentence = map_chr(
+      str_split(text, "(?<=[.!?])\\s+"),
+      \(sentences) sentences[[1]]
+    )
+  ) |>
+  select(question_id, baseline_sentence)
+
+extractive_baseline <- questions |>
+  select(question_id, expected_action, acceptable_list) |>
+  left_join(top_passage, by = "question_id") |>
+  mutate(
+    contains_acceptable_answer = map2_lgl(
+      baseline_sentence,
+      acceptable_list,
+      contains_variant
+    ),
+    contains_acceptable_answer = if_else(
+      expected_action == "answer",
+      coalesce(contains_acceptable_answer, FALSE),
+      NA
+    ),
+    baseline_sentence = if_else(
+      expected_action == "answer" & is.na(baseline_sentence),
+      "no sentence (no lexical match)",
+      baseline_sentence
+    )
+  ) |>
+  select(question_id, baseline_sentence, contains_acceptable_answer)
+
+kable(
+  extractive_baseline,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Question",
+    "Sentence returned by the baseline",
+    "Contains an acceptable short answer"
+  ),
+  caption = "Extractive sentence baseline scored in sentence units",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(extractive_baseline$question_id, questions$question_id),
+  identical(extractive_baseline$baseline_sentence[[3]], "no sentence (no lexical match)"),
+  identical(extractive_baseline$contains_acceptable_answer[[3]], FALSE),
+  all(is.na(extractive_baseline$contains_acceptable_answer[5:6])),
+  all(extractive_baseline$contains_acceptable_answer[1:2] %in% c(TRUE, FALSE))
+)
+```
+
+The baseline is supported by construction because it copies a sentence. It can
+still fail to answer the question, and it has no way to explain a false premise.
+
+## Ask the reader to produce two lines
+
+The generated reader sees the question and the retrieved passages only. If no
+passage is retrieved, that fact is placed in the prompt. The required output has
+exactly two lines: `Answer:` and `Sources:`.
+
+```{r}
+reader_system <- paste(
+  "You are a strict formatter for handbook question answering.",
+  "Your reply must begin with Answer: on the first line.",
+  "The second and final line must begin with Sources:.",
+  "Use only IDs that appear in PASSAGES.",
+  "If no listed passage answers the question, write Answer: NOT IN HANDBOOK",
+  "and Sources: none.",
+  "If the question assumes a fact contradicted by a listed passage, write",
+  "Answer: PREMISE NOT SUPPORTED: plus a short correction.",
+  "Do not write a blank line, bullet, explanation, or extra source."
+)
+
+format_passages <- function(question_id) {
+  rows <- retrieved |>
+    filter(.data$question_id == .env$question_id) |>
+    arrange(rank) |>
+    left_join(handbook |> select(passage_id, text), by = "passage_id")
+
+  if (nrow(rows) == 0L) {
+    return("No passages were retrieved.")
+  }
+
+  rows |>
+    transmute(line = paste0(passage_id, ": ", text)) |>
+    pull(line) |>
+    paste(collapse = "\n")
+}
+
+reader_inputs <- questions |>
+  mutate(
+    passage_block = map_chr(question_id, format_passages),
+    user_prompt = paste0(
+      "QUESTION ID: ", question_id,
+      "\nQUESTION: ", question,
+      "\nPASSAGES:\n", passage_block,
+      "\n\nOUTPUT FORMAT:\nAnswer: <short answer, NOT IN HANDBOOK, or PREMISE NOT SUPPORTED: correction>",
+      "\nSources: <listed passage IDs, or none>"
+    ),
+    model_prompt = map_chr(
+      user_prompt,
+      \(user) nlg_chat_prompt(qa_model$tokenizer, reader_system, user)
+    ),
+    input_tokens = map_int(
+      model_prompt,
+      \(prompt) nlg_token_count(qa_model$tokenizer, prompt)
+    ),
+    max_new_tokens = 48L
+  )
+
+nlg_assert_input_budget(
+  reader_inputs$input_tokens,
+  max_input_tokens = 768L,
+  item_ids = reader_inputs$question_id
+)
+
+kable(
+  reader_inputs |>
+    select(question_id, input_tokens, max_new_tokens),
+  col.names = c("Question", "Prompt tokens", "Maximum new tokens"),
+  caption = "Input budgets checked before each reader call",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(reader_inputs$input_tokens > 0L),
+  all(reader_inputs$input_tokens <= 768L),
+  identical(reader_inputs$max_new_tokens, rep(48L, 6L))
+)
+```
+
+Greedy decoding chooses the highest-scoring next token at each step. The helper
+sets `do_sample = FALSE`. This lesson passes a repetition penalty of 1.05,
+which overrides the checkpoint's generation-config value of 1.1.
+Exact generated text can differ across machines; the page does not depend on
+literal wording.
+
+```{r}
+reader_results <- reader_inputs |>
+  mutate(
+    generation = map2(
+      model_prompt,
+      max_new_tokens,
+      \(prompt, budget) {
+        nlg_generate(
+          qa_model,
+          prompt,
+          max_new_tokens = budget,
+          repetition_penalty = 1.05
+        )
+      }
+    ),
+    raw_output = map_chr(generation, "text"),
+    output_tokens = map_int(generation, "output_tokens"),
+    ended_by_eos = map_lgl(generation, "ended_by_eos"),
+    hit_token_cap = map_lgl(generation, "hit_token_cap")
+  )
+
+kable(
+  reader_results |>
+    mutate(raw_output_visible = str_replace_all(raw_output, "\\r?\\n", " ⏎ ")) |>
+    select(question_id, raw_output_visible, output_tokens, ended_by_eos, hit_token_cap),
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Question",
+    "Raw reader output (`⏎` marks a line break)",
+    "Output tokens",
+    "EOS emitted",
+    "Hit token cap"
+  ),
+  caption = "Raw local model output with visible line-break markers and stopping diagnostics",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(nzchar(reader_results$raw_output)),
+  all(reader_results$output_tokens > 0L),
+  all(reader_results$output_tokens <= 48L),
+  all(reader_results$ended_by_eos | reader_results$hit_token_cap)
+)
+```
+
+## Parse without rewriting
+
+A strict parser accepts only the two requested lines. In this render every
+output parsed; if a later output adds a third line or omits `Sources:`, the
+lesson stops before publishing a malformed row.
+
+```{r}
+parse_reader_output <- function(text) {
+  parsed <- str_match(
+    str_trim(text),
+    "^Answer: ([^\\r\\n]+)\\r?\\nSources: ([^\\r\\n]+)$"
+  )
+
+  if (is.na(parsed[1, 1])) {
+    return(tibble(
+      parse_ok = FALSE,
+      parsed_answer = NA_character_,
+      parsed_sources = list(character()),
+      observed_action = "parse failure"
+    ))
+  }
+
+  answer <- str_squish(parsed[1, 2])
+  source_text <- str_squish(parsed[1, 3])
+  sources <- if (str_to_lower(source_text) == "none") {
+    character()
+  } else {
+    str_split(source_text, "\\s*,\\s*")[[1]]
+  }
+  action <- case_when(
+    str_starts(answer, "NOT IN HANDBOOK") ~ "abstain",
+    str_starts(answer, "PREMISE NOT SUPPORTED") ~ "flag premise",
+    TRUE ~ "answer"
+  )
+
+  tibble(
+    parse_ok = TRUE,
+    parsed_answer = answer,
+    parsed_sources = list(sources),
+    observed_action = action
+  )
+}
+
+parsed_results <- reader_results |>
+  select(question_id, raw_output, output_tokens, ended_by_eos, hit_token_cap) |>
+  mutate(parsed = map(raw_output, parse_reader_output)) |>
+  unnest(parsed) |>
+  left_join(questions, by = "question_id")
+
+parsed_display <- parsed_results |>
+  transmute(
+    question_id,
+    parsed_answer = coalesce(parsed_answer, "parse failure"),
+    parsed_sources = map_chr(
+      parsed_sources,
+      \(sources) if (length(sources) == 0L) "none" else paste(sources, collapse = ", ")
+    ),
+    observed_action,
+    expected_action
+  )
+
+kable(
+  parsed_display,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Question",
+    "Parsed answer",
+    "Parsed sources",
+    "Observed action",
+    "Expected action"
+  ),
+  caption = "Strictly parsed reader outputs",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(parsed_results$question_id, questions$question_id),
+  all(parsed_results$parse_ok),
+  all(parsed_results$observed_action %in% c("answer", "abstain", "flag premise")),
+  all(map_lgl(parsed_results$parsed_sources, \(sources) {
+    all(sources %in% handbook$passage_id) || length(sources) == 0L
+  }))
+)
+```
+
+## Score answers, actions, and retrieval
+
+**Exact match (EM)** is 1 only when the normalized prediction exactly equals one
+acceptable answer. **Token F1** balances shared-token precision and recall after
+normalization. SQuAD is a widely used question-answering benchmark; this lesson
+copies its scoring steps: lowercase, delete punctuation and symbols, remove
+English articles, and squeeze spaces. The only difference is that stringr's ICU
+class removes Unicode punctuation and symbols, not only ASCII punctuation.
+
+```{r}
+answer_f1 <- function(prediction, reference) {
+  prediction_tokens <- str_split(normalize_answer(prediction), "\\s+")[[1]]
+  reference_tokens <- str_split(normalize_answer(reference), "\\s+")[[1]]
+  prediction_tokens <- prediction_tokens[nzchar(prediction_tokens)]
+  reference_tokens <- reference_tokens[nzchar(reference_tokens)]
+
+  if (length(prediction_tokens) == 0L || length(reference_tokens) == 0L) {
+    return(0)
+  }
+
+  common <- intersect(unique(prediction_tokens), unique(reference_tokens))
+  overlap <- sum(pmin(
+    tabulate(match(prediction_tokens, common), nbins = length(common)),
+    tabulate(match(reference_tokens, common), nbins = length(common))
+  ))
+
+  if (overlap == 0L) {
+    return(0)
+  }
+
+  precision <- overlap / length(prediction_tokens)
+  recall <- overlap / length(reference_tokens)
+  2 * precision * recall / (precision + recall)
+}
+
+best_reference_scores <- function(answer, variants) {
+  variants <- variants[nzchar(variants)]
+  if (length(variants) == 0L || is.na(answer)) {
+    return(tibble(exact_match = NA_real_, f1 = NA_real_))
+  }
+
+  tibble(
+    exact_match = as.numeric(map_lgl(
+      variants,
+      \(variant) identical(normalize_answer(answer), normalize_answer(variant))
+    )),
+    f1 = map_dbl(variants, \(variant) answer_f1(answer, variant))
+  ) |>
+    summarise(
+      exact_match = max(exact_match),
+      f1 = max(f1),
+      .groups = "drop"
+    )
+}
+
+retrieval_success <- questions |>
+  select(question_id, expected_action, gold_passage_id) |>
+  left_join(gold_ranks, by = "question_id") |>
+  mutate(
+    recall_at_3 = case_when(
+      is.na(gold_passage_id) ~ NA,
+      gold_rank <= 3L ~ TRUE,
+      TRUE ~ FALSE
+    )
+  )
+
+score_table <- parsed_results |>
+  mutate(
+    answer_for_reference_score = if_else(
+      observed_action == "answer" & parse_ok,
+      parsed_answer,
+      ""
+    ),
+    reference_scores = map2(
+      answer_for_reference_score,
+      acceptable_list,
+      best_reference_scores
+    )
+  ) |>
+  unnest(reference_scores) |>
+  left_join(retrieval_success, by = c("question_id", "expected_action", "gold_passage_id")) |>
+  mutate(
+    action_correct = observed_action == expected_action,
+    reader_action = observed_action,
+    reader_given_passages = case_when(
+      expected_action == "answer" & recall_at_3 %in% FALSE & observed_action == "abstain" ~
+        "reasonable abstention from retrieved passages",
+      action_correct ~ "expected action",
+      TRUE ~ "unexpected action"
+    ),
+    end_to_end_outcome = case_when(
+      expected_action == "answer" & recall_at_3 %in% FALSE ~ "failed before reading",
+      action_correct ~ "expected action",
+      TRUE ~ "unexpected action"
+    ),
+    reference_agreement = case_when(
+      expected_action != "answer" ~ "not applicable",
+      is.na(exact_match) ~ "not applicable",
+      TRUE ~ sprintf("EM %.0f; F1 %.2f", exact_match, f1)
+    ),
+    recall_at_3_label = case_when(
+      is.na(recall_at_3) ~ "not applicable",
+      recall_at_3 ~ "gold in top 3",
+      TRUE ~ "gold not in top 3"
+    )
+  )
+
+acceptable_variant_in_answer <- function(answer, variants) {
+  variants <- variants[nzchar(variants)]
+  if (length(variants) == 0L || is.na(answer) || !nzchar(answer)) {
+    return(FALSE)
+  }
+  normalized_answer <- normalize_answer(answer)
+  any(map_lgl(
+    variants,
+    \(variant) str_detect(
+      normalized_answer,
+      fixed(normalize_answer(variant))
+    )
+  ))
+}
+
+em_zero_reason_text <- function(rows, count, partial_overlap, variant_in_answer) {
+  if (count == 0L) {
+    return("no correctly handled answer row has exact match 0")
+  }
+  verb <- if (count == 1L) " has" else " have"
+  if (all(partial_overlap) && all(variant_in_answer)) {
+    return(paste0(
+      rows,
+      verb,
+      " exact match 0 because ",
+      if (count == 1L) "the answer contains" else "each answer contains",
+      " an acceptable variant but includes extra words"
+    ))
+  }
+  paste0(rows, verb, " exact match 0 for wording differences")
+}
+
+right_action_em_zero_rows <- score_table |>
+  filter(expected_action == "answer", action_correct, exact_match == 0) |>
+  mutate(
+    acceptable_variant_in_answer = map2_lgl(
+      parsed_answer,
+      acceptable_list,
+      acceptable_variant_in_answer
+    ),
+    partial_overlap = f1 > 0
+  )
+
+right_action_em_zero <- tibble(
+  rows = paste(right_action_em_zero_rows$question_id, collapse = ", "),
+  count = nrow(right_action_em_zero_rows),
+  reason = em_zero_reason_text(
+    rows,
+    count,
+    right_action_em_zero_rows$partial_overlap,
+    right_action_em_zero_rows$acceptable_variant_in_answer
+  )
+)
+
+kable(
+  score_table |>
+    select(
+      question_id,
+      reader_action,
+      expected_action,
+      action_correct,
+      reader_given_passages,
+      reference_agreement,
+      recall_at_3_label,
+      end_to_end_outcome
+    ),
+  col.names = c(
+    "Question",
+    "Reader action",
+    "Expected action",
+    "Action correct",
+    "Reader given retrieved passages",
+    "Reference agreement",
+    "Retrieval recall at 3",
+    "End-to-end outcome"
+  ),
+  caption = "Action, reference, retrieval, and end-to-end results kept separate",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(score_table), 6L),
+  all(score_table$action_correct %in% c(TRUE, FALSE)),
+  identical(score_table$recall_at_3_label[[5]], "not applicable"),
+  identical(score_table$recall_at_3[[3]], FALSE),
+  identical(
+    score_table$reader_given_passages[[3]],
+    "reasonable abstention from retrieved passages"
+  ),
+  all(score_table$reference_agreement[5:6] == "not applicable"),
+  all(score_table$exact_match[score_table$expected_action != "answer"] |> is.na()),
+  identical(score_table$reader_action[[3]], "abstain"),
+  identical(score_table$answer_for_reference_score[[3]], ""),
+  identical(score_table$exact_match[[3]], 0),
+  identical(score_table$f1[[3]], 0),
+  all(right_action_em_zero_rows$partial_overlap),
+  all(right_action_em_zero_rows$acceptable_variant_in_answer),
+  identical(
+    em_zero_reason_text("", 0L, logical(), logical()),
+    "no correctly handled answer row has exact match 0"
+  ),
+  identical(
+    em_zero_reason_text("Q2", 1L, TRUE, TRUE),
+    paste0(
+      "Q2 has exact match 0 because the answer contains an ",
+      "acceptable variant but includes extra words"
+    )
+  ),
+  identical(
+    em_zero_reason_text("Q2, Q4", 2L, c(TRUE, TRUE), c(TRUE, TRUE)),
+    paste0(
+      "Q2, Q4 have exact match 0 because each answer contains an ",
+      "acceptable variant but includes extra words"
+    )
+  )
+)
+
+qa_action_summary <- score_table |>
+  summarise(
+    answer_actions = sum(reader_action == "answer"),
+    abstain_actions = sum(reader_action == "abstain"),
+    premise_actions = sum(reader_action == "flag premise"),
+    exact_action_matches = sum(action_correct),
+    retrieval_failures = sum(end_to_end_outcome == "failed before reading"),
+    .groups = "drop"
+  )
+```
+
+In this render, the parsed reader actions include
+`r qa_action_summary$answer_actions` answer actions,
+`r qa_action_summary$abstain_actions` abstentions, and
+`r qa_action_summary$premise_actions` premise flags. Exact action matched the
+predeclared reference on `r qa_action_summary$exact_action_matches` of 6 rows,
+and `r qa_action_summary$retrieval_failures` row failed before reading because
+the gold passage was not retrieved. The generated short answer receives EM and
+F1 only when the expected action is `answer`; parsed abstentions and parse
+failures count as empty predictions, so they receive EM 0 and F1 0 on
+answerable questions. The sentence baseline used a different unit, whether the
+copied sentence contained an acceptable answer. These numbers should not be read
+as a model comparison. In this render, `r right_action_em_zero$reason`.
+
+## Screen citations and surface support
+
+The support screen checks six mechanical facts: the row parsed, cited IDs
+exist, cited IDs were retrieved, an answered row has a citation, an abstention
+cites no passages, and answer numerals appear in cited passages after citation
+tokens are removed. False-premise handling is scored in the action table using
+the author's reference; no screen on this page detects a false premise from text
+alone. A screen can miss number words and wrong attachments, such as using the
+right number for the wrong item.
+
+```{r}
+strip_citation_tokens <- function(text) {
+  str_remove_all(text, "\\bH\\d{2}\\b")
+}
+
+numbers_in <- function(text) {
+  str_extract_all(
+    strip_citation_tokens(coalesce(text, "")),
+    "(?<![\\p{L}\\p{N}])\\d+"
+  )[[1]]
+}
+
+screen_one <- function(answer, sources, parse_ok, observed_action, retrieved_ids) {
+  cited_text <- handbook |>
+    filter(passage_id %in% sources) |>
+    pull(text) |>
+    paste(collapse = " ")
+  answer_numbers <- numbers_in(answer)
+  cited_numbers <- numbers_in(cited_text)
+
+  parsed <- isTRUE(parse_ok)
+  cited_exist <- all(sources %in% handbook$passage_id)
+  cited_retrieved <- all(sources %in% retrieved_ids)
+  answer_has_citation <- if (observed_action == "answer") {
+    length(sources) > 0L
+  } else {
+    TRUE
+  }
+  abstain_sources_ok <- if (observed_action == "abstain") {
+    length(sources) == 0L
+  } else {
+    TRUE
+  }
+  numbers_supported <- if (length(answer_numbers) == 0L) {
+    TRUE
+  } else {
+    all(answer_numbers %in% cited_numbers)
+  }
+
+  c(
+    parsed = parsed,
+    cited_exist = cited_exist,
+    cited_retrieved = cited_retrieved,
+    answer_has_citation = answer_has_citation,
+    abstain_sources_ok = abstain_sources_ok,
+    numbers_supported = numbers_supported
+  )
+}
+
+screen_results <- parsed_results |>
+  left_join(
+    retrieved |>
+      group_by(question_id) |>
+      summarise(retrieved_ids = list(passage_id), .groups = "drop"),
+    by = "question_id"
+  ) |>
+  mutate(
+    retrieved_ids = map(retrieved_ids, \(ids) if (is.null(ids)) character() else ids),
+    screen_values = pmap(
+      list(parsed_answer, parsed_sources, parse_ok, observed_action, retrieved_ids),
+      screen_one
+    ),
+    surface_support_screen = map_lgl(screen_values, all),
+    failed_checks = map_chr(
+      screen_values,
+      \(values) {
+        failed <- names(values)[!values]
+        if (length(failed) == 0L) "none" else paste(failed, collapse = ", ")
+      }
+    ),
+    screen_label = nlg_screen_label(surface_support_screen),
+    human_support_review = "pending"
+  )
+
+screen_display <- screen_results |>
+  transmute(
+    question_id,
+    parsed_answer,
+    cited_passages = map_chr(
+      parsed_sources,
+      \(sources) if (length(sources) == 0L) "none" else paste(sources, collapse = ", ")
+    ),
+    cited_text = map_chr(
+      parsed_sources,
+      \(sources) {
+        text <- handbook |>
+          filter(passage_id %in% sources) |>
+          transmute(line = paste0(passage_id, ": ", text)) |>
+          pull(line)
+        if (length(text) == 0L) "none" else paste(text, collapse = " ")
+      }
+    ),
+    failed_checks,
+    screen_label,
+    human_support_review
+  )
+
+kable(
+  screen_display,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Question",
+    "Parsed answer",
+    "Cited IDs",
+    "Cited passage text",
+    "Failed screen checks",
+    "Surface support screen",
+    "Human support review"
+  ),
+  caption = "Cited text and support-screen labels for every reader output",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(screen_results$screen_label %in% c(
+    "not flagged by screen",
+    "held for human review"
+  )),
+  identical(screen_results$human_support_review, rep("pending", 6L)),
+  is.logical(screen_results$surface_support_screen),
+  all(map_lgl(screen_results$screen_values, \(values) {
+    identical(names(values), c(
+      "parsed",
+      "cited_exist",
+      "cited_retrieved",
+      "answer_has_citation",
+      "abstain_sources_ok",
+      "numbers_supported"
+    ))
+  })),
+  identical(numbers_in("October 16th"), "16"),
+  length(numbers_in("See H08 and H14.")) == 0L,
+  !screen_one(
+    "Applications close on October 16th.",
+    c("H14"),
+    TRUE,
+    "answer",
+    c("H14")
+  )[["numbers_supported"]]
+)
+
+qa_screen_summary <- screen_results |>
+  count(screen_label, name = "questions") |>
+  complete(
+    screen_label = c("not flagged by screen", "held for human review"),
+    fill = list(questions = 0L)
+  )
+```
+
+The plain-language human support test is: would someone who read only the cited
+passage agree, "according to this passage, this answer is supported"? This page
+does not make that human judgment. In this render, the surface screen labels
+`r qa_screen_summary$questions[qa_screen_summary$screen_label == "held for human review"]`
+reader rows as held for review and
+`r qa_screen_summary$questions[qa_screen_summary$screen_label == "not flagged by screen"]`
+as not flagged by the screen.
+
+## Show screen controls
+
+If every generated answer looks clean in one render, a reader still needs to see
+the screen catch something. The next two rows are author-written control
+strings, not model outputs.
+
+```{r}
+control_outputs <- tibble(
+  control_id = c("control-unsupported-number", "control-unretrieved-citation"),
+  question_id = c("Q1", "Q1"),
+  parsed_answer = c(
+    "The weekly training stipend is $200.",
+    "The stipend is paid weekly."
+  ),
+  parsed_sources = list(c("H08"), c("H14")),
+  parse_ok = TRUE,
+  observed_action = "answer"
+) |>
+  left_join(
+    retrieved |>
+      group_by(question_id) |>
+      summarise(retrieved_ids = list(passage_id), .groups = "drop"),
+    by = "question_id"
+  ) |>
+  mutate(
+    screen_values = pmap(
+      list(parsed_answer, parsed_sources, parse_ok, observed_action, retrieved_ids),
+      screen_one
+    ),
+    surface_support_screen = map_lgl(screen_values, all),
+    failed_checks = map_chr(
+      screen_values,
+      \(values) {
+        failed <- names(values)[!values]
+        if (length(failed) == 0L) "none" else paste(failed, collapse = ", ")
+      }
+    ),
+    screen_label = nlg_screen_label(surface_support_screen)
+  )
+
+kable(
+  control_outputs |>
+    transmute(
+      control_id,
+      parsed_answer,
+      cited_passages = map_chr(parsed_sources, paste, collapse = ", "),
+      failed_checks,
+      screen_label
+    ),
+  format = "html",
+  escape = TRUE,
+  col.names = c("Control", "Control answer", "Cited IDs", "Failed screen checks", "Screen label"),
+  caption = "Author-written control strings that the support screen holds for review",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(
+    control_outputs$screen_label,
+    c("held for human review", "held for human review")
+  ),
+  identical(control_outputs$failed_checks[[1]], "numbers_supported"),
+  identical(control_outputs$failed_checks[[2]], "cited_retrieved"),
+  !any(control_outputs$surface_support_screen)
+)
+```
+
+These controls do not prove that the screen is complete. They show only that two
+known failure shapes are caught.
+
+## Count action choices
+
+The fixture has three expected actions, so the table keeps all three:
+`answer`, `abstain`, and `flag premise`. The simple-policy comparison uses the
+same exact-action basis. A policy that always answers matches the four answer
+rows; a policy that always abstains matches only Q5, because the false-premise
+row is a separate expected action.
+
+```{r}
+action_table <- score_table |>
+  count(expected_action, reader_action, name = "questions") |>
+  complete(
+    expected_action = c("answer", "abstain", "flag premise"),
+    reader_action = c("answer", "abstain", "flag premise"),
+    fill = list(questions = 0L)
+  )
+
+always_answer_exact <- sum(questions$expected_action == "answer")
+always_abstain_exact <- sum(questions$expected_action == "abstain")
+observed_reader_exact <- sum(score_table$action_correct)
+
+policy_misses <- bind_rows(
+  score_table |>
+    filter(!action_correct) |>
+    summarise(policy = "observed reader", misses = paste(question_id, collapse = ", ")),
+  questions |>
+    filter(expected_action != "answer") |>
+    summarise(policy = "always answer", misses = paste(question_id, collapse = ", ")),
+  questions |>
+    filter(expected_action != "abstain") |>
+    summarise(policy = "always abstain", misses = paste(question_id, collapse = ", "))
+)
+
+kable(
+  action_table,
+  col.names = c("Expected action", "Observed action", "Questions"),
+  caption = "Expected versus observed action for all six questions",
+  row.names = FALSE
+)
+
+kable(
+  tibble(
+    baseline = c("observed reader", "always answer", "always abstain"),
+    exact_action_matches = c(
+      observed_reader_exact,
+      always_answer_exact,
+      always_abstain_exact
+    ),
+    total_questions = nrow(questions)
+  ) |>
+    left_join(policy_misses, by = c("baseline" = "policy")),
+  col.names = c("Policy", "Exact action matches", "Questions", "Rows missed"),
+  caption = "Observed reader and simple policies scored on the same six questions",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  sum(action_table$questions) == 6L,
+  identical(observed_reader_exact, 4L),
+  identical(always_answer_exact, 4L),
+  identical(always_abstain_exact, 1L),
+  all(action_table$expected_action %in% c("answer", "abstain", "flag premise")),
+  all(action_table$reader_action %in% c("answer", "abstain", "flag premise"))
+)
+```
+
+The abstention row matters because an unanswerable question alone can flatter a
+system that refuses everything. The premise row matters too: a false assumption
+needs a correction, not just a generic refusal. The observed reader and the
+always-answer policy both match `r observed_reader_exact` of 6 actions, but they
+miss different rows: the reader misses `r policy_misses$misses[policy_misses$policy == "observed reader"]`,
+while always-answer misses `r policy_misses$misses[policy_misses$policy == "always answer"]`.
+
+## How to use this pattern
+
+This is a retrieve-then-read demonstration over a small English (`en`)
+handbook. The term retrieval-augmented generation, or RAG, usually refers to a
+broader family of systems that combine a generator with an external memory; the
+original RAG paper used a dense Wikipedia index and trained components together.
+This lesson does neither.
+
+Questions about money, eligibility, or deadlines need a person to check the
+source before anyone acts. Typed questions are user text; this page stores none
+after the render. Retrieved passages are evidence, not instructions. The next
+lesson shows why dialogue systems should keep safety and routing rules in code
+rather than trusting retrieved or typed text.
+
+## What to remember
+
+- Question answering is retrieval plus reading, not retrieval alone.
+- A lexical retriever can miss an answerable question before the reader starts.
+- EM and F1 score short answer strings; they do not measure support.
+- A citation is a clue to inspect, not proof that the answer follows.
+- Screens can hold obvious failures, but human support review stays pending.
+- Abstention must be checked on answerable and unanswerable questions.
+
+## Sources
+
+- [Rajpurkar, Jia, and Liang on unanswerable questions for SQuAD 2.0](https://aclanthology.org/P18-2124/)
+- [Rajpurkar et al. on SQuAD exact match and F1](https://aclanthology.org/D16-1264/)
+- [Chen et al. on retrieval plus reading in DrQA](https://aclanthology.org/P17-1171/)
+- [SQuAD explorer and evaluation script](https://rajpurkar.github.io/SQuAD-explorer/)
+- [Qwen2.5-1.5B-Instruct model card](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)
+- [Liu, Zhang, and Liang on verifiability in generative search](https://aclanthology.org/2023.findings-emnlp.467/)
+- [Kim et al. on question answering with questionable assumptions](https://aclanthology.org/2023.acl-long.472/)
+- [Kamalloo et al. on open-domain QA evaluation with lexical metrics](https://aclanthology.org/2023.acl-long.307/)
+- [Rashkin et al. on attribution to identified sources](https://aclanthology.org/2023.cl-4.2/)
+- [Lewis et al. on retrieval-augmented generation](https://proceedings.neurips.cc/paper/2020/hash/6b493230205f780e1bc26945df7481e5-Abstract.html)

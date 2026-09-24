@@ -1,0 +1,665 @@
+---
+title: "Mapping place mentions"
+subtitle: "Review state-name matches before drawing them"
+description: "Learn how naive place-name matches can mislead a map, and how reviewed readings keep non-place meanings visible."
+categories: [information visualization, maps, place names]
+---
+
+`Washington` is the first problem in this map. In presidential speeches it can
+mean a person, a city, the federal government, or the state. The review below
+has to decide which readings are present.
+
+Ben still wants a map from the speeches, but the name match is only the first
+step.
+
+**Locations on a map** means more than finding a name. The reader has to decide
+whether the name really refers to a place, what place it means, what unit is
+being counted, and whether the basemap can honestly show it.
+
+This lesson uses U.S. inaugural-address paragraphs and the state names bundled
+with R. The review rules and labels below are the author's judgement after
+reading the matches in this corpus. They are not an independent geoparser.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- match U.S. state names with case-sensitive, whole-word rules;
+- compare naive matches with reviewed readings;
+- keep person, river, event, government, and pre-statehood readings off the map;
+- count speeches with at least one reviewed state reading;
+- draw symbols with area scaling instead of a choropleth; and
+- state a basemap's coverage and projection limits.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Match state names before reviewing them
+
+The source data is the shared inaugural-address paragraph table used in earlier
+lessons. A paragraph and speech ID travel with every match. The matcher sorts
+state names from longest to shortest so `West Virginia` would be selected before
+`Virginia` when both could overlap.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(purrr)
+library(stringr)
+library(tibble)
+library(tidyr)
+
+source("R/inaugural-corpus.R")
+
+paragraphs <- inaugural_paragraphs()
+
+state_lookup <- tibble(state = datasets::state.name) |>
+  arrange(desc(str_length(state)), state)
+
+empty_matches <- function() {
+  tibble(
+    state = character(),
+    start = integer(),
+    end = integer(),
+    mention = character()
+  )
+}
+
+state_pattern <- function(state_name) {
+  regex(
+    paste0("\\b", str_replace_all(state_name, " ", "\\\\s+"), "\\b"),
+    ignore_case = FALSE
+  )
+}
+
+find_all_state_candidates <- function(text) {
+  state_lookup$state |>
+    map_dfr(\(state_name) {
+      locations <- str_locate_all(text, state_pattern(state_name))[[1]]
+      if (nrow(locations) == 0L) {
+        return(empty_matches())
+      }
+
+      tibble(
+        state = state_name,
+        start = as.integer(locations[, 1]),
+        end = as.integer(locations[, 2]),
+        mention = str_sub(text, start, end)
+      )
+    }) |>
+    arrange(start, desc(end - start), state)
+}
+
+choose_longest_nonoverlap <- function(candidates, text_length) {
+  if (nrow(candidates) == 0L) {
+    return(candidates)
+  }
+
+  kept <- rep(FALSE, nrow(candidates))
+  used_positions <- rep(FALSE, text_length)
+
+  for (row_number in seq_len(nrow(candidates))) {
+    span <- candidates$start[row_number]:candidates$end[row_number]
+    if (!any(used_positions[span])) {
+      kept[row_number] <- TRUE
+      used_positions[span] <- TRUE
+    }
+  }
+
+  candidates[kept, ]
+}
+
+find_state_matches <- function(text) {
+  find_all_state_candidates(text) |>
+    choose_longest_nonoverlap(nchar(text))
+}
+
+state_matches <- paragraphs |>
+  mutate(matches = map(paragraph, find_state_matches)) |>
+  filter(map_int(matches, nrow) > 0L) |>
+  select(
+    paragraph_id, speech_id, year, president, paragraph_words,
+    paragraph, matches
+  ) |>
+  unnest(matches) |>
+  mutate(
+    match_key = str_c(paragraph_id, state, start, sep = ":"),
+    context = str_squish(str_sub(
+      paragraph,
+      pmax(1L, start - 70L),
+      pmin(nchar(paragraph), end + 70L)
+    ))
+  )
+
+naive_state_counts <- state_matches |>
+  summarise(
+    naive_matches = n(),
+    naive_speeches = n_distinct(speech_id),
+    .by = state
+  ) |>
+  arrange(desc(naive_matches), state)
+
+kable(
+  naive_state_counts,
+  col.names = c("Matched name", "Naive matches", "Speeches with a match"),
+  caption = "Naive case-sensitive state-name matches before review",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+inside_longer_state <- function(text, start, end, state) {
+  longer_states <- state_lookup |>
+    filter(str_length(state) > str_length(.env$state)) |>
+    pull(state)
+
+  longer_states |>
+    map_lgl(\(longer_state) {
+      locations <- str_locate_all(text, state_pattern(longer_state))[[1]]
+      if (nrow(locations) == 0L) {
+        return(FALSE)
+      }
+      any(locations[, 1] <= start & locations[, 2] >= end)
+    }) |>
+    any()
+}
+
+synthetic_overlap_check <- find_state_matches(
+  "West Virginia appears before Virginia in this check."
+)
+
+stopifnot(
+  all(c("dplyr", "ggplot2", "knitr", "purrr", "stringr", "tibble", "tidyr") %in%
+    loadedNamespaces()),
+  !"package:maps" %in% search(),
+  identical(nrow(paragraphs), 1377L),
+  identical(nrow(state_matches), 67L),
+  identical(n_distinct(state_matches$state), 18L),
+  identical(n_distinct(state_matches$speech_id), 24L),
+  identical(synthetic_overlap_check$state, c("West Virginia", "Virginia")),
+  !any(pmap_lgl(
+    list(
+      state_matches$paragraph, state_matches$start,
+      state_matches$end, state_matches$state
+    ),
+    inside_longer_state
+  ))
+)
+```
+
+The naive table counts strings. It does not know whether `Washington` is a
+person, the city, or the state. That is the next step.
+
+## Review what each match means
+
+The categories below were written after reading the 67 matches. Any residue that
+the rules do not explain is assigned to `uncertain`, not to the map.
+
+Each review key combines the paragraph ID, the matched name, and the 1-based
+character start returned for that paragraph, so a label stays with its sentence
+when rows are reordered.
+
+```{r}
+category_table <- tribble(
+  ~category, ~meaning,
+  "person", "the state name is part of a person's name or title",
+  "city or federal government", "the name refers to Washington, DC, New York City, or federal power",
+  "event name", "the name belongs to a named meeting or conference",
+  "river", "the name refers to a river or river valley",
+  "territory or republic before statehood", "the text refers to land before it became a state",
+  "law or organisation name", "the name appears inside a law, congress, or organisation label",
+  "state or its people", "the text refers to the state, its residents, or someone from that state",
+  "uncertain", "the author could not assign a safer category after reading the context"
+)
+
+review_labels <- tribble(
+  ~match_key, ~reading_category,
+  "1805-Jefferson-p06:Louisiana:317", "territory or republic before statehood",
+  "1805-Jefferson-p06:Mississippi:671", "river",
+  "1821-Monroe-p13:Florida:562", "territory or republic before statehood",
+  "1821-Monroe-p14:Mississippi:490", "river",
+  "1821-Monroe-p14:Florida:630", "territory or republic before statehood",
+  "1821-Monroe-p14:Mississippi:1229", "river",
+  "1821-Monroe-p26:Mississippi:86", "river",
+  "1821-Monroe-p26:Louisiana:404", "territory or republic before statehood",
+  "1825-Adams-p04:Mississippi:102", "river",
+  "1845-Polk-p21:Texas:17", "territory or republic before statehood",
+  "1845-Polk-p21:Texas:194", "territory or republic before statehood",
+  "1845-Polk-p22:Texas:87", "territory or republic before statehood",
+  "1845-Polk-p22:Texas:916", "territory or republic before statehood",
+  "1845-Polk-p23:Texas:4", "territory or republic before statehood",
+  "1845-Polk-p24:Louisiana:329", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:67", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:260", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:719", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:1052", "territory or republic before statehood",
+  "1845-Polk-p25:Texas:1646", "territory or republic before statehood",
+  "1845-Polk-p26:Oregon:231", "territory or republic before statehood",
+  "1845-Polk-p26:Mississippi:627", "river",
+  "1845-Polk-p26:Missouri:667", "river",
+  "1849-Taylor-p07:Washington:216", "person",
+  "1853-Pierce-p03:North Carolina:342", "state or its people",
+  "1853-Pierce-p14:Washington:578", "person",
+  "1857-Buchanan-p06:Kansas:83", "territory or republic before statehood",
+  "1857-Buchanan-p08:Nebraska:425", "law or organisation name",
+  "1857-Buchanan-p08:Kansas:434", "law or organisation name",
+  "1857-Buchanan-p17:California:696", "state or its people",
+  "1857-Buchanan-p18:Washington:939", "person",
+  "1857-Buchanan-p19:Texas:169", "territory or republic before statehood",
+  "1877-Hayes-p01:Washington:78", "person",
+  "1885-Cleveland-p11:Washington:687", "person",
+  "1889-Harrison-p03:Washington:184", "person",
+  "1889-Harrison-p03:New York:209", "city or federal government",
+  "1889-Harrison-p03:New York:599", "city or federal government",
+  "1889-Harrison-p05:Washington:203", "person",
+  "1889-Harrison-p06:Virginia:94", "state or its people",
+  "1889-Harrison-p10:Pennsylvania:349", "state or its people",
+  "1889-Harrison-p29:Montana:116", "territory or republic before statehood",
+  "1889-Harrison-p29:Washington:128", "territory or republic before statehood",
+  "1897-McKinley-p14:Washington:321", "person",
+  "1897-McKinley-p14:Washington:1622", "city or federal government",
+  "1905-Roosevelt-p04:Washington:1135", "person",
+  "1909-Taft-p14:Ohio:956", "river",
+  "1909-Taft-p14:Mississippi:971", "river",
+  "1925-Coolidge-p07:Washington:190", "event name",
+  "1941-Roosevelt-p23:Washington:118", "person",
+  "1953-Eisenhower-p21:Iowa:156", "state or its people",
+  "1973-Nixon-p17:Washington:216", "city or federal government",
+  "1981-Reagan-p22:Massachusetts:155", "law or organisation name",
+  "1981-Reagan-p31:Washington:67", "person",
+  "1985-Reagan-p01:Louisiana:80", "state or its people",
+  "1985-Reagan-p03:Washington:144", "person",
+  "1985-Reagan-p13:Virginia:64", "state or its people",
+  "1989-Bush-p02:Washington:61", "person",
+  "1989-Bush-p02:Washington:195", "person",
+  "1989-Bush-p02:Washington:292", "person",
+  "1993-Clinton-p04:Washington:13", "person",
+  "2001-Bush-p28:Virginia:51", "state or its people",
+  "2017-Trump-p03:Washington:207", "city or federal government",
+  "2017-Trump-p18:Nebraska:87", "state or its people",
+  "2025-Trump-p10:North Carolina:118", "state or its people",
+  "2025-Trump-p17:Pennsylvania:39", "state or its people",
+  "2025-Trump-p56:New York:6", "city or federal government",
+  "2025-Trump-p56:Washington:114", "city or federal government"
+)
+
+review_matches <- state_matches |>
+  left_join(
+    review_labels,
+    by = join_by(match_key),
+    relationship = "one-to-one"
+  ) |>
+  mutate(
+    reviewed_state_reading = reading_category == "state or its people"
+  )
+
+label_preview <- review_labels |>
+  slice_head(n = 8)
+
+category_counts <- category_table |>
+  left_join(
+    review_matches |>
+      count(reading_category, name = "matches"),
+    by = join_by(category == reading_category)
+  ) |>
+  mutate(matches = coalesce(matches, 0L))
+
+kable(
+  label_preview,
+  col.names = c("Match key", "Reviewed category"),
+  caption = "First keyed review-label decisions",
+  row.names = FALSE
+)
+
+kable(
+  category_counts,
+  col.names = c("Review category", "How this lesson uses the category", "Matches"),
+  caption = "Author-written review categories for state-name matches",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(category_table), 8L),
+  identical(nrow(review_labels), 67L),
+  !anyDuplicated(review_labels$match_key),
+  !anyDuplicated(state_matches$match_key),
+  identical(nrow(anti_join(state_matches, review_labels, by = join_by(match_key))), 0L),
+  identical(nrow(anti_join(review_labels, state_matches, by = join_by(match_key))), 0L),
+  identical(sum(category_counts$matches), 67L),
+  identical(
+    category_counts$matches,
+    c(16L, 7L, 1L, 9L, 20L, 3L, 11L, 0L)
+  ),
+  identical(sum(review_matches$reviewed_state_reading), 11L),
+  identical(category_counts$matches[category_counts$category == "uncertain"], 0L),
+  all(review_matches$reading_category %in% category_table$category),
+  identical(
+    state_matches |>
+      arrange(desc(paragraph_id), desc(start), state) |>
+      left_join(review_labels, by = join_by(match_key), relationship = "one-to-one") |>
+      select(match_key, reading_category) |>
+      arrange(match_key),
+    review_matches |>
+      select(match_key, reading_category) |>
+      arrange(match_key)
+  ),
+  all(
+    review_matches |>
+      filter(
+        paragraph_id == "1857-Buchanan-p08",
+        state %in% c("Nebraska", "Kansas")
+      ) |>
+      pull(reading_category) == "law or organisation name"
+  )
+)
+```
+
+The category table is a disclosure, not a score. These labels were shaped by
+this corpus. A new collection would need a new review.
+
+## Compare naive and reviewed readings
+
+The table below keeps the naive counts beside the reviewed counts. The reviewed
+unit is speeches with at least one state reading for a state. Repeated mentions
+inside one speech do not add more weight.
+
+```{r}
+reviewed_state_counts <- review_matches |>
+  filter(reviewed_state_reading) |>
+  distinct(state, speech_id) |>
+  count(state, name = "reviewed_state_speeches") |>
+  arrange(desc(reviewed_state_speeches), state)
+
+naive_review_comparison <- naive_state_counts |>
+  left_join(reviewed_state_counts, by = join_by(state)) |>
+  mutate(reviewed_state_speeches = coalesce(reviewed_state_speeches, 0L)) |>
+  arrange(desc(naive_matches), state)
+
+washington_summary <- review_matches |>
+  filter(state == "Washington") |>
+  summarise(
+    matches = n(),
+    speeches = n_distinct(speech_id),
+    reviewed_state_speeches = n_distinct(speech_id[reviewed_state_reading])
+  )
+
+river_summary <- review_matches |>
+  filter(state %in% c("Mississippi", "Ohio", "Missouri")) |>
+  summarise(
+    matches = n(),
+    speeches = n_distinct(speech_id),
+    categories = str_c(sort(unique(reading_category)), collapse = ", "),
+    .by = state
+  ) |>
+  arrange(state)
+
+kable(
+  naive_review_comparison,
+  col.names = c(
+    "Matched name", "Naive matches", "Naive speeches",
+    "Reviewed state speeches"
+  ),
+  caption = "Naive matches compared with reviewed state readings",
+  row.names = FALSE
+)
+
+kable(
+  river_summary,
+  col.names = c("Matched name", "Matches", "Speeches", "Reviewed category"),
+  caption = "River readings checked before mapping",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(washington_summary$matches, 22L),
+  identical(washington_summary$speeches, 17L),
+  identical(washington_summary$reviewed_state_speeches, 0L),
+  identical(river_summary$state, c("Mississippi", "Missouri", "Ohio")),
+  identical(river_summary$categories, rep("river", 3L)),
+  identical(
+    reviewed_state_counts$state,
+    c(
+      "Virginia", "North Carolina", "Pennsylvania", "California",
+      "Iowa", "Louisiana", "Nebraska"
+    )
+  ),
+  identical(reviewed_state_counts$reviewed_state_speeches, c(3L, 2L, 2L, 1L, 1L, 1L, 1L))
+)
+```
+
+The code finds `Washington` in 17 speeches and the review counts none as
+Washington State. It also finds `Mississippi`, `Ohio`, and `Missouri` as river
+readings. Those names stay in the review tables and stay off the map.
+
+The full review table is long because every non-state reading remains visible.
+
+```{r}
+review_table <- review_matches |>
+  transmute(
+    paragraph_id,
+    start,
+    state,
+    speech_id,
+    year,
+    president,
+    reading_category,
+    reviewed_state_reading,
+    context
+  ) |>
+  arrange(paragraph_id, start, state)
+
+kable(
+  review_table,
+  col.names = c(
+    "Paragraph ID", "Character start", "Matched name", "Speech ID", "Year",
+    "President", "Reviewed category", "Mapped as state", "Reading context"
+  ),
+  caption = "All reviewed state-name matches with author-written categories",
+  row.names = FALSE,
+  format = "html",
+  escape = TRUE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(review_table), 67L),
+  identical(sum(review_table$reviewed_state_reading), 11L),
+  !any(is.na(review_table$reading_category)),
+  !any(is.na(review_table$context))
+)
+```
+
+## Draw the reviewed state counts
+
+The basemap comes from `ggplot2::map_data("state")`, which uses the `maps`
+package state database. That database covers the 48 contiguous states and the
+District of Columbia. It does not draw Alaska or Hawaii, and this lesson does
+not plot their `state.center` points.
+
+```{r}
+lower48_map <- ggplot2::map_data("state")
+
+state_centers <- tibble(
+  state = datasets::state.name,
+  longitude = datasets::state.center$x,
+  latitude = datasets::state.center$y
+) |>
+  mutate(
+    lower48_or_dc = !state %in% c("Alaska", "Hawaii"),
+    region = str_to_lower(state)
+  )
+
+map_points <- reviewed_state_counts |>
+  left_join(state_centers, by = join_by(state)) |>
+  filter(lower48_or_dc)
+
+state_count_table <- map_points |>
+  select(state, reviewed_state_speeches, longitude, latitude) |>
+  arrange(desc(reviewed_state_speeches), state)
+
+map_alt_text <- sprintf(
+  paste(
+    "Lower-48 U.S. map with proportional circles for seven reviewed state readings.",
+    "Virginia appears in 3 speeches; North Carolina and Pennsylvania appear in 2 each;",
+    "California, Iowa, Louisiana, and Nebraska appear in 1 each.",
+    "Washington State is not plotted because its %d matches in %d speeches were reviewed as non-state readings."
+  ),
+  washington_summary$matches,
+  washington_summary$speeches
+)
+
+kable(
+  state_count_table,
+  col.names = c(
+    "State", "Speeches with reviewed state reading",
+    "Approximate center longitude", "Approximate center latitude"
+  ),
+  caption = "Long description for the reviewed state-count map",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(n_distinct(lower48_map$region), 49L),
+  identical(nrow(map_points), 7L),
+  !any(map_points$state %in% c("Alaska", "Hawaii")),
+  identical(
+    state_centers$lower48_or_dc[state_centers$state %in% c("Alaska", "Hawaii")],
+    c(FALSE, FALSE)
+  ),
+  identical(max(map_points$reviewed_state_speeches), 3L),
+  identical(sum(map_points$reviewed_state_speeches), 11L),
+  str_detect(map_alt_text, fixed("22 matches in 17 speeches")),
+  !any(str_detect(state_matches$paragraph, fixed("Riverton")))
+)
+```
+
+The coordinates are approximate state centers. A symbol at a center is a count
+marker, not the place where a speech event happened. A choropleth shades whole
+areas by value; this map uses circles instead because the values are small
+counts of speeches, not rates or attention. Pre-statehood references such as the
+Republic of Texas were not counted as state readings.
+
+```{r}
+#| label: fig-state-reading-map
+#| fig-cap: "Reviewed state readings in inaugural speeches on a lower-48 basemap; seven states remain after review."
+#| fig-alt: !expr map_alt_text
+#| fig-width: 8
+#| fig-height: 5
+
+mean_latitude <- mean(lower48_map$lat, na.rm = TRUE)
+fixed_ratio <- 1 / cos(mean_latitude * pi / 180)
+legend_breaks <- seq_len(max(map_points$reviewed_state_speeches))
+
+ggplot() +
+  geom_polygon(
+    data = lower48_map,
+    aes(x = long, y = lat, group = group),
+    fill = "grey95",
+    color = "grey65",
+    linewidth = 0.2
+  ) +
+  geom_point(
+    data = map_points,
+    aes(x = longitude, y = latitude, size = reviewed_state_speeches),
+    shape = 21,
+    fill = "white",
+    color = "black",
+    stroke = 0.8
+  ) +
+  scale_size_area(
+    breaks = legend_breaks,
+    max_size = 10,
+    name = "Reviewed speeches"
+  ) +
+  coord_fixed(ratio = fixed_ratio) +
+  labs(
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.margin = margin(5.5, 24, 5.5, 5.5)
+  )
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(legend_breaks, 1:3),
+  fixed_ratio > 1,
+  fixed_ratio < 2,
+  identical(nrow(map_points), nrow(state_count_table)),
+  setequal(map_points$state, state_count_table$state),
+  !any(map_points$state %in% c("Alaska", "Hawaii")),
+  all(map_points$reviewed_state_speeches %in% legend_breaks)
+)
+```
+
+The coordinate ratio is `1 / cos(mean latitude in radians)`, which is
+`r round(fixed_ratio, 2)` in this render. One degree of latitude is drawn about
+`r round(fixed_ratio, 2)` times as long as one degree of longitude, because a
+degree of longitude covers less ground away from the equator. Near the middle of
+the country, a mile east-west and a mile north-south then look about the same
+length. This does not preserve area. The circle areas encode the speech counts;
+exact values belong in the table.
+
+## Where this fits
+
+Lesson 30 shows how a gazetteer can turn a place name into coordinates. This
+page begins earlier. It asks whether a matched name should become a place record
+at all. Names can refer to people, laws, rivers, cities, events, governments, or
+places from an earlier political period.
+
+The lower-48 map also has coverage limits. If a reviewed state reading pointed
+to Alaska or Hawaii, this page would keep it in the table and not draw it on
+this basemap.
+
+## What to remember
+
+- A state-name match is not automatically a state reference.
+- Review labels shaped after reading the matches must be disclosed.
+- Count speeches, not repeated mentions, when the unit is speeches.
+- Rivers, people, events, and pre-statehood references stay off the reviewed
+  map.
+- `scale_size_area()` maps values to circle area; the table carries exact
+  counts.
+- A lower-48 basemap cannot show every U.S. state.
+
+Ben can map seven reviewed states, but only after most naive matches have been
+kept out of the symbol layer. The table is part of the map because it shows what
+the picture refused to draw.
+
+## Sources
+
+- [Gritta et al. on geoparsing limits](https://doi.org/10.1007/s10579-017-9385-8)
+- [Markert and Nissim on location metonymy](https://aclanthology.org/S07-1007/)
+- [R datasets documentation for state names and centers](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/state.html)
+- [ggplot2 size scales](https://ggplot2.tidyverse.org/reference/scale_size.html)
+- [ggplot2 map data documentation](https://ggplot2.tidyverse.org/reference/map_data.html)
+- [maps package on CRAN](https://cran.r-project.org/package=maps)
