@@ -51,6 +51,16 @@ the start or "Thanks." at the end, and each frame holds exactly 3 responsive and
 17 non-responsive records. Record IDs are assigned after seeded permutations and
 never appear in the text.
 
+Frames are assigned by one fixed rule, with no random draw. Within each class,
+the builder splits the notes into those that match the keyword rule and the
+rest, and it places the matching notes first. Each group is taken in order of
+the SHA-256 digest of the note's text. Each note gets the frame that has the
+fewest notes from its group so far. A tie goes to the lower-numbered frame, and a
+frame that already holds its full share for the class is skipped. A
+near-duplicate pair is placed as one unit, at the position of its member with the
+smaller digest, and shares one frame. In the committed collection, the frame
+counts within each group differ by at most one.
+
 The builder refuses to write the files when base-text variety falls below its
 declared threshold, or when any surface check reaches positive F1 of 0.60 or
 balanced accuracy of 0.75. It stops if any check returns a missing value. Its
@@ -63,6 +73,10 @@ checks cover:
   tokens, sentence count, colon, source type, sender role, and subject;
 - the first word, first two words, first three tokens, and colon of each
   record's core note, and the frame itself;
+- each frame paired with the first word of the core note, both as label-free
+  rules that flag rare pairs and as a pair ranker learned on half the records;
+- the frames among records that match the keyword rule and among records that
+  do not, judged on balanced accuracy;
 - the 20 most frequent tokens outside the review request's own topic words;
 - two out-of-fold rankers, each fitted with `glmnet` ridge and lasso and scored
   by stratified five-fold cross-validation under three fold seeds, at the top 36
@@ -74,9 +88,10 @@ checks cover:
   records.
 
 `--sweep-only` runs the record-level checks on any collection file.
-`--negative-controls` confirms that they refuse three earlier versions of the
-collection: the ones committed at `0a5a5af9` and `a3478085`, and an intermediate
-version from the final revision, which the function-word ranker refuses.
+`--negative-controls` confirms that they refuse four earlier versions of the
+collection: the ones committed at `0a5a5af9`, `a3478085`, and `49a9b67a`, and an
+intermediate version from the final revision, which the function-word ranker
+refuses.
 
 The same person wrote these records, their questions, their reference answers,
 their relevance judgments, and the lessons that score against them. They are
@@ -88,17 +103,28 @@ was revised several times during development to remove shortcuts:
 - a record-ID shortcut;
 - repeated templates;
 - a dominant sentence frame;
-- department names as first words; and
+- department names as first words;
 - non-responsive notes generated from a template grid, whose function words
-  separated the classes.
+  separated the classes; and
+- frames assigned in construction order, which let a frame together with a
+  note's first word, and the frame among keyword matches, carry label
+  information.
 
 Lesson 74 was executed on earlier versions of the collection, including one
 intermediate version during the final revision, and the outputs of those runs
 were discarded. The final non-responsive everyday notes were written by a writer
-who had not seen any lesson 74 output. That writer produced two drafts before
-the collection was committed, and neither draft was run through lesson 74. The
-collection was committed before lesson 74 ran on it, and the published results
-come from the first execution on the committed collection.
+who had not seen any lesson 74 output. That writer revised the first draft once
+before the collection was committed, to vary record length more naturally and to
+remove the repeated situations the writer had been told about. Two reviews of
+the committed collection, made before lesson 74 ran on it, then found more notes
+that described the same situation as another record, and found the
+construction-order frame assignment. A checks commit then added the two frame
+checks. One corrective commit replaced every member but one of each repeated
+group those reviews listed and reassigned the frames by the rule above. No other
+note was reworded, and three groups of records outside the correction still
+describe overlapping situations. Neither the writer's drafts nor the corrected
+collection was run through lesson 74 before it was committed, and the published
+results come from the first execution on the corrected collection.
 
 The builder's metadata records its seeds:
 

@@ -831,7 +831,7 @@ nonresponsive_everyday_texts <- c(
   "Move the hand sanitizer refill beside the classroom sink before the evening cohort arrives.",
   "Move the translation cards to the library event folder with the bilingual flyers.",
   "Move the portable whiteboard back after the job fair and wipe off the employer notes.",
-  "Move the seating chart to reception before the workshop so late arrivals can find seats.",
+  "Move the sign-in tablet to reception before the workshop so arrivals can check themselves in.",
   "Move the donated coats to the storage room this afternoon and keep adult sizes separate.",
   "Move the name cards from the east classroom after class and save the unused blanks.",
   "Move the spare podium to the annex before orientation if the main lectern stays loose.",
@@ -866,22 +866,22 @@ nonresponsive_everyday_texts <- c(
   "Do not move the appointment cards from the front counter before walk-in hours end.",
   "Do not return the placards before the parking tour ends and guests leave.",
   "I left my notes for the résumé clinic on Clara's chair before the printer stopped.",
-  "I sent the room setup map to Dana. She will share it with volunteers.",
+  "I sent the grant workshop agenda to Nell. She will print copies for mentors.",
   "I found a grey umbrella under the third row table and tagged it for reception.",
   "I will bring the sign holders back after the hallway fair if the cart is free.",
   "I updated the volunteer call sheet after three people swapped shifts for Saturday.",
-  "I put the hand sanitizer refill beside the classroom sink for the evening lab.",
+  "I put the spare aprons beside the teaching kitchen sink for the baking class.",
   "I shared the bus schedule with the afternoon childcare group before dismissal.",
   "I can cover the front desk until Marta returns. Send calls to me.",
   "I placed a quiet keyboard in the study booth for tomorrow's typing clinic.",
   "I answered the vendor's question about where to unload snacks during the rain.",
-  "I can update the mentor roster once Fiona confirms availability after her shift.",
+  "I can revise the scholarship clinic roster once Theo sends the interpreter list.",
   "I marked which donated laptops still need chargers and which have cracked cases.",
   "I gave the new volunteer a tour of the storage room and showed the key hook.",
   "I cleaned the whiteboard after the numeracy class ended and saved the marker caps.",
   "I placed replacement batteries beside the portable speaker case for the auditorium setup.",
-  "Ask someone to bring the cart downstairs. The computer class ends early.",
-  "The shuttle can wait for the afternoon cohort today if the driver gets notice.",
+  "Ask someone to bring the rolling coat rack upstairs. The lobby hooks are full.",
+  "The shuttle can carry the evening mentors today if they meet by the library.",
   "Ask someone to unlock the storage closet before the safety drill and check the cones.",
   "The evening roster can include the new child-care volunteer after Marta confirms clearance.",
   "Ask someone to check whether the lab tablets charged overnight before learners sign them out.",
@@ -891,8 +891,8 @@ nonresponsive_everyday_texts <- c(
   "The supply order can include more left-handed scissors this month for the youth class.",
   "Ask grounds about the puddle by the bike rack before the evening rain starts.",
   "Can the Friday workshop use the seminar room instead if the projector works?",
-  "Can someone collect the name cards from the east classroom after tutoring ends?",
-  "Can the catering team bring decaf for the morning panel and a dairy-free creamer?",
+  "Can someone collect the feedback slips from the west classroom after practice?",
+  "Can the catering team set aside nut-free cookies for the evening class?",
   "Can someone send me the list of available interview rooms before mentors choose slots?",
   "Can the front desk hold my classroom packet until Carlos arrives for setup?",
   "We need more badge clips before the open house starts. Reception is low.",
@@ -912,49 +912,49 @@ nonresponsive_everyday_texts <- c(
   "We need more appointment cards for walk-in learners at the front counter.",
   "Use the clean seating chart for the résumé workshop. The old copy is smudged.",
   "Use the yellow tabs for completion folders today, not the archived labels.",
-  "Use the spare display adapter if the speaker needs it during the auditorium test.",
-  "Use the staff room copier until the tray stops squeaking in the main office.",
+  "Use the lapel microphone if the instructor needs it during the auditorium welcome.",
+  "Use the annex printer for badge labels while the front tablet updates.",
   "Use the new stop name on the shuttle notice for Monday pickup.",
   "Use the labelled bin for goggles after practice, and wipe the straps first.",
   "Use the blue folders for translation cards and flyers at the outreach table.",
   "Use the longer cord for the sign-in tablet so the stand reaches the outlet.",
-  "Use the side entrance for deliveries during repairs; the dock is crowded.",
+  "Use the loading dock for furniture deliveries during carpet cleaning.",
   "Use the clean serving tongs for the fruit trays once the covers come off.",
   "Use the portable whiteboard for the job fair line and write employer names clearly.",
   "Use the front tablet for badge photos this week because the kiosk camera flickers.",
   "Use the library partner's headcount for Thursday outreach when packing materials.",
-  "Use the small lab if the annex gets crowded during the health workshop.",
+  "Use the resource room if the health workshop needs quieter seating.",
   "Use my desk copy of the table layout if the printed plan disappears.",
-  "Tell reception that the visitor badge printer is back online. Marcus tested it.",
+  "Tell reception that the side-door buzzer is quiet again after the battery swap.",
   "Tell payroll that the stipend batch cleared after correction and the duplicate row is gone.",
   "Tell the front desk about the blue scarf from security before lost-and-found pickup.",
   "Tell the instructor that the practice file opens cleanly on the classroom laptops.",
   "Tell transit that the shuttle stop moves across the street Monday because of paving.",
   "Tell the opening team about the lobby heater if it is still running at 7:45.",
-  "Tell the vendor where to unload snacks before noon so the ramp stays open.",
+  "Tell the vendor to park the flower delivery by the side awning.",
   "Tell childcare that the craft box needs more glue sticks before the poster activity.",
-  "Tell the career team that the college visitors arrived and are waiting near reception.",
+  "Tell the career team that the apprenticeship brochures arrived in the mailroom.",
   "Tell IT that the password portal will restart at noon; learners are waiting.",
-  "Tell facilities that the mop closet key has been found under the supply cart.",
-  "Tell mentors that the room change email went out and the signs are posted.",
-  "Tell catering that the morning panel needs decaf and extra sleeves for hot cups.",
+  "Tell facilities the courtyard hose bib is dripping near the planter boxes.",
+  "Tell mentors that the Friday reminder includes the bus entrance map.",
+  "Tell catering that the afternoon seminar needs vegetarian wraps and chilled water.",
   "Tell operations that the loading bay is closed Thursday while the railing is repaired.",
-  "Tell the program manager that the new table layout is ready for approval.",
+  "Tell the program manager that the childcare corner needs another rug.",
   "After the morning shift refill the badge sleeves at reception.",
   "After visitor hours check the east gate buzzer again. It sounded faint.",
   "After the duplicate spelling is fixed print the evening roster.",
   "After the delivery arrives count the mismatched folder boxes.",
   "After the help desk call restart the admissions voicemail greeting.",
-  "After the webinar return borrowed headsets to the cabinet; charge them first.",
-  "After the employer breakfast match the invoice to the headcount.",
-  "After the community meeting put the recycling cart outside.",
+  "After the literacy webinar collect the borrowed tablets and plug them in.",
+  "After the employer breakfast wipe the name tents and pack the table numbers.",
+  "After the tenant workshop return the folding chairs to the upstairs closet.",
   "After the storm close the lab windows and check the plants.",
   "After the manufacturer tour count the visitor vests again.",
   "After the forum stack chairs away from the ramp.",
-  "After the numeracy class clean the whiteboard and markers.",
+  "After the pottery demo rinse the folding tables and stack the clay mats.",
   "After the lunch break open the employer panel room.",
   "After the weather closure test update the phone tree.",
-  "After the tour return the visitor parking placards."
+  "After the campus walk collect the borrowed umbrellas from reception."
 )
 stopifnot(length(nonresponsive_everyday_texts) == nonresponsive_needed)
 
@@ -1034,19 +1034,69 @@ stopifnot(
 
 allocate_frames <- function(row_count, frames, capacity, paired_rows = list()) {
   assignment <- rep(NA_character_, row_count)
-  remaining <- setNames(rep(capacity, length(frames)), frames)
-
-  for (pair_index in seq_along(paired_rows)) {
-    rows <- paired_rows[[pair_index]]
-    frame <- frames[[pair_index]]
-    assignment[rows] <- frame
-    remaining[[frame]] <- remaining[[frame]] - length(rows)
+  class_rows <- if (row_count == length(responsive_rows)) responsive_rows else nonresponsive_rows
+  cores <- review_collection$core_text[class_rows]
+  core_digest <- map_chr(
+    cores,
+    \(core) digest(core, algo = "sha256", serialize = FALSE)
+  )
+  keyword_match <- str_detect(cores, regex(keyword_regex_text, ignore_case = TRUE))
+  paired_lookup <- rep(NA_integer_, row_count)
+  if (length(paired_rows) > 0L) {
+    for (pair_index in seq_along(paired_rows)) {
+      rows <- paired_rows[[pair_index]]
+      stopifnot(length(rows) == 2L, length(unique(keyword_match[rows])) == 1L)
+      paired_lookup[rows] <- pair_index
+    }
   }
 
-  for (row in which(is.na(assignment))) {
-    frame <- names(remaining)[remaining > 0][[1]]
-    assignment[[row]] <- frame
-    remaining[[frame]] <- remaining[[frame]] - 1L
+  units <- tibble(
+    unit_id = seq_len(row_count),
+    row = seq_len(row_count),
+    unit = coalesce(paired_lookup, seq_len(row_count) + length(paired_rows)),
+    digest = core_digest,
+    keyword_match = keyword_match
+  ) |>
+    group_by(unit) |>
+    summarise(
+      rows = list(row),
+      size = n(),
+      digest = min(digest),
+      keyword_match = first(keyword_match),
+      .groups = "drop"
+    )
+
+  remaining <- setNames(rep(capacity, length(frames)), frames)
+  stratum_counts <- expand_grid(
+    frame = frames,
+    keyword_match = sort(unique(keyword_match), decreasing = TRUE)
+  ) |>
+    mutate(count = 0L)
+
+  for (stratum in sort(unique(keyword_match), decreasing = TRUE)) {
+    stratum_units <- units |>
+      filter(keyword_match == stratum) |>
+      arrange(digest)
+    for (unit_row in seq_len(nrow(stratum_units))) {
+      size <- stratum_units$size[[unit_row]]
+      candidates <- frames[remaining[frames] >= size]
+      stopifnot(length(candidates) > 0L)
+      candidate_counts <- stratum_counts$count[
+        match(
+          paste(candidates, stratum),
+          paste(stratum_counts$frame, stratum_counts$keyword_match)
+        )
+      ]
+      frame <- candidates[order(candidate_counts, as.integer(str_extract(candidates, "\\d+")))[[1]]]
+      rows <- stratum_units$rows[[unit_row]]
+      assignment[rows] <- frame
+      remaining[[frame]] <- remaining[[frame]] - size
+      stratum_counts$count[
+        stratum_counts$frame == frame & stratum_counts$keyword_match == stratum
+      ] <- stratum_counts$count[
+        stratum_counts$frame == frame & stratum_counts$keyword_match == stratum
+      ] + size
+    }
   }
 
   stopifnot(all(remaining == 0L), !anyNA(assignment))
