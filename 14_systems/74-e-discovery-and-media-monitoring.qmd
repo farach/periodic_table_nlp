@@ -9,7 +9,7 @@ A fictional request asks for records about the Calder Yard contract. It is not a
 
 **E-discovery** is electronic discovery: finding records that must be reviewed or produced for a legal request. **Technology-assisted review** uses a model to rank unreviewed records so people can review likely responsive records first. **Media monitoring** watches new items as they arrive and sends alerts for items that matter.
 
-Grossman and Cormack report that Blair and Maron's legal-search study found searchers believed they had found at least `r 75` percent of relevant documents, while average recall was about `r 20` percent for the studied requests. Lesson 9's active learning chooses uncertain examples to improve a model; ranked review here chooses high-scoring unreviewed records to find responsive material. A low elusion rate can still hide many misses: if a review found `r 70` of `r 100` responsive records in a `r format(10000, big.mark = ",")`-record collection, the unreviewed pile would have only `r sprintf("%.2f%%", 100 * 30 / 9400)` elusion but recall would be only `r sprintf("%.0f%%", 100 * 70 / 100)`.
+Grossman and Cormack report that Blair and Maron's legal-search study found searchers believed they had found at least 75 percent of relevant documents, while average recall was about 20 percent for the studied requests. Lesson 9's active learning chooses uncertain examples to improve a model; ranked review here chooses high-scoring unreviewed records to find responsive material. The **elusion rate** is the share of unreviewed records that are responsive, and a low elusion rate can still hide many misses. Suppose a review of 600 records from a 10,000-record collection finds 70 of its 100 responsive records. The 9,400 unreviewed records still hold 30 responsive records, so the elusion rate is 30 / 9,400, about 0.32 percent, while recall is 70 / 100, or 70 percent.
 
 ::: {.callout-note}
 The records in this lesson are constructed teaching examples. They do not describe a real legal matter, company, person, news source, or monitoring target.
@@ -177,7 +177,34 @@ stopifnot(
 )
 ```
 
-The constructed prevalence is `r sprintf("%.0f%%", 100 * mean(review_records$reference_responsive))`, much higher than many legal-review matters. It was chosen so a small teaching page has enough responsive examples to inspect. The builder also swept superficial features such as length, punctuation, dates, pronouns, source type, sentence frame, common non-topic words, file position, and ID pattern, and refused to write if a single feature separated the classes too well.
+The constructed prevalence is `r sprintf("%.0f%%", 100 * mean(review_records$reference_responsive))`, much higher than many legal-review matters. It was chosen so a small teaching page has enough responsive examples to inspect. Each record is a short note wrapped in one of 12 frames, such as "Reminder:" at the start or "Thanks." at the end, and every frame holds the same number of responsive records and the same number of non-responsive records. Before writing the file, the builder checked that surface features alone could not separate the two classes. It would have refused to write the file if any check reached an F1 of 0.60 or a balanced accuracy of 0.75. Both scores rise as a check separates the classes better: balanced accuracy, from lesson 44, averages the share of each class that a check gets right, and F1 combines the precision and recall defined in the keyword section below. The table below is the builder's own record of those checks.
+
+```{r}
+knitr::kable(
+  tibble(builder_checks = review_metadata$shortcut_sweep[[1]]),
+  format = "html",
+  escape = TRUE,
+  col.names = "Surface checks recorded by the builder",
+  caption = "Checks the builder ran before writing the review collection",
+  row.names = FALSE
+)
+```
+
+The table uses the builder's own shorthand. A held-out check learns a rule from some of the records and tests it on records it did not see. Ridge and lasso are two kinds of penalized regression, the same family as the ranker later on this page, and snowball stop words are a standard list of common words such as "the" and "to". CK-D1 and CK-D2 are the builder's names for its two frame checks. CK-D1 looks at each frame together with the first word of the note inside it, and CK-D2 compares the frames separately among records that contain a keyword and records that do not.
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(dplyr::n_distinct(review_metadata$shortcut_sweep), 1L),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("F1 >= 0.60")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("balanced accuracy >= 0.75")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("snowball")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("ridge and lasso")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("CK-D1")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("CK-D2"))
+)
+```
 
 ## Search predeclared keywords
 
@@ -309,6 +336,9 @@ review_batches <- list()
 ranked_batches <- 2L
 batch_size <- 10L
 tie_rows <- integer(ranked_batches)
+pool_rows <- integer(ranked_batches)
+batch_tied_rows <- integer(ranked_batches)
+tie_crosses_batch_edge <- logical(ranked_batches)
 
 for (batch_id in seq_len(ranked_batches)) {
   fitted_review <- fit_review_model(reviewed_records)
@@ -323,9 +353,14 @@ for (batch_id in seq_len(ranked_batches)) {
     mutate(score = .pred_responsive) |>
     arrange(desc(score), doc_id)
 
-  tie_rows[[batch_id]] <- sum(
-    duplicated(scored_pool$score) |
-      duplicated(scored_pool$score, fromLast = TRUE)
+  tied_in_pool <- duplicated(scored_pool$score) |
+    duplicated(scored_pool$score, fromLast = TRUE)
+  tie_rows[[batch_id]] <- sum(tied_in_pool)
+  pool_rows[[batch_id]] <- nrow(scored_pool)
+  batch_tied_rows[[batch_id]] <- sum(tied_in_pool[seq_len(batch_size)])
+  tie_crosses_batch_edge[[batch_id]] <- identical(
+    scored_pool$score[[batch_size]],
+    scored_pool$score[[batch_size + 1L]]
   )
 
   batch_rows <- scored_pool |>
@@ -404,6 +439,40 @@ missed_records <- unreviewed_records |>
     text
   )
 
+tie_edge_sentence <- if (any(tie_crosses_batch_edge)) {
+  paste0(
+    "In ranked batch ", paste(which(tie_crosses_batch_edge), collapse = " and "),
+    ", a tie crossed the batch edge, so the document-ID rule decided which of the tied records were reviewed."
+  )
+} else {
+  "No tie crossed the edge of a ranked batch, so the tie rule did not decide which records were reviewed."
+}
+
+mostly_tied_batches <- which(batch_tied_rows > batch_size / 2)
+tied_batch_sentence <- if (length(mostly_tied_batches) > 0L) {
+  paste0(
+    "Tied records fill most of ranked batch ", paste(mostly_tied_batches, collapse = " and "), ": ",
+    paste(batch_tied_rows[mostly_tied_batches], collapse = " and "), " of its ", batch_size,
+    " records share an exact score with another record, so their order says nothing about which is more likely to be responsive."
+  )
+} else {
+  ""
+}
+
+gain_alt_text <- paste0(
+  "Line chart of responsive records found against records reviewed; both axes start at zero. ",
+  "The line runs from ", review_progress$cumulative_responsive_found[[1]],
+  " found at ", review_progress$cumulative_reviewed[[1]], " reviewed to ",
+  paste(
+    paste0(
+      review_progress$cumulative_responsive_found[-1], " at ",
+      review_progress$cumulative_reviewed[-1]
+    ),
+    collapse = " and "
+  ),
+  "."
+)
+
 knitr::kable(
   batch_summary,
   col.names = c("Ranked batch", "Reference label", "Records"),
@@ -475,12 +544,12 @@ stopifnot(
 )
 ```
 
-The team can see how many responsive records it has found, because reviewers code those records as they review them. It cannot see recall in a real matter without more assessment. The recall column is labeled as fiction-only because it uses the hidden labels for records that were not reviewed. In the two scoring rounds, `r sum(tie_rows)` scored-pool rows were part of exact score ties; ties are ordered by document ID so the run is reproducible, not because lower IDs are more relevant.
+The team can see how many responsive records it has found, because reviewers code those records as they review them. It cannot see recall in a real matter without more assessment. The recall column is labeled as fiction-only because it uses the hidden labels for records that were not reviewed. In the two scoring rounds, `r sum(tie_rows)` of `r sum(pool_rows)` scored-pool rows were part of exact score ties; ties are ordered by document ID so the run is reproducible, not because lower IDs are more relevant. `r tie_edge_sentence` `r tied_batch_sentence`
 
 ```{r}
 #| label: fig-review-gain
 #| fig-cap: "Responsive records found as review proceeds through the keyword seed and two ranked batches."
-#| fig-alt: "Line chart starting at zero. Responsive records found rises from 22 at 39 reviewed records to 23 at 49 and 33 at 59."
+#| fig-alt: !expr gain_alt_text
 
 ggplot(
   review_progress,
@@ -638,9 +707,9 @@ stopifnot(
 )
 ```
 
-The predeclared elusion seed is `7401`, reused by rule before drawing the sample. The sample found `r observed_missed_in_sample` responsive records in `r elusion_n`. `r if (observed_missed_in_sample == 0L) "The point estimate reads as no missed records in the unreviewed pile, but" else sprintf("The point estimate scales that to about %.1f missed records in the unreviewed pile, and", point_missed)` the exact finite-population interval still allows `r missed_interval[1]` to `r missed_interval[2]` missed records. That becomes recall from about `r round(recall_interval[1], 3)` to `r round(recall_interval[2], 3)`. The fiction reveals that the true missed count is `r sum(unreviewed_records$reference_responsive)`.
+The elusion seed is `7401`, the builder's base seed, fixed by rule before the sample was drawn. The sample found `r observed_missed_in_sample` responsive records in `r elusion_n`. `r if (observed_missed_in_sample == 0L) "The point estimate reads as no missed records in the unreviewed pile, but" else sprintf("The point estimate scales that to about %.1f missed records in the unreviewed pile, and", point_missed)` the exact finite-population interval still allows `r missed_interval[1]` to `r missed_interval[2]` missed records. That becomes recall from about `r round(recall_interval[1], 3)` to `r round(recall_interval[2], 3)`. The fiction reveals that the true missed count is `r sum(unreviewed_records$reference_responsive)`.
 
-A binomial Clopper-Pearson interval treats the pile as if it were very large and samples with replacement. Here it gives a wider lower recall bound than the finite-population interval. Confidence intervals describe a repeated-sampling procedure; they are not a 95 percent chance statement about this one interval.
+A binomial Clopper-Pearson interval treats the pile as if it were very large and samples with replacement. `r if (binomial_warning$printed_recall_low < recall_interval[1]) "Here it gives a wider lower recall bound than the finite-population interval." else "Here its lower recall bound is not wider than the finite-population one."` Confidence intervals describe a repeated-sampling procedure; they are not a 95 percent chance statement about this one interval.
 
 Repeatedly sampling, reviewing more records, and sampling again until the result looks acceptable would bias the report. The sample belongs after the stop, once.
 
