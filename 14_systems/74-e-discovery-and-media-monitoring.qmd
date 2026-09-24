@@ -535,10 +535,10 @@ stopifnot(
   identical(ranked_batches, 2L),
   identical(batch_size, 10L),
   identical(nrow(reviewed_records), 59L),
-  identical(sum(reviewed_records$reference_responsive), 33L),
+  identical(sum(reviewed_records$reference_responsive), 27L),
   identical(nrow(unreviewed_records), 181L),
-  identical(sum(unreviewed_records$reference_responsive), 3L),
-  identical(nrow(missed_records), 3L),
+  identical(sum(unreviewed_records$reference_responsive), 9L),
+  identical(nrow(missed_records), 9L),
   all(table(review_scored$label[review_scored$keyword_hit]) >= 8L),
   !any(ranked_reviewed$doc_id %in% review_scored$doc_id[review_scored$keyword_hit])
 )
@@ -578,7 +578,7 @@ ggplot(
 stopifnot(
   identical(nrow(review_progress), 3L),
   identical(review_progress$cumulative_reviewed, c(39L, 49L, 59L)),
-  identical(review_progress$cumulative_responsive_found, c(22L, 23L, 33L))
+  identical(review_progress$cumulative_responsive_found, c(22L, 26L, 27L))
 )
 ```
 
@@ -696,13 +696,13 @@ knitr::kable(
 stopifnot(
   identical(elusion_seed, 7401L),
   identical(elusion_n, 50L),
-  identical(observed_missed_in_sample, 0L),
+  identical(observed_missed_in_sample, 2L),
   identical(unreviewed_total, 181L),
-  identical(found_total, 33L),
-  identical(missed_interval, c(0L, 11L)),
-  round(recall_interval[1], 3) == 0.75,
-  round(recall_interval[2], 3) == 1,
-  round(known_recall, 3) == 0.917,
+  identical(found_total, 27L),
+  identical(missed_interval, c(2L, 22L)),
+  round(recall_interval[1], 3) == 0.551,
+  round(recall_interval[2], 3) == 0.931,
+  round(known_recall, 3) == 0.75,
   binomial_warning$printed_recall_low < recall_interval[1]
 )
 ```
