@@ -941,8 +941,8 @@ phrases, and `specific needs`), promise words (`guarantee`, `guaranteed`,
 `approved`, `promise`, `scheduled`, `reach out`, `will follow up`, and `will be
 accepted`), and bracketed placeholders. Several of these patterns, for example
 `will follow up`, `reach out`, `scheduled`, and bracketed placeholders, were
-written after reading replies from this same model and an earlier version of
-this prompt, so they fit these replies and are not a general detector. A
+written after reading earlier replies from this model, so they fit those replies
+and are not a general detector. A
 flagged generated reply is replaced by a fixed fallback. Fixed refusal and
 hand-off text is not a model screen result.
 
