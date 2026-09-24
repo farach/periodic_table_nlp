@@ -46,27 +46,75 @@ fictional dated items with arrival order, explicit syndicated near-duplicates,
 and ambiguous Riverton mentions. `data-raw/build-riverton-review-collection.R`
 writes both. Every row carries an `author_note` marking it as fictional, and a
 `near_duplicate_of` column names the original of each deliberate near-duplicate.
-Record IDs are assigned after seeded permutations and never appear in the text.
+Each record is a short note wrapped in one of 12 frames, such as "Reminder:" at
+the start or "Thanks." at the end, and each frame holds exactly 3 responsive and
+17 non-responsive records. Record IDs are assigned after seeded permutations and
+never appear in the text.
+
 The builder refuses to write the files when base-text variety falls below its
-declared threshold or when a superficial feature separates the reference
-classes. Its sweep covers length, punctuation, sentence frame, first word,
-construction order, record ID, date, file position, and frequent tokens, with
-the review request's own topic words excluded by a rule written before the
-final rebuild.
+declared threshold, or when any surface check reaches positive F1 of 0.60 or
+balanced accuracy of 0.75. It stops if any check returns a missing value. Its
+checks cover:
+
+- single values, and value sets learned on half the records and tested on the
+  other half (20 seeded splits), of record features: length, punctuation,
+  pronouns, digits, month, weekday, record-ID digit and order, date rank, file
+  position, construction-ID order, first word, first two words, first three
+  tokens, sentence count, colon, source type, sender role, and subject;
+- the first word, first two words, first three tokens, and colon of each
+  record's core note, and the frame itself;
+- the 20 most frequent tokens outside the review request's own topic words;
+- two out-of-fold rankers, each fitted with `glmnet` ridge and lasso and scored
+  by stratified five-fold cross-validation under three fold seeds, at the top 36
+  records. One ranker sees counts of every word on the snowball stop-word list,
+  and the other sees format cues (length, punctuation, capitalization, and
+  digits);
+- a frame-only ranker; and
+- a cap of 15 percent on any frame or core opening among non-responsive
+  records.
+
+`--sweep-only` runs the record-level checks on any collection file.
+`--negative-controls` confirms that they refuse three earlier versions of the
+collection: the ones committed at `0a5a5af9` and `a3478085`, and an intermediate
+version from the final revision, which the function-word ranker refuses.
 
 The same person wrote these records, their questions, their reference answers,
 their relevance judgments, and the lessons that score against them. They are
 disclosed teaching fixtures, not independent benchmarks or ground truth. The
 handbook, its questions, and its judgments were written and fingerprinted before
-any lesson retrieved or generated anything. The review collection was not: it
-was rebuilt three times after early drafts of lesson 74 had run, to remove a
-record-ID shortcut, then repeated templates, then a dominant sentence frame. Its
-metadata records the base seed 7401 and the effective seeds the builder uses
-for dates, record IDs, and stream IDs, and the lesson's single elusion sample
-uses the predeclared seed 7401. `riverton-handbook-metadata.csv` and
-`riverton-review-collection-metadata.csv` record row counts, class counts, and
-line-normalised SHA-256 fingerprints that `scripts/check-data-fingerprints.R`
-verifies.
+any lesson retrieved or generated anything. The review collection was not. It
+was revised several times during development to remove shortcuts:
+
+- a record-ID shortcut;
+- repeated templates;
+- a dominant sentence frame;
+- department names as first words; and
+- non-responsive notes generated from a template grid, whose function words
+  separated the classes.
+
+Lesson 74 was executed on earlier versions of the collection, including one
+intermediate version during the final revision, and the outputs of those runs
+were discarded. The final non-responsive everyday notes were written by a writer
+who had not seen any lesson 74 output. That writer produced two drafts before
+the collection was committed, and neither draft was run through lesson 74. The
+collection was committed before lesson 74 ran on it, and the published results
+come from the first execution on the committed collection.
+
+The builder's metadata records its seeds:
+
+- the base seed 7401 and the row-shuffle seed 7403;
+- the date, record-ID, and stream-ID seeds, each chosen by a rule written in
+  the builder;
+- the split-half seeds 7501 to 7520; and
+- the ranker fold seeds 7601, 7602, and 7603.
+
+The lesson's single elusion sample uses the predeclared seed 7401. During
+drafting, that seed was briefly changed to 7402 after development draws had
+been inspected. It was restored to 7401 before the draft was frozen.
+
+`riverton-handbook-metadata.csv` and `riverton-review-collection-metadata.csv`
+record row counts, class counts, and line-normalised SHA-256 fingerprints that
+`scripts/check-data-fingerprints.R` verifies.
 
 ## Bing Liu opinion lexicon
 
