@@ -48,8 +48,8 @@ writes both. Every row carries an `author_note` marking it as fictional, and a
 `near_duplicate_of` column names the original of each deliberate near-duplicate.
 Each record is a short note wrapped in one of 12 frames, such as "Reminder:" at
 the start or "Thanks." at the end, and each frame holds exactly 3 responsive and
-17 non-responsive records. Record IDs are assigned after seeded permutations and
-never appear in the text.
+17 non-responsive records. One of the 12 frames leaves the note bare. Record IDs
+are assigned after seeded permutations and never appear in the text.
 
 Frames are assigned by one fixed rule, with no random draw. Within each class,
 the builder splits the notes into those that match the keyword rule and the
@@ -61,6 +61,9 @@ is skipped. A
 near-duplicate pair is placed as one unit, at the position of its member with the
 smaller digest, and shares one frame. In the committed collection, the frame
 counts within each group differ by at most one.
+Because the frame rule does not look at a note's own opening words, three
+records (RYD-0048, RYD-0125 and RYD-0185) begin "Please note: Please"; they are
+left as built.
 
 The builder refuses to write the files when base-text variety falls below its
 declared threshold, or when any surface check reaches positive F1 of 0.60 or
@@ -89,11 +92,20 @@ checks cover:
 - a cap of 15 percent on any frame or core opening among non-responsive
   records.
 
+In the sweep description stored in the metadata, "core opening" means the note's
+first two words in the 15 percent share cap and its first word in CK-D1.
+
 `--sweep-only` runs the record-level checks on any collection file.
 `--negative-controls` confirms that they refuse four earlier versions of the
 collection: the ones committed at `0a5a5af9`, `a3478085`, and `49a9b67a`, and an
 intermediate version from the final revision, which the function-word ranker
 refuses.
+The intermediate version is not in the repository, so a clone cannot run
+`--negative-controls`. From a clone, write each committed version to a file with
+`git show <commit>:data/riverton/riverton-review-collection.csv` and run
+`--sweep-only` on that file; each of the three is refused. Both check-only modes
+need their file argument: without it, the script runs the full build, which
+rewrites the collection, stream and metadata files.
 
 Run the builder in a UTF-8 locale; in the C locale its frame-reading check stops
 the build before it writes anything.
