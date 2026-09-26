@@ -333,7 +333,7 @@ cat(
   '<p class="task-map-instructions" id="task-map-instructions">',
   'Select a solid-bordered tile to open its lesson. ',
   planned_instruction,
-  'If the map is wider than the window, ',
+  'If the whole map does not fit, ',
   'use the buttons, arrow keys, or horizontal scrolling.',
   '</p>',
   '<div class="task-map-scroll-controls" ',
