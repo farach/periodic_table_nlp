@@ -46,13 +46,17 @@ lesson_text_colours <- c(
   support = "#00755A"
 )
 
-theme_lesson <- function(base_size = 12, grid = c("x", "y", "both", "none")) {
+# `base_family` exists for figures drawn on a device that cannot see the
+# registered font, such as the grDevices::png() device that word clouds need.
+theme_lesson <- function(base_size = 12,
+                         grid = c("x", "y", "both", "none"),
+                         base_family = lesson_font) {
   grid <- match.arg(grid)
   half_line <- base_size / 2
 
   theme <- ggplot2::theme_minimal(
     base_size = base_size,
-    base_family = lesson_font
+    base_family = base_family
   ) +
     ggplot2::theme(
       text = ggplot2::element_text(colour = lesson_colours[["ink"]]),

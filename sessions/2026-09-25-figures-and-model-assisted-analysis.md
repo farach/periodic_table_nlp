@@ -47,9 +47,19 @@
 
 ## Decisions worth remembering
 
-- ggwordcloud measures words on a separate `png()` device, so a font
-  registered with systemfonts triggers a missing-font warning, which the
-  lessons turn into an error. Word clouds keep the default font.
+- ggwordcloud places words by measuring them on a separate `grDevices::png()`
+  device, so a font registered with systemfonts triggers a missing-font
+  warning, which the lessons turn into an error. Drawing the cloud with ragg
+  is not safe either: on the Linux runner, ragg drew "sans" as DejaVu Sans
+  while the measuring device used a narrower Helvetica substitute, and the
+  words overlapped. Lesson 77 draws its clouds on the `png()` device instead,
+  so the words are drawn in the font they were measured in.
+- On the Linux runner the t-SNE layout in lesson 78 came out taller than wide,
+  so `coord_equal()` narrowed every panel and cut off two strip titles. The
+  panels now use a square window. The first Linux render also showed that the
+  long lesson 78 subtitle ran off both figures on every platform;
+  `scripts/check-lessons.R` now fails a figure that draws into its outer
+  margin.
 - When layers draw different subsets of rows on a discrete axis, the axis
   orders levels by the first layer that contains each one. Lesson 79's undated
   row jumped to the top until `scale_y_discrete(drop = FALSE)` was added.
@@ -60,6 +70,19 @@
   refuses the cache if the prompt, collection, labels, or model revision no
   longer match, and it reports rather than asserts how many rerun answers
   repeat, because another computer may differ.
+
+## Linux render
+
+The pull request's CI run was the first full render and the first on Linux.
+Every step passed. The guide's eight-record rerun matched all eight saved
+answers there too. Compared with the Windows render, the page text differed in
+seven places, all computed during the render: generated wording in lessons 66
+and 71, library versions in lessons 7 and 17, t-SNE neighbours and overlaps in
+lesson 78, and small tokenizer counts in lessons 72 and 77. Compared with
+`main`'s Linux render, no lesson whose only change was moving table code
+differs in its prose, tables, or printed output. Lessons 39, 48, and 49 lost a
+duplicate figure caption, because the table that used to share the figure
+chunk had been captioned as a figure too.
 
 ## Local environment notes
 

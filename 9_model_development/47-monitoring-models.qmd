@@ -421,11 +421,17 @@ drift_plot <- drift_table |>
   )
 
 # Both panels start at zero, so the nearly flat share does not look like a
-# large change just because its panel has its own scale.
+# large change just because its panel has its own scale. The zero line is the
+# only reference line; the labels carry the values.
 panel_floor <- tibble(measure = unique(drift_plot$measure), value = 0)
 
 ggplot(drift_plot, aes(x = period, y = value, group = measure)) +
   geom_blank(data = panel_floor, aes(x = NULL, group = NULL)) +
+  geom_hline(
+    yintercept = 0,
+    colour = lesson_colours[["context"]],
+    linewidth = 0.5
+  ) +
   geom_line(colour = lesson_colours[["accent"]], linewidth = 0.9) +
   geom_point(colour = lesson_colours[["accent"]], size = 2.6) +
   geom_text(
@@ -440,11 +446,11 @@ ggplot(drift_plot, aes(x = period, y = value, group = measure)) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.3))) +
   labs(
     title = "Paragraph length drifts far more than vocabulary coverage",
-    subtitle = "Two label-free input checks for each period of the inaugural corpus",
+    subtitle = "Two label-free input checks for each period of the inaugural corpus; both panels start at zero",
     x = "Period",
     y = NULL
   ) +
-  theme_lesson(grid = "y") +
+  theme_lesson(grid = "none") +
   theme(axis.text.y = element_blank())
 ```
 

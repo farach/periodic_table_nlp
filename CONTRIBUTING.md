@@ -295,7 +295,11 @@ evidence.
   cue besides colour. Text drawn in a series colour uses the darker
   `lesson_text_colours` value so it meets 4.5:1 contrast. Assert any claim a
   title makes in the hidden chunk after the figure, and inspect the rendered
-  PNG before publishing.
+  PNG before publishing, on Linux as well as your own machine when the layout
+  comes from an algorithm. Break a long subtitle with `<br>`; element_markdown
+  does not wrap. `scripts/check-lessons.R` fails a rendered figure that draws
+  into its outer margin, which catches text running off the image but not text
+  clipped inside a panel.
 - In the visualization lessons, 75 to 81, the plotting code is the lesson and
   stays visible. Elsewhere, fold supporting plotting code with
   `#| code-fold: true` and `#| code-summary: "Show the plotting code"`. A long
@@ -371,8 +375,15 @@ evidence.
   `scale_*_discrete(drop = FALSE)`. Otherwise the axis orders levels by the
   first layer that contains each one, not by the factor, and a row can jump to
   the wrong end of a timeline.
-- ggwordcloud measures words on its own `png()` device, which cannot see a
-  font registered with systemfonts, so word clouds keep the default font.
+- ggwordcloud places each word by first measuring it on a `grDevices::png()`
+  device. Draw a word cloud chunk on that same device with `#| dev: png` and
+  `theme_lesson(base_family = "sans")`. Drawn with ragg, the words can use a
+  wider font than the one they were measured in (on Linux, DejaVu Sans against
+  a Helvetica substitute), and they overlap.
+- A projection drawn with `coord_equal()` changes shape when its layout does,
+  and a t-SNE layout is wider on one computer and taller on another. Give each
+  panel a square window with `xlim` and `ylim` so the panels, and the strip
+  titles above them, keep the same size everywhere.
 - Stochastic or chaotic layouts (t-SNE, force-directed graphs, word clouds) get
   seeds and single threads, but assertions and prose must not depend on their
   coordinates. When labels would collide, redesign the figure with small

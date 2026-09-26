@@ -321,6 +321,13 @@ anchor_panels <- function(points, neighbours_2d) {
 }
 
 draw_projection <- function(panels) {
+  # A square window gives every panel the same shape on every computer. A
+  # t-SNE run can come out wider or taller, and coord_equal() alone would then
+  # change the panel shape.
+  half_span <- max(diff(range(panels$x)), diff(range(panels$y))) / 2
+  x_centre <- mean(range(panels$x))
+  y_centre <- mean(range(panels$y))
+
   ggplot(panels, aes(x = x, y = y)) +
     geom_point(
       data = \(d) filter(d, role == "other"),
@@ -352,7 +359,10 @@ draw_projection <- function(panels) {
       size = 3.8
     ) +
     facet_wrap(vars(panel), ncol = 4) +
-    coord_equal() +
+    coord_equal(
+      xlim = x_centre + c(-1, 1) * half_span,
+      ylim = y_centre + c(-1, 1) * half_span
+    ) +
     labs(x = NULL, y = NULL) +
     theme_lesson(grid = "none") +
     theme(
@@ -363,9 +373,9 @@ draw_projection <- function(panels) {
 
 key_subtitle <- str_c(
   "Each panel shows one landmark word (dark triangle) and its 10 nearest ",
-  "neighbours among the 300 words, measured in all 50 dimensions.<br>",
+  "neighbours<br>among the 300 words, measured in all 50 dimensions. ",
   lesson_key("Filled squares", lesson_text_colours[["accent"]]),
-  " are still among its 10 nearest points here; ",
+  " are still among<br>its 10 nearest points here; ",
   lesson_key("hollow squares", lesson_text_colours[["contrast"]]),
   " are not."
 )
@@ -411,7 +421,7 @@ stopifnot(
 #| fig-cap: "PCA projection of 300 word vectors, one panel per landmark word. Squares mark the landmark's 10 nearest neighbours among the 300 words, measured in all 50 dimensions."
 #| fig-alt: !expr pca_alt_text
 #| fig-width: 8
-#| fig-height: 5.6
+#| fig-height: 5.4
 
 pca_plot <- draw_projection(pca_panels) +
   labs(
@@ -509,7 +519,7 @@ stopifnot(
 #| fig-cap: "t-SNE projection of the same 300 word vectors with seed 7801, drawn the same way as the PCA figure."
 #| fig-alt: !expr tsne_alt_text
 #| fig-width: 8
-#| fig-height: 4.9
+#| fig-height: 5.4
 
 tsne_plot <- draw_projection(tsne_panels) +
   labs(

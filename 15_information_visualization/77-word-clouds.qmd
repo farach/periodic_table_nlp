@@ -259,11 +259,13 @@ count can still cover more of the slide than a short word used more often.
 #| fig-alt: !expr cloud_alt_seed_7701
 #| fig-width: 7
 #| fig-height: 4.4
+#| dev: png
 
 draw_cloud <- function(seed) {
   ggplot(cloud_words, aes(label = word, size = count)) +
-    # ggwordcloud measures each word on a separate device, so the words keep
-    # the default font rather than the one registered for the page.
+    # ggwordcloud places each word by first measuring it on a grDevices::png()
+    # device. These figures are drawn on that same device, with its default
+    # font, so each word is drawn exactly as wide as it was measured.
     geom_text_wordcloud(
       seed = seed,
       colour = lesson_colours[["accent"]],
@@ -272,7 +274,7 @@ draw_cloud <- function(seed) {
       rm_outside = FALSE
     ) +
     scale_size_area(max_size = 16, guide = "none") +
-    theme_lesson(grid = "none")
+    theme_lesson(grid = "none", base_family = "sans")
 }
 
 cloud_plot_seed_7701 <- draw_cloud(seed = 7701) +
@@ -337,6 +339,7 @@ counts are unchanged.
 #| fig-alt: "Second word cloud with the same words and counts as the first cloud but a different layout seed. Government is still used 585 times and people 561 times; every change in position is a layout artefact."
 #| fig-width: 7
 #| fig-height: 4.4
+#| dev: png
 
 cloud_plot_seed_7702 <- draw_cloud(seed = 7702) +
   labs(

@@ -357,6 +357,54 @@ for (lesson_file in c(lesson_files, guide_files)) {
   }
 }
 
+# theme_lesson() keeps a margin on every side of a figure, so ink in the
+# outermost pixels means a title, label, or legend ran off the image. This
+# catches text that overflows the figure, not text clipped inside a panel.
+figure_files <- if (dir.exists("_site")) {
+  list.files("_site", pattern = "[.]png$", recursive = TRUE, full.names = TRUE)
+} else {
+  character()
+}
+figure_files <- figure_files[grepl("figure-html", figure_files, fixed = TRUE)]
+
+edges_with_ink <- function(path, band = 6L) {
+  image <- png::readPNG(path)
+  if (length(dim(image)) == 2L) {
+    image <- array(image, dim = c(dim(image), 1L))
+  }
+  channels <- dim(image)[3]
+  has_alpha <- channels %in% c(2L, 4L)
+  colour_channels <- seq_len(if (has_alpha) channels - 1L else channels)
+  brightness <- rowMeans(image[, , colour_channels, drop = FALSE], dims = 2L)
+  opacity <- if (has_alpha) image[, , channels] else 1
+  ink <- brightness < 0.78 & opacity > 0.1
+
+  rows <- nrow(ink)
+  columns <- ncol(ink)
+  edges <- c(
+    top = any(ink[seq_len(band), ]),
+    bottom = any(ink[rows - seq_len(band) + 1L, ]),
+    left = any(ink[, seq_len(band)]),
+    right = any(ink[, columns - seq_len(band) + 1L])
+  )
+  names(edges)[edges]
+}
+
+for (figure_file in figure_files) {
+  edges <- edges_with_ink(figure_file)
+
+  if (length(edges) > 0L) {
+    failures <- c(
+      failures,
+      sprintf(
+        "%s draws to its %s edge; shorten or wrap the text",
+        figure_file,
+        paste(edges, collapse = " and ")
+      )
+    )
+  }
+}
+
 if (length(failures) > 0) {
   cat(paste(failures, collapse = "\n"), "\n")
   quit(status = 1)
@@ -379,10 +427,11 @@ if (
 cat(
   sprintf(
     paste0(
-      "Checked %d lessons, %d executed R chunks, ",
+      "Checked %d lessons, %d executed R chunks, %d rendered figures, ",
       "and the review manifest.\n"
     ),
     length(lesson_files),
-    source_chunk_total
+    source_chunk_total,
+    length(figure_files)
   )
 )

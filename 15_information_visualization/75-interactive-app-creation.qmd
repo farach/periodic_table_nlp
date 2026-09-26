@@ -407,9 +407,11 @@ knitr::kable(
   case_results |>
     transmute(
       case,
+      # HTML collapses a run of spaces, so whitespace-only input is shown with
+      # no-break spaces and stays visible.
       typed_text = if_else(
         str_trim(typed_text) == "",
-        str_c("\"", typed_text, "\""),
+        str_c("\"", str_replace_all(typed_text, " ", "\u00a0"), "\""),
         typed_text
       ),
       rows = if_else(is.na(rows), "not applicable", as.character(rows)),
