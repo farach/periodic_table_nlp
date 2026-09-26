@@ -160,6 +160,12 @@
   opacity: 0.55;
 }
 
+/* When the map already fits, both buttons are disabled and the row is a pair
+   of dead controls. Hide it rather than show something that cannot be used. */
+.task-map-scroll-controls:not(:has(button:not(:disabled))) {
+  display: none;
+}
+
 .periodic-scroll {
   width: 100%;
   max-width: 100%;
@@ -403,7 +409,17 @@
   max-width: 38rem;
 }
 
-@media (min-width: 1200px) {
+/* The map only fits without scrolling when the *container* is wide enough, so
+   this is a container query rather than a viewport one. Keyed off the viewport
+   it fired whenever the window was wide, even when the surrounding column was
+   not, and fifteen 1fr tracks then collapsed the tiles far below a readable
+   size. 15 columns at 7.6rem plus gaps needs roughly 118rem. */
+.periodic-scroll {
+  container-type: inline-size;
+  container-name: taskmap;
+}
+
+@container taskmap (min-width: 118rem) {
   .periodic-table {
     width: 100%;
     grid-template-columns: repeat(15, minmax(0, 1fr));
@@ -455,6 +471,16 @@
   color: var(--map-text);
   font-size: 0.88rem;
   line-height: 1.55;
+}
+
+.route-item {
+  margin: 0 0 0.55rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--map-border);
+}
+
+.route-item:last-child {
+  margin-bottom: 0;
 }
 
 @media (max-width: 700px) {
