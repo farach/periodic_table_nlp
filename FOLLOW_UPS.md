@@ -1,13 +1,15 @@
 # Follow-ups
 
-**Status on 2026-09-25:** all 81 tiles have lessons, and the guide page
-`using-language-models.qmd` covers model-assisted analysis. This session moved
-table-formatting code out of the reader's view, gave every figure one design
-system, redesigned the charts in lessons 75 to 81, clarified lessons 69 to 81,
-and added a dated research pass on language models used as research
+**Status on 2026-09-26:** all 81 tiles have lessons, and the guide page
+`using-language-models.qmd` covers model-assisted analysis. The 2026-09-25
+session moved table-formatting code out of the reader's view, gave every figure
+one design system, redesigned the charts in lessons 75 to 81, clarified lessons
+69 to 81, and added a dated research pass on language models used as research
 instruments. `sessions/2026-09-25-figures-and-model-assisted-analysis.md`
-describes the work. This file lists what is still open, so the next session can
-start here.
+describes that work. Pull request #9 then gave the map three ways in, kept its
+tiles at full size, and linked the guide above the map; see
+`sessions/2026-09-26-map-routes-and-guide-link.md`. This file lists what is
+still open, so the next session can start here.
 
 ## Pending for every lesson
 
@@ -17,10 +19,6 @@ start here.
   `data/lesson_reviews.csv` stays `pending` until a person has done it.
 - **Human approval.** `human_approval` is `pending` for every lesson. Only the
   owner changes it.
-- **Linux render of this branch.** Run the render workflow and read lessons 44,
-  47, 77 to 81, and the guide from its artifact. The figures now draw with
-  ragg and a bundled font, so their layout should match Windows closely, but
-  this has not been seen on Linux yet.
 
 ## Resolved from pull request #19
 
@@ -86,21 +84,23 @@ between them.
 
 ## Platform differences to expect
 
-These values differ between Windows and Linux. Each page computes them inline,
-so each render states its own value:
+These values differed between the Windows and Linux renders in September 2026.
+Each page computes them inline, so each render states its own value:
 
-- **Lesson 71:** some generated replies are worded differently.
+- **Lesson 7:** the Linux runner has Tesseract 5.3.4, so its live OCR of the
+  degraded copy does not reproduce the transcript recorded with 5.3.2, and that
+  row's match column reads `FALSE`. The published error rates use the recorded
+  transcript.
+- **Lessons 66 and 71:** some generated summaries and replies are worded
+  differently, even between two Linux runs, and the word counts and screen
+  results computed from them change too.
+- **Lesson 72:** the default-tokenizer BM25 scores differ in the second
+  decimal place. The ranking is the same.
 - **Lesson 77:** the letters-only filter drops 369 tokens on Windows and 367 on
   Linux, because of the platform's ICU word-break build.
-- **Lesson 78:** the t-SNE neighbour percentages and panel counts change
-  slightly.
-- **Guide page:** the number of rerun answers that match the saved run.
+- **Lesson 78:** the t-SNE neighbour percentages, panel counts, and neighbour
+  lists change.
+- **Guide page:** the number of rerun answers that match the saved run. Both
+  platforms matched 8 of 8 so far.
 
 Do not pin these values in a hidden check.
-
-## Other open work in the repository
-
-- **Pull request #9** ("Offer three ways into the map, and size it from its
-  container", branch `guidance-routes`) is open from 2026-08-29. It conflicts
-  with `main` in `index.qmd` and `periodic-table.css`, because the finished map
-  dropped the planned-tile key. Rebase it or close it.

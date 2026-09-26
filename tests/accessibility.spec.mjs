@@ -191,20 +191,67 @@ test("periodic table scrolls without widening the page", async ({ page }) => {
     .toBeGreaterThan(0);
 });
 
-test("periodic table fits a wide desktop viewport", async ({ page }) => {
+const measureMap = (page) =>
+  page.evaluate(() => {
+    const scroller = document.querySelector(".periodic-scroll");
+    const tile = document.querySelector(".nlp-element");
+    const rootSize = Number.parseFloat(
+      getComputedStyle(document.documentElement).fontSize
+    );
+
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      scrollerWidth: scroller.scrollWidth,
+      scrollerViewport: scroller.clientWidth,
+      tileRem: tile.getBoundingClientRect().width / rootSize,
+      nameSize: getComputedStyle(
+        document.querySelector(".element-name")
+      ).fontSize
+    };
+  });
+
+// The site's content column is narrower than the fifteen full-size columns,
+// so on a desktop the map keeps readable tiles and scrolls sideways instead
+// of shrinking them to fit.
+test("periodic table keeps full-size tiles on a desktop", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/");
 
-  const dimensions = await page
-    .locator(".periodic-scroll")
-    .evaluate((element) => ({
-      content: element.scrollWidth,
-      viewport: element.clientWidth
-    }));
+  const map = await measureMap(page);
 
-  expect(dimensions.content).toBeLessThanOrEqual(
-    dimensions.viewport + 1
+  expect(map.documentWidth).toBeLessThanOrEqual(map.viewportWidth);
+  expect(map.tileRem).toBeGreaterThanOrEqual(7.5);
+  expect(map.scrollerWidth).toBeGreaterThan(map.scrollerViewport);
+
+  const later = page.getByRole("button", { name: "Later groups" });
+  await expect(later).toBeVisible();
+  await expect(later).toBeEnabled();
+});
+
+// A page that embeds the map in a column at least 118rem wide gets the whole
+// map without scrolling. The width set here leaves room for the scroller's
+// padding and scrollbar gutter, because the container query measures the
+// content box.
+test("periodic table fits a container wide enough for it", async ({ page }) => {
+  await page.setViewportSize({ width: 2400, height: 1000 });
+  await page.goto("/");
+
+  const scrolling = await measureMap(page);
+
+  await page.addStyleTag({
+    content: ".periodic-scroll { width: 124rem; max-width: none; }"
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+
+  const fitted = await measureMap(page);
+
+  expect(fitted.scrollerWidth).toBeLessThanOrEqual(
+    fitted.scrollerViewport + 1
   );
+  expect(fitted.tileRem).toBeGreaterThanOrEqual(7.5);
+  expect(fitted.nameSize).toBe(scrolling.nameSize);
+  await expect(page.locator(".task-map-scroll-controls")).toBeHidden();
 });
 
 test("map controls scroll narrow viewports", async ({ page }) => {

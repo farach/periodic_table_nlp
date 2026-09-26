@@ -208,6 +208,23 @@ stopifnot(
   )
 )
 
+# The guide is not a tile, so the home page must point to it before the map,
+# where a reader deciding how to start will see it. The page head also links
+# to it with rel="next", so only an anchor counts.
+guide_link <- regexpr(
+  '<a href="(\\./)?using-language-models\\.html"',
+  html,
+  perl = TRUE
+)
+map_region <- regexpr('id="nlp-task-map"', html, fixed = TRUE)
+
+stopifnot(
+  file.exists("_site/using-language-models.html"),
+  guide_link > 0L,
+  map_region > 0L,
+  guide_link < map_region
+)
+
 css <- paste(
   readLines(
     "periodic-table.css",
@@ -252,7 +269,8 @@ cat(
     paste0(
       "Periodic table passed: %d ordered tasks, %d groups, ",
       "%d lesson links, %d planned tiles, visible item types, ",
-      "stage labels, and responsive structural checks.\n"
+      "stage labels, a guide link above the map, and responsive ",
+      "structural checks.\n"
     ),
     nrow(task_map),
     length(unique(task_map$group_id)),
