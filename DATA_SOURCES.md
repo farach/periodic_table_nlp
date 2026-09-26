@@ -163,6 +163,30 @@ been inspected. It was restored to 7401 before the draft was frozen.
 record row counts, class counts, and line-normalised SHA-256 fingerprints that
 `scripts/check-data-fingerprints.R` verifies.
 
+### Language-model labels for the review collection
+
+The guide page `using-language-models.qmd` reads
+`riverton-llm-review-labels.csv`: one saved yes-or-no answer from the pinned
+local Qwen2.5-1.5B-Instruct model for each of the 240 records in the review
+collection above, with the parsed label, the number of output tokens, and
+whether the model stopped on its own. `data-raw/build-llm-review-labels.R`
+produced the file by sending the prompt in `riverton-llm-review-prompt.json`
+once per record with greedy decoding.
+
+The prompt was written from the review request alone, before the model saw any
+record, and was not revised after the model's answers were read. The labels are
+model output, not reference labels. The guide compares them with the
+collection's author-written reference labels on a random sample.
+
+`riverton-llm-review-labels-metadata.csv` records the model ID and revision,
+the prompt and collection fingerprints, the decoding settings, the platform
+and library versions used for the run, the run date, and the labels file's
+line-normalised SHA-256. The guide stops if any of those no longer match, and
+`scripts/check-data-fingerprints.R` verifies the labels fingerprint. Rerunning
+the builder on another computer or library version can change some answers,
+so a rebuild must be committed together with its metadata. The files are
+released under the MIT licence, as part of this repository.
+
 ## Bing Liu opinion lexicon
 
 Some lessons access the Bing Liu positive/negative opinion lexicon through the
@@ -446,3 +470,18 @@ and an existing mismatched snapshot fails closed rather than being repaired by
 a silent redownload. The R loader repeats that verification before loading.
 Rendering sets Hugging Face and Transformers offline modes and fails if a
 prepared snapshot is absent or changed.
+
+## Source Sans 3 font
+
+`fonts/SourceSans3-Regular.ttf` and `fonts/SourceSans3-Semibold.ttf` are the
+static TrueType files from Adobe's Source Sans 3 release 3.052R
+(<https://github.com/adobe-fonts/source-sans>). Source Sans is the typeface of
+the site's text, so the figures use it too. `R/lesson-figures.R` registers the
+two files with systemfonts, and knitr draws figures with ragg, so the figures
+look the same on Windows, macOS, and Linux without installing the font.
+
+The fonts are licensed under the SIL Open Font License 1.1. The licence and
+copyright notice are kept beside them in `fonts/OFL.txt`, as the licence
+requires. Word clouds in lesson 77 keep the default font, because ggwordcloud
+measures each word on a separate graphics device that cannot see a registered
+font.

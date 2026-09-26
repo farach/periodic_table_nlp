@@ -162,6 +162,10 @@ deployment_record <- tibble(
     as.character(evaluation_date)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   deployment_record,
@@ -259,6 +263,10 @@ prototype_table <- tibble(
   columns = paste(names(vetiver_object$prototype), collapse = ", "),
   rows = nrow(vetiver_object$prototype)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   prototype_table,

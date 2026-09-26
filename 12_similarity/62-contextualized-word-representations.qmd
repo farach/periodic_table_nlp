@@ -45,7 +45,6 @@ library(reticulate)
 library(spacyr)
 library(dplyr)
 library(tibble)
-library(knitr)
 
 source("R/use-spacy.R")
 
@@ -65,8 +64,12 @@ pipeline_table <- tibble(
     as.character(nlp$vocab$vectors$shape[[2]])
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   pipeline_table,
   col.names = c("Item", "Value"),
   caption = "The pinned small spaCy pipeline has no static word-vector table",
@@ -117,8 +120,12 @@ token_table <- tibble(
     TRUE ~ "other token"
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   token_table,
   col.names = c("Position", "Token", "Role in this lesson"),
   caption = "Tokens in the sentence and the positions compared below",
@@ -185,8 +192,12 @@ comparison_table <- tibble(
   cosine_similarity = c(bank_cosine, the_cosine),
   percentile_of_all_pairs = c(bank_percentile, the_percentile)
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   all_pair_summary |>
     mutate(cosine = round(cosine, 4)),
   col.names = c("All-pair baseline", "Cosine"),
@@ -194,7 +205,7 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   comparison_table |>
     mutate(
       cosine_similarity = round(cosine_similarity, 4),
@@ -279,8 +290,12 @@ role_gap <- abs(
   bank_control_sentences$cosine_similarity[bank_control_sentences$comparison == "different senses, different roles"] -
     bank_control_sentences$cosine_similarity[bank_control_sentences$comparison == "same financial sense, different roles"]
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   bank_control_sentences |>
     mutate(cosine_similarity = round(cosine_similarity, 4)),
   col.names = c("Comparison", "Sentences", "Cosine similarity"),
@@ -337,8 +352,12 @@ final_checks <- tibble(
     as.character(nlp$vocab$vectors$shape[[1]])
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   final_checks,
   col.names = c("Check", "Value"),
   caption = "Final checks for the contextual representation example",

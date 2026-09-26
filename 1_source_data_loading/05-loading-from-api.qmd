@@ -162,6 +162,10 @@ fixture_md5 <- digest::digest(
   algo = "md5",
   serialize = FALSE
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -250,6 +254,10 @@ response_summary <- tibble(
     httr2::resp_header(fixture_response, "content-type")
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   response_summary,
@@ -337,6 +345,10 @@ display_books <- books |>
     first_published = first_published,
     catalog_link = catalog_links
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   display_books,
@@ -707,6 +719,10 @@ collected <- bind_rows(
 distinct_records <- collected |>
   distinct(key, .keep_all = TRUE)
 shortfall <- first_page$reported_total - nrow(distinct_records)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -819,6 +835,10 @@ pagination_report <- tibble(
     shortfall
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   pagination_report,

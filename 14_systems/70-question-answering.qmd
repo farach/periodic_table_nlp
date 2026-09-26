@@ -51,7 +51,6 @@ teaching fixture rather than an independent benchmark.
 suppressPackageStartupMessages({
   library(dplyr)
   library(huggingfaceR)
-  library(knitr)
   library(purrr)
   library(readr)
   library(reticulate)
@@ -112,8 +111,12 @@ qa_model <- load_nlg_pipeline(
 
 model_record <- qa_model$metadata |>
   select(model_id, revision, license, task_scope)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   model_record,
   col.names = c("Model", "Revision", "License", "Use in this course"),
   caption = "Pinned local model used as the passage reader",
@@ -126,7 +129,7 @@ kable(
 
 stopifnot(
   all(c(
-    "dplyr", "huggingfaceR", "knitr", "purrr", "readr",
+    "dplyr", "huggingfaceR", "purrr", "readr",
     "reticulate", "stringr", "tibble", "tidyr"
   ) %in% loadedNamespaces()),
   identical(nrow(handbook), 15L),
@@ -151,7 +154,9 @@ Each passage keeps its passage ID. Later tables cite these IDs instead of row
 positions.
 
 ```{r}
-kable(
+#| echo: false
+
+knitr::kable(
   handbook |>
     select(passage_id, topic, text),
   format = "html",
@@ -188,8 +193,12 @@ reference_table <- questions |>
     gold_passage_id = coalesce(gold_passage_id, "not applicable"),
     acceptable_answers = coalesce(acceptable_answers, "not applicable")
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   reference_table,
   format = "html",
   escape = TRUE,
@@ -266,8 +275,12 @@ gold_overlap <- questions |>
     )
   ) |>
   select(question_id, gold_passage_id, shared_content_words)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   gold_overlap,
   col.names = c("Question", "Gold evidence", "Shared content words"),
   caption = "Content-word overlap between each question and its gold passage",
@@ -299,6 +312,9 @@ ID. The retrieval score is cosine similarity between the question and passage
 tf-idf vectors, so it ranges from 0 to 1.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the retrieval code"
+
 passage_terms <- handbook |>
   transmute(
     passage_id,
@@ -406,8 +422,12 @@ retrieval_display <- questions |>
     retrieved_ranks = if_else(is.na(retrieved_ranks), "no lexical match", retrieved_ranks),
     gold_passage_id = coalesce(gold_passage_id, "not applicable")
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   retrieval_display |>
     select(question_id, question, retrieved_ranks, gold_passage_id, gold_retrieval_label),
   format = "html",
@@ -509,8 +529,12 @@ extractive_baseline <- questions |>
     )
   ) |>
   select(question_id, baseline_sentence, contains_acceptable_answer)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   extractive_baseline,
   format = "html",
   escape = TRUE,
@@ -600,8 +624,12 @@ nlg_assert_input_budget(
   max_input_tokens = 768L,
   item_ids = reader_inputs$question_id
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   reader_inputs |>
     select(question_id, input_tokens, max_new_tokens),
   col.names = c("Question", "Prompt tokens", "Maximum new tokens"),
@@ -623,8 +651,8 @@ stopifnot(
 Greedy decoding chooses the highest-scoring next token at each step. The helper
 sets `do_sample = FALSE`. This lesson passes a repetition penalty of 1.05,
 which overrides the checkpoint's generation-config value of 1.1.
-Exact generated text can differ across machines; the page does not depend on
-literal wording.
+Exact generated text can differ across machines, so every sentence that reports
+a model result is computed from this render.
 
 ```{r}
 reader_results <- reader_inputs |>
@@ -646,8 +674,12 @@ reader_results <- reader_inputs |>
     ended_by_eos = map_lgl(generation, "ended_by_eos"),
     hit_token_cap = map_lgl(generation, "hit_token_cap")
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   reader_results |>
     mutate(raw_output_visible = str_replace_all(raw_output, "\\r?\\n", " ⏎ ")) |>
     select(question_id, raw_output_visible, output_tokens, ended_by_eos, hit_token_cap),
@@ -736,8 +768,12 @@ parsed_display <- parsed_results |>
     observed_action,
     expected_action
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   parsed_display,
   format = "html",
   escape = TRUE,
@@ -776,6 +812,9 @@ English articles, and squeeze spaces. The only difference is that stringr's ICU
 class removes Unicode punctuation and symbols, not only ASCII punctuation.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the scoring code"
+
 answer_f1 <- function(prediction, reference) {
   prediction_tokens <- str_split(normalize_answer(prediction), "\\s+")[[1]]
   reference_tokens <- str_split(normalize_answer(reference), "\\s+")[[1]]
@@ -872,6 +911,40 @@ score_table <- parsed_results |>
       TRUE ~ "gold not in top 3"
     )
   )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  score_table |>
+    select(
+      question_id,
+      reader_action,
+      expected_action,
+      action_correct,
+      reader_given_passages,
+      reference_agreement,
+      recall_at_3_label,
+      end_to_end_outcome
+    ),
+  col.names = c(
+    "Question",
+    "Reader action",
+    "Expected action",
+    "Action correct",
+    "Reader given retrieved passages",
+    "Reference agreement",
+    "Retrieval recall at 3",
+    "End-to-end outcome"
+  ),
+  caption = "Action, reference, retrieval, and end-to-end results kept separate",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
 
 acceptable_variant_in_answer <- function(answer, variants) {
   variants <- variants[nzchar(variants)]
@@ -926,36 +999,6 @@ right_action_em_zero <- tibble(
     right_action_em_zero_rows$acceptable_variant_in_answer
   )
 )
-
-kable(
-  score_table |>
-    select(
-      question_id,
-      reader_action,
-      expected_action,
-      action_correct,
-      reader_given_passages,
-      reference_agreement,
-      recall_at_3_label,
-      end_to_end_outcome
-    ),
-  col.names = c(
-    "Question",
-    "Reader action",
-    "Expected action",
-    "Action correct",
-    "Reader given retrieved passages",
-    "Reference agreement",
-    "Retrieval recall at 3",
-    "End-to-end outcome"
-  ),
-  caption = "Action, reference, retrieval, and end-to-end results kept separate",
-  row.names = FALSE
-)
-```
-
-```{r}
-#| include: false
 
 stopifnot(
   identical(nrow(score_table), 6L),
@@ -1029,6 +1072,9 @@ alone. A screen can miss number words and wrong attachments, such as using the
 right number for the wrong item.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the citation and support screens"
+
 strip_citation_tokens <- function(text) {
   str_remove_all(text, "\\bH\\d{2}\\b")
 }
@@ -1124,8 +1170,12 @@ screen_display <- screen_results |>
     screen_label,
     human_support_review
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   screen_display,
   format = "html",
   escape = TRUE,
@@ -1229,8 +1279,12 @@ control_outputs <- tibble(
     ),
     screen_label = nlg_screen_label(surface_support_screen)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   control_outputs |>
     transmute(
       control_id,
@@ -1296,15 +1350,19 @@ policy_misses <- bind_rows(
     filter(expected_action != "abstain") |>
     summarise(policy = "always abstain", misses = paste(question_id, collapse = ", "))
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   action_table,
   col.names = c("Expected action", "Observed action", "Questions"),
   caption = "Expected versus observed action for all six questions",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   tibble(
     baseline = c("observed reader", "always answer", "always abstain"),
     exact_action_matches = c(
@@ -1355,6 +1413,13 @@ after the render. Retrieved passages are evidence, not instructions. The next
 lesson shows why dialogue systems should keep safety and routing rules in code
 rather than trusting retrieved or typed text.
 
+A common shortcut is to ask a second language model whether each answer is
+supported by its cited passages. Recent benchmark work finds such judges close
+to chance on hard unsupported answers, so their scores are a screening signal
+at best. Keep mechanical screens like the ones above, and have a person read a
+random sample of answers against their sources before reporting a support
+rate.
+
 ## What to remember
 
 - Question answering is retrieval plus reading, not retrieval alone.
@@ -1376,3 +1441,4 @@ rather than trusting retrieved or typed text.
 - [Kamalloo et al. on open-domain QA evaluation with lexical metrics](https://aclanthology.org/2023.acl-long.307/)
 - [Rashkin et al. on attribution to identified sources](https://aclanthology.org/2023.cl-4.2/)
 - [Lewis et al. on retrieval-augmented generation](https://proceedings.neurips.cc/paper/2020/hash/6b493230205f780e1bc26945df7481e5-Abstract.html)
+- [Tamber et al. (2025), Benchmarking LLM faithfulness in RAG with evolving leaderboards](https://aclanthology.org/2025.emnlp-industry.54/)

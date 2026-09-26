@@ -5,6 +5,7 @@ project:
   render:
     - index.qmd
     - accessibility.qmd
+    - using-language-models.qmd
     - 1_source_data_loading/*.qmd
     - 2_training_data_generation/*.qmd
     - 3_word_parsing/*.qmd
@@ -38,6 +39,8 @@ website:
     contents:
       - href: index.qmd
         text: Home
+      - href: using-language-models.qmd
+        text: Using a language model reproducibly
       - href: 1_source_data_loading/01-bits-to-character-encoding.qmd
         text: How computers store text
       - href: 1_source_data_loading/02-manual-typewriting.qmd
@@ -235,5 +238,6 @@ execute:
 knitr:
   opts_chunk:
     message: false
+    dev: ragg_png
 
 lang: en

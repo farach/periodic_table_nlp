@@ -47,7 +47,6 @@ library(stringdist)
 library(quanteda)
 library(Matrix)
 library(ggplot2)
-library(knitr)
 
 source("R/permutation-null.R")
 
@@ -68,8 +67,12 @@ name_matches <- tibble(
 
 stevenson_rows <- name_matches |>
   filter(recorded == "Stevenson")
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   name_matches |>
     mutate(jaro_winkler = round(jaro_winkler, 4)),
   col.names = c("Recorded", "Candidate", "Levenshtein", "Jaro-Winkler", "Levenshtein rank", "Jaro-Winkler rank"),
@@ -147,8 +150,12 @@ pair_distances <- tibble(
   first_speech = paragraphs$speech_id[first],
   second_speech = paragraphs$speech_id[second]
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   tibble(
     item = c("Paragraphs", "Speeches", "People", "Features", "Paragraph pairs"),
     value = c(nrow(paragraphs), n_distinct(paragraphs$speech_id), n_distinct(paragraphs$president), nfeat(paragraph_dfm), nrow(pair_distances))
@@ -219,8 +226,12 @@ same_speech_examples <- pair_distances |>
     cosine = round(cosine, 3),
     jaccard = round(jaccard, 3)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   length_correlations |>
     mutate(correlation_with_length_difference = round(correlation_with_length_difference, 3)),
   col.names = c("Distance", "Correlation with length difference"),
@@ -228,7 +239,7 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   same_speech_examples,
   col.names = c("First paragraph", "Second paragraph", "Speech", "First length", "Second length", "Length difference", "Euclidean", "Cosine", "Jaccard"),
   caption = "Long and short paragraphs from the same speech can be far apart under Euclidean distance",
@@ -276,8 +287,12 @@ same_speech_null <- permutation_null(
   seed = 5902L,
   alternative = "less"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   same_speech_null |>
     mutate(across(where(is.numeric), ~ round(.x, 3))),
   col.names = c("Observed", "Null mean", "Null 5th pct", "Null 95th pct", "p-value", "Replicates", "Alternative"),
@@ -304,7 +319,12 @@ still dominated by length.
 ```{r}
 #| label: fig-length-distance
 #| fig-cap: "Length difference and distance for a deterministic sample of paragraph pairs."
-#| fig-alt: "A faceted scatter plot. Euclidean distance rises sharply with length difference, while cosine and Jaccard show much weaker patterns."
+#| fig-alt: "Three scatter plots side by side, one per distance measure, each with its own vertical scale. Euclidean distance rises sharply with length difference, while cosine and Jaccard show much weaker patterns."
+#| fig-height: 3.8
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
 
 set.seed(5901)
 plot_pairs <- pair_distances |>
@@ -313,17 +333,25 @@ plot_pairs <- pair_distances |>
     c(euclidean, cosine, jaccard),
     names_to = "distance",
     values_to = "value"
+  ) |>
+  mutate(
+    distance = factor(
+      distance,
+      levels = c("euclidean", "cosine", "jaccard"),
+      labels = c("Euclidean", "Cosine", "Jaccard")
+    )
   )
 
 ggplot(plot_pairs, aes(x = length_difference, y = value)) +
-  geom_point(alpha = 0.18, size = 0.7) +
-  facet_wrap(~distance, scales = "free_y") +
+  geom_point(alpha = 0.15, size = 0.7, colour = lesson_colours[["accent"]]) +
+  facet_wrap(vars(distance), scales = "free_y") +
   labs(
+    title = "Raw Euclidean distance mostly follows length",
+    subtitle = "3,000 sampled paragraph pairs; each panel has its own vertical scale",
     x = "Difference in paragraph length, in tokens",
-    y = "Distance",
-    title = "Raw Euclidean distance mostly follows length"
+    y = "Distance"
   ) +
-  theme_minimal()
+  theme_lesson(grid = "both")
 ```
 
 ```{r}
@@ -331,7 +359,8 @@ ggplot(plot_pairs, aes(x = length_difference, y = value)) +
 
 stopifnot(
   nrow(plot_pairs) == 9000L,
-  identical(sort(unique(plot_pairs$distance)), c("cosine", "euclidean", "jaccard")),
+  identical(levels(plot_pairs$distance), c("Euclidean", "Cosine", "Jaccard")),
+  !anyNA(plot_pairs$distance),
   max(plot_pairs$length_difference) > 900L
 )
 ```

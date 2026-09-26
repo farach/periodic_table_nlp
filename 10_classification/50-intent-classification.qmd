@@ -76,6 +76,10 @@ inbox <- read_csv(
 
 intent_counts <- inbox |>
   count(intent, name = "messages")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   intent_counts,
@@ -163,6 +167,10 @@ probability_display <- intent_predictions |>
 predicted_distribution <- intent_predictions |>
   count(.pred_class, name = "messages") |>
   arrange(.pred_class)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   probability_display |>
@@ -251,6 +259,10 @@ boundary_messages <- inbox |>
     )
   ) |>
   select(message_id, intent, other_plausible_action, why_it_strains_the_schema, text)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   boundary_messages,

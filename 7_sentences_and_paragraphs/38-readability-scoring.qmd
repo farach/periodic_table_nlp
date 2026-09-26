@@ -159,6 +159,10 @@ expected_syllable_summary <- tibble(
   comparison = c("exact", "overcount", "undercount"),
   words = c(21L, 5L, 4L)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   syllable_check,
@@ -297,6 +301,10 @@ syllable_sensitivity <- bind_rows(
     adjusted_job_syllables
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   preprocessing_counts,

@@ -122,6 +122,10 @@ spacy_parsed <- spacy_parse(
   nounphrase = TRUE
 ) |>
   as_tibble()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   spacy_info_table,
@@ -212,6 +216,10 @@ lemma_stem_comparison <- same_word_lemmas |>
     spacy_known = known_to_hunspell(spacy_lemma)
   ) |>
   arrange(match(word, comparison_words))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   lemma_stem_comparison,
@@ -270,6 +278,10 @@ lemma_variation <- bind_rows(
   ) |>
   filter(distinct_lemmas > 1L) |>
   arrange(system, word)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   lemma_variation,
@@ -349,6 +361,10 @@ flagged_comparison <- compared_word_lemmas |>
     udpipe_broken_string,
     spacy_broken_string
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   lemma_quality,
@@ -428,14 +444,18 @@ final_check <- tibble(
   )
 )
 
+invisible(suppressMessages(spacy_finalize()))
+```
+
+```{r}
+#| echo: false
+
 knitr::kable(
   final_check,
   col.names = c("Model", "Lemma for provided"),
   caption = "A final check on the clearest contrast",
   row.names = FALSE
 )
-
-invisible(suppressMessages(spacy_finalize()))
 ```
 
 ```{r}

@@ -10,7 +10,8 @@ the six weeks began. Other entries report a day, a month, or a season.
 
 **Events on a timeline** means placing event records on a time scale only as
 precisely as the text allows. A day can be a point. A month, season, or course
-length needs an interval. A duration with no start date stays off the chart.
+length needs an interval. A duration with no start date stays off the time
+scale.
 
 This lesson uses a small constructed log so the dates can be checked by eye. It
 builds on [the temporal parsing lesson](../6_entity_enrichment/31-temporal-parsing.qmd),
@@ -25,12 +26,12 @@ The Riverton program log in this lesson is a constructed teaching example about 
 
 This lesson shows how to:
 
-- keep the entry date separate from the event date;
-- resolve relative dates from each entry's own date;
+- keep the date of a note separate from the date of the event it mentions;
+- resolve relative dates from each note's own date;
 - draw seasons, months, and course lengths as intervals;
-- mark planned and reported events without relying on color alone;
-- keep undated events in a table instead of guessing; and
-- compare narrative order with event order.
+- mark planned and reported events without relying on colour alone;
+- show an undated event without guessing its position; and
+- compare the order of the notes with the order of the events.
 :::
 
 ```{r}
@@ -42,18 +43,20 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Build a small event log
 
-An entry date is the date of the note. It is the anchor for relative language,
-not automatically the date of the event. The `entry_id` stays with every row so
-the timeline can be traced back to the source sentence.
+An **entry date** is the date the note was written. It is the anchor for
+relative language, not automatically the date of the event. The `entry_id`
+stays with every row so each mark on the timeline can be traced back to its
+source sentence.
 
 ```{r}
 library(dplyr)
 library(ggplot2)
-library(knitr)
 library(purrr)
 library(stringr)
 library(tibble)
 library(tidyr)
+
+source("R/lesson-figures.R")
 
 program_entries <- tribble(
   ~entry_id, ~entry_date, ~entry_text,
@@ -73,8 +76,12 @@ program_entries <- tribble(
   "The November report covers work completed in September."
 ) |>
   mutate(entry_date = as.Date(entry_date))
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   program_entries,
   col.names = c("Entry ID", "Entry date", "Constructed log entry"),
   caption = "Constructed Riverton program log entries",
@@ -86,7 +93,7 @@ kable(
 #| include: false
 
 stopifnot(
-  all(c("dplyr", "ggplot2", "knitr", "purrr", "stringr", "tibble", "tidyr") %in%
+  all(c("dplyr", "ggplot2", "purrr", "stringr", "tibble", "tidyr") %in%
     loadedNamespaces()),
   identical(nrow(program_entries), 7L),
   identical(program_entries$entry_id, sprintf("R%02d", 1:7)),
@@ -97,14 +104,14 @@ stopifnot(
 
 The second entry has two events and two dates. The orientation belongs to March
 2. The registration closing belongs to March 15. Reading only the nearest date
-would fail on many real sentences, so the attachment is recorded by hand here.
+would fail on many real sentences, so here the attachment is recorded by hand.
 
 ## Normalize only what the text supports
 
-The normalization table names the event trigger, the time expression, and the
-rule used to compute dates. The season rule is a local convention: this page uses
-Northern Hemisphere meteorological seasons, so spring runs from March 1 through
-May 31.
+The table of events below names each event's trigger, its time expression, and
+the rule used to compute its dates. The season rule is a local convention: this
+page uses Northern Hemisphere meteorological seasons, so spring runs from March
+1 through May 31.
 
 ```{r}
 season_bounds <- tribble(
@@ -169,58 +176,40 @@ previous_weekday <- function(entry_date, weekday) {
   entry_date - days_back
 }
 
+placed_interval <- function(start, end) {
+  list(start = start, end = end, placed = TRUE, reason_unplaced = NA_character_)
+}
+
 normalize_event <- function(rule, entry_date, time_text) {
   entry_year <- as.integer(format(entry_date, "%Y"))
 
   if (rule == "entry-year spring") {
     bounds <- season_bounds |>
       filter(season == "spring")
-    return(list(
-      start = make_date(entry_year, bounds$start_month, bounds$start_day),
-      end = make_date(entry_year, bounds$end_month, bounds$end_day),
-      placed = TRUE,
-      reason_unplaced = NA_character_
+    return(placed_interval(
+      make_date(entry_year, bounds$start_month, bounds$start_day),
+      make_date(entry_year, bounds$end_month, bounds$end_day)
     ))
   }
 
   if (rule == "entry-year month day") {
-    start <- parse_month_day(entry_date, time_text)
-    return(list(
-      start = start,
-      end = start,
-      placed = TRUE,
-      reason_unplaced = NA_character_
-    ))
+    day <- parse_month_day(entry_date, time_text)
+    return(placed_interval(day, day))
   }
 
   if (rule == "entry-year month day plus weeks") {
     start <- parse_month_day(entry_date, time_text)
-    return(list(
-      start = start,
-      end = start + 12L * 7L - 1L,
-      placed = TRUE,
-      reason_unplaced = NA_character_
-    ))
+    return(placed_interval(start, start + 12L * 7L - 1L))
   }
 
   if (rule == "previous weekday from entry date") {
-    start <- previous_weekday(entry_date, "Monday")
-    return(list(
-      start = start,
-      end = start,
-      placed = TRUE,
-      reason_unplaced = NA_character_
-    ))
+    day <- previous_weekday(entry_date, "Monday")
+    return(placed_interval(day, day))
   }
 
   if (rule == "entry-year month") {
     interval <- parse_month_interval(entry_date, time_text)
-    return(list(
-      start = interval$start,
-      end = interval$end,
-      placed = TRUE,
-      reason_unplaced = NA_character_
-    ))
+    return(placed_interval(interval$start, interval$end))
   }
 
   list(
@@ -234,38 +223,33 @@ normalize_event <- function(rule, entry_date, time_text) {
 event_rows <- event_plan |>
   left_join(program_entries, by = join_by(entry_id)) |>
   mutate(
-    normalized = pmap(
-      list(rule, entry_date, time_text),
-      normalize_event
-    ),
+    normalized = pmap(list(rule, entry_date, time_text), normalize_event),
     start = as.Date(map_chr(normalized, \(item) as.character(item$start))),
     end = as.Date(map_chr(normalized, \(item) as.character(item$end))),
     placed = map_lgl(normalized, "placed"),
-    reason_unplaced = map_chr(
-      normalized,
-      \(item) {
-        if (is.na(item$reason_unplaced)) {
-          NA_character_
-        } else {
-          item$reason_unplaced
-        }
-      }
-    ),
+    reason_unplaced = map_chr(normalized, "reason_unplaced"),
     narrative_order = match(entry_id, program_entries$entry_id)
   ) |>
   select(
     event_id, entry_id, narrative_order, entry_date, trigger, time_text,
     granularity, status, rule, start, end, placed, reason_unplaced
   )
+```
 
-kable(
-  event_rows,
+```{r}
+#| echo: false
+
+knitr::kable(
+  event_rows |>
+    select(
+      event_id, entry_id, entry_date, trigger, time_text, granularity,
+      status, rule, start, end, reason_unplaced
+    ),
   col.names = c(
-    "Event ID", "Entry ID", "Narrative order", "Entry date", "Event trigger",
-    "Time text", "Granularity", "Status", "Rule", "Start", "End", "Placed",
-    "Reason unplaced"
+    "Event ID", "Entry ID", "Entry date", "Event trigger", "Time text",
+    "Granularity", "Status", "Rule", "Start", "End", "Reason not placed"
   ),
-  caption = "Normalized event records with separate document dates and event intervals",
+  caption = "Normalized event records with separate entry dates and event intervals",
   row.names = FALSE
 )
 ```
@@ -287,163 +271,186 @@ stopifnot(
   identical(event_rows$end[event_rows$event_id == "EV08"], as.Date("2026-09-30")),
   identical(event_rows$rule, event_plan$rule),
   identical(sum(event_rows$placed), 7L),
-  identical(sum(!event_rows$placed), 1L),
+  identical(event_rows$event_id[!event_rows$placed], "EV06"),
+  identical(
+    event_rows$reason_unplaced[!event_rows$placed],
+    "duration has no start date"
+  ),
+  all(is.na(event_rows$reason_unplaced[event_rows$placed])),
   !any(is.na(event_rows$entry_date))
 )
 ```
 
-Seven events receive dates. One duration does not. The `start` and `end` columns
-make the difference visible: a day has the same start and end. The spring and
-September bars mark only the season or month named in the entry; only the
-12-week course bar is a known duration.
+Seven events receive dates. One duration does not. The `start` and `end`
+columns make the difference visible: a day has the same start and end. The
+spring and September intervals cover only the season or month named in the
+entry; only the 12-week course interval is a known duration.
 
-## Keep unplaced events visible
+The "pilot lasted six weeks" row gives a length but no position. Nadia keeps it
+in the table, and the timeline gives it a row with no mark rather than a
+guessed one.
 
-Undated events should not disappear from the lesson. They also should not reach
-`ggplot2`, because missing dates would either create a warning or invite a false
-point.
+## Draw the notes and the events together
 
-```{r}
-unplaced_events <- event_rows |>
-  filter(!placed) |>
-  select(event_id, entry_id, entry_date, trigger, time_text, reason_unplaced)
+The timeline below gives every event its own row, sorted by when the event
+happened, with the undated pilot last. Each row shows two dates. The grey
+diamond is the day the note was written, and the dotted line leads from it to
+the event the note describes. Days are points; seasons, months, and the course
+length are bars.
 
-kable(
-  unplaced_events,
-  col.names = c(
-    "Event ID", "Entry ID", "Entry date", "Event trigger",
-    "Time text", "Reason not drawn"
-  ),
-  caption = "Unplaced events kept out of the timeline",
-  row.names = FALSE
-)
-```
-
-```{r}
-#| include: false
-
-stopifnot(
-  identical(nrow(unplaced_events), 1L),
-  identical(unplaced_events$event_id, "EV06"),
-  identical(unplaced_events$reason_unplaced, "duration has no start date")
-)
-```
-
-The "pilot lasted six weeks" row gives a length but no position. Nadia can keep
-it in the review table, but drawing it would be a guess.
-
-## Draw points only for days
-
-The timeline below filters to placed events first. It uses segments for intervals
-and points for day-level dates. Shape and line type mark status, so the planned
-and reported distinction remains readable without color.
+Status has two cues so it does not depend on colour: planned events are hollow
+points or dashed bars, and reported events are filled points or solid bars.
+In this constructed log, every reported event comes before its note and every
+planned event after it, so the dotted lines of reported events point back in time
+and those of planned events point forward. Real notes can report ongoing work or
+record a plan after the fact, so direction is a check to run, not a rule.
 
 ```{r}
 #| label: fig-event-timeline
-#| fig-cap: "Timeline of seven placed events from a constructed Riverton log in 2026; range bars show a season, a named month, and one 12-week course duration, while four day-level events are points."
-#| fig-alt: "Timeline with seven placed events in chronological order. Three events are drawn as range bars: spring outreach can be placed only within March 1 to May 31 2026, September work can be placed only within September 1 to September 30 2026, and the 12-week course runs from September 14 to December 6 2026. Four day-level events are points on March 2, March 15, September 14, and October 22 2026. Each row label includes the event order and source entry number. The six-week pilot duration without a start date is left off the chart."
+#| fig-cap: "Timeline of eight events from a constructed Riverton log in 2026. Grey diamonds mark each note's entry date; the six-week pilot has no start date, so it has a row but no mark."
+#| fig-alt: "Timeline with one row per event. Grey diamonds mark the dates the notes were written, and dotted lines lead to the events they describe. Spring outreach is a dashed planned bar from March 1 to May 31 2026, reached forward from a February 20 note. The orientation on March 2 is a filled reported point reached back from a March 3 note, and registration closing on March 15 is a hollow planned point. The 12-week course is a dashed planned bar from September 14 to December 6. The applicant check-in on September 14 is a reported point reached back from a September 20 note. September work is a solid reported bar reached back from a November 1 note. The review meeting on October 22 is a hollow planned point. The six-week pilot, noted on October 5, has no start date and no event mark."
 #| fig-width: 8
-#| fig-height: 5.5
+#| fig-height: 4.6
 
-placed_events <- event_rows |>
-  filter(placed) |>
-  arrange(start, end, event_id) |>
+status_colours <- c(
+  planned = lesson_colours[["accent"]],
+  reported = lesson_colours[["contrast"]]
+)
+
+timeline_rows <- event_rows |>
+  arrange(!placed, start, end, event_id) |>
   mutate(
-    event_order = row_number(),
-    y_position = -event_order,
-    event_label = sprintf("%s. entry %s: %s", event_order, narrative_order, trigger)
+    row_label = str_c(str_to_sentence(trigger), " (", entry_id, ")"),
+    row_label = factor(row_label, levels = rev(row_label)),
+    # The dotted line runs from the note to the nearest edge of the event.
+    link_end = case_when(
+      !placed ~ as.Date(NA),
+      start > entry_date ~ start,
+      end < entry_date ~ end,
+      TRUE ~ entry_date
+    )
   )
 
-interval_events <- placed_events |>
-  filter(granularity != "day")
-
-day_events <- placed_events |>
-  filter(granularity == "day")
-
-ggplot() +
+timeline_plot <- ggplot(timeline_rows, aes(y = row_label)) +
   geom_segment(
-    data = interval_events,
-    aes(
-      x = start, xend = end,
-      y = y_position, yend = y_position,
-      linetype = status
-    ),
-    linewidth = 2,
-    color = "grey35"
+    data = \(d) filter(d, placed),
+    aes(x = entry_date, xend = link_end),
+    colour = lesson_colours[["muted"]],
+    linewidth = 0.5,
+    linetype = "dotted"
+  ) +
+  geom_segment(
+    data = \(d) filter(d, placed, granularity != "day"),
+    aes(x = start, xend = end, colour = status, linetype = status),
+    linewidth = 3.2
   ) +
   geom_point(
-    data = day_events,
-    aes(x = start, y = y_position, shape = status),
-    size = 3,
-    color = "black"
+    data = \(d) filter(d, placed, granularity == "day"),
+    aes(x = start, colour = status, shape = status),
+    size = 3.4,
+    stroke = 1.3,
+    fill = lesson_colours[["paper"]]
   ) +
+  geom_point(
+    aes(x = entry_date),
+    shape = 23,
+    size = 2.6,
+    fill = lesson_colours[["muted"]],
+    colour = lesson_colours[["paper"]]
+  ) +
+  geom_text(
+    data = \(d) filter(d, !placed),
+    aes(x = entry_date, label = "no start date, so no mark"),
+    hjust = 1,
+    nudge_x = -8,
+    family = lesson_font,
+    size = 9.5,
+    size.unit = "pt",
+    colour = lesson_colours[["muted"]]
+  ) +
+  scale_y_discrete(drop = FALSE) +
+  scale_colour_manual(values = status_colours) +
   scale_linetype_manual(values = c(planned = "22", reported = "solid")) +
-  scale_shape_manual(values = c(planned = 17, reported = 16)) +
+  scale_shape_manual(values = c(planned = 21, reported = 19)) +
   scale_x_date(
-    date_breaks = "2 months",
-    date_labels = "%b %Y",
-    expand = expansion(mult = c(0.02, 0.04))
-  ) +
-  scale_y_continuous(
-    breaks = placed_events$y_position,
-    labels = placed_events$event_label
+    date_breaks = "1 month",
+    date_labels = "%b",
+    limits = as.Date(c("2026-01-15", "2026-12-20")),
+    expand = expansion(mult = 0)
   ) +
   labs(
-    x = "Event date or interval in 2026",
-    y = "Chronological event order with source entry",
-    shape = "Day-level status",
-    linetype = "Interval status"
+    title = "An event's date is not the date of the note that mentions it",
+    subtitle = str_c(
+      "Constructed Riverton log, 2026. Grey diamonds are entry dates; ",
+      "dotted lines lead to ",
+      lesson_key("planned", lesson_text_colours[["accent"]]),
+      " and ",
+      lesson_key("reported", lesson_text_colours[["contrast"]]),
+      " events."
+    ),
+    x = NULL,
+    y = NULL
   ) +
-  theme_minimal()
+  theme_lesson(grid = "x") +
+  theme(legend.position = "none")
+
+timeline_plot
 ```
 
 ```{r}
 #| include: false
 
+drawn_rows <- timeline_rows |>
+  filter(placed)
+
 stopifnot(
-  identical(nrow(placed_events), 7L),
-  identical(nrow(interval_events), 3L),
-  identical(nrow(day_events), 4L),
-  !any(is.na(placed_events$start)),
-  !any(is.na(placed_events$end)),
-  all(interval_events$start < interval_events$end),
-  all(day_events$start == day_events$end),
-  which(placed_events$event_id == "EV08") < which(placed_events$event_id == "EV07"),
-  identical(
-    placed_events$event_order,
-    seq_len(nrow(placed_events))
-  )
+  identical(nrow(timeline_rows), 8L),
+  identical(nrow(drawn_rows), 7L),
+  identical(sum(drawn_rows$granularity != "day"), 3L),
+  identical(sum(drawn_rows$granularity == "day"), 4L),
+  identical(as.character(tail(timeline_rows$event_id, 1)), "EV06"),
+  !anyDuplicated(timeline_rows$row_label),
+  all(drawn_rows$start[drawn_rows$granularity != "day"] <
+    drawn_rows$end[drawn_rows$granularity != "day"]),
+  all(drawn_rows$start[drawn_rows$granularity == "day"] ==
+    drawn_rows$end[drawn_rows$granularity == "day"]),
+  all(drawn_rows$link_end[drawn_rows$status == "reported"] <
+    drawn_rows$entry_date[drawn_rows$status == "reported"]),
+  all(drawn_rows$link_end[drawn_rows$status == "planned"] >
+    drawn_rows$entry_date[drawn_rows$status == "planned"]),
+  which(drawn_rows$event_id == "EV08") < which(drawn_rows$event_id == "EV07"),
+  all(c(drawn_rows$entry_date, drawn_rows$start, drawn_rows$end) >=
+    as.Date("2026-01-15")),
+  all(c(drawn_rows$entry_date, drawn_rows$start, drawn_rows$end) <=
+    as.Date("2026-12-20"))
 )
 ```
 
-The y-axis is chronological event order, sorted by the resolved start date. Each
-row label also includes the source entry number, which shows narrative order.
-The November report is labeled `entry 7`, but its September work interval belongs
-before the October review meeting. That difference is why a timeline should not
-treat row order as time.
+The rows follow event order, but each label also names its source entry, which
+shows the order of the notes. The November report is entry `R07`, yet its
+September work sits above the October review meeting, and its dotted line runs
+back from November. That difference is why a timeline should not treat the
+order of the notes as time.
 
-The event table is the long description for the figure. It gives the exact dates,
-status, and entry ID for each mark.
+The event table is the long description for the figure. It gives the exact
+dates, status, and entry ID for each mark.
 
 ```{r}
-timeline_long_description <- placed_events |>
-  transmute(
-    event_order,
-    narrative_order,
-    event_id,
-    entry_id,
-    trigger,
-    time_text,
-    granularity,
-    status,
-    start,
-    end
+timeline_long_description <- timeline_rows |>
+  mutate(event_order = if_else(placed, row_number(), NA_integer_)) |>
+  select(
+    event_order, narrative_order, event_id, entry_id, entry_date, trigger,
+    time_text, granularity, status, start, end
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   timeline_long_description,
   col.names = c(
-    "Event order", "Narrative order", "Event ID", "Entry ID",
+    "Event order", "Narrative order", "Event ID", "Entry ID", "Entry date",
     "Event trigger", "Time text", "Granularity", "Status", "Start", "End"
   ),
   caption = "Text version of the timeline data",
@@ -455,11 +462,11 @@ kable(
 #| include: false
 
 stopifnot(
-  identical(timeline_long_description$event_order, seq_len(7L)),
+  identical(timeline_long_description$event_order, c(1:7, NA)),
   identical(timeline_long_description$narrative_order[1:3], c(1L, 2L, 2L)),
   identical(
     timeline_long_description$granularity,
-    c("season", "day", "day", "month", "day", "duration", "day")
+    c("season", "day", "day", "month", "day", "duration", "day", "duration")
   )
 )
 ```
@@ -468,10 +475,10 @@ stopifnot(
 
 TimeML and related standards separate events, time expressions, and the
 document's creation time. This page does the same thing in a small table. It
-does not train or evaluate a temporal parser, and the constructed normalizations
-are not independent labels.
+does not train or evaluate a temporal parser, and the constructed
+normalizations are not independent labels.
 
-A real-text coda shows why the table matters. In the inaugural corpus,
+A real-text case shows why the table matters. In the inaugural corpus,
 Lincoln's 1865 phrase "four years ago" can be anchored only to a speech year if
 the source records no month or day. The output should keep that year-level
 granularity rather than inventing a day.
@@ -480,10 +487,9 @@ granularity rather than inventing a day.
 
 - The entry date anchors relative phrases, but it is not the event date.
 - A season or month is an interval under a stated convention.
-- A day-level event can be a point; a coarse event should not be.
-- Planned events need a visible status cue.
-- A duration without a start date belongs in the unplaced table, not on the
-  chart.
+- A day-level event can be a point; a coarser event should not be.
+- Planned and reported events need a cue besides colour.
+- A duration without a start date gets a row but no mark.
 
 Nadia's timeline is useful because it refuses one false mark. The six-week pilot
 is still visible, but it stays off the time scale until a start date appears.

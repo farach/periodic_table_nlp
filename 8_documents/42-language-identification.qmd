@@ -111,6 +111,10 @@ display_samples <- language_samples |>
       "</span>"
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   detector_versions,
@@ -197,6 +201,10 @@ detected_samples <- language_samples |>
 
 open_house <- detected_samples |>
   filter(text == "Open house.")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   detected_samples |>
@@ -270,6 +278,10 @@ detector_counts <- tibble(
     differed_from_recorded_label =
       nrow(detected_samples) - matched_recorded_label - no_label
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   detector_counts,
@@ -319,6 +331,10 @@ length_summary <- detected_samples |>
     .groups = "drop"
   ) |>
   arrange(length_group)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   length_summary,
@@ -372,6 +388,10 @@ short_probe <- tibble(
     cld2_match = !is.na(cld2_language) & cld2_language == recorded_language,
     cld3_match = !is.na(cld3_language) & cld3_language == recorded_language
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   short_probe |>

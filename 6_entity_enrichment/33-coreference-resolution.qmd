@@ -110,6 +110,10 @@ parsed <- parsed_raw |>
   )
 
 phrases <- nounphrase_extract(parsed_raw)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   riverton_pronouns |>
@@ -223,6 +227,10 @@ rule_links <- pronouns |>
     rule_antecedent = first(antecedent),
     .by = c(pronoun_id, pronoun, sentence_id, pronoun_number)
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_links,
@@ -283,6 +291,10 @@ score_counts <- tibble(result = c("correct", "wrong", "ambiguous reference")) |>
   mutate(pronouns = coalesce(pronouns, 0L))
 
 spacy_finalize()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   coreference_score |>

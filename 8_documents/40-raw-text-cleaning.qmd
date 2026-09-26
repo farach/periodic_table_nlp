@@ -68,6 +68,10 @@ feedback <- read_csv(
 entity_html <- "<p>Training &amp; tools&nbsp;provided.</p>"
 regex_tag_stripped <- str_remove_all(entity_html, "<[^>]+>")
 html_text <- rvest::html_text2(rvest::read_html(entity_html))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -129,6 +133,10 @@ flyer_lines <- workforce_sentences |>
 
 flyer_block <- paste(flyer_lines, collapse = "\n")
 squished_flyer <- str_squish(flyer_block)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -177,6 +185,10 @@ control_text <- str_c("shift", intToUtf8(0x0001), "starts soon")
 control_marked <- str_replace_all(control_text, "[\\p{Cc}]", " ")
 control_repaired <- str_squish(control_marked)
 control_squished <- str_squish(control_text)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -268,6 +280,10 @@ encoding_examples <- tibble(
       character(1)
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   encoding_examples,

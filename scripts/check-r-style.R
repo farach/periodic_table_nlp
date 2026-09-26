@@ -34,6 +34,9 @@ lesson_files <- unlist(
   use.names = FALSE
 )
 
+# Guide pages follow the same code style as lessons.
+lesson_files <- c(lesson_files, "using-language-models.qmd")
+
 stopifnot(
   length(lesson_files) > 0L,
   all(file.exists(lesson_files))

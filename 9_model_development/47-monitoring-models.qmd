@@ -100,6 +100,10 @@ era_length_summary <- paragraphs |>
     median_words = median(paragraph_words),
     .groups = "drop"
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -196,6 +200,10 @@ period_accuracy <- label_counts |>
 lowest_slice <- period_accuracy |>
   filter(held_out_paragraphs > 0L) |>
   slice_min(accuracy, n = 1, with_ties = FALSE)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   period_accuracy |>
@@ -306,6 +314,10 @@ drift_table <- period_paragraphs |>
   ) |>
   left_join(period_lengths, by = join_by(period)) |>
   select(period, paragraphs, median_words, tokens, absent_tokens, absent_share)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   drift_table |>
@@ -332,6 +344,20 @@ stopifnot(
   identical(drift_table$absent_tokens, c(9900L, 7390L, 7014L, 4972L, 2800L)),
   identical(round(drift_table$absent_share, 3), c(0.516, 0.507, 0.487, 0.467, 0.502)),
   max(drift_table$median_words) - min(drift_table$median_words) > 100
+)
+
+drift_alt_text <- paste0(
+  "Two line charts by period, both starting at zero. Median words per paragraph ",
+  "fall from ", max(drift_table$median_words), " in the earliest period to ",
+  min(drift_table$median_words), " in the latest. The share of non-stopword ",
+  "tokens outside the 500 training features stays between ",
+  scales::percent(min(drift_table$absent_share), accuracy = 1), " and ",
+  scales::percent(max(drift_table$absent_share), accuracy = 1), "."
+)
+
+stopifnot(
+  identical(drift_table$median_words[1], max(drift_table$median_words)),
+  identical(drift_table$median_words[5], min(drift_table$median_words))
 )
 ```
 
@@ -368,29 +394,58 @@ a model can be badly wrong on inputs that look perfectly familiar.
 ```{r}
 #| label: fig-input-drift
 #| fig-cap: "Input drift checks by period."
-#| fig-alt: "Two small line charts by period. One shows the share of non-stopword tokens outside the training features. The other shows median paragraph length falling over time."
+#| fig-alt: !expr drift_alt_text
+#| fig-height: 5
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
 
 drift_plot <- drift_table |>
   transmute(
     period,
-    `share outside training features` = absent_share,
-    `median paragraph words` = median_words
+    `Median words per paragraph` = median_words,
+    `Share of non-stopword tokens outside the 500 training features` = absent_share
   ) |>
   pivot_longer(
     cols = -period,
     names_to = "measure",
     values_to = "value"
+  ) |>
+  mutate(
+    value_label = if_else(
+      str_detect(measure, "^Share"),
+      scales::percent(value, accuracy = 1),
+      as.character(value)
+    )
   )
 
+# Both panels start at zero, so the nearly flat share does not look like a
+# large change just because its panel has its own scale.
+panel_floor <- tibble(measure = unique(drift_plot$measure), value = 0)
+
 ggplot(drift_plot, aes(x = period, y = value, group = measure)) +
-  geom_line(linewidth = 0.8) +
-  geom_point(size = 3) +
-  facet_wrap(~measure, scales = "free_y", ncol = 1) +
+  geom_blank(data = panel_floor, aes(x = NULL, group = NULL)) +
+  geom_line(colour = lesson_colours[["accent"]], linewidth = 0.9) +
+  geom_point(colour = lesson_colours[["accent"]], size = 2.6) +
+  geom_text(
+    aes(label = value_label),
+    vjust = -1,
+    family = lesson_font,
+    size = 9.5,
+    size.unit = "pt",
+    colour = lesson_colours[["body"]]
+  ) +
+  facet_wrap(vars(measure), scales = "free_y", ncol = 1) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3))) +
   labs(
+    title = "Paragraph length drifts far more than vocabulary coverage",
+    subtitle = "Two label-free input checks for each period of the inaugural corpus",
     x = "Period",
     y = NULL
   ) +
-  theme_minimal()
+  theme_lesson(grid = "y") +
+  theme(axis.text.y = element_blank())
 ```
 
 ```{r}
@@ -400,9 +455,18 @@ stopifnot(
   identical(nrow(drift_plot), 10L),
   identical(
     sort(unique(drift_plot$measure)),
-    c("median paragraph words", "share outside training features")
+    c(
+      "Median words per paragraph",
+      "Share of non-stopword tokens outside the 500 training features"
+    )
   ),
-  max(drift_table$median_words) - min(drift_table$median_words) > 100
+  !any(drift_plot$value_label %in% c("0%", "0")),
+  identical(
+    drift_plot$value_label[drift_plot$measure == "Median words per paragraph"],
+    c("149.5", "92", "67", "53", "43")
+  ),
+  max(drift_table$median_words) - min(drift_table$median_words) > 100,
+  max(drift_table$absent_share) - min(drift_table$absent_share) < 0.06
 )
 ```
 
@@ -443,6 +507,10 @@ democratic_range <- paragraphs |>
 
 party_rows <- paragraphs |>
   filter(party %in% c("Democratic", "Republican"))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   bind_rows(

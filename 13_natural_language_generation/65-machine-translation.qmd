@@ -45,7 +45,6 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(huggingfaceR)
   library(jsonlite)
-  library(knitr)
   library(purrr)
   library(reticulate)
   library(stringr)
@@ -62,8 +61,12 @@ translation_model <- load_nlg_pipeline(
 
 model_record <- translation_model$metadata |>
   select(model_id, revision, license, task_scope)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   model_record,
   col.names = c("Model", "Revision", "License", "Use in this course"),
   caption = "Pinned local checkpoint for English-to-French translation",
@@ -76,7 +79,7 @@ kable(
 
 stopifnot(
   all(c(
-    "dplyr", "huggingfaceR", "jsonlite", "knitr", "purrr",
+    "dplyr", "huggingfaceR", "jsonlite", "purrr",
     "reticulate", "stringr", "tibble", "tidyr"
   ) %in% loadedNamespaces()),
   identical(
@@ -126,8 +129,12 @@ direction <- tibble(
   runtime_language_switch = FALSE,
   checkpoint_beams = generation_config$num_beams
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   direction,
   col.names = c(
     "Checkpoint",
@@ -180,8 +187,12 @@ translation_inputs <- tribble(
   "",
   FALSE
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   translation_inputs,
   col.names = c(
     "Source ID",
@@ -220,8 +231,12 @@ translation_budget <- translation_inputs |>
     model_input_limit = 512L,
     fits_without_truncation = input_tokens <= model_input_limit
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   translation_budget |>
     select(source_id, input_tokens, model_input_limit, fits_without_truncation),
   col.names = c(
@@ -281,8 +296,12 @@ translation_results <- translation_budget |>
     hit_token_cap = map_lgl(generation, "hit_token_cap"),
     source_copy_baseline = source_text
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   translation_results |>
     select(source_id, source_text, french_candidate, source_copy_baseline),
   col.names = c(
@@ -384,8 +403,12 @@ translation_check_display <- translation_checks |>
       nlg_screen_label
     )
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   translation_check_display,
   col.names = c(
     "Source ID",
@@ -480,8 +503,12 @@ translation_review <- tibble(
     "pending"
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   translation_review,
   col.names = c("Review gate", "Status"),
   caption = "Automatic checks do not grant bilingual approval",

@@ -41,7 +41,6 @@ library(tidytext)
 library(tokenizers)
 library(udpipe)
 library(purrr)
-library(knitr)
 
 source("R/inaugural-corpus.R")
 source("R/permutation-null.R")
@@ -63,8 +62,12 @@ corpus_summary <- tibble(
     n_distinct(paragraphs$president)
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   corpus_summary,
   col.names = c("Measure", "Value"),
   caption = "The inaugural-address corpus used in this lesson",
@@ -110,8 +113,12 @@ tfidf_top <- tfidf_scores |>
   slice_head(n = 5, by = c(speech_id, year, president)) |>
   mutate(tf_idf = round(tf_idf, 4)) |>
   select(speech_id, word, n, tf_idf)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   tfidf_top,
   col.names = c("Speech", "Word", "Count", "tf-idf"),
   caption = "Top tf-idf words in three selected speeches",
@@ -201,8 +208,12 @@ rake_top <- rake_top_20 |>
 tagger_error <- annotated_all |>
   filter(doc_id == "1789-Washington", str_to_lower(token) %in% c("auspiciously", "commence")) |>
   select(token, lemma, upos)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   rake_top,
   col.names = c("Speech", "Tagged phrase", "Words", "Frequency", "RAKE score"),
   caption = "Top RAKE phrase keywords in the same three speeches",
@@ -261,13 +272,6 @@ comparison <- tfidf_top |>
     overlap_count
   ) |>
   arrange(match(speech_id, selected_ids))
-
-kable(
-  comparison,
-  col.names = c("Speech", "Top tf-idf words", "Top RAKE phrases", "Shared raw words"),
-  caption = "Top-5 overlap before normalizing word forms",
-  row.names = FALSE
-)
 
 raw_tfidf_top_20 <- tfidf_scores |>
   arrange(desc(tf_idf), word, .by_group = TRUE) |>
@@ -347,15 +351,26 @@ overlap_null <- permutation_null(
 
 overlap_null_display <- overlap_null |>
   mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
+  comparison,
+  col.names = c("Speech", "Top tf-idf words", "Top RAKE phrases", "Shared raw words"),
+  caption = "Top-5 overlap before normalizing word forms",
+  row.names = FALSE
+)
+
+knitr::kable(
   overlap_summary,
   col.names = c("Match basis", "Speeches", "Mean shared words", "Median shared words", "Zero-overlap speeches", "Maximum shared words"),
   caption = "Overlap after widening both keyword lists to 20 items across all speeches",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   overlap_null_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Permutation null for normalized top-20 overlap",

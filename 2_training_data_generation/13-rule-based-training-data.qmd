@@ -185,6 +185,10 @@ result_counts <- tibble(weak_label = result_order) |>
     by = join_by(weak_label)
   ) |>
   mutate(rows = coalesce(rows, 0L))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   weak_results |>
@@ -235,6 +239,10 @@ rule_summary <- tibble(
     mean(weak_results$rule_count == 1L)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_summary |>
@@ -283,6 +291,10 @@ rule_agreement <- foundryR::foundry_agreement(
   estimate = "weak_label",
   truth = "reference_label"
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_agreement,
@@ -339,6 +351,10 @@ all_row_accounting <- tibble(
       nrow()
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   all_row_accounting,
@@ -399,6 +415,10 @@ rule_diagnostics <- map(
   mutate(
     precision_when_alone = alone_and_correct / rows_fired_alone
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_diagnostics |>
@@ -494,6 +514,10 @@ rule_pairs <- expand.grid(
     )
   ) |>
   arrange(desc(fired_together), first, second)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_pairs,
@@ -584,6 +608,10 @@ abstain_outcomes <- tibble(
   sentence_id = rule_votes$sentence_id[abstain_rows],
   reference_label = reference_labels[abstain_rows]
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   conflict_outcomes,
@@ -702,6 +730,10 @@ stress_results <- stress_cases |>
     )
   ) |>
   select(-rule_count, -voted_label)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   stress_results,

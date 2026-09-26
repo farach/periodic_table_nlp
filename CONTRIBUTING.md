@@ -88,7 +88,9 @@ clearly, and `ggplot2` for a chart that earns its place.
 
 - Load packages by name in a visible chunk near the top of the lesson and
   assert that they attached. Do not use `library(tidyverse)`; naming each
-  package shows the reader which one does which job.
+  package shows the reader which one does which job. knitr is the exception:
+  display chunks call `knitr::kable()` by its full name, so the reader never
+  sees `library(knitr)`.
 - Give `readr::read_csv()` an explicit `col_types = cols(...)` and a deliberate
   `na =`. Column types are a teaching point, so never rely on type guessing.
 - Keep base R where it is the subject of the lesson or has no tidyverse
@@ -179,7 +181,8 @@ during a render. Call `spacy_finalize()` when the lesson is done with it.
 
 ## Set up local generation models once
 
-Lessons 65 through 68, 70, 71, and 72 use public Hugging Face models through
+Lessons 65 through 68, 70, 71, and 72, and the guide page
+`using-language-models.qmd`, use public Hugging Face models through
 the pinned `huggingfaceR` and `reticulate` packages. They use a separate Python
 environment because a single R session cannot switch safely between the spaCy
 and generation interpreters after Python has initialized.
@@ -275,6 +278,30 @@ evidence.
 
 ## Keep project invariants intact
 
+- Show the reader the code that does the work, not the code that formats the
+  page. A table is built in the visible chunk and printed from an
+  `#| echo: false` display chunk placed straight after it, so the reader sees
+  the computation and then the table, never the `knitr::kable()` call.
+  Display-only helpers such as alt-text builders, sentence builders for inline
+  prose, and one-off summary tibbles go in the display chunk or in the hidden
+  verification chunk. `scripts/check-lessons.R` fails any chunk a reader can
+  see that calls `kable()`. A display chunk may sit between a computation and
+  the hidden verification chunk that checks it.
+- Figures use the shared style in `R/lesson-figures.R`: `theme_lesson()`,
+  the `lesson_colours` and `lesson_text_colours` palettes, and the bundled
+  Source Sans 3 font. Knitr draws with `ragg_png`, set in `_quarto.yml`. Give
+  each figure a takeaway title that the data support, a subtitle that says
+  what is plotted, direct labels in place of a legend where possible, and a
+  cue besides colour. Text drawn in a series colour uses the darker
+  `lesson_text_colours` value so it meets 4.5:1 contrast. Assert any claim a
+  title makes in the hidden chunk after the figure, and inspect the rendered
+  PNG before publishing.
+- In the visualization lessons, 75 to 81, the plotting code is the lesson and
+  stays visible. Elsewhere, fold supporting plotting code with
+  `#| code-fold: true` and `#| code-summary: "Show the plotting code"`. A long
+  mechanical chunk may also be folded with a summary that names what it does,
+  but only when the prose around it explains the method in words.
+
 - Every R chunk in a lesson is covered by `stopifnot()`, either inside the chunk
   or in an `#| include: false` verification chunk placed directly after it.
   Prefer the second form. Assertions are a build guarantee, not reading matter,
@@ -340,6 +367,12 @@ evidence.
 - Do not attach `maps` with `library(maps)` after purrr; it masks `purrr::map()`.
   Call `ggplot2::map_data()` instead. `datasets::state.center` places Alaska and
   Hawaii off the West Coast, so neither may be drawn on a lower-48 basemap.
+- When layers draw different subsets of rows on a discrete axis, add
+  `scale_*_discrete(drop = FALSE)`. Otherwise the axis orders levels by the
+  first layer that contains each one, not by the factor, and a row can jump to
+  the wrong end of a timeline.
+- ggwordcloud measures words on its own `png()` device, which cannot see a
+  font registered with systemfonts, so word clouds keep the default font.
 - Stochastic or chaotic layouts (t-SNE, force-directed graphs, word clouds) get
   seeds and single threads, but assertions and prose must not depend on their
   coordinates. When labels would collide, redesign the figure with small

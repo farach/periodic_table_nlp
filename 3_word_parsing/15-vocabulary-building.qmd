@@ -83,6 +83,10 @@ word_counts <- word_token_rows |>
   count(token, name = "frequency", sort = TRUE)
 top_word_counts <- word_counts |>
   slice_head(n = 8)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   top_word_counts,
@@ -165,6 +169,10 @@ split_summary <- tibble(
   tokens = c(nrow(job_token_rows), nrow(flyer_token_rows)),
   types = c(nrow(job_word_counts), n_distinct(flyer_token_rows$token))
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   split_summary,
@@ -224,6 +232,10 @@ frequency_cutoffs <- tibble(minimum_frequency = 1:3) |>
       round(100 * coverage)
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   frequency_cutoffs |>
@@ -290,6 +302,10 @@ unknown_summary <- tibble(
     )
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   unknown_summary,
@@ -419,6 +435,10 @@ subword_test_summary <- tibble(
     as.character(unknown_flyer_piece_count)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   subword_test_summary,

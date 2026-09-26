@@ -235,6 +235,10 @@ ocr_provenance <- tibble(
     image_md5
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   ocr_provenance,
@@ -469,6 +473,10 @@ rate_table <- bind_rows(
   error_rates(reference_text, degraded_observed) |>
     mutate(version = "degraded copy", .before = 1)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rate_table |>
@@ -530,6 +538,10 @@ comparison <- tibble(
     rep(NA_character_, max(0L, length(reference_lines) - length(degraded_lines)))
   )[seq_len(max(length(reference_lines), length(degraded_lines)))]
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   comparison,

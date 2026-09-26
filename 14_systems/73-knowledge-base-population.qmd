@@ -6,9 +6,9 @@ categories: [systems, knowledge base population, entity linking]
 ---
 
 Grace receives a week of short announcements about Riverton training programs.
-Some repeat facts the team already has. One gives a new deadline. Another uses
-the name `Riverton`, which could mean two different places in the reference
-table.
+Some repeat each other. Two give different deadlines for the same program.
+Another uses the name `Riverton`, which could mean two different places in the
+reference table.
 
 **Knowledge base population** reads documents, links entity mentions, and adds
 typed facts to a knowledge base with provenance. A knowledge base is not a truth
@@ -42,8 +42,9 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Load the Riverton reference list
 
 The existing knowledge base starts with entity IDs and aliases. The lesson reads
-the local CSV files with fixed column types and checks their recorded
-fingerprints before using them.
+the local CSV files with fixed column types, computes each file's SHA-256
+fingerprint, and compares it with the fingerprint recorded when the file was
+made. A mismatch stops the page before any fact is added.
 
 ```{r}
 library(readr)
@@ -53,7 +54,6 @@ library(tidyr)
 library(purrr)
 library(stringr)
 library(digest)
-library(knitr)
 
 entities <- read_csv(
   "data/riverton/riverton-entities.csv",
@@ -100,12 +100,10 @@ alias_hash <- digest(
   algo = "sha256",
   serialize = FALSE
 )
+```
 
-reference_summary <- tibble(
-  artifact = c("riverton-entities.csv", "riverton-aliases.csv"),
-  rows = c(nrow(entities), nrow(aliases)),
-  sha256 = c(entity_hash, alias_hash)
-)
+```{r}
+#| echo: false
 
 knitr::kable(
   entities,
@@ -114,12 +112,24 @@ knitr::kable(
   row.names = FALSE
 )
 
-knitr::kable(
-  reference_summary,
-  col.names = c("Artifact", "Rows", "SHA-256"),
-  caption = "Reference files checked before use",
-  row.names = FALSE
-)
+tibble(
+  artifact = c("riverton-entities.csv", "riverton-aliases.csv"),
+  rows = c(nrow(entities), nrow(aliases)),
+  computed = c(entity_hash, alias_hash)
+) |>
+  left_join(
+    metadata |>
+      select(artifact, recorded = fingerprint),
+    by = "artifact"
+  ) |>
+  mutate(matches = computed == recorded) |>
+  knitr::kable(
+    col.names = c(
+      "Artifact", "Rows", "Computed SHA-256", "Recorded SHA-256", "Match"
+    ),
+    caption = "Reference files checked against their recorded fingerprints before use",
+    row.names = FALSE
+  )
 ```
 
 ```{r}
@@ -160,6 +170,10 @@ slot_schema <- tribble(
   "application_deadline", "organisation", "date literal", "single-valued",
   "Keep each dated value, flag conflict, and let review decide."
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   slot_schema,
@@ -221,6 +235,10 @@ candidate_plan <- tribble(
   "CAND-009", "A009", "offers", "Riverton Skills Centre", "Forklift Operator Licence", "hedged", "hold hedged",
   "CAND-010", "A010", "promotes", "Riverton Skills Centre", "Data Support Certificate", "asserted", "reject undeclared slot"
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   documents,
@@ -269,6 +287,9 @@ review. If the alias has several candidates, the candidate goes to review
 instead of choosing a nearby name.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the mention-linking code"
+
 normalize_text <- function(value) {
   str_to_lower(value, locale = "en")
 }
@@ -390,6 +411,10 @@ link_table <- candidates |>
     object_type,
     object_link_status
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   link_table,
@@ -433,6 +458,9 @@ pipeline made the expected decision for each candidate. It is not precision and
 recall.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the slot and type checks"
+
 schema_checks <- candidates |>
   left_join(slot_schema, by = "slot") |>
   mutate(
@@ -503,6 +531,10 @@ candidate_actions <- schema_checks |>
       TRUE ~ "asserted, linked, and type-compatible"
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   candidate_actions |>
@@ -602,6 +634,10 @@ review_queue <- candidate_actions |>
     provisional_or_candidate_id = subject_id,
     review_reason = action_reason
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   populated_facts,
@@ -684,6 +720,10 @@ graph_facts <- populated_facts |>
     document_ids,
     source = "populated fact"
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   graph_facts,

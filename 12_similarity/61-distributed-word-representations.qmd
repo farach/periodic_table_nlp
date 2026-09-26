@@ -50,7 +50,6 @@ library(readr)
 library(quanteda)
 library(word2vec)
 library(ggplot2)
-library(knitr)
 
 source("R/inaugural-corpus.R")
 
@@ -108,22 +107,26 @@ model_fingerprint <- tibble(
   field = c("generator", "model SHA-256", "reproducibility note"),
   value = metadata_values[c("generator", "sha256_model", "reproducibility")]
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   training_summary,
   col.names = c("Item", "Value"),
   caption = "Training text and vocabulary checks stored with the saved word2vec model",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   hyperparameter_table,
   col.names = c("Setting", "Value"),
   caption = "Hyperparameters for the pinned local word2vec skip-gram model",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   model_fingerprint,
   col.names = c("Field", "Value"),
   caption = "Provenance for the committed word2vec model",
@@ -196,8 +199,12 @@ expected_neighbours <- c(
   "human", "evil", "mankind", "dignity", "civilization", "ancient",
   "friendship", "lasting", "world", "cultivate", "amity", "prosperity"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   neighbour_table |>
     mutate(similarity = round(similarity, 3)),
   col.names = c("Query", "Nearest word", "Cosine similarity", "Cosine similarity band", "Rank"),
@@ -264,8 +271,12 @@ random_pair_summary <- tibble(
     as.numeric(quantile(random_pair_cosines, 0.95))
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   bind_rows(
     tibble(statistic = "freedom / liberty", cosine_similarity = freedom_liberty_cosine),
     random_pair_summary
@@ -315,8 +326,12 @@ similarity_summary <- tibble(
     freedom_liberty_percentile
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   similarity_summary |>
     mutate(value = if_else(statistic == "word pairs", as.character(as.integer(value)), sprintf("%.3f", value))),
   col.names = c("Statistic", "Value"),
@@ -344,19 +359,48 @@ chosen to be easy, yet it lands below the median pair.
 ```{r}
 #| label: fig-word2vec-cosines
 #| fig-cap: "Pairwise cosine similarities among words kept by the pinned local word2vec model."
-#| fig-alt: "A histogram concentrated toward high positive cosine values. A vertical line for freedom slash liberty falls left of the median rather than near the far right edge."
+#| fig-alt: !expr sprintf("A histogram of cosine similarities concentrated toward high positive values. A dashed line for freedom and liberty at %.2f falls left of the median rather than near the far right edge.", freedom_liberty_cosine)
+#| fig-height: 4.2
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
 
 plot_similarities <- tibble(cosine_similarity = word_similarities)
 
 ggplot(plot_similarities, aes(x = cosine_similarity)) +
-  geom_histogram(bins = 40, boundary = 0, color = "white") +
-  geom_vline(xintercept = freedom_liberty_cosine, linewidth = 1, linetype = "dashed") +
-  labs(
-    x = "Cosine similarity",
-    y = "Word pairs",
-    title = "Many arbitrary word pairs sit above an easy related pair"
+  geom_histogram(
+    bins = 40,
+    boundary = 0,
+    fill = lesson_colours[["context"]],
+    colour = lesson_colours[["paper"]]
   ) +
-  theme_minimal()
+  geom_vline(
+    xintercept = freedom_liberty_cosine,
+    linewidth = 0.9,
+    linetype = "22",
+    colour = lesson_colours[["contrast"]]
+  ) +
+  annotate(
+    "text",
+    x = freedom_liberty_cosine,
+    y = Inf,
+    label = sprintf("freedom / liberty\n%.2f", freedom_liberty_cosine),
+    hjust = 1.08,
+    vjust = 1.4,
+    lineheight = 0.95,
+    family = lesson_font,
+    size = 3.6,
+    colour = lesson_text_colours[["contrast"]]
+  ) +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(
+    title = "Many arbitrary word pairs sit above an easy related pair",
+    subtitle = "Cosine similarity for every pair of words kept by the pinned word2vec model",
+    x = "Cosine similarity",
+    y = "Word pairs"
+  ) +
+  theme_lesson(grid = "y")
 ```
 
 ```{r}

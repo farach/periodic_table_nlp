@@ -79,6 +79,10 @@ all_caps_hits <- sentences |>
     token = str_extract_all(text, all_caps_pattern)
   ) |>
   unnest(token)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   all_caps_hits,
@@ -161,6 +165,10 @@ guard_failure_examples <- tibble(token = c("UNESCO", "IT")) |>
     longer_than_five = str_length(token) > 5L,
     guarded_match = !longer_than_five & !in_dictionary
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   capital_score,
@@ -269,6 +277,10 @@ parenthetical_score <- tibble(
   true_definitions_in_constructed_passage = 2L,
   definitions_found = nrow(definitions)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   riverton_parenthetical_score,

@@ -1,8 +1,13 @@
 # Follow-ups
 
-**Status on 2026-09-24:** all 81 tiles have lessons. Lessons 69 to 81 arrived in
-pull request #19. Every automated gate passes on Windows and on Linux CI. This
-file lists what is still open, so the next session can start here.
+**Status on 2026-09-25:** all 81 tiles have lessons, and the guide page
+`using-language-models.qmd` covers model-assisted analysis. This session moved
+table-formatting code out of the reader's view, gave every figure one design
+system, redesigned the charts in lessons 75 to 81, clarified lessons 69 to 81,
+and added a dated research pass on language models used as research
+instruments. `sessions/2026-09-25-figures-and-model-assisted-analysis.md`
+describes the work. This file lists what is still open, so the next session can
+start here.
 
 ## Pending for every lesson
 
@@ -12,39 +17,27 @@ file lists what is still open, so the next session can start here.
   `data/lesson_reviews.csv` stays `pending` until a person has done it.
 - **Human approval.** `human_approval` is `pending` for every lesson. Only the
   owner changes it.
+- **Linux render of this branch.** Run the render workflow and read lessons 44,
+  47, 77 to 81, and the guide from its artifact. The figures now draw with
+  ragg and a bundled font, so their layout should match Windows closely, but
+  this has not been seen on Linux yet.
 
-## Should-fix items left open in lessons 69 to 81
+## Resolved from pull request #19
 
-Each item has a suggested fix. The description of pull request #19 lists them
-with their review IDs.
+K04 in lesson 70, K07 in lesson 71, K12 and K13 in lesson 73, K32 and K34 in lesson 74,
+the row-count check in lesson 75, the apostrophe wording in lesson 77, and the
+heading and the check that could not fail in lesson 81 are fixed. K03 and K05
+in lesson 70 and K33 in lesson 74 no longer apply, because the sentence-building
+helpers they describe now sit in hidden chunks. K20's four words for lesson 75
+are in place.
 
-- **70:** "the page does not depend on literal wording" overstates, because the
-  reason check can stop the build if the answer's wording changes. Suggested:
-  "Exact generated text can differ across machines, so every sentence that
-  reports a model result is computed from this render."
-- **71:** the program-name screen shows TRUE on `request_program` rows by
-  construction. Show "not applicable" on those rows, or write the branch as
-  TRUE with a comment.
-- **73:** "checks their recorded fingerprints" describes a comparison the page
-  does not show. Add the recorded fingerprint and a match column, as lesson 78
-  does.
-- **74:** most of the shorthand in the builder-checks table is unexplained. The
-  suggested gloss is in the pull request description.
+## Still open from pull request #19
+
 - **74 builder:** a check-only mode run without its file argument runs the full
   build instead of checking. `DATA_SOURCES.md` says so, and the builder
   follow-ups below include the fix.
-- **75:** `identical(nrow(case_results), 9L)` cannot fail at render. Drop it, or
-  tie it to the number of `setInputs()` calls.
-- **77:** the sentence "splits punctuation away from words" sits next to the
-  `america's` example. Suggested: "...splits punctuation away from words,
-  except an apostrophe inside a word."
-- **81:** the heading "Check seed dependence without reading coordinates"
-  contradicts the sentence that compares coordinates. Suggested: "...and checks
-  only whether their coordinates are identical, without printing them."
-- **81:** `all(edge_set == sort(edge_set))` cannot fail. Delete it.
-
-The optional items are listed in the pull request description. They are small
-wording, density and explanation points.
+- The remaining optional items in the pull request description, such as K11,
+  K35, and K36, are small wording and disclosure points.
 
 ## Lesson 74 collection builder
 
@@ -60,17 +53,36 @@ first run on the committed collection. A later pull request can:
   such as "Please note: Please ...";
 - give the two frame checks, CK-D1 and CK-D2, descriptive names.
 
-Any change to the builder or the collection changes lesson 74's results.
-Follow the order the lesson depends on:
+Any change to the builder or the collection changes lesson 74's results and the
+guide page's cached labels. Follow the order the lesson depends on:
 
 1. The builder's checks pass.
 2. The collection and its fingerprints are committed.
 3. Lesson 74 runs once on the committed collection.
 4. Only then are the lesson's hidden result checks updated.
+5. The guide's labels are rebuilt with `data-raw/build-llm-review-labels.R`,
+   and its hidden checks are updated from that run.
 
 `--negative-controls` and the `git show` route in `DATA_SOURCES.md` read
 commits `0a5a5af9`, `a3478085` and `49a9b67a`. Keep them reachable from `main`,
 so do not rewrite that history.
+
+## Guide page and its cached run
+
+- `data-raw/build-llm-review-labels.R` labels all 240 records with the pinned
+  local model. It is slow on machines without native PyTorch support. Rebuild
+  it only when the prompt, the collection, or the model changes, and commit the
+  labels and metadata together.
+- The guide reruns eight saved answers during every render and reports how
+  many match. A Linux render may report a different count from Windows; do not
+  pin it in a hidden check.
+
+## Longer chunks that stay visible
+
+Lesson 71's state-update chunk and lesson 72's BM25, dense-vector, and fusion
+chunks are still long, but they are the method each lesson teaches, so they
+were left visible. A later pass could split each into smaller steps with prose
+between them.
 
 ## Platform differences to expect
 
@@ -80,13 +92,15 @@ so each render states its own value:
 - **Lesson 71:** some generated replies are worded differently.
 - **Lesson 77:** the letters-only filter drops 369 tokens on Windows and 367 on
   Linux, because of the platform's ICU word-break build.
-- **Lesson 78:** the t-SNE neighbour percentages change slightly.
+- **Lesson 78:** the t-SNE neighbour percentages and panel counts change
+  slightly.
+- **Guide page:** the number of rerun answers that match the saved run.
 
 Do not pin these values in a hidden check.
 
 ## Other open work in the repository
 
 - **Pull request #9** ("Offer three ways into the map, and size it from its
-  container", branch `guidance-routes`) is open from 2026-08-29. It now
-  conflicts with `main` in `index.qmd` and `periodic-table.css`, because the
-  finished map dropped the planned-tile key. Rebase it or close it.
+  container", branch `guidance-routes`) is open from 2026-08-29. It conflicts
+  with `main` in `index.qmd` and `periodic-table.css`, because the finished map
+  dropped the planned-tile key. Rebase it or close it.

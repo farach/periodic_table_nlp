@@ -89,6 +89,10 @@ sentences <- read_csv(
 document_counts <- sentences |>
   count(document_id, name = "sentence_count") |>
   arrange(document_id)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   document_counts,
@@ -146,6 +150,10 @@ analysis_table <- tibble(
   analyses = map_chr(word_analyses, \(value) paste(value, collapse = "; ")),
   stems = map_chr(word_stems, \(value) paste(value, collapse = ", "))
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   analysis_table,
@@ -231,6 +239,10 @@ unanalyzed_words <- vocabulary_summary |>
 multi_analysis_words <- vocabulary_summary |>
   filter(analysis_count > 1L) |>
   pull(word)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   summary_counts,
@@ -288,6 +300,10 @@ ambiguous_words <- vocabulary_summary |>
     word,
     analyses = map_chr(analyses, \(value) paste(value, collapse = "; "))
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   ambiguous_words,

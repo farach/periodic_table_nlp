@@ -41,7 +41,6 @@ library(tibble)
 library(stringr)
 library(tidytext)
 library(ggplot2)
-library(knitr)
 
 source("R/inaugural-corpus.R")
 source("R/permutation-null.R")
@@ -116,8 +115,12 @@ trend_summary <- trend_counts |>
     survives_guard = max_rate_flag == "ok" & guarded_rate_excluding_largest >= max_rate * 0.5
   ) |>
   ungroup()
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   trend_summary,
   col.names = c(
     "Word", "Total count", "Speeches with word",
@@ -171,25 +174,47 @@ rates from speeches under 500 alphabetic tokens.
 ```{r}
 #| label: fig-word-trends
 #| fig-cap: "Uses per thousand alphabetic tokens for four selected words across 60 inaugural addresses."
-#| fig-alt: "Line chart showing word rates over time for america, freedom, constitution, and children. Rates from speeches under 500 alphabetic tokens are marked with open circles."
+#| fig-alt: "Four small line charts, one per word, sharing a vertical scale: america, freedom, constitution, and children. Each panel draws its word in blue over faint grey lines for the other three words. America, freedom, and children reach their highest rates after 1990; constitution peaks in 1793. Rates from speeches under 500 alphabetic tokens are marked with open circles."
+#| fig-height: 5
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
 
 plot_data <- trend_counts |>
   mutate(word = factor(word, levels = target_words))
 
-ggplot(plot_data, aes(x = year, y = per_thousand_alphabetic, color = word)) +
-  geom_line(linewidth = 0.7) +
-  geom_point(aes(shape = below_min_tokens), size = 1.6) +
-  scale_shape_manual(
-    values = c(`FALSE` = 16, `TRUE` = 1),
-    labels = c(`FALSE` = "500+ tokens", `TRUE` = "under 500 tokens")
+# Without a `word` column, this copy is drawn in every panel as context.
+context_lines <- plot_data |>
+  rename(context_word = word)
+
+ggplot(plot_data, aes(x = year, y = per_thousand_alphabetic)) +
+  geom_line(
+    data = context_lines,
+    aes(group = context_word),
+    colour = lesson_colours[["context"]],
+    linewidth = 0.35
   ) +
+  geom_line(colour = lesson_colours[["accent"]], linewidth = 0.7) +
+  geom_point(
+    aes(shape = below_min_tokens),
+    colour = lesson_colours[["accent"]],
+    fill = lesson_colours[["paper"]],
+    size = 1.6,
+    stroke = 0.7
+  ) +
+  scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 21), guide = "none") +
+  facet_wrap(vars(word), ncol = 2) +
   labs(
+    title = "Three of the four words reach their highest rate after 1990",
+    subtitle = str_c(
+      "Uses per 1,000 alphabetic tokens in 60 inaugural addresses.<br>",
+      "Open circles mark speeches under 500 tokens; grey lines show the other words."
+    ),
     x = "Speech year",
-    y = "Uses per 1,000 alphabetic tokens",
-    color = "Word",
-    shape = "Denominator"
+    y = NULL
   ) +
-  theme_minimal()
+  theme_lesson(grid = "y")
 ```
 
 ```{r}
@@ -203,7 +228,12 @@ stopifnot(
     as.integer(plot_data$year[which.max(plot_data$per_thousand_alphabetic)]),
     2005L
   ),
-  identical(sum(plot_data$below_min_tokens), 8L)
+  identical(sum(plot_data$below_min_tokens), 8L),
+  identical(sum(trend_summary$max_year > 1990), 3L),
+  identical(
+    as.character(trend_summary$word[trend_summary$max_year < 1990]),
+    "constitution"
+  )
 )
 ```
 
@@ -254,8 +284,12 @@ constitution_top_rates <- constitution_counts |>
     per_thousand_alphabetic = round(per_thousand_alphabetic, 2),
     denominator_flag = if_else(below_min_tokens, "under 500 tokens", "ok")
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   constitution_top_rates,
   col.names = c(
     "Speech",
@@ -270,7 +304,7 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   constitution_peak_null_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Permutation null for the constitution peak rate",

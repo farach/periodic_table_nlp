@@ -102,6 +102,10 @@ gazetteer_hash <- digest(
 expected_hash <- metadata |>
   filter(artifact == "riverton-gazetteer.csv") |>
   pull(fingerprint)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   gazetteer,
@@ -169,6 +173,10 @@ geocoded_rows <- place_mentions |>
     by = join_by(mention == place_name),
     relationship = "many-to-many"
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   geocoded_rows,
@@ -224,6 +232,10 @@ status_counts <- tibble(status = c("resolved", "ambiguous", "not found")) |>
     by = join_by(status)
   ) |>
   mutate(mentions = coalesce(mentions, 0L))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   mention_status,
@@ -275,6 +287,10 @@ supplied_context <- tibble(
 with_parent_context <- riverton_candidates |>
   inner_join(supplied_context, by = join_by(mention)) |>
   filter(parent == parent_context)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   riverton_candidates,

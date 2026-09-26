@@ -9,7 +9,11 @@ A fictional request asks for records about the Calder Yard contract. It is not a
 
 **E-discovery** is electronic discovery: finding records that must be reviewed or produced for a legal request. **Technology-assisted review** uses a model to rank unreviewed records so people can review likely responsive records first. **Media monitoring** watches new items as they arrive and sends alerts for items that matter.
 
-Grossman and Cormack report that Blair and Maron's legal-search study found searchers believed they had found at least 75 percent of relevant documents, while average recall was about 20 percent for the studied requests. Lesson 9's active learning chooses uncertain examples to improve a model; ranked review here chooses high-scoring unreviewed records to find responsive material. The **elusion rate** is the share of unreviewed records that are responsive, and a low elusion rate can still hide many misses. Suppose a review of 600 records from a 10,000-record collection finds 70 of its 100 responsive records. The 9,400 unreviewed records still hold 30 responsive records, so the elusion rate is 30 / 9,400, about 0.32 percent, while recall is 70 / 100, or 70 percent.
+Grossman and Cormack report that in Blair and Maron's legal-search study, searchers believed they had found at least 75 percent of the relevant documents, while average recall was about 20 percent for the studied requests.
+
+Ranked review is not the same as lesson 9's active learning. Active learning chooses uncertain examples to improve a model; ranked review chooses high-scoring unreviewed records so responsive material is found sooner.
+
+The **elusion rate** is the share of unreviewed records that are responsive. A low elusion rate can still hide many misses. Suppose a review of 600 records from a 10,000-record collection finds 70 of its 100 responsive records. The 9,400 unreviewed records still hold 30 responsive records, so the elusion rate is 30 / 9,400, about 0.32 percent, while recall is 70 / 100, or 70 percent.
 
 ::: {.callout-note}
 The records in this lesson are constructed teaching examples. They do not describe a real legal matter, company, person, news source, or monitoring target.
@@ -45,7 +49,6 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(ggplot2)
   library(glmnet)
-  library(knitr)
   library(purrr)
   library(readr)
   library(stringdist)
@@ -139,6 +142,10 @@ actual_fingerprints <- tibble(
 collection_summary <- review_records |>
   count(reference_responsive, name = "records") |>
   mutate(label = if_else(reference_responsive, "responsive", "not responsive"))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   collection_summary |>
@@ -177,9 +184,15 @@ stopifnot(
 )
 ```
 
-The constructed prevalence is `r sprintf("%.0f%%", 100 * mean(review_records$reference_responsive))`, much higher than many legal-review matters. It was chosen so a small teaching page has enough responsive examples to inspect. Each record is a short note wrapped in one of 12 frames, such as "Reminder:" at the start or "Thanks." at the end, and every frame holds the same number of responsive records and the same number of non-responsive records. Before writing the file, the builder tested whether the surface features it lists could separate the two classes. It would have refused to write the file if a check reached an F1 of 0.60 or a balanced accuracy of 0.75; the frame checks within keyword groups use only the balanced-accuracy limit. Passing means that no listed check separated the classes that well, not that surface features carry no signal. Both scores rise as a check separates the classes better: balanced accuracy, from lesson 44, averages the share of each class that a check gets right, and F1 combines the precision and recall defined in the keyword section below. The table below is the builder's own record of those checks.
+The constructed prevalence is `r sprintf("%.0f%%", 100 * mean(review_records$reference_responsive))`, much higher than many legal-review matters. It was chosen so a small teaching page has enough responsive examples to inspect.
+
+Each record is a short note wrapped in one of 12 frames, such as "Reminder:" at the start or "Thanks." at the end; one frame leaves the note bare. Every frame holds the same number of responsive records and the same number of non-responsive records. Before writing the file, the builder tested whether the surface features it lists could separate the two classes. It would have refused to write the file if a check reached an F1 of 0.60 or a balanced accuracy of 0.75; the frame checks within keyword groups use only the balanced-accuracy limit.
+
+Passing means that no listed check separated the classes that well, not that surface features carry no signal. Both scores rise as a check separates the classes better: balanced accuracy, from lesson 44, averages the share of each class that a check gets right, and F1 combines the precision and recall defined in the keyword section below. The table below is the builder's own record of those checks.
 
 ```{r}
+#| echo: false
+
 knitr::kable(
   tibble(builder_checks = review_metadata$shortcut_sweep[[1]]),
   format = "html",
@@ -190,7 +203,14 @@ knitr::kable(
 )
 ```
 
-The table uses the builder's own shorthand. A held-out check learns a rule from some of the records and tests it on records it did not see. Ridge and lasso are two kinds of penalized regression, the same family as the ranker later on this page, and snowball stop words are a standard list of common words such as "the" and "to". CK-D1 and CK-D2 are the builder's names for its two frame checks. CK-D1 looks at each frame together with the first word of the note inside it, and CK-D2 compares the frames separately among records that contain a keyword and records that do not.
+The table uses the builder's own shorthand:
+
+- A **held-out** check learns a rule from some of the records and tests it on records it did not see.
+- **Out-of-fold** scores come from cross-validation (lesson 43): each record is scored by a model that did not train on it. **Top 36** means the 36 highest scores, as many as there are responsive records.
+- **Ridge** and **lasso** are two kinds of penalized regression, the same family as the ranker later on this page. **Snowball stop words** are a standard list of common words such as "the" and "to".
+- The **core** is the note inside the frame, and its **opening** is its first word or first two words.
+- A **rarity rule** flags records whose frame-and-first-word pair occurs at most k times, without using labels.
+- **CK-D1** and **CK-D2** are the builder's names for its two frame checks. CK-D1 looks at each frame together with the first word of the note inside it, and CK-D2 compares the frames separately among records that contain a keyword and records that do not.
 
 ```{r}
 #| include: false
@@ -265,6 +285,10 @@ keyword_examples <- bind_rows(
     construction_subtype,
     text
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   keyword_metrics |>
@@ -307,6 +331,9 @@ The reviewed seed is the keyword-hit set. It has at least eight records of each 
 The stopping rule is also fixed before the model runs: review the keyword-hit seed, then review two ranked batches of ten. That rule has no statistical guarantee. It is a budget rule, and the elusion sample is what estimates the remaining miss.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the ranking code"
+
 fit_review_model <- function(training_rows) {
   class_counts <- table(training_rows$label)
   stopifnot(min(class_counts) >= 8L)
@@ -438,40 +465,10 @@ missed_records <- unreviewed_records |>
     construction_subtype,
     text
   )
+```
 
-tie_edge_sentence <- if (any(tie_crosses_batch_edge)) {
-  paste0(
-    "In ranked batch ", paste(which(tie_crosses_batch_edge), collapse = " and "),
-    ", a tie crossed the batch edge, so the document-ID rule decided which of the tied records were reviewed."
-  )
-} else {
-  "No tie crossed the edge of a ranked batch, so the tie rule did not decide which records were reviewed."
-}
-
-mostly_tied_batches <- which(batch_tied_rows > batch_size / 2)
-tied_batch_sentence <- if (length(mostly_tied_batches) > 0L) {
-  paste0(
-    "Tied records fill most of ranked batch ", paste(mostly_tied_batches, collapse = " and "), ": ",
-    paste(batch_tied_rows[mostly_tied_batches], collapse = " and "), " of its ", batch_size,
-    " records share an exact score with another record, so their order says nothing about which is more likely to be responsive."
-  )
-} else {
-  ""
-}
-
-gain_alt_text <- paste0(
-  "Line chart of responsive records found against records reviewed; both axes start at zero. ",
-  "The line runs from ", review_progress$cumulative_responsive_found[[1]],
-  " found at ", review_progress$cumulative_reviewed[[1]], " reviewed to ",
-  paste(
-    paste0(
-      review_progress$cumulative_responsive_found[-1], " at ",
-      review_progress$cumulative_reviewed[-1]
-    ),
-    collapse = " and "
-  ),
-  "."
-)
+```{r}
+#| echo: false
 
 knitr::kable(
   batch_summary,
@@ -531,6 +528,40 @@ knitr::kable(
 ```{r}
 #| include: false
 
+tie_edge_sentence <- if (any(tie_crosses_batch_edge)) {
+  paste0(
+    "In ranked batch ", paste(which(tie_crosses_batch_edge), collapse = " and "),
+    ", a tie crossed the batch edge, so the document-ID rule decided which of the tied records were reviewed."
+  )
+} else {
+  "No tie crossed the edge of a ranked batch, so the tie rule did not decide which records were reviewed."
+}
+
+mostly_tied_batches <- which(batch_tied_rows > batch_size / 2)
+tied_batch_sentence <- if (length(mostly_tied_batches) > 0L) {
+  paste0(
+    "Tied records fill most of ranked batch ", paste(mostly_tied_batches, collapse = " and "), ": ",
+    paste(batch_tied_rows[mostly_tied_batches], collapse = " and "), " of its ", batch_size,
+    " records share an exact score with another record, so their order says nothing about which is more likely to be responsive."
+  )
+} else {
+  ""
+}
+
+gain_alt_text <- paste0(
+  "Line chart of responsive records found against records reviewed; both axes start at zero. ",
+  "The line starts at zero and reaches ", review_progress$cumulative_responsive_found[[1]],
+  " found at ", review_progress$cumulative_reviewed[[1]], " reviewed, then ",
+  paste(
+    paste0(
+      review_progress$cumulative_responsive_found[-1], " at ",
+      review_progress$cumulative_reviewed[-1]
+    ),
+    collapse = " and "
+  ),
+  "."
+)
+
 stopifnot(
   identical(ranked_batches, 2L),
   identical(batch_size, 10L),
@@ -550,26 +581,59 @@ The team can see how many responsive records it has found, because reviewers cod
 #| label: fig-review-gain
 #| fig-cap: "Responsive records found as review proceeds through the keyword seed and two ranked batches."
 #| fig-alt: !expr gain_alt_text
+#| fig-height: 4.2
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
+
+gain_points <- review_progress |>
+  add_row(
+    stage = "start",
+    responsive_found = 0L,
+    cumulative_reviewed = 0L,
+    cumulative_responsive_found = 0L,
+    .before = 1
+  ) |>
+  mutate(
+    point_label = case_when(
+      stage == "start" ~ "",
+      stage == "keyword seed" ~ str_c("keyword seed: ", responsive_found, " found"),
+      TRUE ~ str_c(stage, ": +", responsive_found)
+    )
+  )
 
 ggplot(
-  review_progress,
+  gain_points,
   aes(x = cumulative_reviewed, y = cumulative_responsive_found)
 ) +
-  geom_line(linewidth = 0.8) +
-  geom_point(size = 2) +
+  geom_line(colour = lesson_colours[["accent"]], linewidth = 0.9) +
+  geom_point(colour = lesson_colours[["accent"]], size = 2.8) +
+  geom_text(
+    aes(label = point_label),
+    hjust = 0,
+    vjust = 1.8,
+    family = lesson_font,
+    size = 9.5,
+    size.unit = "pt",
+    colour = lesson_colours[["body"]]
+  ) +
   scale_x_continuous(
     breaks = c(0, review_progress$cumulative_reviewed),
-    limits = c(0, max(review_progress$cumulative_reviewed))
+    limits = c(0, max(review_progress$cumulative_reviewed) + 12)
   ) +
   scale_y_continuous(
-    breaks = c(0, review_progress$cumulative_responsive_found),
-    limits = c(0, max(review_progress$cumulative_responsive_found))
+    breaks = seq(0, 30, by = 10),
+    limits = c(0, 30)
   ) +
+  coord_cartesian(clip = "off") +
   labs(
+    title = "Returns shrink as review goes on: the ranked batches add 4, then 1",
+    subtitle = "Responsive records found against records reviewed, as the reviewers see it",
     x = "Records reviewed",
     y = "Responsive records found"
   ) +
-  theme_minimal()
+  theme_lesson(grid = "both")
 ```
 
 ```{r}
@@ -578,7 +642,8 @@ ggplot(
 stopifnot(
   identical(nrow(review_progress), 3L),
   identical(review_progress$cumulative_reviewed, c(39L, 49L, 59L)),
-  identical(review_progress$cumulative_responsive_found, c(22L, 26L, 27L))
+  identical(review_progress$cumulative_responsive_found, c(22L, 26L, 27L)),
+  identical(review_progress$responsive_found, c(22L, 4L, 1L))
 )
 ```
 
@@ -659,6 +724,10 @@ binomial_warning <- tibble(
   printed_recall_high = binomial_recall[2],
   maximum_possible_recall = maximum_possible_recall
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   elusion_result |>
@@ -722,6 +791,9 @@ This use of "monitoring" is not lesson 47's deployed-model monitoring, and it is
 The watch phrases below were written after reading this constructed stream, so the alert count shows bookkeeping rather than transferable precision. The pattern watches `Calder Yard`, `contract records`, `inspection messages`, `route notes`, and `missed check`. A repeated alert is suppressed only when its character-trigram Jaccard distance to a prior alert is at most 0.35.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the monitoring code"
+
 normalize_stream_text <- function(text) {
   text |>
     str_to_lower(locale = "en") |>
@@ -810,6 +882,10 @@ stream_display <- stream_decisions |>
     near_duplicate_of = coalesce(near_duplicate_of, "not a copy"),
     matched_prior_alert = coalesce(matched_prior_alert, "not suppressed")
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   stream_display,

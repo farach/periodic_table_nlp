@@ -47,11 +47,12 @@ inspection tool; here it is the function placed behind an app.
 
 ```{r}
 library(dplyr)
-library(knitr)
+library(purrr)
 library(quanteda)
 library(shiny)
 library(stringr)
 library(tibble)
+library(tidyr)
 
 source("R/inaugural-corpus.R")
 
@@ -79,8 +80,12 @@ find_in_context <- function(word, window = 5L) {
       after = post
     )
 }
+```
 
-search_setup <- tibble(
+```{r}
+#| echo: false
+
+tibble(
   item = c(
     "paragraphs",
     "speeches",
@@ -93,21 +98,19 @@ search_setup <- tibble(
     as.character(packageVersion("shiny")),
     "fixed, case-insensitive token matching"
   )
-)
-
-kable(
-  search_setup,
-  col.names = c("Item", "Value"),
-  caption = "Inputs and package version for the small app",
-  row.names = FALSE
-)
+) |>
+  knitr::kable(
+    col.names = c("Item", "Value"),
+    caption = "Inputs and package version for the small app",
+    row.names = FALSE
+  )
 ```
 
 ```{r}
 #| include: false
 
 stopifnot(
-  all(c("dplyr", "knitr", "quanteda", "shiny", "stringr", "tibble") %in%
+  all(c("dplyr", "purrr", "quanteda", "shiny", "stringr", "tibble", "tidyr") %in%
     loadedNamespaces()),
   identical(nrow(paragraphs), 1377L),
   identical(n_distinct(paragraphs$speech_id), 60L),
@@ -236,7 +239,8 @@ rows after the input changes. `%||%` turns a missing input into empty text.
 the app's rules. `renderText()` and `renderTable()` turn R values into page text
 and a table.
 
-`fluidPage()` builds the app page. Its `title` names the browser tab, and
+`fluidPage()` builds the app page, and `h2()` and `p()` write a heading and a
+paragraph inside it. Its `title` names the browser tab, and
 `lang = "en"` tells screen readers that the page is in English. When Shiny
 serves the app, it puts the title in the page head and the language on the
 `<html>` element, so neither appears in the printed body HTML. `shinyApp()`
@@ -288,216 +292,102 @@ only a hint. It is not an invitation to type in this page.
 
 ## Test server behavior
 
-`testServer()` runs the server function without starting a browser. The
-`session$setInputs()` calls below play the part of a person typing into the app.
+`testServer()` runs the server function without starting a browser.
+`session$setInputs()` plays the part of a person typing into the box, and the
+test can then read the outputs the server produced.
+
+The helper below runs one fresh test session for one typed value and records
+what came back. `tryCatch()` keeps a stop, such as a failed `need()` check, as a
+result instead of an error that would halt the page.
 
 ```{r}
-status_result <- function(expr) {
-  tryCatch(
-    {
-      list(
-        status = "output",
-        value = force(expr),
-        condition_class = NA_character_
-      )
-    },
-    error = function(error) {
-      list(
-        status = "condition",
-        value = conditionMessage(error),
-        condition_class = class(error)[[1]]
-      )
-    }
-  )
+run_server_case <- function(typed_text) {
+  result <- NULL
+
+  shiny::testServer(server, {
+    session$setInputs(word = typed_text)
+
+    status <- tryCatch(
+      list(type = "output", text = output$status, class = NA_character_),
+      error = \(error) {
+        list(
+          type = "condition",
+          text = conditionMessage(error),
+          class = class(error)[[1]]
+        )
+      }
+    )
+    found <- tryCatch(context_rows(), error = \(error) NULL)
+
+    result <<- tibble(
+      rows = if (is.null(found)) NA_integer_ else nrow(found),
+      result_type = status$type,
+      server_result = status$text,
+      condition_class = status$class,
+      rows_shown = list(if (is.null(found)) NULL else slice_head(found, n = max_rows_shown))
+    )
+  })
+
+  result
 }
 
-case_results <- NULL
-liberty_rows_from_server <- NULL
+server_cases <- tribble(
+  ~case, ~typed_text,
+  "known word", "liberty",
+  "empty text", "",
+  "three spaces", "   ",
+  "two words", "free people",
+  "over 30 characters", strrep("a", 31L),
+  "literal asterisk", "*",
+  "markup-like text", "<b>",
+  "punctuated word", "liberty,",
+  "no matching word", "zzzzzz"
+)
 
-rows_result <- function(rows_expr) {
-  tryCatch(nrow(rows_expr), error = function(error) NA_integer_)
-}
-
-shiny::testServer(server, {
-  session$setInputs(word = "liberty")
-  liberty_status <- status_result(output$status)
-  liberty_rows <- context_rows()
-  liberty_rows_from_server <<- liberty_rows |>
-    slice_head(n = max_rows_shown)
-  stopifnot(
-    identical(nrow(liberty_rows), 118L),
-    identical(
-      liberty_status$value,
-      "Found 118 lines for 'liberty'; showing the first 8."
-    )
-  )
-
-  session$setInputs(word = "")
-  empty_status <- status_result(output$status)
-  empty_rows <- rows_result(context_rows())
-  stopifnot(
-    identical(empty_status$condition_class, "shiny.silent.error"),
-    identical(empty_status$value, "")
-  )
-
-  session$setInputs(word = "   ")
-  space_status <- status_result(output$status)
-  space_rows <- rows_result(context_rows())
-  stopifnot(
-    identical(space_status$condition_class, "shiny.silent.error"),
-    identical(space_status$value, "")
-  )
-
-  session$setInputs(word = "free people")
-  two_word_status <- status_result(output$status)
-  two_word_rows <- rows_result(context_rows())
-  stopifnot(
-    identical(
-      two_word_status$value,
-      "Enter one word, with no spaces."
-    )
-  )
-
-  session$setInputs(word = strrep("a", 31L))
-  long_status <- status_result(output$status)
-  long_rows <- rows_result(context_rows())
-  stopifnot(
-    identical(
-      long_status$value,
-      "Enter at most 30 characters."
-    )
-  )
-
-  session$setInputs(word = "*")
-  star_status <- status_result(output$status)
-  star_rows <- context_rows()
-  stopifnot(
-    identical(nrow(star_rows), 0L),
-    identical(
-      star_status$value,
-      "No word in these paragraphs matches '*'. Marks at the start or end of a word, such as commas, are not part of the word here."
-    )
-  )
-
-  session$setInputs(word = "<b>")
-  markup_status <- status_result(output$status)
-  markup_rows <- context_rows()
-  stopifnot(
-    identical(nrow(markup_rows), 0L),
-    identical(
-      markup_status$value,
-      "No word in these paragraphs matches '<b>'. Marks at the start or end of a word, such as commas, are not part of the word here."
-    )
-  )
-
-  session$setInputs(word = "liberty,")
-  punctuation_status <- status_result(output$status)
-  punctuation_rows <- context_rows()
-  stopifnot(
-    identical(nrow(punctuation_rows), 0L),
-    identical(
-      punctuation_status$value,
-      "No word in these paragraphs matches 'liberty,'. Marks at the start or end of a word, such as commas, are not part of the word here."
-    )
-  )
-
-  session$setInputs(word = "zzzzzz")
-  no_match_status <- status_result(output$status)
-  no_match_rows <- context_rows()
-  stopifnot(
-    identical(nrow(no_match_rows), 0L),
-    identical(
-      no_match_status$value,
-      "No word in these paragraphs matches 'zzzzzz'. Marks at the start or end of a word, such as commas, are not part of the word here."
-    )
-  )
-
-  case_results <<- tibble(
-    case = c(
-      "known word",
-      "empty text",
-      "three spaces",
-      "two words",
-      "over 30 characters",
-      "literal asterisk",
-      "markup-like text",
-      "punctuated word",
-      "no matching word"
-    ),
-    typed_text = c(
-      "liberty",
-      "\"\"",
-      "\"   \"",
-      "free people",
-      strrep("a", 31L),
-      "*",
-      "<b>",
-      "liberty,",
-      "zzzzzz"
-    ),
-    rows = c(
-      nrow(liberty_rows),
-      empty_rows,
-      space_rows,
-      two_word_rows,
-      long_rows,
-      nrow(star_rows),
-      nrow(markup_rows),
-      nrow(punctuation_rows),
-      nrow(no_match_rows)
-    ),
-    result_type = c(
-      liberty_status$status,
-      empty_status$status,
-      space_status$status,
-      two_word_status$status,
-      long_status$status,
-      star_status$status,
-      markup_status$status,
-      punctuation_status$status,
-      no_match_status$status
-    ),
-    server_result = c(
-      liberty_status$value,
-      empty_status$value,
-      space_status$value,
-      two_word_status$value,
-      long_status$value,
-      star_status$value,
-      markup_status$value,
-      punctuation_status$value,
-      no_match_status$value
-    )
-  ) |>
-    mutate(
-      rows = if_else(is.na(rows), "not applicable", as.character(rows))
-    )
-})
+case_results <- server_cases |>
+  mutate(result = map(typed_text, run_server_case)) |>
+  unnest(result)
 ```
-
-The test returns `NULL` when it passes. Its value is not a report; the checks
-are the important part.
 
 ```{r}
 #| include: false
 
+result_for <- function(case_name, column = "server_result") {
+  case_results[[column]][case_results$case == case_name]
+}
+no_match_message <- function(word) {
+  paste0(
+    "No word in these paragraphs matches '", word,
+    "'. Marks at the start or end of a word, such as commas, are not part of the word here."
+  )
+}
+liberty_rows_from_server <- result_for("known word", "rows_shown")[[1]]
+
 stopifnot(
-  identical(status_result("ok")$value, "ok"),
-  identical(nrow(find_in_context("zzzzzz")), 0L),
-  identical(nrow(case_results), 9L),
-  identical(nrow(liberty_rows_from_server), 8L),
+  identical(case_results$case, server_cases$case),
   identical(
-    case_results$server_result[case_results$case == "known word"],
+    result_for("known word"),
     "Found 118 lines for 'liberty'; showing the first 8."
   ),
-  identical(
-    case_results$server_result[case_results$case == "punctuated word"],
-    "No word in these paragraphs matches 'liberty,'. Marks at the start or end of a word, such as commas, are not part of the word here."
-  ),
+  identical(result_for("known word", "rows"), 118L),
+  identical(result_for("empty text", "condition_class"), "shiny.silent.error"),
+  identical(result_for("empty text"), ""),
+  identical(result_for("three spaces", "condition_class"), "shiny.silent.error"),
+  identical(result_for("three spaces"), ""),
+  identical(result_for("two words"), "Enter one word, with no spaces."),
+  identical(result_for("over 30 characters"), "Enter at most 30 characters."),
+  identical(result_for("literal asterisk"), no_match_message("*")),
+  identical(result_for("literal asterisk", "rows"), 0L),
+  identical(result_for("markup-like text"), no_match_message("<b>")),
+  identical(result_for("punctuated word"), no_match_message("liberty,")),
+  identical(result_for("no matching word"), no_match_message("zzzzzz")),
   identical(
     case_results$result_type == "condition",
-    case_results$rows == "not applicable"
-  )
+    is.na(case_results$rows)
+  ),
+  identical(nrow(liberty_rows_from_server), 8L),
+  identical(liberty_rows_from_server$keyword, rep("liberty", 8L)),
+  identical(liberty_rows_from_server, find_in_context("liberty") |> slice_head(n = 8L))
 )
 ```
 
@@ -507,13 +397,25 @@ not read as page markup.
 
 A condition row means the server stopped instead of returning output. `req()`
 stops with an empty message, while `validate(need())` stops with the message
-shown. Shiny reports both kinds of stop under the same first condition class,
-`shiny.silent.error`, so the table does not repeat it. "Not applicable" marks a
-Rows cell where the server stopped before returning any rows.
+shown. "Not applicable" marks a Rows cell where the server stopped before
+returning any rows.
 
 ```{r}
-kable(
-  case_results,
+#| echo: false
+
+knitr::kable(
+  case_results |>
+    transmute(
+      case,
+      typed_text = if_else(
+        str_trim(typed_text) == "",
+        str_c("\"", typed_text, "\""),
+        typed_text
+      ),
+      rows = if_else(is.na(rows), "not applicable", as.character(rows)),
+      result_type,
+      server_result
+    ),
   format = "html",
   escape = TRUE,
   col.names = c(
@@ -528,21 +430,14 @@ kable(
 )
 ```
 
-```{r}
-#| include: false
-
-stopifnot(
-  str_detect(case_results$server_result[case_results$case == "two words"], fixed("one word")),
-  str_detect(case_results$server_result[case_results$case == "over 30 characters"], fixed("30 characters"))
-)
-```
-
 The table below is the first app table for `liberty`, captured from the same
 server test. It shows the first eight KWIC rows even though the full result has
 118 lines.
 
 ```{r}
-kable(
+#| echo: false
+
+knitr::kable(
   liberty_rows_from_server,
   format = "html",
   escape = TRUE,
@@ -556,9 +451,8 @@ kable(
 #| include: false
 
 stopifnot(
-  identical(nrow(liberty_rows_from_server), 8L),
-  identical(liberty_rows_from_server$keyword, rep("liberty", 8L)),
-  identical(liberty_rows_from_server, find_in_context("liberty") |> slice_head(n = 8L))
+  str_detect(result_for("two words"), fixed("one word")),
+  str_detect(result_for("over 30 characters"), fixed("30 characters"))
 )
 ```
 

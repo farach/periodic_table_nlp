@@ -46,7 +46,6 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(huggingfaceR)
   library(jsonlite)
-  library(knitr)
   library(purrr)
   library(reticulate)
   library(stringr)
@@ -79,8 +78,12 @@ model_record <- long_model$metadata |>
     architecture = "decoder-only causal language model",
     context_limit
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   model_record,
   col.names = c(
     "Model",
@@ -99,7 +102,7 @@ kable(
 
 stopifnot(
   all(c(
-    "dplyr", "huggingfaceR", "jsonlite", "knitr", "purrr",
+    "dplyr", "huggingfaceR", "jsonlite", "purrr",
     "reticulate", "stringr", "tibble", "tidyr"
   ) %in% loadedNamespaces()),
   identical(
@@ -179,8 +182,12 @@ document_plan <- tribble(
     "guarantee seed growth."
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   document_plan |>
     select(
       section_id,
@@ -237,8 +244,12 @@ continuity_patterns <- tribble(
     "|\\bevening\\b.*\\b(29|twenty-nine|twenty nine)\\b"
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   continuity_patterns |>
     select(section_id, context_evidence_id),
   col.names = c("Section checked", "Context-only evidence"),
@@ -311,8 +322,12 @@ section_requests <- document_plan |>
     planned_total_tokens = prompt_tokens + max_new_tokens,
     fits_context = planned_total_tokens <= context_limit
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   section_requests |>
     select(
       section_id,
@@ -375,8 +390,12 @@ section_generations <- section_requests |>
     ended_by_eos = map_lgl(generation, "ended_by_eos"),
     hit_token_cap = map_lgl(generation, "hit_token_cap")
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   section_generations |>
     select(section_id, heading, generated_text),
   col.names = c("Section ID", "Heading", "Generated section"),
@@ -421,8 +440,12 @@ stopping_diagnostics <- section_generations |>
       "[.!?]$"
     )
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   stopping_diagnostics,
   col.names = c(
     "Section ID",
@@ -562,8 +585,12 @@ continuity_diagnostics <- continuity_patterns |>
     context_evidence_id,
     restated_outside_scope
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   section_diagnostics |>
     select(
       section_id,
@@ -582,14 +609,14 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   coverage_diagnostics,
   col.names = c("Section ID", "Evidence ID", "Surface flag present"),
   caption = "Evidence coverage flags for each generated section",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   continuity_diagnostics,
   col.names = c(
     "Section ID",
@@ -725,13 +752,6 @@ long_review <- tibble(
   )
 )
 
-kable(
-  long_review,
-  col.names = c("Review gate", "Status"),
-  caption = "Completed scans do not approve the generated sections",
-  row.names = FALSE
-)
-
 document_decision <- tibble(
   automated_recommendation = if_else(
     automatic_revision_needed,
@@ -744,8 +764,19 @@ document_decision <- tibble(
     "automatic checks cannot approve the document."
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
+  long_review,
+  col.names = c("Review gate", "Status"),
+  caption = "Completed scans do not approve the generated sections",
+  row.names = FALSE
+)
+
+knitr::kable(
   document_decision,
   col.names = c(
     "Automated recommendation",

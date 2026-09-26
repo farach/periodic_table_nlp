@@ -105,6 +105,10 @@ first_units <- workforce_sentences |>
     uncertainty
   ) |>
   slice_head(n = 8)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   first_units,
@@ -160,6 +164,10 @@ unit_shapes <- workforce_sentences |>
 
 shape_counts <- unit_shapes |>
   count(shape, name = "units")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   shape_counts,
@@ -212,6 +220,10 @@ flyer_rows <- workforce_sentences |>
 flyer_transcript <- read_lines(
   "data/workforce/training-flyer-ground-truth.txt"
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   flyer_rows |>
@@ -344,6 +356,10 @@ label_counts <- workforce_sentences |>
     label = as.character(reference_label),
     units
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   label_counts,
@@ -377,6 +393,10 @@ the codebook labels it as a requirement.
 ```{r}
 ambiguous_case <- workforce_sentences |>
   filter(sentence_id == "s013")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   ambiguous_case |>
@@ -450,6 +470,10 @@ pilot_round <- tibble(
   mutate(agreed = reviewer_p == reviewer_q)
 
 pilot_agreement <- mean(pilot_round$agreed)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   pilot_round |>
@@ -534,6 +558,10 @@ adjudication_check <- adjudication_log |>
       \(clause) str_detect(instructions, fixed(clause))
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   adjudication_check |>
@@ -594,6 +622,22 @@ Expertise depends on the question. A worker, career counselor, employer, and
 labor researcher may interpret the same text unit differently. Those
 perspectives should be designed into the study rather than treated as noise.
 
+## When a language model reads the codebook too
+
+A language model can act as one more annotator: it reads the codebook and
+proposes a label for each unit. The evidence is mixed. On some tasks models
+match or beat crowd workers; careful replications find them inconsistent from
+one dataset to the next. Models also follow a full codebook, with its
+definitions and edge cases, more reliably than a bare category name, which is
+one more reason to write the codebook first.
+
+Treat a model's labels the way this lesson treats any annotator's. Record the
+codebook version, the prompt, and the model revision, compare a random sample
+with human decisions, and report where they disagree. The guide
+[Using a language model in a reproducible analysis](../using-language-models.qmd)
+works through one example, including how to correct a count for the model's
+errors.
+
 ## What to remember
 
 - Annotation labels are measurements created from written rules.
@@ -603,6 +647,7 @@ perspectives should be designed into the study rather than treated as noise.
 - Run a pilot and let its disagreements write the rules.
 - Ambiguity should lead to review, not an unrecorded correction.
 - Human labels require ethical working conditions and relevant expertise.
+- A language model used as an annotator needs the same codebook and checks.
 
 The Lab has defined the categories and preserved its reading decisions. To test
 selection without exposing known answers, the active-learning exercise starts
@@ -615,3 +660,6 @@ model.
 - [Datasheets for Datasets](https://doi.org/10.1145/3458723)
 - [Data Collection and Quality Challenges in Deep Learning](https://arxiv.org/abs/2002.11821)
 - [foundryR codebook documentation](https://farach.github.io/foundryR/reference/foundry_codebook.html)
+- [Gilardi, Alizadeh, and Kubli (2023), ChatGPT outperforms crowd workers for text-annotation tasks](https://doi.org/10.1073/pnas.2305016120)
+- [Kristensen-McLachlan et al. (2025), Are chatbots reliable text annotators? Sometimes](https://doi.org/10.1093/pnasnexus/pgaf069)
+- [Halterman and Keith, Codebook LLMs](https://arxiv.org/abs/2407.10747)

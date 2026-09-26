@@ -87,6 +87,10 @@ expected_sentences <- c(
   "J. Rivera can apply by Friday",
   "Bring a photo ID."
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -194,6 +198,10 @@ splitter_scores <- split_results |>
     count_difference = pieces_found - expected_pieces,
     matches_expected_count = pieces_found == expected_pieces
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   splitter_scores,
@@ -275,6 +283,10 @@ flyer_rows <- sentences |>
 job_rows <- sentences |>
   filter(document_id != "F001") |>
   nrow()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   row_boundary_summary,

@@ -100,6 +100,10 @@ split_size <- tibble(
   part = c("training", "test"),
   rows = c(nrow(riverton_training), nrow(riverton_testing))
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   riverton_label_counts,
@@ -174,6 +178,10 @@ era_counts <- paragraphs |>
     median_words = median(paragraph_words),
     .groups = "drop"
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   corpus_summary,
@@ -311,6 +319,10 @@ fold_group_overlap <- vapply(
   },
   integer(1)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   fold_summary,
@@ -398,6 +410,10 @@ comparison_display <- model_comparison |>
 
 selected_candidate <- model_comparison |>
   filter(selected)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   comparison_display |>
@@ -552,6 +568,10 @@ score_table <- tibble(
     corpus_baseline
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   score_table |>
