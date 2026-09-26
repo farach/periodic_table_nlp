@@ -413,7 +413,9 @@
    this is a container query rather than a viewport one. Keyed off the viewport
    it fired whenever the window was wide, even when the surrounding column was
    not, and fifteen 1fr tracks then collapsed the tiles far below a readable
-   size. 15 columns at 7.6rem plus gaps needs roughly 118rem. */
+   size. 15 columns at 7.6rem plus 0.25rem gaps need about 118rem, so a
+   container that wide already holds full-size tiles. The query only stops the
+   scrolling; tiles keep the padding and text sizes of the scrolling layout. */
 .periodic-scroll {
   container-type: inline-size;
   container-name: taskmap;
@@ -428,33 +430,6 @@
 
   .element-group {
     contain-intrinsic-inline-size: auto;
-  }
-
-  .nlp-element {
-    min-height: 7.5rem;
-    padding: 0.35rem;
-  }
-
-  .element-number {
-    font-size: 0.58rem;
-  }
-
-  .element-kind {
-    top: 0.38rem;
-    right: 0.35rem;
-    font-size: 0.44rem;
-  }
-
-  .element-symbol {
-    font-size: 1.35rem;
-  }
-
-  .element-name {
-    font-size: 0.57rem;
-  }
-
-  .element-status {
-    font-size: 0.5rem;
   }
 }
 

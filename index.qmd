@@ -75,7 +75,11 @@ its name. `r availability_sentence`
 
 For a course, read in number order because the R code builds on earlier
 lessons. For a specific problem, open any available lesson; each page introduces
-its own NLP idea and points out the assumptions it needs.
+its own NLP idea and points out the assumptions it needs. If a language model
+will do part of the work, read the guide
+[Using a language model in a reproducible analysis](using-language-models.qmd).
+It shows how to record the model and check its labels against a sample that a
+person reviewed.
 :::
 
 ```{r}
