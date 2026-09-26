@@ -1,7 +1,7 @@
 ---
 title: "Drawing a knowledge graph"
 subtitle: "Use IDs, arrows, labels, and tables before reading a layout"
-description: "Learn how to draw a small knowledge graph in R while keeping identifiers, edge labels, layout limits, and text alternatives visible."
+description: "Learn how to draw a small knowledge graph in R with ggraph while keeping identifiers, edge labels, layout limits, and text alternatives visible."
 categories: [information visualization, knowledge graph visualization, networks]
 ---
 
@@ -28,7 +28,8 @@ By the end of this lesson, you will be able to:
 
 - key graph nodes by entity ID instead of display label;
 - show how label-keyed data wrongly merges two Riverton places;
-- draw directed, labelled edges with igraph and ggplot2;
+- draw directed, labelled edges with ggraph, the ggplot2 extension for
+  networks;
 - explain why layout coordinates can change and are not data;
 - give a captioned edge table as the text alternative; and
 - compare a co-word network with a typed knowledge graph.
@@ -53,13 +54,14 @@ library(tibble)
 library(tidyr)
 library(purrr)
 library(stringr)
-library(readr)
 library(igraph)
+library(tidygraph)
 library(ggplot2)
+library(ggraph)
 library(tidytext)
-library(knitr)
 
 source("R/inaugural-corpus.R")
+source("R/lesson-figures.R")
 
 nodes <- tribble(
   ~node_id, ~label, ~node_type,
@@ -74,43 +76,35 @@ nodes <- tribble(
 )
 
 edges <- tribble(
-  ~from, ~to, ~relation, ~object_value, ~document_ids, ~source,
-  "ORG-0002", "CRD-0002", "offers", "CRD-0002", "A001; A002", "populated fact",
-  "ORG-0002", "VALUE-October 15", "application_deadline", "October 15", "A003", "populated fact",
-  "ORG-0002", "VALUE-November 1", "application_deadline", "November 1", "A004", "populated fact"
+  ~from, ~to, ~relation, ~document_ids,
+  "ORG-0002", "CRD-0002", "offers", "A001; A002",
+  "ORG-0002", "VALUE-October 15", "application_deadline", "A003",
+  "ORG-0002", "VALUE-November 1", "application_deadline", "A004"
 )
+```
 
-edge_list <- edges |>
-  left_join(
-    nodes |> select(from = node_id, from_label = label, from_type = node_type),
-    by = "from"
-  ) |>
-  left_join(
-    nodes |> select(to = node_id, to_label = label, to_type = node_type),
-    by = "to"
-  ) |>
+```{r}
+#| echo: false
+
+node_names <- nodes |>
+  transmute(node_id, name = str_c(label, " (", node_id, ")"))
+
+edges |>
+  left_join(node_names, by = join_by(from == node_id)) |>
+  rename(from_node = name) |>
+  left_join(node_names, by = join_by(to == node_id)) |>
+  rename(to_node = name) |>
   transmute(
-    from_id = from,
-    from_label,
-    from_type,
+    from_node,
     relation = str_replace_all(relation, "_", " "),
-    object_value,
-    document_ids,
-    to_id = to,
-    to_label,
-    to_type,
-    source
+    to_node,
+    document_ids
+  ) |>
+  knitr::kable(
+    col.names = c("From", "Relation", "To", "Supporting documents"),
+    caption = "Every edge drawn in the Riverton knowledge graph",
+    row.names = FALSE
   )
-
-knitr::kable(
-  edge_list,
-  col.names = c(
-    "From ID", "From label", "From type", "Relation",
-    "Object value", "Document IDs", "To ID", "To label", "To type", "Source"
-  ),
-  caption = "Every edge drawn in the Riverton knowledge graph",
-  row.names = FALSE
-)
 ```
 
 ```{r}
@@ -119,9 +113,9 @@ knitr::kable(
 stopifnot(
   identical(nrow(nodes), 8L),
   identical(nrow(edges), 3L),
+  !anyDuplicated(nodes$node_id),
   all(edges$from %in% nodes$node_id),
   all(edges$to %in% nodes$node_id),
-  all(edges$source == "populated fact"),
   all(edges$document_ids %in% c("A001; A002", "A003", "A004")),
   !any(str_detect(nodes$label, "2026")),
   sum(nodes$label == "Riverton") == 2L,
@@ -130,11 +124,10 @@ stopifnot(
 ```
 
 The table is the long description of the graph. It lists every drawn edge with
-IDs and labels, so the relation can be checked without seeing the picture. The
-two deadline values are both kept because the knowledge base flagged them as a
-dated conflict rather than choosing one automatically; no year is supplied in
-these graph labels because the announcements say only `October 15` and
-`November 1`.
+IDs and labels, so each relation can be checked without seeing the picture.
+Both deadline values are kept because the knowledge base flagged them as a
+dated conflict rather than choosing one automatically. No year appears in these
+labels because the announcements say only `October 15` and `November 1`.
 
 ## Show the label-keyed mistake
 
@@ -143,10 +136,11 @@ into one node. That would merge two different places, so any later fact about
 one Riverton would appear to belong to the other.
 
 ```{r}
-id_graph <- igraph::graph_from_data_frame(
-  d = edges,
+id_graph <- tbl_graph(
+  nodes = nodes |> rename(name = node_id),
+  edges = edges,
   directed = TRUE,
-  vertices = nodes |> select(name = node_id, label, node_type)
+  node_key = "name"
 )
 
 label_edges <- edges |>
@@ -154,23 +148,24 @@ label_edges <- edges |>
   left_join(nodes |> select(to = node_id, to_label = label), by = "to") |>
   transmute(from = from_label, to = to_label, relation)
 
-label_nodes <- nodes |>
-  distinct(name = label, node_type)
-
-label_keyed_graph <- igraph::graph_from_data_frame(
+label_keyed_graph <- graph_from_data_frame(
   d = label_edges,
   directed = TRUE,
-  vertices = label_nodes
+  vertices = nodes |> distinct(name = label)
 )
 
 merge_check <- tibble(
   key_used = c("entity ID", "display label"),
-  vertices = c(igraph::vcount(id_graph), igraph::vcount(label_keyed_graph)),
+  vertices = c(vcount(id_graph), vcount(label_keyed_graph)),
   riverton_vertices = c(
-    sum(igraph::V(id_graph)$label == "Riverton"),
-    sum(igraph::V(label_keyed_graph)$name == "Riverton")
+    sum(V(id_graph)$label == "Riverton"),
+    sum(V(label_keyed_graph)$name == "Riverton")
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   merge_check,
@@ -184,32 +179,38 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  igraph::vcount(id_graph) == 8L,
-  igraph::vcount(label_keyed_graph) == 7L,
-  merge_check$vertices[merge_check$key_used == "entity ID"] >
-    merge_check$vertices[merge_check$key_used == "display label"],
-  merge_check$riverton_vertices[merge_check$key_used == "entity ID"] == 2L,
-  merge_check$riverton_vertices[merge_check$key_used == "display label"] == 1L
+  vcount(id_graph) == 8L,
+  ecount(id_graph) == 3L,
+  vcount(label_keyed_graph) == 7L,
+  identical(merge_check$riverton_vertices, c(2L, 1L)),
+  identical(
+    sort(V(id_graph)$name),
+    sort(nodes$node_id)
+  )
 )
 ```
 
-The ID-keyed graph has eight vertices. The label-keyed graph has seven because
-the two places named `Riverton` have been merged.
+`tbl_graph()` from tidygraph builds the graph from the two tables, with the
+entity ID as the node key. The ID-keyed graph has eight vertices. The
+label-keyed graph has seven because the two places named `Riverton` have been
+merged.
 
 ```{r}
 name_clash <- nodes |>
-  count(label, name = "ids_with_label") |>
-  filter(ids_with_label > 1L) |>
-  left_join(
-    nodes |>
-      group_by(label) |>
-      summarise(
-        entity_ids = paste(node_id, collapse = "; "),
-        entity_types = paste(node_type, collapse = "; "),
-        .groups = "drop"
-      ),
-    by = "label"
-  )
+  summarise(
+    ids_with_label = n(),
+    entity_ids = str_c(node_id, collapse = "; "),
+    entity_types = str_c(node_type, collapse = "; "),
+    .by = label
+  ) |>
+  filter(ids_with_label > 1L)
+
+unconnected_nodes <- nodes |>
+  filter(!node_id %in% c(edges$from, edges$to))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   name_clash,
@@ -217,37 +218,7 @@ knitr::kable(
   caption = "The name clash is a label problem, not a factual graph edge",
   row.names = FALSE
 )
-```
 
-```{r}
-#| include: false
-
-stopifnot(
-  identical(name_clash$label, "Riverton"),
-  identical(name_clash$ids_with_label, 2L),
-  str_detect(name_clash$entity_ids, "LOC-0001"),
-  str_detect(name_clash$entity_ids, "LOC-0002")
-)
-```
-
-```{r}
-unconnected_nodes <- nodes |>
-  filter(!node_id %in% unique(c(edges$from, edges$to))) |>
-  select(node_id, label, node_type)
-```
-
-```{r}
-#| include: false
-
-stopifnot(
-  setequal(unconnected_nodes$node_id, c("ORG-0003", "LOC-0001", "LOC-0002", "LOC-0003"))
-)
-```
-
-The figure draws `r nrow(unconnected_nodes)` nodes that have no populated fact
-yet. It places them in its bottom row, and the table below names them.
-
-```{r}
 knitr::kable(
   unconnected_nodes,
   col.names = c("Node ID", "Label", "Type"),
@@ -260,109 +231,109 @@ knitr::kable(
 #| include: false
 
 stopifnot(
-  identical(nrow(unconnected_nodes), 4L)
+  identical(name_clash$label, "Riverton"),
+  identical(name_clash$ids_with_label, 2L),
+  str_detect(name_clash$entity_ids, "LOC-0001"),
+  str_detect(name_clash$entity_ids, "LOC-0002"),
+  setequal(unconnected_nodes$node_id, c("ORG-0003", "LOC-0001", "LOC-0002", "LOC-0003"))
 )
 ```
 
+The figure draws `r nrow(unconnected_nodes)` nodes that have no populated fact
+yet. It places them in its bottom row, and the table above names them.
+
 ## Place nodes by hand and draw arrows
 
-The main figure uses fixed deterministic coordinates chosen so the labels are
-readable. That keeps the drawing stable while Chloe reads the arrows and labels.
+**ggraph** draws graphs with the same grammar as ggplot2: a layout gives each
+node a position, `geom_edge_*()` layers draw the edges, and `geom_node_*()`
+layers draw the nodes. Here the layout is written by hand, so the drawing stays
+the same on every render while Chloe reads the arrows and labels.
+
 The bottom row holds the nodes with no populated fact. Apart from that row, up,
-down, left, right, rotation, and mirror image do not carry data. Count links in
-the table if you need a number. Viewers tend to read a centrally drawn node as
-more prominent, so the drawing should not be used as an importance score.
+down, left, right, rotation, and mirror image carry no data. Count links in the
+table if you need a number. Viewers tend to read a centrally drawn node as more
+important, so the drawing should not be used as an importance score.
 
 ```{r}
 #| label: fig-riverton-graph
-#| fig-cap: "ID-keyed Riverton knowledge graph with directed, labelled edges."
-#| fig-alt: !expr paste0("A node-link diagram of ", nrow(nodes), " nodes, each labelled with a name and an ID, and ", nrow(edges), " directed relation edges. The exact edges are listed in the edge table above.")
+#| fig-cap: "ID-keyed Riverton knowledge graph with directed, labelled edges; the bottom row holds nodes with no populated fact."
+#| fig-alt: !expr paste0("A node-link diagram of ", nrow(nodes), " nodes, each labelled with a name and an ID, and ", nrow(edges), " directed relation edges. Riverton Skills Centre (ORG-0002) offers the Data Support Certificate (CRD-0002) and has two application deadlines, October 15 and November 1. A bottom row holds four nodes with no populated fact, including the two places labelled Riverton, which stay separate because they have different IDs. The exact edges are listed in the edge table above.")
 #| fig-width: 9
-#| fig-height: 6.5
+#| fig-height: 6
 
-layout_from_matrix <- function(graph, coordinates) {
-  tibble(
-    node_id = igraph::V(graph)$name,
-    x = coordinates[, 1],
-    y = coordinates[, 2]
-  ) |>
-    left_join(nodes, by = "node_id")
-}
-
-layout_fixed <- tribble(
-  ~node_id, ~x, ~y,
+hand_layout <- tribble(
+  ~name, ~x, ~y,
   "ORG-0002", 0.0, 0.0,
-  "CRD-0002", -2.2, 1.5,
-  "VALUE-October 15", 2.2, 1.5,
-  "VALUE-November 1", 2.2, -1.1,
-  "LOC-0001", -3.0, -3.6,
-  "LOC-0002", -1.0, -3.6,
-  "ORG-0003", 1.0, -3.6,
-  "LOC-0003", 3.0, -3.6
-) |>
-  left_join(nodes, by = "node_id")
-
-edge_label_positions <- tribble(
-  ~from, ~to, ~label_x, ~label_y,
-  "ORG-0002", "CRD-0002", -1.25, 0.95,
-  "ORG-0002", "VALUE-October 15", 1.30, 0.95,
-  "ORG-0002", "VALUE-November 1", 1.35, -0.55
+  "CRD-0002", -3.2, 1.9,
+  "VALUE-October 15", 3.2, 1.9,
+  "VALUE-November 1", 3.2, -1.7,
+  "LOC-0001", -3.6, -3.6,
+  "LOC-0002", -1.2, -3.6,
+  "ORG-0003", 1.2, -3.6,
+  "LOC-0003", 3.6, -3.6
 )
 
-shorten_segments <- function(edge_positions, amount = 0.20) {
-  edge_positions |>
-    mutate(
-      x_start = x_from + amount * (x_to - x_from),
-      y_start = y_from + amount * (y_to - y_from),
-      x_end = x_from + (1 - amount) * (x_to - x_from),
-      y_end = y_from + (1 - amount) * (y_to - y_from),
-      x_mid = (x_start + x_end) / 2,
-      y_mid = (y_start + y_end) / 2
-    )
-}
+node_type_fills <- c(
+  organisation = "#D6E6F4",
+  credential = "#D5EFE6",
+  "date literal" = "#FBE3CF",
+  place = "#E6E9ED"
+)
 
-edge_positions <- edges |>
-  left_join(
-    layout_fixed |> select(from = node_id, x_from = x, y_from = y),
-    by = "from"
-  ) |>
-  left_join(
-    layout_fixed |> select(to = node_id, x_to = x, y_to = y),
-    by = "to"
-  ) |>
-  left_join(edge_label_positions, by = c("from", "to")) |>
-  shorten_segments() |>
+riverton_graph <- id_graph |>
+  activate(nodes) |>
+  left_join(hand_layout, by = "name") |>
+  mutate(display_label = str_c(label, "\n", name)) |>
+  activate(edges) |>
   mutate(relation_label = str_replace_all(relation, "_", " "))
 
-node_positions <- layout_fixed |>
-  mutate(display_label = paste0(label, "\n", node_id))
-
-graph_plot <- ggplot() +
-  geom_segment(
-    data = edge_positions,
-    aes(x = x_start, y = y_start, xend = x_end, yend = y_end),
-    arrow = grid::arrow(type = "closed", length = grid::unit(0.12, "inches")),
-    linewidth = 0.4,
-    lineend = "round"
+graph_plot <- ggraph(
+  riverton_graph,
+  layout = "manual",
+  x = x,
+  y = y
+) +
+  geom_edge_link(
+    aes(
+      label = relation_label,
+      start_cap = label_rect(node1.display_label, fontsize = 11, fontfamily = lesson_font),
+      end_cap = label_rect(node2.display_label, fontsize = 11, fontfamily = lesson_font)
+    ),
+    arrow = arrow(type = "closed", length = unit(3, "mm")),
+    angle_calc = "along",
+    label_dodge = unit(3.2, "mm"),
+    label_size = 3.4,
+    family = lesson_font,
+    edge_colour = lesson_colours[["body"]],
+    edge_width = 0.5
   ) +
-  geom_label(
-    data = edge_positions,
-    aes(x = label_x, y = label_y, label = relation_label),
-    fill = "white",
-    linewidth = 0.15,
-    size = 2.8
+  geom_node_label(
+    aes(label = display_label, fill = node_type),
+    family = lesson_font,
+    size = 3.8,
+    lineheight = 1.05,
+    colour = lesson_colours[["ink"]],
+    label.padding = unit(0.35, "lines"),
+    label.r = unit(0.2, "lines"),
+    key_glyph = "rect"
   ) +
-  geom_label(
-    data = node_positions,
-    aes(x = x, y = y, label = display_label),
-    fill = "white",
-    linewidth = 0.25,
-    size = 3
+  scale_fill_manual(values = node_type_fills, name = "Node type") +
+  coord_cartesian(clip = "off") +
+  scale_x_continuous(expand = expansion(add = 1.2)) +
+  scale_y_continuous(expand = expansion(add = 0.6)) +
+  labs(
+    title = "Facts connect IDs, so the two places named Riverton stay apart",
+    subtitle = str_c(
+      "Arrows point from subject to object and carry the relation. ",
+      "The bottom row holds nodes with no populated fact."
+    )
   ) +
-  coord_equal(clip = "off") +
-  expand_limits(x = c(-3.7, 3.7), y = c(-4.1, 2.2)) +
-  theme_void() +
-  theme(plot.margin = margin(15, 15, 15, 15))
+  theme_lesson(grid = "none") +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    legend.key.size = unit(0.9, "lines")
+  )
 
 graph_plot
 ```
@@ -370,120 +341,115 @@ graph_plot
 ```{r}
 #| include: false
 
-edge_set <- edges |>
-  transmute(edge = paste(from, relation, to, sep = "|")) |>
-  arrange(edge) |>
-  pull(edge)
+graph_nodes <- riverton_graph |>
+  activate(nodes) |>
+  as_tibble()
 
-degree_table <- tibble(
-  node_id = igraph::V(id_graph)$name,
-  total_degree = igraph::degree(id_graph, mode = "total"),
-  out_degree = igraph::degree(id_graph, mode = "out"),
-  in_degree = igraph::degree(id_graph, mode = "in")
-)
-
-label_boxes <- bind_rows(
-  node_positions |>
-    transmute(
-      label_id = node_id,
-      label_kind = "node",
-      x,
-      y,
-      half_width = 0.050 * pmax(nchar(label), nchar(node_id)),
-      half_height = 0.28
-    ),
-  edge_positions |>
-    transmute(
-      label_id = paste(from, relation, to, sep = "|"),
-      label_kind = "edge",
-      x = label_x,
-      y = label_y,
-      half_width = 0.035 * nchar(relation_label),
-      half_height = 0.14
-    )
-)
-
-label_box_pairs <- label_boxes |>
-  cross_join(label_boxes) |>
-  filter(label_id.x < label_id.y) |>
+graph_edges <- riverton_graph |>
+  activate(edges) |>
+  as_tibble() |>
   mutate(
-    x_overlap = abs(x.x - x.y) < (half_width.x + half_width.y),
-    y_overlap = abs(y.x - y.y) < (half_height.x + half_height.y),
-    boxes_overlap = x_overlap & y_overlap
+    from_id = graph_nodes$name[from],
+    to_id = graph_nodes$name[to]
   )
 
-unconnected_positions <- layout_fixed |>
-  mutate(
-    unconnected = node_id %in% unconnected_nodes$node_id,
-    distance_from_hub = sqrt(
-      (x - x[node_id == "ORG-0002"])^2 + (y - y[node_id == "ORG-0002"])^2
-    )
+# Rough text boxes in layout units: about 0.07 units per character at this
+# figure size. The check only has to catch labels placed on top of each other.
+node_boxes <- graph_nodes |>
+  transmute(
+    box_id = name,
+    x,
+    y,
+    half_width = 0.07 * pmax(nchar(label), nchar(name)) / 2 + 0.2,
+    half_height = 0.45
   )
+
+label_box_pairs <- node_boxes |>
+  cross_join(node_boxes) |>
+  filter(box_id.x < box_id.y) |>
+  mutate(
+    boxes_overlap = abs(x.x - x.y) < (half_width.x + half_width.y) &
+      abs(y.x - y.y) < (half_height.x + half_height.y)
+  )
+
+# Each relation label sits in the middle of its edge, tilted along it. It is
+# readable only if it fits in the stretch of edge left visible between the two
+# node boxes.
+box_reach <- function(half_width, half_height, angle) {
+  pmin(half_width / abs(cos(angle)), half_height / abs(sin(angle)))
+}
+
+edge_label_room <- graph_edges |>
+  left_join(node_boxes |> select(from_id = box_id, x_from = x, y_from = y, w_from = half_width, h_from = half_height), by = "from_id") |>
+  left_join(node_boxes |> select(to_id = box_id, x_to = x, y_to = y, w_to = half_width, h_to = half_height), by = "to_id") |>
+  mutate(
+    angle = atan2(y_to - y_from, x_to - x_from),
+    edge_length = sqrt((x_to - x_from)^2 + (y_to - y_from)^2),
+    visible_length = edge_length -
+      box_reach(w_from, h_from, angle) -
+      box_reach(w_to, h_to, angle),
+    label_length = 0.07 * nchar(relation_label)
+  )
+
+unconnected_rows <- graph_nodes |>
+  mutate(unconnected = name %in% unconnected_nodes$node_id)
 
 stopifnot(
-  nrow(layout_fixed) == igraph::vcount(id_graph),
-  nrow(edge_positions) == igraph::ecount(id_graph),
-  nrow(edge_list) == igraph::ecount(id_graph),
-  all(!is.na(edge_positions$x_start)),
-  all(!is.na(edge_positions$label_x)),
+  !anyNA(graph_nodes$x),
+  !anyNA(graph_nodes$y),
+  identical(nrow(graph_edges), nrow(edges)),
+  identical(
+    str_c(graph_edges$from_id, graph_edges$relation, graph_edges$to_id),
+    str_c(edges$from, edges$relation, edges$to)
+  ),
   !any(label_box_pairs$boxes_overlap),
-  all(edge_set == sort(edge_set)),
-  !("weight" %in% names(igraph::edge_attr(id_graph))),
-  all(unconnected_positions$y[unconnected_positions$unconnected] == min(unconnected_positions$y)),
-  all(unconnected_positions$y[!unconnected_positions$unconnected] > min(unconnected_positions$y)),
-  min(unconnected_positions$distance_from_hub[unconnected_positions$unconnected]) >
-    max(unconnected_positions$distance_from_hub[!unconnected_positions$unconnected])
+  identical(nrow(edge_label_room), nrow(edges)),
+  all(edge_label_room$visible_length > edge_label_room$label_length),
+  !("weight" %in% names(graph_edges)),
+  all(unconnected_rows$y[unconnected_rows$unconnected] == min(unconnected_rows$y)),
+  all(unconnected_rows$y[!unconnected_rows$unconnected] > min(unconnected_rows$y)),
+  setequal(names(node_type_fills), nodes$node_type)
 )
 ```
 
-The edge labels are text, not color. The arrowheads show direction, while the
-caption and table make the same information available outside the image.
+The relation labels are text, not colour. The arrowheads show direction, and
+the caption and table make the same information available outside the image.
+The fill colours group node types, and the ID prefix inside every label says
+the same thing in words.
 
-## Check seed dependence without reading coordinates
+## Check that a layout seed changes only the picture
 
 Force-directed layouts are useful for many graphs, but their coordinates depend
 on random starting positions. A layout cannot change the graph's edges or
-degrees; it only assigns positions. The check below runs two seeded
-Fruchterman-Reingold layouts and compares only their coordinates.
+degrees; it only assigns positions. The code below runs two seeded
+Fruchterman-Reingold layouts and checks only whether their coordinates are
+identical, without printing them.
 
 ```{r}
 layout_for_seed <- function(graph, seed) {
   set.seed(seed)
-  layout_from_matrix(
-    graph,
-    igraph::layout_with_fr(graph, weights = NA)
-  )
+  layout_with_fr(graph, weights = NA)
 }
 
-layout_seed_17 <- layout_for_seed(id_graph, 17L)
-layout_seed_29 <- layout_for_seed(id_graph, 29L)
-
-seed_comparison <- tibble(
-  check = "coordinates identical",
-  result = identical(
-    layout_seed_17 |> arrange(node_id) |> select(x, y),
-    layout_seed_29 |> arrange(node_id) |> select(x, y)
-  )
+coordinates_identical <- identical(
+  layout_for_seed(id_graph, 17L),
+  layout_for_seed(id_graph, 29L)
 )
 
-knitr::kable(
-  seed_comparison,
-  col.names = c("Layout check", "Result"),
-  caption = "Two force-directed layout seeds produce different coordinates",
-  row.names = FALSE
-)
+coordinates_identical
 ```
 
 ```{r}
 #| include: false
 
 stopifnot(
-  !seed_comparison$result[seed_comparison$check == "coordinates identical"]
+  isFALSE(coordinates_identical)
 )
 ```
 
-Use the main layout to follow labelled arrows. The seeded force-layout check is
-there only to show why coordinates should not be treated as facts.
+`FALSE` means the two seeds put the same eight nodes in different places. Use
+the hand-placed figure to follow the labelled arrows; the seeded check is here
+only to show why coordinates should not be treated as facts.
 
 ## Build a co-word network for comparison
 
@@ -498,10 +464,10 @@ paragraphs <- inaugural_paragraphs()
 
 paragraph_words <- paragraphs |>
   transmute(paragraph_id, paragraph) |>
-  tidytext::unnest_tokens(word, paragraph, token = "regex", pattern = "[^A-Za-z]+") |>
+  unnest_tokens(word, paragraph, token = "regex", pattern = "[^A-Za-z]+") |>
   mutate(word = str_to_lower(word, locale = "en")) |>
   filter(nchar(word) >= 4L) |>
-  anti_join(tidytext::stop_words, by = "word") |>
+  anti_join(stop_words, by = "word") |>
   distinct(paragraph_id, word)
 
 top_words <- paragraph_words |>
@@ -530,9 +496,11 @@ coword_edges <- word_pairs |>
   filter(observed_expected_ratio >= ratio_threshold) |>
   arrange(desc(observed_expected_ratio), word.x, word.y)
 
-kept_pair_count <- nrow(coword_edges)
-dropped_pair_count <- nrow(word_pairs) - kept_pair_count
-undrawn_words <- setdiff(top_words$word, unique(c(coword_edges$word.x, coword_edges$word.y)))
+undrawn_words <- setdiff(top_words$word, c(coword_edges$word.x, coword_edges$word.y))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   top_words,
@@ -556,20 +524,6 @@ knitr::kable(
   caption = "Co-word edges kept by the observed-versus-expected threshold",
   row.names = FALSE
 )
-
-threshold_summary <- tibble(
-  threshold = ratio_threshold,
-  kept_pairs = kept_pair_count,
-  dropped_pairs = dropped_pair_count,
-  undrawn_top_words = paste(undrawn_words, collapse = ", ")
-)
-
-knitr::kable(
-  threshold_summary,
-  col.names = c("Observed / expected threshold", "Kept pairs", "Dropped pairs", "Top words not drawn"),
-  caption = "The author's co-word threshold decides which word pairs are drawn",
-  row.names = FALSE
-)
 ```
 
 ```{r}
@@ -579,83 +533,85 @@ stopifnot(
   identical(nrow(top_words), 10L),
   identical(nrow(word_pairs), 45L),
   all(word_pairs$observed > 0L),
-  nrow(coword_edges) < nrow(word_pairs),
   ratio_threshold == 1.80,
-  identical(kept_pair_count, 3L),
-  identical(dropped_pair_count, 42L),
-  all(unique(c(coword_edges$word.x, coword_edges$word.y)) %in% top_words$word)
+  identical(nrow(coword_edges), 3L),
+  all(c(coword_edges$word.x, coword_edges$word.y) %in% top_words$word)
 )
 ```
 
 Raw co-occurrence among these ten frequent words is a complete graph: all 45
 pairs appear in at least one paragraph. The threshold is the author's choice
-for this lesson. It keeps `r kept_pair_count` pairs and drops
-`r dropped_pair_count` pairs by requiring the observed count to be at least
-1.8 times the independence expectation
-`count(word A) * count(word B) / paragraphs`. The undrawn top-ten words are
-`r paste(undrawn_words, collapse = ", ")`.
+for this lesson. It keeps `r nrow(coword_edges)` pairs and drops
+`r nrow(word_pairs) - nrow(coword_edges)` by requiring the observed count to be
+at least 1.8 times the count expected if the two words were independent,
+`count(word A) * count(word B) / paragraphs`. The top-ten words left out of the
+drawing are `r str_c(undrawn_words, collapse = ", ")`.
 
 ## Draw the co-word graph
 
-The co-word graph uses the same drawing machinery, but its edges are not typed
-facts. They are paragraph-level co-occurrences that passed the threshold.
+The co-word graph uses the same ggraph grammar, but its edges are not typed
+facts. They are paragraph-level co-occurrences that passed the threshold, so
+each edge is labelled with its observed-to-expected ratio instead of a
+relation.
 
 ```{r}
 #| label: fig-coword-network
 #| fig-cap: "Co-word network for the three top-word pairs that passed the observed-versus-expected threshold."
-#| fig-alt: "An undirected co-word diagram whose nodes are content words and whose edges are thresholded paragraph co-occurrences. The kept edges and counts are listed in the table 'Co-word edges kept by the observed-versus-expected threshold'."
+#| fig-alt: "An undirected co-word diagram whose nodes are content words and whose edges are thresholded paragraph co-occurrences, each labelled with its observed-to-expected ratio. The kept edges and counts are listed in the table 'Co-word edges kept by the observed-versus-expected threshold'."
 #| fig-width: 8
-#| fig-height: 5.5
+#| fig-height: 4.6
 
+# Listing the words edge by edge puts linked words next to each other on the
+# circle, so no two edges cross.
 coword_nodes <- tibble(
-  node_id = sort(unique(c(coword_edges$word.x, coword_edges$word.y))),
-  label = node_id
+  name = unique(as.vector(rbind(coword_edges$word.x, coword_edges$word.y)))
 )
 
-coword_graph <- igraph::graph_from_data_frame(
-  d = coword_edges |>
-    transmute(from = word.x, to = word.y, relation = "co-occurs"),
-  directed = FALSE,
-  vertices = coword_nodes |> select(name = node_id, label)
+coword_graph <- tbl_graph(
+  nodes = coword_nodes,
+  edges = coword_edges |>
+    transmute(
+      from = word.x,
+      to = word.y,
+      ratio_label = sprintf("%.1f×", observed_expected_ratio)
+    ),
+  directed = FALSE
 )
 
-coword_layout_matrix <- igraph::layout_in_circle(coword_graph)
-coword_layout <- tibble(
-  node_id = igraph::V(coword_graph)$name,
-  x = coword_layout_matrix[, 1],
-  y = coword_layout_matrix[, 2]
-) |>
-  left_join(coword_nodes, by = "node_id")
-
-coword_positions <- coword_edges |>
-  transmute(from = word.x, to = word.y, relation = "co-occurs") |>
-  left_join(
-    coword_layout |> select(from = node_id, x_from = x, y_from = y),
-    by = "from"
-  ) |>
-  left_join(
-    coword_layout |> select(to = node_id, x_to = x, y_to = y),
-    by = "to"
-  ) |>
-  shorten_segments(amount = 0.12)
-
-coword_plot <- ggplot() +
-  geom_segment(
-    data = coword_positions,
-    aes(x = x_start, y = y_start, xend = x_end, yend = y_end),
-    linewidth = 0.4,
-    lineend = "round"
+coword_plot <- ggraph(coword_graph, layout = "circle") +
+  geom_edge_link(
+    aes(
+      label = ratio_label,
+      start_cap = label_rect(node1.name, fontsize = 12, fontfamily = lesson_font),
+      end_cap = label_rect(node2.name, fontsize = 12, fontfamily = lesson_font)
+    ),
+    angle_calc = "along",
+    label_dodge = unit(3, "mm"),
+    label_size = 3.3,
+    family = lesson_font,
+    edge_colour = lesson_colours[["body"]],
+    edge_width = 0.6
   ) +
-  geom_label(
-    data = coword_layout,
-    aes(x = x, y = y, label = label),
-    fill = "white",
-    linewidth = 0.25,
-    size = 3
+  geom_node_label(
+    aes(label = name),
+    family = lesson_font,
+    size = 4.2,
+    fill = lesson_colours[["paper"]],
+    colour = lesson_colours[["ink"]],
+    label.padding = unit(0.3, "lines")
   ) +
-  coord_equal(clip = "off") +
-  theme_void() +
-  theme(plot.margin = margin(15, 15, 15, 15))
+  coord_cartesian(clip = "off") +
+  scale_x_continuous(expand = expansion(mult = 0.15)) +
+  scale_y_continuous(expand = expansion(mult = 0.15)) +
+  labs(
+    title = str_c(
+      "Only ", nrow(coword_edges), " of ", nrow(word_pairs),
+      " frequent word pairs pass the threshold"
+    ),
+    subtitle = "Undirected edges between words that share paragraphs at least 1.8 times as often as expected"
+  ) +
+  theme_lesson(grid = "none") +
+  theme(axis.text = element_blank(), axis.title = element_blank())
 
 coword_plot
 ```
@@ -663,12 +619,15 @@ coword_plot
 ```{r}
 #| include: false
 
+coword_graph_edges <- coword_graph |>
+  activate(edges) |>
+  as_tibble()
+
 stopifnot(
-  igraph::vcount(coword_graph) == nrow(coword_nodes),
-  igraph::ecount(coword_graph) == nrow(coword_edges),
-  nrow(coword_positions) == nrow(coword_edges),
-  !igraph::is_directed(coword_graph),
-  !("weight" %in% names(igraph::edge_attr(coword_graph)))
+  gorder(coword_graph) == n_distinct(c(coword_edges$word.x, coword_edges$word.y)),
+  gsize(coword_graph) == nrow(coword_edges),
+  !is_directed(coword_graph),
+  !("weight" %in% names(coword_graph_edges))
 )
 ```
 
@@ -693,7 +652,8 @@ lists.
 
 - [Hogan et al. (2021), Knowledge Graphs](https://arxiv.org/abs/2003.02320)
 - [Fruchterman and Reingold (1991), Graph Drawing by Force-directed Placement](https://reingold.co/force-directed.pdf)
-- [igraph `layout_in_circle()` reference](https://r.igraph.org/reference/layout_in_circle.html)
+- [ggraph documentation](https://ggraph.data-imaginist.com/)
+- [tidygraph documentation](https://tidygraph.data-imaginist.com/)
 - [igraph `layout_with_fr()` reference](https://r.igraph.org/reference/layout_with_fr.html)
 - [McGrath, Blythe, and Krackhardt (1997), The effect of spatial arrangement on judgments and errors in interpreting graphs](https://doi.org/10.1016/S0378-8733(96)00299-7)
 - [W3C WAI tutorial on complex images](https://www.w3.org/WAI/tutorials/images/complex/)

@@ -101,6 +101,10 @@ inbox_hash <- digest(
   algo = "sha256",
   serialize = FALSE
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   spam_counts |>
@@ -184,6 +188,10 @@ surface_scores <- tibble(
   ) |>
     pull(.estimate)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   surface_scores |>
@@ -270,6 +278,10 @@ length_feature_counts <- superficial_features |>
     scams_above_median = sum(present & is_spam),
     genuine_above_median = sum(present & !is_spam)
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   shortcut_display |>
@@ -394,6 +406,10 @@ rule_confusion <- yardstick::conf_mat(
 )
 
 rule_matrix <- as.matrix(rule_confusion$table)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   as.data.frame(rule_confusion$table),
@@ -523,6 +539,10 @@ test_comparison <- tibble(
     "not fitted"
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   as.data.frame(test_rule_confusion$table),
@@ -619,6 +639,10 @@ disagreements <- spam_scored |>
     model_spam,
     text
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   disagreements,
@@ -663,10 +687,6 @@ twice. A deployed threshold should be chosen on separate calibration data before
 the final test.
 
 ```{r}
-#| label: fig-spam-threshold
-#| fig-cap: "The spam cut point shifts false alarms first, then missed scams, on the invented test split."
-#| fig-alt: "Line chart with thresholds from 0.05 to 0.95. Genuine messages blocked drops from four to two. Scams missed rises from one to three."
-
 threshold_table <- tibble(threshold = seq(0.05, 0.95, by = 0.05)) |>
   mutate(
     results = map(threshold, \(cut_point) {
@@ -680,21 +700,10 @@ threshold_table <- tibble(threshold = seq(0.05, 0.95, by = 0.05)) |>
     })
   ) |>
   unnest(results)
+```
 
-threshold_plot <- threshold_table |>
-  select(threshold, genuine_blocked, scams_missed) |>
-  pivot_longer(
-    cols = c(genuine_blocked, scams_missed),
-    names_to = "error_type",
-    values_to = "messages"
-  ) |>
-  mutate(
-    error_type = recode(
-      error_type,
-      genuine_blocked = "Genuine messages blocked",
-      scams_missed = "Scams missed"
-    )
-  )
+```{r}
+#| echo: false
 
 knitr::kable(
   threshold_table,
@@ -707,17 +716,6 @@ knitr::kable(
   caption = "Threshold trade-off on the invented test split",
   row.names = FALSE
 )
-
-ggplot(threshold_plot, aes(x = threshold, y = messages, color = error_type)) +
-  geom_line(linewidth = 0.8) +
-  geom_point(size = 2) +
-  scale_x_continuous(breaks = threshold_table$threshold) +
-  labs(
-    x = "Decision threshold",
-    y = "Messages",
-    color = "Error type"
-  ) +
-  theme_minimal()
 ```
 
 ```{r}
@@ -727,6 +725,81 @@ stopifnot(
   identical(threshold_table$genuine_blocked, c(4L, rep(3L, 16), 2L, 2L)),
   identical(threshold_table$scams_missed, c(rep(1L, 5), rep(2L, 13), 3L)),
   identical(threshold_table$sent_to_review, c(8L, rep(7L, 4), rep(6L, 12), 5L, 4L))
+)
+```
+
+```{r}
+#| label: fig-spam-threshold
+#| fig-cap: "The spam cut point shifts false alarms first, then missed scams, on the invented test split."
+#| fig-alt: "Line chart with thresholds from 0.05 to 0.95. Genuine messages blocked drops from four to two. Scams missed rises from one to three."
+#| fig-height: 4.2
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
+
+threshold_plot <- threshold_table |>
+  select(threshold, genuine_blocked, scams_missed) |>
+  pivot_longer(
+    cols = c(genuine_blocked, scams_missed),
+    names_to = "error_type",
+    values_to = "messages"
+  ) |>
+  mutate(
+    error_type = recode(
+      error_type,
+      genuine_blocked = "genuine messages blocked",
+      scams_missed = "scams missed"
+    )
+  )
+
+error_colours <- c(
+  "genuine messages blocked" = lesson_colours[["accent"]],
+  "scams missed" = lesson_colours[["contrast"]]
+)
+error_label_colours <- c(
+  "genuine messages blocked" = lesson_text_colours[["accent"]],
+  "scams missed" = lesson_text_colours[["contrast"]]
+)
+
+ggplot(threshold_plot, aes(x = threshold, y = messages, colour = error_type)) +
+  geom_step(aes(linetype = error_type), linewidth = 0.9, direction = "hv") +
+  geom_point(size = 2) +
+  geom_text(
+    data = \(d) filter(d, threshold == max(threshold)),
+    aes(label = error_type, colour = I(error_label_colours[error_type])),
+    hjust = 0,
+    nudge_x = 0.03,
+    family = lesson_font,
+    size = 10,
+    size.unit = "pt"
+  ) +
+  scale_colour_manual(values = error_colours, guide = "none") +
+  scale_linetype_manual(
+    values = c("genuine messages blocked" = "solid", "scams missed" = "22"),
+    guide = "none"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0.1, 0.9, by = 0.2),
+    expand = expansion(mult = c(0.02, 0.38))
+  ) +
+  scale_y_continuous(breaks = 0:4, limits = c(0, 4)) +
+  labs(
+    title = "Raising the cut point trades false alarms for missed scams",
+    subtitle = "Errors on the 19 invented test messages at each spam-score cut point",
+    x = "Spam score cut point",
+    y = "Messages"
+  ) +
+  theme_lesson(grid = "y")
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(threshold_plot), 38L),
+  all(threshold_plot$messages >= 0L & threshold_plot$messages <= 4L),
+  setequal(names(error_colours), unique(threshold_plot$error_type))
 )
 ```
 

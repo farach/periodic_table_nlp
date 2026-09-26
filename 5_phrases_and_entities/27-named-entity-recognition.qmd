@@ -127,6 +127,10 @@ pipeline_table <- tibble(
   field = names(pipeline_info),
   value = unlist(pipeline_info, use.names = FALSE)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   pipeline_table,
@@ -194,6 +198,10 @@ same word can be a `GPE` in `Riverton raised the training budget` and part of an
 ```{r}
 entity_type_counts <- entities |>
   count(entity_type, name = "entities", sort = TRUE)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   entity_type_counts,
@@ -253,6 +261,10 @@ entity_score <- entity_judgments |>
     wrong_spans = sum(!correct),
     .groups = "drop"
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   entity_judgments,

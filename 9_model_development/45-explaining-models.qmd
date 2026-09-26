@@ -116,6 +116,10 @@ check_words <- c("attention", "object", "effect", "placed", "parts", "opinion")
 checked_coefficients <- era_coefficients |>
   filter(word %in% check_words) |>
   arrange(word)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   checked_coefficients |>
@@ -170,6 +174,10 @@ era_extremes <- bind_rows(
   select(word, direction, estimate)
 
 sensitive_terms <- c("slavery", "slave", "race", "war")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   era_extremes,
@@ -260,6 +268,10 @@ party_speech <- party_summary |>
   filter(split_scheme == "speech")
 party_president <- party_summary |>
   filter(split_scheme == "president")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   party_extremes,

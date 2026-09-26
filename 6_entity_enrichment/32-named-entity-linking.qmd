@@ -111,6 +111,10 @@ alias_hash <- digest(
 expected_alias_hash <- metadata |>
   filter(artifact == "riverton-aliases.csv") |>
   pull(fingerprint)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   entities,
@@ -175,6 +179,10 @@ mention_candidates <- bind_rows(
     )
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   mention_candidates,
@@ -260,6 +268,10 @@ outcome_counts <- tibble(
     by = join_by(outcome)
   ) |>
   mutate(mentions = coalesce(mentions, 0L))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   link_status,
@@ -313,6 +325,10 @@ credential_mentions <- resolved_links |>
   filter(entity_type == "credential") |>
   count(entity_id, canonical_name, name = "mentions") |>
   arrange(entity_id)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   credential_mentions,

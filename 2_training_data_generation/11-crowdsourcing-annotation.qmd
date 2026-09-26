@@ -114,6 +114,10 @@ allowed_labels <- c(
 )
 source("R/workforce-codebook.R")
 crowd_codebook <- workforce_codebook("1.0.0")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   crowd_labels |>
@@ -208,6 +212,10 @@ pairwise_agreement <- pmap(
   }
 ) |>
   list_rbind()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   pairwise_agreement |>
@@ -355,6 +363,10 @@ sensitivity <- tibble(
   arrange(desc(alpha_without_this_item))
 
 alpha_range <- range(alpha_without_item)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   sensitivity |>
@@ -423,6 +435,10 @@ disagreements <- crowd_labels |>
     by = join_by(sentence_id)
   ) |>
   arrange(sentence_id)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   disagreements |>
@@ -514,6 +530,10 @@ combined_labels <- crowd_labels |>
     unanimity_by_sentence,
     by = join_by(sentence_id)
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   top_vote_table,
@@ -606,6 +626,10 @@ adjudication_outcome <- adjudication |>
     reviewers_still_disagree = reviewer_a != reviewer_b |
       reviewer_b != reviewer_c
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   adjudication_outcome |>

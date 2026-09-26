@@ -1,0 +1,7 @@
+{
+  "prompt_id": "riverton-review-yes-no-v1",
+  "written_on": "2026-09-25",
+  "note": "Written from the review request alone, before the model was run on any record. It was not revised after reading model output.",
+  "system": "You review records for one legal request. Follow the codebook. Reply with one word: yes or no.",
+  "user_template": "Request: {request}\n\nCodebook:\n- Answer yes when the record is about hiding safety inspection delays, changing inspection logs, or deleting inspection-related messages for the Calder Yard contract. Vague or indirect wording that asks someone to keep an inspection problem out of a document counts.\n- Answer no when the record is about other work, even if it mentions an inspection, a log, or a delay.\n\nRecord: {record}\n\nIs this record responsive to the request? Answer yes or no."
+}

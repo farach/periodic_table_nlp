@@ -184,6 +184,10 @@ jobs <- tibble(
   employer = card_text(job_cards, ".employer"),
   location = card_text(job_cards, ".location")
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   jobs,
@@ -264,6 +268,10 @@ expected_job_sentences <- expected_sentences |>
   filter(document_id != "F001") |>
   select(sentence_id, document_id, text) |>
   as_tibble()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   scraped_sentences |>
@@ -351,6 +359,10 @@ drift_error <- tryCatch(
   collect_cards(redesigned_page, ".job-card", 1L),
   error = conditionMessage
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(

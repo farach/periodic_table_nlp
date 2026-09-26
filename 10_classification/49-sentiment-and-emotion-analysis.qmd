@@ -68,6 +68,10 @@ feedback <- read_csv(
   mutate(
     rating = if_else(rating == "", NA_integer_, as.integer(rating))
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   feedback,
@@ -137,6 +141,10 @@ lexicon_scores <- token_scores |>
 zero_match_feedback_ids <- lexicon_scores |>
   filter(matched_words == 0L) |>
   pull(feedback_id)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   lexicon_scores |>
@@ -226,6 +234,10 @@ coverage_by_length <- inaugural_lexicon |>
     .by = length_bin
   ) |>
   arrange(length_bin)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   inaugural_silence |>
@@ -322,6 +334,10 @@ negation_examples <- tibble(
     lexicon_score = sum(token_score),
     .by = phrase
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   failure_cases,
@@ -455,6 +471,10 @@ trained_scores <- feedback |>
     by = join_by(feedback_id)
   ) |>
   relocate(lexicon_score, .before = trained_score)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   trained_scores |>
@@ -523,10 +543,6 @@ for labels such as anger, fear, sadness, joy, or surprise. That claim is much
 stronger.
 
 ```{r}
-#| label: fig-feedback-score-counts
-#| fig-cap: "Only two Bing lexicon scores appear in the five fictional feedback comments."
-#| fig-alt: "Bar chart showing three comments with lexicon score 0 and two comments with lexicon score 1."
-
 score_range <- lexicon_scores |>
   summarise(
     lowest = min(lexicon_score),
@@ -537,6 +553,10 @@ score_range <- lexicon_scores |>
 
 score_plot <- lexicon_scores |>
   count(lexicon_score, name = "comments")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   score_plot,
@@ -544,14 +564,6 @@ knitr::kable(
   caption = "Only two lexicon scores appear in the feedback file",
   row.names = FALSE
 )
-
-ggplot(score_plot, aes(x = factor(lexicon_score), y = comments)) +
-  geom_col(fill = "#4C78A8") +
-  labs(
-    x = "Lexicon score",
-    y = "Comments"
-  ) +
-  theme_minimal()
 ```
 
 ```{r}
@@ -562,6 +574,50 @@ stopifnot(
   identical(score_range$highest, 1L),
   identical(score_range$distinct_scores, 2L),
   identical(score_plot$comments, c(3L, 2L))
+)
+```
+
+```{r}
+#| label: fig-feedback-score-counts
+#| fig-cap: "Only two Bing lexicon scores appear in the five fictional feedback comments."
+#| fig-alt: "Horizontal bar chart with two bars: three comments have lexicon score 0 and two comments have lexicon score 1."
+#| fig-height: 2.6
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
+
+ggplot(
+  score_plot,
+  aes(x = comments, y = str_c("score ", lexicon_score))
+) +
+  geom_col(fill = lesson_colours[["accent"]], width = 0.6) +
+  geom_text(
+    aes(label = str_c(comments, " comments")),
+    hjust = 0,
+    nudge_x = 0.05,
+    family = lesson_font,
+    size = 10,
+    size.unit = "pt",
+    colour = lesson_colours[["body"]]
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.35))) +
+  labs(
+    title = "Five comments collapse onto two lexicon scores",
+    subtitle = "Bing lexicon score for each fictional feedback comment",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_lesson(grid = "none") +
+  theme(axis.text.x = element_blank())
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(sum(score_plot$comments), nrow(lexicon_scores)),
+  identical(nrow(score_plot), 2L)
 )
 ```
 

@@ -50,13 +50,14 @@ state names from longest to shortest so `West Virginia` would be selected before
 ```{r}
 library(dplyr)
 library(ggplot2)
-library(knitr)
+library(ggrepel)
 library(purrr)
 library(stringr)
 library(tibble)
 library(tidyr)
 
 source("R/inaugural-corpus.R")
+source("R/lesson-figures.R")
 
 paragraphs <- inaugural_paragraphs()
 
@@ -145,8 +146,12 @@ naive_state_counts <- state_matches |>
     .by = state
   ) |>
   arrange(desc(naive_matches), state)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   naive_state_counts,
   col.names = c("Matched name", "Naive matches", "Speeches with a match"),
   caption = "Naive case-sensitive state-name matches before review",
@@ -178,7 +183,7 @@ synthetic_overlap_check <- find_state_matches(
 )
 
 stopifnot(
-  all(c("dplyr", "ggplot2", "knitr", "purrr", "stringr", "tibble", "tidyr") %in%
+  all(c("dplyr", "ggplot2", "ggrepel", "purrr", "stringr", "tibble", "tidyr") %in%
     loadedNamespaces()),
   !"package:maps" %in% search(),
   identical(nrow(paragraphs), 1377L),
@@ -312,15 +317,19 @@ category_counts <- category_table |>
     by = join_by(category == reading_category)
   ) |>
   mutate(matches = coalesce(matches, 0L))
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   label_preview,
   col.names = c("Match key", "Reviewed category"),
   caption = "First keyed review-label decisions",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   category_counts,
   col.names = c("Review category", "How this lesson uses the category", "Matches"),
   caption = "Author-written review categories for state-name matches",
@@ -405,8 +414,12 @@ river_summary <- review_matches |>
     .by = state
   ) |>
   arrange(state)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   naive_review_comparison,
   col.names = c(
     "Matched name", "Naive matches", "Naive speeches",
@@ -416,7 +429,7 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   river_summary,
   col.names = c("Matched name", "Matches", "Speeches", "Reviewed category"),
   caption = "River readings checked before mapping",
@@ -464,8 +477,12 @@ review_table <- review_matches |>
     context
   ) |>
   arrange(paragraph_id, start, state)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   review_table,
   col.names = c(
     "Paragraph ID", "Character start", "Matched name", "Speech ID", "Year",
@@ -504,32 +521,20 @@ state_centers <- tibble(
   longitude = datasets::state.center$x,
   latitude = datasets::state.center$y
 ) |>
-  mutate(
-    lower48_or_dc = !state %in% c("Alaska", "Hawaii"),
-    region = str_to_lower(state)
-  )
+  mutate(lower48_or_dc = !state %in% c("Alaska", "Hawaii"))
 
 map_points <- reviewed_state_counts |>
   left_join(state_centers, by = join_by(state)) |>
   filter(lower48_or_dc)
+```
 
-state_count_table <- map_points |>
-  select(state, reviewed_state_speeches, longitude, latitude) |>
-  arrange(desc(reviewed_state_speeches), state)
+```{r}
+#| echo: false
 
-map_alt_text <- sprintf(
-  paste(
-    "Lower-48 U.S. map with proportional circles for seven reviewed state readings.",
-    "Virginia appears in 3 speeches; North Carolina and Pennsylvania appear in 2 each;",
-    "California, Iowa, Louisiana, and Nebraska appear in 1 each.",
-    "Washington State is not plotted because its %d matches in %d speeches were reviewed as non-state readings."
-  ),
-  washington_summary$matches,
-  washington_summary$speeches
-)
-
-kable(
-  state_count_table,
+knitr::kable(
+  map_points |>
+    select(state, reviewed_state_speeches, longitude, latitude) |>
+    arrange(desc(reviewed_state_speeches), state),
   col.names = c(
     "State", "Speeches with reviewed state reading",
     "Approximate center longitude", "Approximate center latitude"
@@ -542,6 +547,19 @@ kable(
 ```{r}
 #| include: false
 
+map_alt_text <- sprintf(
+  paste(
+    "Lower-48 U.S. map with a labelled, proportional circle for each of seven",
+    "states with a reviewed state reading. Virginia appears in 3 speeches;",
+    "North Carolina and Pennsylvania appear in 2 each; California, Iowa,",
+    "Louisiana, and Nebraska appear in 1 each. A note on Washington State says",
+    "that its %d name matches in %d speeches were all reviewed as other readings,",
+    "so it has no circle."
+  ),
+  washington_summary$matches,
+  washington_summary$speeches
+)
+
 stopifnot(
   identical(n_distinct(lower48_map$region), 49L),
   identical(nrow(map_points), 7L),
@@ -552,7 +570,7 @@ stopifnot(
   ),
   identical(max(map_points$reviewed_state_speeches), 3L),
   identical(sum(map_points$reviewed_state_speeches), 11L),
-  str_detect(map_alt_text, fixed("22 matches in 17 speeches")),
+  str_detect(map_alt_text, fixed("22 name matches in 17 speeches")),
   !any(str_detect(state_matches$paragraph, fixed("Riverton")))
 )
 ```
@@ -563,6 +581,11 @@ areas by value; this map uses circles instead because the values are small
 counts of speeches, not rates or attention. Pre-statehood references such as the
 Republic of Texas were not counted as state readings.
 
+Each circle carries its state name and count as a label, so the map needs no
+size legend. `ggrepel` places those labels so they do not collide, and its seed
+keeps the placement the same on every render. Washington gets a note instead
+of a circle, because the review is the reason it is missing.
+
 ```{r}
 #| label: fig-state-reading-map
 #| fig-cap: "Reviewed state readings in inaugural speeches on a lower-48 basemap; seven states remain after review."
@@ -572,38 +595,80 @@ Republic of Texas were not counted as state readings.
 
 mean_latitude <- mean(lower48_map$lat, na.rm = TRUE)
 fixed_ratio <- 1 / cos(mean_latitude * pi / 180)
-legend_breaks <- seq_len(max(map_points$reviewed_state_speeches))
+
+map_labels <- map_points |>
+  mutate(
+    label = str_c(state, " ", reviewed_state_speeches),
+    # Circle diameter from scale_size_area(), so labels clear the circle.
+    circle_size = 11 * sqrt(reviewed_state_speeches / max(reviewed_state_speeches))
+  )
+
+washington_note <- state_centers |>
+  filter(state == "Washington") |>
+  mutate(
+    label = str_c(
+      "Washington: ", washington_summary$matches, " name matches,\n",
+      "none about the state"
+    )
+  )
 
 ggplot() +
   geom_polygon(
     data = lower48_map,
     aes(x = long, y = lat, group = group),
-    fill = "grey95",
-    color = "grey65",
-    linewidth = 0.2
+    fill = "#EEF1F4",
+    colour = lesson_colours[["paper"]],
+    linewidth = 0.4
   ) +
   geom_point(
     data = map_points,
     aes(x = longitude, y = latitude, size = reviewed_state_speeches),
     shape = 21,
-    fill = "white",
-    color = "black",
-    stroke = 0.8
+    fill = lesson_colours[["accent"]],
+    colour = lesson_colours[["paper"]],
+    stroke = 0.8,
+    alpha = 0.9
   ) +
-  scale_size_area(
-    breaks = legend_breaks,
-    max_size = 10,
-    name = "Reviewed speeches"
+  geom_text_repel(
+    data = map_labels,
+    aes(x = longitude, y = latitude, label = label, point.size = circle_size),
+    family = lesson_font,
+    size = 3.6,
+    colour = lesson_colours[["ink"]],
+    seed = 8001,
+    box.padding = 0.4,
+    point.padding = 0.15,
+    min.segment.length = 0,
+    segment.colour = lesson_colours[["muted"]],
+    segment.size = 0.3,
+    max.overlaps = Inf
   ) +
-  coord_fixed(ratio = fixed_ratio) +
+  geom_text(
+    data = washington_note,
+    aes(x = longitude, y = latitude, label = label),
+    family = lesson_font,
+    size = 3.3,
+    hjust = 0,
+    lineheight = 0.95,
+    colour = lesson_colours[["muted"]]
+  ) +
+  scale_size_area(max_size = 11, guide = "none") +
+  coord_fixed(ratio = fixed_ratio, clip = "off") +
   labs(
-    x = "Longitude",
-    y = "Latitude"
+    title = "After review, only seven states remain on the map",
+    subtitle = str_c(
+      "Speeches with at least one reviewed reading of each state; ",
+      "circle area shows the count"
+    ),
+    caption = str_c(
+      "Circles sit at approximate state centres from datasets::state.center. ",
+      "Alaska and Hawaii are not on this basemap."
+    )
   ) +
-  theme_void() +
+  theme_lesson(grid = "none") +
   theme(
-    legend.position = "right",
-    plot.margin = margin(5.5, 24, 5.5, 5.5)
+    axis.text = element_blank(),
+    axis.title = element_blank()
   )
 ```
 
@@ -611,13 +676,13 @@ ggplot() +
 #| include: false
 
 stopifnot(
-  identical(legend_breaks, 1:3),
   fixed_ratio > 1,
   fixed_ratio < 2,
-  identical(nrow(map_points), nrow(state_count_table)),
-  setequal(map_points$state, state_count_table$state),
-  !any(map_points$state %in% c("Alaska", "Hawaii")),
-  all(map_points$reviewed_state_speeches %in% legend_breaks)
+  identical(nrow(map_labels), 7L),
+  all(str_detect(map_labels$label, "[0-9]$")),
+  identical(nrow(washington_note), 1L),
+  !"Washington" %in% map_points$state,
+  !any(map_points$state %in% c("Alaska", "Hawaii"))
 )
 ```
 

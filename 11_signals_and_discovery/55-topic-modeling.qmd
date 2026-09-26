@@ -42,7 +42,6 @@ library(purrr)
 library(readr)
 library(quanteda)
 library(topicmodels)
-library(knitr)
 
 source("R/inaugural-corpus.R")
 source("R/permutation-null.R")
@@ -65,8 +64,12 @@ matrix_summary <- tibble(
   measure = c("documents", "features", "nonzero term counts"),
   value = c(ndoc(trimmed_dfm), nfeat(trimmed_dfm), sum(trimmed_dfm))
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   matrix_summary,
   col.names = c("Measure", "Value"),
   caption = "The trimmed paragraph matrix for LDA",
@@ -167,6 +170,10 @@ selected_coherence_spread <- (
   selected_diagnostics$coherence_high -
     selected_diagnostics$coherence_low
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   diagnostic_display,
@@ -311,8 +318,12 @@ terms_c <- top_terms(lda_c, n = 10L)
 topics_a <- terms_a |>
   slice_head(n = 8, by = topic) |>
   summarise(top_terms = paste(term, collapse = ", "), .by = topic)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   topics_a,
   col.names = c("Topic number", "Top terms"),
   caption = "Top terms from a five-topic LDA model with seed 42",
@@ -435,22 +446,26 @@ seed_null <- permutation_null(
 
 seed_null_display <- seed_null |>
   mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   seed_matches,
   col.names = c("Comparison", "Topic in first run", "Matched topic in second run", "Shared top-10 terms"),
   caption = "Best-matched topic overlaps across three five-topic runs",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   seed_summary,
   col.names = c("Comparison", "Mean shared top-10 terms", "Minimum", "Maximum", "Total shared terms"),
   caption = "Topic overlap after matching arbitrary topic numbers",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   seed_null_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Frequency-preserving allocation null for seed 42 vs seed 7 overlap",
@@ -507,8 +522,12 @@ topics_4 <- top_terms(lda_4, n = 8L) |>
   )
 
 shared_first_terms <- length(intersect(topics_a$top_terms |> str_extract("^[^,]+"), topics_4$top_term))
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   topics_4 |>
     select(topic, top_terms),
   col.names = c("Topic number", "Top terms"),
@@ -516,7 +535,7 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   tibble(shared_first_terms = shared_first_terms),
   col.names = "Shared first terms with the seed-42 five-topic fit",
   caption = "A small comparison after changing k",

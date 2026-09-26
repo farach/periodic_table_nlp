@@ -58,7 +58,6 @@ library(purrr)
 library(stringr)
 library(digest)
 library(spacyr)
-library(knitr)
 source("R/use-spacy.R")
 
 relation_schema <- tribble(
@@ -70,6 +69,10 @@ relation_schema <- tribble(
   "organisation -> credential", "asserted, negated, hedged",
   "The sentence says the organisation requires, may require, or does not require the credential."
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   relation_schema,
@@ -163,6 +166,10 @@ alias_hash <- digest(
   algo = "sha256",
   serialize = FALSE
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   aliases |>
@@ -199,7 +206,16 @@ two distinct linked entity mentions in one sentence. The table below is the only
 place this lesson prints all 28 source sentences. It shows why none of these lines can
 produce complete relation triples.
 
+The matcher behind the table looks for every alias in each sentence. It tries
+longer aliases first, so `Riverton Skills Centre` is claimed as one organisation
+before `Riverton` alone can match inside it, and it records the first and last
+character of every match. An alias shared by two IDs is kept and marked
+ambiguous rather than resolved by guessing.
+
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the code that finds alias mentions"
+
 escape_regex <- function(value) {
   str_replace_all(value, "([.\\\\|()\\[\\]{}^$*+?])", "\\\\\\1")
 }
@@ -330,6 +346,10 @@ verbatim_inspection <- sentences |>
     polarity_read_by_hand,
     modality_read_by_hand
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   verbatim_inspection,
@@ -407,6 +427,10 @@ reference_triples <- tribble(
   "c11", "requires", "ORG-0003", "CRD-0001", "negated",
   "c13", "requires", "ORG-0003", "CRD-0001", "hedged"
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   constructed_sentences,
@@ -510,6 +534,10 @@ mention_head_table <- mention_heads |>
     by = c("sentence_id", "head_token_id")
   ) |>
   select(sentence_id, entity_id, mention, start, end, head_token, head_dep)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   mention_head_table,
@@ -557,6 +585,9 @@ argument, `no longer` under an adverb, and hedging from `may`. The reported
 requirement is a visible miss for this small pattern set.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the extractor code"
+
 trigger_tokens <- parsed |>
   filter(lemma %in% c("offer", "require"), pos == "VERB") |>
   transmute(
@@ -744,6 +775,10 @@ extracted_triples <- raw_triples |>
     evidence_text
   ) |>
   arrange(sentence_id, relation, subject_id, object_id, status)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   extracted_triples,
@@ -800,6 +835,9 @@ fields are not applicable. The extractor is scored twice: once for entity-pair
 detection and once for labelled triples.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the pair and triple scoring code"
+
 cooccurrence_pairs <- constructed_mentions |>
   select(sentence_id, document_id, entity_id) |>
   distinct() |>
@@ -883,6 +921,10 @@ triple_results <- full_join(
   ) |>
   filter(result != "true negative") |>
   arrange(sentence_id, relation, subject_id, object_id, status)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   cooccurrence_pairs,
@@ -945,6 +987,16 @@ trained classifiers. Those systems still need the same schema, argument spans,
 status policy, and evidence checks. Published comparisons disagree by domain and
 scoring method, so this page does not make a performance claim about them.
 
+Many current pipelines ask a language model to return each triple as JSON that
+must match a schema. A schema guarantee checks the format, not the content: a
+reply can parse perfectly and still name the wrong entity or drop a negation.
+Asking for the answer before any reasoning can also lower accuracy, so a
+schema that includes a reasoning field should put it first. Keep this page's
+evidence offsets and status column, and score the output against a reference
+written before the model runs. The guide
+[Using a language model in a reproducible analysis](../using-language-models.qmd)
+covers the rest of the record-keeping.
+
 ## What to remember
 
 - Relation extraction produces typed, directed triples, not loose word matches.
@@ -967,6 +1019,8 @@ triples as claims that need sentence evidence.
 - [Farkas et al. (2010), CoNLL-2010 shared task on uncertainty](https://aclanthology.org/W10-3001/)
 - [Wadhwa, Amir, and Wallace (2023), Revisiting relation extraction in the era of LLMs](https://aclanthology.org/2023.acl-long.868/)
 - [Jimenez Gutierrez et al. (2022), Biomedical relation extraction with large language models](https://aclanthology.org/2022.findings-emnlp.329/)
+- [Tam et al. (2024), Let me speak freely? A study on the impact of format restrictions on LLM performance](https://aclanthology.org/2024.emnlp-industry.91/)
+- [Geng et al. (2025), JSONSchemaBench: a benchmark of structured outputs for language models (preprint)](https://arxiv.org/abs/2501.10868)
 
 ```{r}
 #| include: false

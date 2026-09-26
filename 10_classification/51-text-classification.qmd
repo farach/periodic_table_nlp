@@ -105,6 +105,10 @@ era_evidence <- split_study |>
 
 era_baseline_metadata <- baselines |>
   filter(task == "era")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   era_counts,
@@ -326,6 +330,10 @@ feature_gaps <- feature_replicates |>
 
 test_counts <- era_test |>
   count(era, name = "paragraphs")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   feature_comparison |>
@@ -380,10 +388,6 @@ usual 0.50 cut point is a convention, and a project can choose a different point
 if the two errors have different costs.
 
 ```{r}
-#| label: fig-era-probabilities
-#| fig-cap: "Predicted probabilities for the '1900 or later' era label on the speech-level test split."
-#| fig-alt: "Histogram of predicted probabilities. Before-1900 paragraphs cluster mostly near 0, while 1900-or-later paragraphs cluster mostly near 1 with overlap between the groups."
-
 probability_summary <- tfidf_scores |>
   summarise(
     minimum = min(prob_1900_or_later),
@@ -393,6 +397,10 @@ probability_summary <- tfidf_scores |>
     maximum = max(prob_1900_or_later),
     .groups = "drop"
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   probability_summary |>
@@ -401,15 +409,6 @@ knitr::kable(
   caption = "Distribution of predicted probabilities for the later era label",
   row.names = FALSE
 )
-
-ggplot(tfidf_scores, aes(x = prob_1900_or_later, fill = era)) +
-  geom_histogram(binwidth = 0.05, boundary = 0, color = "white") +
-  labs(
-    x = "Predicted probability for 1900 or later",
-    y = "Paragraphs",
-    fill = "Recorded era"
-  ) +
-  theme_minimal()
 ```
 
 ```{r}
@@ -421,6 +420,65 @@ stopifnot(
   isTRUE(all.equal(round(as.numeric(probability_summary$median), 4), 0.8629)),
   isTRUE(all.equal(round(as.numeric(probability_summary$ninetieth), 4), 0.9928)),
   isTRUE(all.equal(round(as.numeric(probability_summary$maximum), 4), 1.0000))
+)
+```
+
+```{r}
+#| label: fig-era-probabilities
+#| fig-cap: "Predicted probabilities for the '1900 or later' era label on the speech-level test split."
+#| fig-alt: "Two stacked histograms of predicted probabilities, one per recorded era, on the same scale. Before-1900 paragraphs cluster mostly near 0, while 1900-or-later paragraphs cluster mostly near 1, with overlap between the groups. A dashed line marks the 0.50 cut point."
+#| fig-height: 4.6
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
+
+era_colours <- c(
+  "before 1900" = lesson_colours[["contrast"]],
+  "1900 or later" = lesson_colours[["accent"]]
+)
+
+ggplot(tfidf_scores, aes(x = prob_1900_or_later, fill = era)) +
+  geom_histogram(
+    binwidth = 0.05,
+    boundary = 0,
+    colour = lesson_colours[["paper"]],
+    show.legend = FALSE
+  ) +
+  geom_vline(
+    xintercept = 0.5,
+    linetype = "22",
+    colour = lesson_colours[["muted"]]
+  ) +
+  facet_wrap(
+    vars(era),
+    ncol = 1,
+    labeller = as_labeller(\(era) str_c("Recorded era: ", era))
+  ) +
+  scale_fill_manual(values = era_colours) +
+  scale_x_continuous(
+    breaks = seq(0, 1, by = 0.25),
+    labels = scales::label_number(accuracy = 0.01)
+  ) +
+  labs(
+    title = "Each recorded era piles up at its own end of the scale",
+    subtitle = "Test paragraphs by predicted probability of the 1900-or-later label; dashed line at 0.50",
+    x = "Predicted probability for 1900 or later",
+    y = "Paragraphs"
+  ) +
+  theme_lesson(grid = "y")
+```
+
+```{r}
+#| include: false
+
+era_medians <- tfidf_scores |>
+  summarise(median_probability = median(prob_1900_or_later), .by = era)
+
+stopifnot(
+  setequal(names(era_colours), unique(as.character(tfidf_scores$era))),
+  era_medians$median_probability[era_medians$era == "before 1900"] < 0.5,
+  era_medians$median_probability[era_medians$era == "1900 or later"] > 0.5
 )
 ```
 
@@ -450,6 +508,10 @@ era_thresholds <- tibble(threshold = c(0.40, 0.50, 0.60)) |>
     })
   ) |>
   unnest(results)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   era_thresholds,
@@ -477,6 +539,19 @@ count rises to 22 while fewer earlier paragraphs move to the later label. A
 classifier returns a score; a person chooses the cut point that matches the
 task.
 
+## Where prompting a language model fits
+
+A general language model can also classify text from written instructions,
+with no training rows. That is useful when labelled examples are scarce or the
+categories change often. With a few hundred labelled examples for a stable
+task, published comparisons often find that a trained model like the one here
+matches or beats prompting, at lower cost and with more stable output from run
+to run. Whichever you try, score both on the same held-out rows, keep the
+baseline beside them, and record the prompt and model revision as part of the
+method. The guide
+[Using a language model in a reproducible analysis](../using-language-models.qmd)
+shows how.
+
 ## What to remember
 
 - Text classification needs labelled documents and a fixed set of categories.
@@ -484,9 +559,12 @@ task.
 - A baseline gives the model score a reference point.
 - Class imbalance can make easy guesses look better than they are.
 - Word-count models ignore order unless order is built into the features.
+- Compare prompting and trained models on the same held-out rows.
 
 ## Sources
 
 - [quanteda inaugural corpus documentation](https://quanteda.io/reference/data_corpus_inaugural.html)
 - [glmnet package documentation](https://glmnet.stanford.edu/articles/glmnet.html)
 - [textrecipes package documentation](https://textrecipes.tidymodels.org/)
+- [Edwards and Camacho-Collados (2024), Language models for text classification: is in-context learning enough?](https://aclanthology.org/2024.lrec-main.879/)
+- [Bucher and Martini (2024), Fine-tuned small LLMs (still) significantly outperform zero-shot generative AI models in text classification (preprint)](https://arxiv.org/abs/2406.08660)

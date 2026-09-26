@@ -423,6 +423,11 @@ capability gap but the shape of a measurement: the definition, the comparison,
 and the text that actually arrived. The useful amount of checking depends on
 your text and on the cost of a wrong answer; this page cannot set it for you.
 
+The guide [Using a language model in a reproducible analysis](using-language-models.qmd)
+works through that shape on a constructed collection. It records a local model
+as an instrument, checks its labels against a random sample reviewed by a
+person, and corrects an estimate for the errors that sample reveals.
+
 The first thirteen lessons cover getting text out of files, web pages, and scans
 without damaging it, then building labels you can defend. Lessons 14 through 42
 follow the text through tokens and vocabularies, word forms and grammar links,

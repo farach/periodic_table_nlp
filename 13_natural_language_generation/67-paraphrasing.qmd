@@ -50,7 +50,6 @@ the prepared local directory through `huggingfaceR`.
 suppressPackageStartupMessages({
   library(dplyr)
   library(huggingfaceR)
-  library(knitr)
   library(purrr)
   library(reticulate)
   library(stringr)
@@ -67,8 +66,12 @@ paraphrase_model <- load_nlg_pipeline(
 
 model_record <- paraphrase_model$metadata |>
   select(model_id, revision, license)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   model_record,
   col.names = c("Model", "Revision", "License"),
   caption = "Pinned local model used for paraphrase generation",
@@ -81,7 +84,7 @@ kable(
 
 stopifnot(
   all(c(
-    "dplyr", "huggingfaceR", "knitr", "purrr",
+    "dplyr", "huggingfaceR", "purrr",
     "reticulate", "stringr", "tibble", "tidyr"
   ) %in% loadedNamespaces()),
   identical(model_record$model_id, "Qwen/Qwen2.5-1.5B-Instruct"),
@@ -136,8 +139,12 @@ paraphrase_inputs <- tribble(
   "obligation",
   "\\b(must|required|obliged|has to)\\b"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   paraphrase_inputs,
   col.names = c(
     "Probe ID",
@@ -201,8 +208,12 @@ paraphrase_requests <- paraphrase_inputs |>
       \(prompt) nlg_token_count(paraphrase_model$tokenizer, prompt)
     )
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   paraphrase_requests |>
     select(probe_id, input_tokens),
   col.names = c("Probe ID", "Complete prompt tokens"),
@@ -249,8 +260,12 @@ paraphrase_results <- paraphrase_requests |>
     hit_token_cap = map_lgl(generation, "hit_token_cap"),
     copy_baseline = source_text
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   paraphrase_results |>
     select(probe_id, source_text, candidate_display, copy_baseline),
   col.names = c(
@@ -317,8 +332,12 @@ wording_diagnostics <- paraphrase_results |>
       jaccard_overlap
     )
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   wording_diagnostics,
   digits = 2,
   col.names = c(
@@ -439,19 +458,6 @@ invariant_check_display <- invariant_checks |>
     )
   )
 
-kable(
-  invariant_check_display,
-  col.names = c(
-    "Probe ID",
-    "Arabic-numeral screen",
-    "Protected-name screen",
-    "Negation screen",
-    "Modality screen"
-  ),
-  caption = "Conservative screens for predeclared paraphrase invariants",
-  row.names = FALSE
-)
-
 screen_actions <- invariant_checks |>
   rowwise() |>
   mutate(
@@ -481,8 +487,25 @@ paraphrase_actions <- wording_diagnostics |>
     )
   ) |>
   select(probe_id, flagged_screens, action)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
+  invariant_check_display,
+  col.names = c(
+    "Probe ID",
+    "Arabic-numeral screen",
+    "Protected-name screen",
+    "Negation screen",
+    "Modality screen"
+  ),
+  caption = "Conservative screens for predeclared paraphrase invariants",
+  row.names = FALSE
+)
+
+knitr::kable(
   paraphrase_actions,
   col.names = c("Probe ID", "Screen flags", "Next action"),
   caption = "Screen flags route candidates to human meaning review",
@@ -558,8 +581,12 @@ paraphrase_review <- tibble(
     "pending"
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   paraphrase_review,
   col.names = c("Review gate", "Status"),
   caption = "A generated rewrite is not an approved paraphrase",

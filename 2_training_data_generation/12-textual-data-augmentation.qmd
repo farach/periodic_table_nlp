@@ -79,6 +79,10 @@ workforce_sentences <- read_csv(
 )
 training_examples <- workforce_sentences |>
   filter(reference_label == "training")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   training_examples |>
@@ -216,6 +220,10 @@ augmentation_counts <- tibble(label = augmentation_label_order) |>
 source_families <- augmented_rows |>
   distinct(source_family_id) |>
   arrange(source_family_id)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   augmented_rows,
@@ -344,6 +352,10 @@ accepted_rows <- reviewed_candidates |>
   filter(decision == "accept")
 rejected_rows <- reviewed_candidates |>
   filter(decision == "reject")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   reviewed_candidates |>
@@ -469,8 +481,10 @@ ablation <- tibble(
   ),
   items = nrow(held_out)
 )
+```
 
-new_terms <- setdiff(with_augmentation, without_augmentation)
+```{r}
+#| echo: false
 
 knitr::kable(
   ablation,
@@ -483,8 +497,6 @@ knitr::kable(
   caption = "The same held-out units judged with and without the augmented rows",
   row.names = FALSE
 )
-
-new_terms
 ```
 
 ```{r}
@@ -499,14 +511,29 @@ stopifnot(
   identical(sum(is_training), 2L),
   identical(ablation$distinctive_terms, c(13L, 18L)),
   identical(ablation$correct, c(10L, 10L)),
+  identical(
+    predict_training(without_augmentation, held_out$text),
+    predict_training(with_augmentation, held_out$text)
+  )
+)
+```
+
+`setdiff()` lists the terms that exist only in the augmented vocabulary:
+
+```{r}
+new_terms <- setdiff(with_augmentation, without_augmentation)
+
+new_terms
+```
+
+```{r}
+#| include: false
+
+stopifnot(
   identical(length(new_terms), 5L),
   identical(
     new_terms,
     c("analyst", "assistant", "developer", "junior", "pathway")
-  ),
-  identical(
-    predict_training(without_augmentation, held_out$text),
-    predict_training(with_augmentation, held_out$text)
   )
 )
 ```
@@ -608,6 +635,10 @@ meaning_check <- tibble(
         !str_detect(lower_text, "\\bnot\\b")
   ) |>
   select(-lower_text)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   meaning_check,

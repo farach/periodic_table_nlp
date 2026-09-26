@@ -124,6 +124,10 @@ keyword_hits <- sentences |>
   ) |>
   filter(keyword_match) |>
   select(sentence_id, text)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   keyword_hits,
@@ -167,6 +171,10 @@ hand_judgments <- sentences |>
       TRUE ~ "No negating word changes the main claim."
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   hand_judgments,
@@ -276,6 +284,10 @@ rule_predictions <- trigger_scopes |>
     rule_negated = if_else(is.na(rule_negated), FALSE, rule_negated),
     scope_tokens = if_else(is.na(scope_tokens), "", scope_tokens)
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   trigger_scopes,
@@ -348,6 +360,10 @@ mistakes <- negation_scored |>
   filter(hand_negated != rule_negated) |>
   left_join(sentences |> select(sentence_id, text), by = "sentence_id") |>
   select(sentence_id, text, hand_negated, rule_negated, result, scope_tokens)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   score_summary,

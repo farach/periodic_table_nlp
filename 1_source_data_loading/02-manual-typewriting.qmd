@@ -115,6 +115,10 @@ prints its size and each column's type.
 
 ```{r}
 has_order_prefix <- str_detect(messages, fixed("R-"))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -237,6 +241,10 @@ extracted_for_display <- extracted_summary |>
     first_date = coalesce(first_date, "No match"),
     first_email = coalesce(first_email, "No match")
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   extracted_for_display,
@@ -351,6 +359,10 @@ date_parts <- str_match(
   date_inputs,
   complete_date_pattern
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -405,9 +417,11 @@ redaction_report <- message_table |>
     changed = shared_version != message_text
   )
 
-removed_addresses <- redaction_report$removed_addresses |>
-  list_c()
 changed_messages <- sum(redaction_report$changed)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   redaction_report |>
@@ -416,8 +430,6 @@ knitr::kable(
   caption = "Which messages the redaction step altered",
   row.names = FALSE
 )
-
-removed_addresses
 ```
 
 ```{r}
@@ -434,7 +446,24 @@ stopifnot(
   ),
   all(lengths(redaction_report$removed_addresses[-2]) == 0L),
   !any(str_detect(redaction_report$shared_version, fixed("@"))),
-  identical(changed_messages, 1L),
+  identical(changed_messages, 1L)
+)
+```
+
+The report also kept what the pattern removed, so the removal itself can be
+read:
+
+```{r}
+removed_addresses <- redaction_report$removed_addresses |>
+  list_c()
+
+removed_addresses
+```
+
+```{r}
+#| include: false
+
+stopifnot(
   identical(removed_addresses, "support@example.com"),
   identical(
     sum(lengths(redaction_report$removed_addresses)),
@@ -474,6 +503,10 @@ id_cases <- tibble(
 
 id_cases <- id_cases |>
   mutate(actual = str_detect(input, order_id_pattern))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   id_cases,
@@ -562,6 +595,10 @@ letters_and_marks <- str_detect(
   words,
   letters_and_marks_pattern
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(

@@ -226,6 +226,10 @@ strings <- c(
 )
 
 declared_encoding <- Encoding(strings)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -440,6 +444,10 @@ row_report <- tibble(
     decode_row
   ))
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   row_report,
@@ -546,14 +554,10 @@ same_appearance <- c(
 )
 
 counts <- nchar(same_appearance, type = "chars")
-exact_match_before <- identical(
-  unname(same_appearance[1]),
-  unname(same_appearance[2])
-)
-exact_match_after <- identical(
-  unname(stri_trans_nfc(same_appearance[1])),
-  unname(stri_trans_nfc(same_appearance[2]))
-)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -564,6 +568,27 @@ knitr::kable(
   col.names = c("Form", "Displayed text", "Code point count"),
   caption = "Two ways to represent the same visible character",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(unname(counts), c(1L, 2L))
+)
+```
+
+An exact comparison sees two different sequences until both are normalized:
+
+```{r}
+exact_match_before <- identical(
+  unname(same_appearance[1]),
+  unname(same_appearance[2])
+)
+exact_match_after <- identical(
+  unname(stri_trans_nfc(same_appearance[1])),
+  unname(stri_trans_nfc(same_appearance[2]))
 )
 
 c(
@@ -576,7 +601,6 @@ c(
 #| include: false
 
 stopifnot(
-  identical(unname(counts), c(1L, 2L)),
   identical(exact_match_before, FALSE),
   identical(exact_match_after, TRUE)
 )

@@ -112,11 +112,20 @@ list is checked against `data/periodic_table.csv`.
 The topic map comes from Rob van Zoest's
 [Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).
 
+A separate guide,
+[Using a language model in a reproducible analysis](using-language-models.qmd),
+shows how to treat a local language model as a research instrument: record the
+model and prompt, save its outputs, check them against a random sample reviewed
+by a person, and correct an estimate for the model's errors. It reads a saved
+run built by `data-raw/build-llm-review-labels.R`.
+
 ## Teaching standard
 
 Lessons marked available in the source are written for first-time,
 non-technical readers. Every R code chunk is executed during the site build,
 and important outputs are checked in code. A failed example stops the build.
+Readers see the code that does the work; table formatting runs in hidden
+display chunks, and figures share one style from `R/lesson-figures.R`.
 
 The workforce lessons use
 [onet2r](https://farach.github.io/onet2r/),

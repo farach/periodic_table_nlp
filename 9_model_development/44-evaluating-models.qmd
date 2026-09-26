@@ -137,6 +137,10 @@ baseline_display <- baselines |>
     largest_class,
     baseline_accuracy
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   baseline_display |>
@@ -269,6 +273,10 @@ party_president_bal_range <- range(
       study$split_scheme == "president"
   ]
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   score_table,
@@ -345,6 +353,12 @@ features are doing real work.
 #| label: fig-split-study
 #| fig-cap: "Accuracy over 10 replicates for the model and cheap rules."
 #| fig-alt: "A dot and line chart faceted by task. In the era panel, model accuracy stays above both the training-majority rule and the paragraph-length rule at all three split schemes: paragraph, speech, and president. In the party panel, model accuracy sits near or below the training-majority rule at all three split schemes."
+#| fig-width: 8
+#| fig-height: 4.8
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
 
 plot_data <- study |>
   filter(task %in% c("era", "party")) |>
@@ -367,26 +381,78 @@ plot_data <- study |>
     )
   )
 
+mean_scores <- plot_data |>
+  summarise(score = mean(score), .by = c(task, split_scheme, measure))
+
+measure_colours <- c(
+  "model" = lesson_colours[["accent"]],
+  "training-majority rule" = lesson_colours[["contrast"]],
+  "paragraph-length rule" = lesson_colours[["support"]]
+)
+measure_label_colours <- c(
+  "model" = lesson_text_colours[["accent"]],
+  "training-majority rule" = lesson_text_colours[["contrast"]],
+  "paragraph-length rule" = lesson_text_colours[["support"]]
+)
+
 # The y scale is left to the data. Fixing the lower bound at 0.3 would drop the
 # two replicates where the training-majority rule scores 0.27, and those
 # are exactly the cases worth seeing: the rule collapses when the class that was
 # largest in training is the smaller one in test.
-ggplot(plot_data, aes(x = split_scheme, y = score, color = measure)) +
-  geom_point(alpha = 0.55, position = position_jitter(width = 0.08, height = 0)) +
-  stat_summary(fun = mean, geom = "line", aes(group = measure), linewidth = 0.8) +
-  stat_summary(fun = mean, geom = "point", size = 2.4) +
-  facet_wrap(~task) +
+ggplot(plot_data, aes(x = split_scheme, y = score, colour = measure)) +
+  geom_point(
+    alpha = 0.35,
+    size = 1.5,
+    position = position_jitter(width = 0.08, height = 0, seed = 4401)
+  ) +
+  geom_line(
+    data = mean_scores,
+    aes(group = measure, linetype = measure),
+    linewidth = 0.9
+  ) +
+  geom_point(data = mean_scores, size = 2.6) +
+  ggrepel::geom_text_repel(
+    data = mean_scores |>
+      filter(split_scheme == last(split_levels)),
+    aes(label = measure, colour = I(measure_label_colours[measure])),
+    direction = "y",
+    hjust = 0,
+    nudge_x = 0.3,
+    segment.colour = NA,
+    family = lesson_font,
+    size = 3.4,
+    seed = 4402
+  ) +
+  facet_wrap(vars(task)) +
+  scale_colour_manual(values = measure_colours, guide = "none") +
+  scale_linetype_manual(
+    values = c(
+      "model" = "solid",
+      "training-majority rule" = "22",
+      "paragraph-length rule" = "42"
+    ),
+    guide = "none"
+  ) +
+  scale_x_discrete(expand = expansion(add = c(0.3, 2.1))) +
   scale_y_continuous(labels = scales::label_number(accuracy = 0.01)) +
   labs(
+    title = "The model beats both cheap rules for era but not clearly for party",
+    subtitle = "Accuracy in 10 replicates per split scheme; lines join the replicate means",
     x = "Split scheme",
-    y = "Accuracy",
-    color = "Measure"
+    y = "Accuracy"
   ) +
-  theme_minimal()
+  theme_lesson(grid = "y")
 ```
 
 ```{r}
 #| include: false
+
+era_means <- mean_scores |>
+  filter(task == task_labels[["era"]]) |>
+  pivot_wider(names_from = measure, values_from = score)
+party_means <- mean_scores |>
+  filter(task == task_labels[["party"]]) |>
+  pivot_wider(names_from = measure, values_from = score)
 
 stopifnot(
   identical(nrow(plot_data), 180L),
@@ -397,7 +463,12 @@ stopifnot(
     rep(10L, 18L)
   ),
   all(plot_data$score >= 0 & plot_data$score <= 1),
-  identical(round(min(plot_data$score), 4), 0.2749)
+  identical(round(min(plot_data$score), 4), 0.2749),
+  identical(nrow(mean_scores), 18L),
+  all(era_means$model > era_means$`training-majority rule`),
+  all(era_means$model > era_means$`paragraph-length rule`),
+  all(party_means$model < party_means$`training-majority rule` + 0.01),
+  setequal(names(measure_colours), unique(plot_data$measure))
 )
 ```
 
@@ -502,6 +573,10 @@ metric_table <- metric_set(accuracy, bal_accuracy, sens, spec)(
       .estimate = final_split_baseline
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   confusion_table,
@@ -572,6 +647,19 @@ does not show that the model learned what a period was about. A features-only
 stylometric model, or a subsample matched on paragraph length, would be needed to
 pull period vocabulary apart from period register.
 
+## When a model grades another model
+
+Generated text rarely has one right answer, so many projects now ask a
+language model to score other outputs. Large comparisons find that model judges
+agree with people well on some tasks and poorly on others, and that they can
+favour an answer because of its position in the prompt or its length. A judge
+is a measuring instrument like the classifier on this page. Before using its
+scores, compare them with human ratings on a random sample from your own task,
+swap the order of the answers it compares, and report agreement with a
+chance-corrected statistic such as Cohen's kappa. The guide
+[Using a language model in a reproducible analysis](../using-language-models.qmd)
+shows the same checking pattern for model labels.
+
 ## What to remember
 
 - A score with no baseline is hard to interpret.
@@ -582,6 +670,7 @@ pull period vocabulary apart from period register.
 - This text model learned era well. This model, with this penalty and these
   features, did not learn party, which is a smaller claim than saying the task
   is impossible.
+- A language model used as a judge needs the same checks against people.
 
 A useful evaluation does not flatter the model. It tells you which answer you are
 allowed to trust.
@@ -594,3 +683,5 @@ allowed to trust.
 - [rsample grouped V-fold cross-validation](https://rsample.tidymodels.org/reference/group_vfold_cv.html)
 - [tidymodels tuning](https://www.tidymodels.org/start/tuning/)
 - [tidymodels workflows](https://workflows.tidymodels.org/)
+- [Zheng et al. (2023), Judging LLM-as-a-judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685)
+- [Bavaresco et al. (2025), LLMs instead of human judges? A large-scale empirical study across 20 NLP evaluation tasks](https://aclanthology.org/2025.acl-short.20/)

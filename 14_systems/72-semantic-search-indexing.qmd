@@ -45,7 +45,6 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(huggingfaceR)
   library(jsonlite)
-  library(knitr)
   library(purrr)
   library(readr)
   library(reticulate)
@@ -128,6 +127,10 @@ judgment_summary <- judgments |>
     },
     .groups = "drop"
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   miss_context,
@@ -150,6 +153,8 @@ stopifnot(
 The table above starts with H13 because it answers the parent's question. H15 is a distractor about laptops and class. A search method that always returns a top row can still put a distractor first.
 
 ```{r}
+#| echo: false
+
 knitr::kable(
   judgment_summary,
   format = "html",
@@ -225,6 +230,10 @@ posting_preview <- passage_terms |>
   filter(term %in% c("dsc-104", "104", "dsc-105")) |>
   count(term, passage_id, name = "count") |>
   arrange(term, passage_id)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   identifier_example,
@@ -364,6 +373,10 @@ top_margin <- function(ranks, query) {
   }
   scores[[1]] - scores[[2]]
 }
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   bm25_preview |>
@@ -510,6 +523,10 @@ dense_metadata <- tibble(
     as.character(ncol(embedding_matrix))
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   dense_metadata,
@@ -557,6 +574,9 @@ All passages are short enough to embed without truncation. The lesson embeds one
 An index is tied to its passages and model conventions. The embedding dimension alone cannot detect a swap: several small English embedding models can produce 384-dimensional vectors. The safer record includes model revision, pooling, prefixes, tokenizer behavior, library versions, lexical settings, and passage fingerprints.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the stale-index checks"
+
 passage_fingerprints <- handbook |>
   transmute(
     passage_id,
@@ -670,6 +690,10 @@ edited_passage_check <- passage_fingerprints |>
       "re-embed this passage"
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   index_record,
@@ -794,6 +818,10 @@ bm25_no_match_rows <- queries |>
 
 top_hits_display <- bind_rows(top_hits, bm25_no_match_rows) |>
   arrange(query_id, method)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   top_hits_display |>
@@ -842,6 +870,9 @@ S8 asks for a cafeteria lunch menu. The judgments say no passage is relevant. BM
 The table below reports each method on each query. **Recall at 1** asks whether the relevant passage appears first. **Recall at 3** asks whether it appears in the first three. Because these probes have at most one relevant passage, recall at *k* is the same as success at *k*. **Reciprocal rank** is `1 / rank` for the first relevant passage. S8 has no relevant passage, so these columns are not applicable.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the evaluation code"
+
 evaluate_ranks <- function(ranks, method_name) {
   judgments |>
     left_join(
@@ -1016,6 +1047,10 @@ miss_table_display <- miss_table |>
     reciprocal_rank = display_metric(reciprocal_rank)
   ) |>
   select(-relevant_total)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rank_evaluation_display,
@@ -1110,6 +1145,10 @@ This lesson scans all 15 passage vectors exactly. A larger system may use approx
 
 An index of private text is private data. Embeddings can leak information about their source text, so storing vectors does not anonymize the handbook or any real collection.
 
+## Choosing an embedding model now
+
+The embedding model here is small and several years old. Newer open models, such as EmbeddingGemma and the Qwen3 embedding models, score higher on public benchmarks like MMTEB, and some can run on a laptop. A benchmark rank does not reliably predict performance on your own documents, and a new model means re-embedding the whole index, because vectors from different models cannot be compared. Judge any change on a small set of your own queries with relevance judgments written in advance, as this page does, and keep a lexical list beside the dense one.
+
 ## What to remember
 
 - A lexical index stores terms, counts, document frequency, and passage length.
@@ -1133,3 +1172,6 @@ The dense list rescued the child-care query, but the no-menu query showed why ev
 - [Reciprocal Rank Fusion](https://doi.org/10.1145/1571941.1572114)
 - [HNSW approximate nearest-neighbour search](https://doi.org/10.1109/TPAMI.2018.2889473)
 - [Text Embeddings Reveal Almost As Much As Text](https://aclanthology.org/2023.emnlp-main.765/)
+- [MMTEB: Massive Multilingual Text Embedding Benchmark](https://arxiv.org/abs/2502.13595)
+- [EmbeddingGemma technical report](https://arxiv.org/abs/2509.20354)
+- [Qwen3 Embedding technical report](https://arxiv.org/abs/2506.05176)

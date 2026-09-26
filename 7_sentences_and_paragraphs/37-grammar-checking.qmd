@@ -111,6 +111,10 @@ marked_sentences <- tibble(
   )
 ) |>
   mutate(has_planted_error = planted_check != "none")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   marked_sentences,
@@ -251,6 +255,10 @@ expected_scores <- tibble(
   false_negative = c(0L, 0L, 0L),
   true_negative = c(11L, 12L, 10L)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   agreement_pairs |>
@@ -361,6 +369,10 @@ riverton_coverage <- tibble(
     nrow(sentences) - riverton_pair_sentence_count
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   riverton_flag_summary,

@@ -88,6 +88,10 @@ flagged_types <- vocabulary[!known_to_hunspell(vocabulary)] |>
   sort()
 
 flagged_table <- tibble(flagged_word_type = flagged_types)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   flagged_table,
@@ -150,6 +154,10 @@ spell_summary <- tibble(
   caught_fraction = paste0(real_errors_caught, "/", constructed_errors),
   false_flag_fraction = paste0(correct_words_wrongly_flagged, "/", correct_words_checked)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   constructed_results,
@@ -207,6 +215,10 @@ real_word_error <- tibble(
   intended_flagged = !known_to_hunspell(intended_word),
   typed_flagged = !known_to_hunspell(typed_word)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   real_word_error,

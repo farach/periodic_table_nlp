@@ -205,6 +205,10 @@ corpus <- tibble(
   source_text = unname(source_documents),
   analysis_text = unname(analysis_documents)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   corpus |>
@@ -277,6 +281,10 @@ collection_record <- tibble(
     "one complete article"
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   collection_record,
@@ -325,6 +333,10 @@ corpus <- corpus |>
       count_whitespace_tokens
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   corpus |>
@@ -421,6 +433,10 @@ matching_documents <- corpus |>
     )
   ) |>
   select(document_id, topic, analysis_text)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   matching_documents,
@@ -529,6 +545,10 @@ pair_scores <- tibble(
     containment
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   pair_scores |>
@@ -626,6 +646,10 @@ split_is_family_consistent <- assigned |>
   summarise(splits = n_distinct(split), .by = family_id) |>
   pull(splits) |>
   max()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   assigned |>
@@ -634,8 +658,6 @@ knitr::kable(
   caption = "Four candidates, three kept, one removed with its family recorded",
   row.names = FALSE
 )
-
-removed$analysis_text
 ```
 
 ```{r}
@@ -654,6 +676,22 @@ stopifnot(
     removed$family_id,
     "account-access-family"
   )
+)
+```
+
+The text that left the corpus is printed in full, not summarized:
+
+```{r}
+removed$analysis_text
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(removed$document_id, "seasonal-faq-account"),
+  identical(removed$analysis_text, candidate_text),
+  str_detect(removed$analysis_text, fixed("help desk"))
 )
 ```
 

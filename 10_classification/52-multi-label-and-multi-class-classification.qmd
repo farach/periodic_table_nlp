@@ -70,6 +70,10 @@ periods <- paragraphs |>
 
 period_counts <- periods |>
   count(period, name = "paragraphs")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   period_counts,
@@ -169,6 +173,10 @@ period_scores <- tibble(
     period_oracle_baseline
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   period_scores |>
@@ -236,6 +244,10 @@ period_recall <- period_predictions |>
     .by = period
   ) |>
   arrange(period)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   period_recall |>
@@ -300,6 +312,10 @@ theme_labels <- paragraphs |>
 label_count_table <- theme_labels |>
   mutate(label_count = rowSums(across(-paragraph_id))) |>
   count(label_count, name = "paragraphs")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   label_count_table,
@@ -388,6 +404,10 @@ baseline_accuracy_summary <- tibble(
     exact_empty_accuracy
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   per_label_metrics |>

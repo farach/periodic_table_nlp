@@ -46,7 +46,6 @@ lesson instead of starting a network download.
 suppressPackageStartupMessages({
   library(dplyr)
   library(huggingfaceR)
-  library(knitr)
   library(purrr)
   library(reticulate)
   library(stringr)
@@ -63,8 +62,12 @@ summary_model <- load_nlg_pipeline(
 
 model_record <- summary_model$metadata |>
   select(model_id, revision, license, task_scope)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   model_record,
   col.names = c("Model", "Revision", "License", "Use in this course"),
   caption = "Pinned local model used for the generated summaries",
@@ -77,7 +80,7 @@ kable(
 
 stopifnot(
   all(c(
-    "dplyr", "huggingfaceR", "knitr", "purrr",
+    "dplyr", "huggingfaceR", "purrr",
     "reticulate", "stringr", "tibble", "tidyr"
   ) %in% loadedNamespaces()),
   identical(model_record$model_id, "Qwen/Qwen2.5-1.5B-Instruct"),
@@ -129,8 +132,12 @@ summary_sources <- tribble(
     "The session does not include access to restricted storage."
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   summary_sources,
   col.names = c("Source ID", "Brief", "Source text"),
   caption = "Constructed source records and their summary briefs",
@@ -182,8 +189,12 @@ summary_checks <- tribble(
   "SUM-02", "F12", "free registration", FALSE,
   "\\bfree\\b"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   summary_checks |>
     select(source_id, check_id, needed_information, required),
   col.names = c(
@@ -244,8 +255,12 @@ summary_inputs <- summary_sources |>
       \(prompt) nlg_token_count(summary_model$tokenizer, prompt)
     )
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   summary_inputs |>
     select(source_id, input_tokens),
   col.names = c("Source ID", "Complete prompt tokens"),
@@ -297,8 +312,12 @@ summary_results <- summary_inputs |>
       \(sentences) sentences[[1]]
     )
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   summary_results |>
     select(source_id, generated_summary, first_sentence_baseline),
   col.names = c(
@@ -353,8 +372,12 @@ compression <- summary_results |>
     ),
     generated_to_source = generated_words / source_words
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   compression,
   digits = 2,
   col.names = c(
@@ -431,8 +454,12 @@ summary_actions <- summary_flags |>
     optional_clues_missing,
     action
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   summary_flags,
   col.names = c(
     "Source ID",
@@ -445,7 +472,7 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   summary_actions,
   col.names = c(
     "Source ID",
@@ -529,8 +556,12 @@ summary_review <- tibble(
     "pending"
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   summary_review,
   col.names = c("Review gate", "Status"),
   caption = "Automatic execution checks remain separate from human review",

@@ -48,7 +48,6 @@ position, so the slice uses `start + 1` and `end`.
 ```{r}
 library(dplyr)
 library(htmltools)
-library(knitr)
 library(purrr)
 library(readr)
 library(spacyr)
@@ -125,17 +124,19 @@ model_spans <- entity_tokens |>
     label,
     reviewed = "model output"
   )
+```
 
-version_table <- tibble(
-  field = c("spacyr", names(pipeline_info)),
-  value = c(
-    as.character(packageVersion("spacyr")),
-    unname(unlist(pipeline_info))
-  )
-)
+```{r}
+#| echo: false
 
-kable(
-  version_table,
+knitr::kable(
+  tibble(
+    field = c("spacyr", names(pipeline_info)),
+    value = c(
+      as.character(packageVersion("spacyr")),
+      unname(unlist(pipeline_info))
+    )
+  ),
   col.names = c("Field", "Value"),
   caption = "spaCy runtime and English model used for this display",
   row.names = FALSE
@@ -147,7 +148,7 @@ kable(
 
 stopifnot(
   all(c(
-    "dplyr", "htmltools", "knitr", "purrr", "readr",
+    "dplyr", "htmltools", "purrr", "readr",
     "spacyr", "stringr", "tibble"
   ) %in% loadedNamespaces()),
   identical(nrow(display_sentences), 3L),
@@ -180,8 +181,12 @@ s001_token_offsets <- parsed |>
     end = idx + nchar(token, type = "chars"),
     entity_tag = if_else(nzchar(entity), entity, "outside")
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   s001_token_offsets,
   format = "html",
   escape = TRUE,
@@ -217,8 +222,12 @@ offset_slice <- model_spans |>
     search_found = !is.na(str_locate(s001_source, fixed(search_text))[, 1]),
     offset_slice = substr(s001_source, start + 1L, end)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   offset_slice,
   format = "html",
   escape = TRUE,
@@ -291,8 +300,12 @@ accent_units <- tibble(
   wrong_slice_if_bytes_are_positions = wrong_byte_as_character_slice,
   sliced_text = accent_person$text
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   accent_units,
   format = "html",
   escape = TRUE,
@@ -356,7 +369,8 @@ sentence would slide to the right.
 The renderer below accepts one sentence and one layer of non-overlapping spans.
 It builds the line with htmltools tags, so source text is escaped by
 construction. The label appears as visible text inside each mark; the background
-color is only a backup cue.
+color is only a backup cue. The colors and borders come from two classes in the
+site's stylesheet, so the code only names them.
 
 ```{r}
 has_layer_overlap <- function(spans) {
@@ -399,25 +413,10 @@ render_annotation_layer <- function(sentence_id, layer_name, spans, source_text)
       parts,
       list(
         tags$mark(
-          style = paste(
-            "background-color: #fff3bf;",
-            "color: #1f1f1f;",
-            "border: 2px solid #5f3dc4;",
-            "border-radius: 0.2rem;",
-            "padding: 0.05rem 0.15rem;"
-          ),
+          class = "annotation-mark",
           .noWS = "outside",
           span_text,
-          tags$span(
-            style = paste(
-              "font-weight: 700;",
-              "margin-left: 0.25rem;",
-              "border: 1px solid #1f1f1f;",
-              "padding: 0 0.12rem;",
-              "background-color: #ffffff;"
-            ),
-            label_text
-          )
+          tags$span(class = "annotation-label", label_text)
         )
       )
     )
@@ -517,8 +516,12 @@ all_visible_spans <- bind_rows(
   model_spans,
   review_spans
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   all_visible_spans |>
     arrange(sentence_id, layer, start, end),
   format = "html",
@@ -608,8 +611,12 @@ overlap_report <- overlap_spans |>
       "safe for inline display"
     )
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   overlap_report,
   format = "html",
   escape = TRUE,
@@ -702,8 +709,12 @@ table so text such as `<b>` remains visible.
 ```{r}
 escape_table <- escape_span |>
   select(sentence_id, layer, start, end, text, label, reviewed)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   escape_table,
   format = "html",
   escape = TRUE,

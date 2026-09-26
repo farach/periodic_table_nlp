@@ -120,6 +120,10 @@ documents <- tibble(
     "spreadsheet-skills"
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   documents |>
@@ -172,6 +176,10 @@ exact_groups <- documents |>
   filter(documents > 1L)
 
 exact_duplicate_pairs <- sum(choose(exact_groups$documents, 2))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   documents |>
@@ -227,6 +235,10 @@ normalized_groups <- documents |>
   filter(documents > 1L)
 
 normalized_duplicate_pairs <- sum(choose(normalized_groups$documents, 2))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   documents |>
@@ -325,6 +337,10 @@ calibration_pair <- tibble(
   )
 
 calibration_distance <- calibration_pair$jaccard_distance
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   comparison_pairs |>
@@ -387,10 +403,6 @@ documents. The threshold is not learned here. The team tries several values and
 counts both kinds of outcome.
 
 ```{r}
-#| label: fig-dedup-threshold
-#| fig-cap: "Duplicate pairs caught and distinct pairs wrongly joined at each tested threshold."
-#| fig-alt: "Step chart showing true duplicate pairs caught at 3 until threshold 0.35 and 6 afterward, while wrongly joined distinct pairs move from 0 to 3, then 4, then 9."
-
 threshold_sweep <- tibble(
   threshold = c(0, 0.2, 0.3, 0.35, 0.7, 0.99)
 ) |>
@@ -413,6 +425,10 @@ threshold_sweep <- tibble(
 
 perfect_threshold <- threshold_sweep |>
   filter(caught_true == 6L, wrongly_joined == 0L)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   threshold_sweep,
@@ -424,30 +440,6 @@ knitr::kable(
   caption = "Near-duplicate results at six threshold values",
   row.names = FALSE
 )
-
-threshold_sweep |>
-  tidyr::pivot_longer(
-    cols = c(caught_true, wrongly_joined),
-    names_to = "result",
-    values_to = "pairs"
-  ) |>
-  mutate(
-    result = case_when(
-      result == "caught_true" ~ "True duplicate pairs caught",
-      result == "wrongly_joined" ~ "Distinct pairs wrongly joined",
-      TRUE ~ result
-    )
-  ) |>
-  ggplot(aes(x = threshold, y = pairs, color = result)) +
-  geom_step(linewidth = 0.8, direction = "hv") +
-  geom_point(size = 2) +
-  scale_x_continuous(breaks = threshold_sweep$threshold) +
-  labs(
-    x = "Jaccard distance threshold",
-    y = "Pairs",
-    color = NULL
-  ) +
-  theme_minimal()
 ```
 
 ```{r}
@@ -457,6 +449,85 @@ stopifnot(
   identical(threshold_sweep$caught_true, c(3L, 3L, 3L, 6L, 6L, 6L)),
   identical(threshold_sweep$wrongly_joined, c(0L, 0L, 3L, 3L, 4L, 9L)),
   identical(nrow(perfect_threshold), 0L)
+)
+```
+
+```{r}
+#| label: fig-dedup-threshold
+#| fig-cap: "Duplicate pairs caught and distinct pairs wrongly joined at each tested threshold."
+#| fig-alt: "Step chart with two lines across Jaccard distance thresholds from 0 to 0.99. True duplicate pairs caught stay at 3 until threshold 0.35 and reach all 6 afterward. Distinct pairs wrongly joined rise from 0 to 3 at threshold 0.3, then 4, then 9. No threshold has 6 caught and 0 wrongly joined."
+#| fig-height: 4.2
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
+
+sweep_lines <- threshold_sweep |>
+  tidyr::pivot_longer(
+    cols = c(caught_true, wrongly_joined),
+    names_to = "result",
+    values_to = "pairs"
+  ) |>
+  mutate(
+    result = if_else(
+      result == "caught_true",
+      "true duplicate pairs caught",
+      "distinct pairs wrongly joined"
+    )
+  )
+
+line_colours <- c(
+  "true duplicate pairs caught" = lesson_colours[["accent"]],
+  "distinct pairs wrongly joined" = lesson_colours[["contrast"]]
+)
+label_colours <- c(
+  "true duplicate pairs caught" = lesson_text_colours[["accent"]],
+  "distinct pairs wrongly joined" = lesson_text_colours[["contrast"]]
+)
+
+ggplot(sweep_lines, aes(x = threshold, y = pairs, colour = result)) +
+  geom_step(aes(linetype = result), linewidth = 0.9, direction = "hv") +
+  geom_point(size = 2.2) +
+  geom_text(
+    data = \(d) filter(d, threshold == max(threshold)),
+    aes(label = str_c(pairs, " ", result), colour = I(label_colours[result])),
+    hjust = 0,
+    nudge_x = 0.02,
+    family = lesson_font,
+    size = 10,
+    size.unit = "pt"
+  ) +
+  scale_colour_manual(values = line_colours, guide = "none") +
+  scale_linetype_manual(
+    values = c(
+      "true duplicate pairs caught" = "solid",
+      "distinct pairs wrongly joined" = "22"
+    ),
+    guide = "none"
+  ) +
+  scale_x_continuous(
+    breaks = threshold_sweep$threshold,
+    guide = guide_axis(n.dodge = 2),
+    expand = expansion(mult = c(0.02, 0.55))
+  ) +
+  scale_y_continuous(breaks = seq(0, 9, by = 3)) +
+  labs(
+    title = "No threshold catches every duplicate without joining distinct pairs",
+    subtitle = "Pairs joined at or below each tested Jaccard distance threshold",
+    x = "Jaccard distance threshold",
+    y = "Pairs"
+  ) +
+  theme_lesson(grid = "y")
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(sweep_lines), 12L),
+  setequal(names(line_colours), unique(sweep_lines$result)),
+  setequal(names(label_colours), unique(sweep_lines$result)),
+  identical(max(sweep_lines$pairs), 9L)
 )
 ```
 

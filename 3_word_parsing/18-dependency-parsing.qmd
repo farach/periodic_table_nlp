@@ -158,6 +158,10 @@ spacy_info_table <- tibble(
   item = names(spacy_info),
   value = unname(unlist(spacy_info))
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   parser_score,
@@ -252,6 +256,10 @@ paid_parse <- parsed |>
     )
   ) |>
   select(token, head_word, dep_rel)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   paid_parse,
@@ -325,14 +333,18 @@ spacy_paid_parse <- spacy_s001 |>
   ) |>
   select(token, head_word, dep_rel, lemma, pos)
 
+invisible(suppressMessages(spacy_finalize()))
+```
+
+```{r}
+#| echo: false
+
 knitr::kable(
   spacy_paid_parse,
   col.names = c("Token", "Head word", "spaCy relation", "Lemma", "POS tag"),
   caption = "spaCy parse for the same sentence",
   row.names = FALSE
 )
-
-invisible(suppressMessages(spacy_finalize()))
 ```
 
 ```{r}
@@ -370,6 +382,10 @@ features**, compact labels for grammar carried by a token in this sentence.
 paid_features <- parsed |>
   filter(doc_id == "s001", token %in% c("is", "provided")) |>
   select(token, feats)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   paid_features,
@@ -450,6 +466,10 @@ attachment_scores <- bind_rows(
     attachment = c(computed_unlabelled, computed_labelled)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tagging_score,
@@ -546,6 +566,10 @@ root_summary <- root_audit |>
 
 root_mismatches <- root_audit |>
   filter(!root_matches)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   root_mismatches,
@@ -585,6 +609,10 @@ included_parse <- parsed |>
     )
   ) |>
   select(token, head_word, dep_rel)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   included_parse,

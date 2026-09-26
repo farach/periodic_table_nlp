@@ -26,7 +26,12 @@ function lessonPages() {
 }
 
 const lessonPagePaths = lessonPages();
-const pages = ["/", "/accessibility.html", ...lessonPagePaths];
+const pages = [
+  "/",
+  "/accessibility.html",
+  "/using-language-models.html",
+  ...lessonPagePaths
+];
 const totalTasks = 81;
 
 if (pages.length < 3) {

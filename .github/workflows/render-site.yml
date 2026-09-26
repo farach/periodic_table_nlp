@@ -44,6 +44,12 @@ jobs:
             libpng-dev \
             libjpeg-dev \
             libx11-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libtiff5-dev \
+            libwebp-dev \
             cmake \
             poppler-data \
             tesseract-ocr \

@@ -53,7 +53,6 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(huggingfaceR)
   library(jsonlite)
-  library(knitr)
   library(purrr)
   library(readr)
   library(reticulate)
@@ -98,8 +97,12 @@ model_record <- dialogue_model$metadata |>
     license,
     hard_context_limit
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   model_record,
   col.names = c("Model", "Revision", "License", "Hard context limit"),
   caption = "Pinned local model used only for reply realization",
@@ -112,7 +115,7 @@ kable(
 
 stopifnot(
   all(c(
-    "dplyr", "huggingfaceR", "jsonlite", "knitr", "purrr", "readr",
+    "dplyr", "huggingfaceR", "jsonlite", "purrr", "readr",
     "reticulate", "stringr", "tibble", "tidyr"
   ) %in% loadedNamespaces()),
   identical(nrow(handbook), 15L),
@@ -173,15 +176,19 @@ policy_table <- tibble(
     "Qwen realization"
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   frame_slots,
   col.names = c("Slot", "Allowed values", "Why the slot is kept"),
   caption = "Dialogue frame for a small enrollment assistant",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   policy_table,
   col.names = c("Policy condition", "Action", "Reply source"),
   caption = "Policy actions are chosen in R before any generated wording",
@@ -248,8 +255,12 @@ scripted_turns <- tribble(
   "C4", 3L, "Do the handbook passages answer my parking question?",
   "unknown", "unknown", "unknown", "abstain_hand_off"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   scripted_turns,
   format = "html",
   escape = TRUE,
@@ -429,8 +440,12 @@ dialogue_trace <- scripted_turns |>
       contact_channel == expected_contact,
     action_matches = action == expected_action
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   dialogue_trace |>
     select(
       conversation_id,
@@ -518,6 +533,9 @@ assistant message. The system message is an instruction message inside the same
 token sequence, not a security boundary.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the prompt comparison code"
+
 naive_system <- paste(
   "You are a helpful enrollment assistant.",
   "Use the conversation so far to answer the user."
@@ -752,7 +770,9 @@ stopifnot(
 ```
 
 ```{r}
-kable(
+#| echo: false
+
+knitr::kable(
   token_table,
   col.names = c(
     "Conversation",
@@ -848,8 +868,12 @@ reply_trace <- realizer_requests |>
     reply_source = if_else(uses_model, "Qwen realization", "fixed text"),
     raw_reply = if_else(uses_model, generated_reply, fixed_reply_text)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   reply_trace |>
     select(
       conversation_id,
@@ -947,6 +971,9 @@ flagged generated reply is replaced by a fixed fallback. Fixed refusal and
 hand-off text is not a model screen result.
 
 ```{r}
+#| code-fold: true
+#| code-summary: "Show the reply screens and fixed fallback"
+
 allowed_fact_text <- function(action, program) {
   ids <- fact_rows_for_action(action, program)
   handbook |>
@@ -980,7 +1007,9 @@ screen_generated_reply <- function(reply, action, program, contact_channel, allo
     str_detect(reply, fixed(allowed_program_names, ignore_case = TRUE))
   ]
   allowed_program_ok <- case_when(
-    action == "request_program" ~ all(mentioned_programs %in% allowed_program_names),
+    # A request_program reply may name either program, so this screen has
+    # nothing to rule out on those rows and passes them.
+    action == "request_program" ~ TRUE,
     length(mentioned_programs) == 0L ~ TRUE,
     program == "data_support" ~ all(mentioned_programs == "Data Support Certificate"),
     program == "forklift" ~ all(mentioned_programs == "Forklift Operator Licence"),
@@ -1093,9 +1122,20 @@ screened_replies <- reply_trace |>
     ),
     human_review = if_else(uses_model, "pending", "not applicable")
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   screened_replies |>
+    mutate(
+      program_names_ok = if_else(
+        action == "request_program" & !is.na(program_names_ok),
+        "not applicable",
+        as.character(program_names_ok)
+      )
+    ) |>
     select(
       conversation_id,
       turn_id,
@@ -1214,8 +1254,12 @@ screen_controls <- tibble(
   ) |>
   unnest(screen_result) |>
   mutate(screen_label = nlg_screen_label(generated_screen_ok))
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   screen_controls |>
     select(
       control_id,
@@ -1330,8 +1374,12 @@ fallback_interpretation <- if (fallback_reply_count > 0L) {
 shown_transcript <- screened_replies |>
   filter(conversation_id == "C1") |>
   select(user_utterance, action, final_reply)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   shown_transcript,
   format = "html",
   escape = TRUE,
@@ -1393,8 +1441,12 @@ retained_record <- screened_replies |>
     reply_screen = screen_label,
     human_review
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   retained_record,
   col.names = c(
     "Conversation",

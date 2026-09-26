@@ -97,6 +97,10 @@ masking_rules <- tibble(
   ),
   replacement = c("[EMAIL]", "[PHONE]", "[DATE_OF_BIRTH]", "[STREET_ADDRESS]", "[PERSON]")
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   identifiers,
@@ -167,6 +171,10 @@ mask_accounting <- tibble(
     nrow(leaked_identifiers)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   found_missed_accounting,
@@ -246,6 +254,10 @@ spacy_accounting <- tibble(
 )
 
 spacy_finalize()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   spacy_people,

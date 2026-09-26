@@ -84,6 +84,10 @@ help_counts <- help_paragraphs |>
 
 total_help_paragraphs <- sum(help_counts$paragraphs)
 help_blank_line_counts <- str_count(help_articles$text, "\\r?\\n\\s*\\r?\\n+")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   help_counts,
@@ -144,6 +148,10 @@ expected_tag_counts <- tibble(
   tag = c("h1", "h2", "li", "p"),
   blocks = c(1L, 6L, 22L, 12L)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   html_tag_counts,
@@ -205,6 +213,10 @@ boundary_loss <- tibble(
     length(paragraphs_after_squish)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   boundary_loss,

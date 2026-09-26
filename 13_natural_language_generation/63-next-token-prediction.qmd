@@ -50,7 +50,6 @@ library(tibble)
 library(stringr)
 library(purrr)
 library(readr)
-library(knitr)
 
 source("R/inaugural-corpus.R")
 
@@ -139,8 +138,12 @@ split_counts <- split_assignments |>
   ) |>
   count(split, era, name = "speeches") |>
   arrange(split, era)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   split_counts,
   col.names = c("Split", "Era", "Speeches"),
   caption = "Speech-level assignments used for next-token modeling",
@@ -167,7 +170,7 @@ artifact_paths <- file.path(
 stopifnot(
   all(c(
     "digest", "dplyr", "tidyr", "tibble", "stringr",
-    "purrr", "readr", "knitr"
+    "purrr", "readr"
   ) %in% loadedNamespaces()),
   identical(nrow(split_assignments), 60L),
   identical(nrow(validation_results), 13L),
@@ -277,8 +280,12 @@ training_summary <- tibble(
     length(model_vocabulary)
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   training_summary,
   col.names = c("Training item", "Value"),
   caption = "Training data for the inspectable count model",
@@ -408,8 +415,12 @@ context_predictions <- bind_rows(
     slice_head(n = 5)
 ) |>
   select(context, next_token, trigram_count, probability)
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   context_predictions |>
     mutate(probability = round(probability, 4)),
   col.names = c("Previous two tokens", "Possible next token", "Training count", "Probability"),
@@ -485,8 +496,12 @@ choice_table <- tibble(
     str_c(sampled_next, collapse = ", ")
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   choice_table,
   col.names = c("Choice rule", "Next-token output after 'we must'"),
   caption = "One probability distribution can support different choice rules",
@@ -544,8 +559,12 @@ validation_display <- validation_results |>
     perplexity = round(perplexity, 1),
     selected = if_else(selected, "yes", "no")
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   validation_display,
   col.names = c(
     "Candidate",
@@ -676,8 +695,12 @@ non_overlap_test <- test_comparison_by_speech |>
     speeches = n(),
     trigram_wins = sum(trigram < unigram)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   test_display,
   col.names = c(
     "Model",

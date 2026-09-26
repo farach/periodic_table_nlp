@@ -59,7 +59,6 @@ library(tibble)
 library(stringr)
 library(readr)
 library(glue)
-library(knitr)
 
 validation_results <- read_csv(
   "data/inaugural/next-token-validation.csv",
@@ -161,8 +160,12 @@ evidence_ledger <- tribble(
   NA_real_, "setup",
   "reconstructed inaugural paragraphs; paragraph-bounded contexts"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   evidence_ledger |>
     mutate(
       value = case_when(
@@ -297,8 +300,12 @@ candidate_claims <- tribble(
   "reject",
   "the study did not evaluate reports"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   candidate_claims,
   col.names = c("Claim ID", "Candidate sentence", "Evidence IDs", "Decision", "Reason"),
   caption = "Candidate claims are checked before document planning",
@@ -383,8 +390,12 @@ report_text <- str_c(
   report_sentences$text,
   collapse = "\n\n"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   report_sentences |>
     select(sentence_id, role, claim_ids, evidence_ids, text),
   col.names = c("Sentence", "Role", "Claim IDs", "Evidence IDs", "Generated text"),
@@ -560,8 +571,12 @@ review_status <- tibble(
     "pending"
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   review_status,
   col.names = c("Review gate", "Status"),
   caption = "Automated checks do not substitute for human approval",

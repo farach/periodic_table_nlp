@@ -114,6 +114,10 @@ feedback <- read_csv(
     comment = col_character()
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   feedback,
@@ -178,6 +182,10 @@ column_types <- map_chr(
   feedback,
   \(column) class(column)[1]
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -221,6 +229,10 @@ feedback <- feedback |>
       format = "%Y-%m-%d"
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   feedback |>
@@ -259,6 +271,10 @@ missing_counts <- map_int(
   feedback,
   \(column) sum(is.na(column))
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -295,6 +311,10 @@ unknown rating out of the comparison rather than treating it as high or low.
 low_ratings <- feedback |>
   filter(!is.na(rating), rating <= 2) |>
   select(feedback_id, rating, comment)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   low_ratings,
@@ -410,6 +430,10 @@ parse_problems <- problems(messy_feedback) |>
     expected,
     actual
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   parse_problems,
@@ -498,6 +522,10 @@ status_counts <- row_report |>
 
 quarantined <- row_report |>
   filter(str_starts(status, "quarantine"))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   row_report |>
