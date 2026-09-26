@@ -1,0 +1,601 @@
+---
+title: "Writing a shorter account"
+subtitle: "Generate a summary, then check what it kept and changed"
+description: "Learn how abstractive summarization differs from sentence selection and why shorter text still needs source review."
+categories: [natural language generation, abstractive summarization, evaluation]
+---
+
+Rosa prepares the morning brief for a neighborhood archive. Two service notes
+have arrived, and each is longer than the one sentence her colleagues need.
+The shorter sentence still has to respect the source.
+
+**Abstractive summarization** generates wording for a shorter account of a
+source. The output may reuse some source phrases, but it is not limited to
+selecting whole sentences. Lesson 54 used sentence selection. This lesson asks
+a local language model to write a new sentence, then checks the candidate
+against the original record.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- keep source records, prompts, and outputs tied to durable IDs;
+- count the model's input tokens before generation;
+- compare generated summaries with a first-sentence baseline;
+- separate compression from source support and useful coverage;
+- inspect names, numbers, and explicit limits without calling them proof; and
+- leave factual and editorial approval to a recorded human review.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the local model
+
+The model files were downloaded before rendering at the revision recorded in
+`data/nlg-models.csv`. The code below uses `huggingfaceR` to load that local
+snapshot. Offline mode is set by `R/use-nlg.R`, so a missing model stops the
+lesson instead of starting a network download.
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(huggingfaceR)
+  library(purrr)
+  library(reticulate)
+  library(stringr)
+  library(tibble)
+  library(tidyr)
+})
+
+source("R/use-nlg.R")
+
+summary_model <- load_nlg_pipeline(
+  "qwen_1_5b_instruct",
+  "text-generation"
+)
+
+model_record <- summary_model$metadata |>
+  select(model_id, revision, license, task_scope)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  model_record,
+  col.names = c("Model", "Revision", "License", "Use in this course"),
+  caption = "Pinned local model used for the generated summaries",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c(
+    "dplyr", "huggingfaceR", "purrr",
+    "reticulate", "stringr", "tibble", "tidyr"
+  ) %in% loadedNamespaces()),
+  identical(model_record$model_id, "Qwen/Qwen2.5-1.5B-Instruct"),
+  identical(
+    model_record$revision,
+    "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
+  ),
+  identical(model_record$license, "Apache-2.0")
+)
+```
+
+The model card documents an instruction-tuned causal language model. That
+description and license do not establish that its summaries are accurate.
+
+## Keep the source beside the brief
+
+These records are fictional teaching examples. They were written for this
+lesson and are not a random sample, a held-out benchmark, or evidence about
+archive services elsewhere.
+
+Each brief states information that matters to the reader. SUM-01 needs the
+service, Tuesday schedule, and boundary on volunteer help. SUM-02 needs the
+event, photo-identification rule, and restricted-storage limit.
+
+```{r}
+summary_sources <- tribble(
+  ~source_id, ~brief, ~source_text,
+  "SUM-01",
+  paste(
+    "One sentence for staff; retain the job-search service, Tuesday help",
+    "schedule, and boundary on volunteer help."
+  ),
+  paste(
+    "The Riverton library opens a new job-search room on Monday.",
+    "The room has 12 computers.",
+    "Volunteers offer free help on Tuesdays, but they do not complete",
+    "applications for visitors.",
+    "The pilot runs for six weeks."
+  ),
+  "SUM-02",
+  paste(
+    "One sentence for visitors; retain the catalog workshop,",
+    "photo-identification rule, and restricted-storage limit."
+  ),
+  paste(
+    "The neighborhood archive will open Room 5 on 14 September for a",
+    "catalog workshop led by Maya Chen.",
+    "Registration is free, but visitors must bring photo identification.",
+    "The session does not include access to restricted storage."
+  )
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  summary_sources,
+  col.names = c("Source ID", "Brief", "Source text"),
+  caption = "Constructed source records and their summary briefs",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(summary_sources$source_id, c("SUM-01", "SUM-02")),
+  !anyDuplicated(summary_sources$source_id),
+  all(str_count(summary_sources$source_text, "[.!?]") >= 3L)
+)
+```
+
+## Declare required and optional facts
+
+The checklist is fixed before generation. A missing required item sends a
+candidate back for revision. Optional clues remain useful during source review,
+but their omission alone does not violate the brief.
+
+```{r}
+summary_checks <- tribble(
+  ~source_id, ~check_id, ~needed_information, ~required, ~pattern,
+  "SUM-01", "F1", "job-search service", TRUE,
+  "\\bjob[ -]search\\b",
+  "SUM-01", "F2", "Tuesday help", TRUE,
+  "\\bTuesday\\b",
+  "SUM-01", "F3", "volunteers do not complete applications", TRUE,
+  "\\b(not|no|never|without|do not|does not)\\b",
+  "SUM-01", "F4", "12 computers", FALSE,
+  "\\b12\\b",
+  "SUM-01", "F5", "six-week pilot", FALSE,
+  "\\b(six|6)[ -]week",
+  "SUM-02", "F6", "catalog workshop", TRUE,
+  "\\bworkshop\\b",
+  "SUM-02", "F7", "photo identification", TRUE,
+  "\\b(photo|identification|ID)\\b",
+  "SUM-02", "F8", "no restricted-storage access", TRUE,
+  "\\b(not|no|without|does not)\\b",
+  "SUM-02", "F9", "Room 5", FALSE,
+  "\\bRoom 5\\b",
+  "SUM-02", "F10", "14 September", FALSE,
+  "\\b14\\b.*\\bSeptember\\b",
+  "SUM-02", "F11", "Maya Chen", FALSE,
+  "\\bMaya Chen\\b",
+  "SUM-02", "F12", "free registration", FALSE,
+  "\\bfree\\b"
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  summary_checks |>
+    select(source_id, check_id, needed_information, required),
+  col.names = c(
+    "Source ID",
+    "Check",
+    "Predeclared information",
+    "Required by brief"
+  ),
+  caption = "Required facts and optional review clues declared before generation",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(summary_checks$check_id, paste0("F", 1:12)),
+  all(summary_checks$source_id %in% summary_sources$source_id),
+  all(summary_checks$required %in% c(TRUE, FALSE)),
+  all(summary_checks$needed_information[summary_checks$required] != "")
+)
+```
+
+## Check the input budget before generation
+
+A model token is a tokenizer unit, not necessarily a word. The prompt includes
+the instruction, brief, and source text, so all three count against the input
+budget. This demonstration uses a 256-token ceiling and refuses to truncate.
+
+```{r}
+summary_system <- paste(
+  "Write one sentence for the stated brief.",
+  "Use only information in the source.",
+  "Do not add a cause, recommendation, or new event."
+)
+
+summary_inputs <- summary_sources |>
+  mutate(
+    user_prompt = paste0(
+      "BRIEF: ", brief,
+      "\nSOURCE ID: ", source_id,
+      "\nSOURCE: ", source_text
+    ),
+    model_prompt = map2_chr(
+      summary_system,
+      user_prompt,
+      \(system, user) {
+        nlg_chat_prompt(
+          summary_model$tokenizer,
+          system,
+          user
+        )
+      }
+    ),
+    input_tokens = map_int(
+      model_prompt,
+      \(prompt) nlg_token_count(summary_model$tokenizer, prompt)
+    )
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  summary_inputs |>
+    select(source_id, input_tokens),
+  col.names = c("Source ID", "Complete prompt tokens"),
+  caption = "Tokenizer counts before summarization",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(summary_inputs), 2L),
+  all(summary_inputs$input_tokens > 0L),
+  all(summary_inputs$input_tokens <= 256L),
+  all(str_detect(summary_inputs$model_prompt, "SOURCE ID"))
+)
+```
+
+No text is cut to fit. A longer document would need a stated policy such as
+sectioning or hierarchical summarization before the model call.
+
+## Generate the candidate summaries
+
+Greedy decoding chooses the highest-scoring next token at each step. The output
+limit is 72 new tokens. The call returns the generated text and token-level
+stopping information from the local model.
+
+```{r}
+summary_results <- summary_inputs |>
+  mutate(
+    generation = map(
+      model_prompt,
+      \(prompt) {
+        nlg_generate(
+          summary_model,
+          prompt,
+          max_new_tokens = 72L,
+          repetition_penalty = 1.05
+        )
+      }
+    ),
+    generated_summary = map_chr(generation, "text"),
+    output_tokens = map_int(generation, "output_tokens"),
+    ended_by_eos = map_lgl(generation, "ended_by_eos"),
+    hit_token_cap = map_lgl(generation, "hit_token_cap"),
+    first_sentence_baseline = map_chr(
+      str_split(source_text, "(?<=[.!?])\\s+"),
+      \(sentences) sentences[[1]]
+    )
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  summary_results |>
+    select(source_id, generated_summary, first_sentence_baseline),
+  col.names = c(
+    "Source ID",
+    "Generated abstractive candidate",
+    "First-sentence teaching baseline"
+  ),
+  caption = "Generated summaries beside an extractive comparator",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(nzchar(summary_results$generated_summary)),
+  all(summary_results$output_tokens > 0L),
+  all(summary_results$output_tokens <= 72L),
+  all(summary_results$ended_by_eos | summary_results$hit_token_cap),
+  any(
+    summary_results$generated_summary !=
+      summary_results$first_sentence_baseline
+  )
+)
+```
+
+The first-sentence baseline is available before any model output is read. It is
+not a fair contest with a matched length budget; it shows the difference
+between selecting source wording and generating a new account.
+
+## Measure shortening without calling it truth
+
+The next table counts whitespace-separated words. That rule is easy to inspect,
+but it is different from the model tokenizer used for the generation budget.
+A compression ratio below 1 means the candidate is shorter. It says nothing
+about whether the candidate kept the needed facts.
+
+```{r}
+count_words <- function(text) {
+  str_count(str_squish(text), "\\S+")
+}
+
+compression <- summary_results |>
+  transmute(
+    source_id,
+    source_words = map_int(source_text, count_words),
+    generated_words = map_int(generated_summary, count_words),
+    first_sentence_words = map_int(
+      first_sentence_baseline,
+      count_words
+    ),
+    generated_to_source = generated_words / source_words
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  compression,
+  digits = 2,
+  col.names = c(
+    "Source ID",
+    "Source words",
+    "Generated words",
+    "Baseline words",
+    "Generated/source ratio"
+  ),
+  caption = "Length diagnostics use whitespace-separated words",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(compression$source_words > compression$generated_words),
+  all(compression$generated_to_source > 0),
+  all(compression$generated_to_source < 1)
+)
+```
+
+The generated sentence can be short because it chose the right content, because
+it omitted necessary content, or both. Length cannot separate those cases.
+
+## Inspect facts chosen before generation
+
+Rosa writes a checklist before reading the output. The regular expressions
+below flag visible strings related to that checklist. A missing flag points to
+an omission worth reading. A present flag cannot prove that the name, number,
+or negative statement has the right role or scope.
+
+```{r}
+summary_flags <- summary_checks |>
+  left_join(
+    summary_results |>
+      select(source_id, generated_summary),
+    by = "source_id"
+  ) |>
+  mutate(
+    text_flag = str_detect(
+      generated_summary,
+      regex(pattern, ignore_case = TRUE)
+    )
+  ) |>
+  select(
+    source_id,
+    check_id,
+    needed_information,
+    required,
+    text_flag
+  )
+
+summary_actions <- summary_flags |>
+  group_by(source_id) |>
+  summarise(
+    decision = list(nlg_required_fact_action(required, text_flag)),
+    optional_clues_missing = sum(!required & !text_flag),
+    .groups = "drop"
+  ) |>
+  mutate(
+    missing_required = map_int(decision, "missing_required"),
+    action = if_else(
+      map_lgl(decision, "revision_needed"),
+      "revise",
+      "send to human source review"
+    )
+  ) |>
+  select(
+    source_id,
+    missing_required,
+    optional_clues_missing,
+    action
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  summary_flags,
+  col.names = c(
+    "Source ID",
+    "Check",
+    "Information chosen before generation",
+    "Required by brief",
+    "Surface flag present"
+  ),
+  caption = "Surface flags for required facts and optional review clues",
+  row.names = FALSE
+)
+
+knitr::kable(
+  summary_actions,
+  col.names = c(
+    "Source ID",
+    "Missing required facts",
+    "Missing optional clues",
+    "Next action"
+  ),
+  caption = "Only missing required facts trigger automatic revision",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(summary_flags$check_id, paste0("F", 1:12)),
+  all(summary_flags$source_id %in% summary_sources$source_id),
+  is.logical(summary_flags$text_flag),
+  length(summary_flags$text_flag) == 12L,
+  any(!summary_flags$text_flag),
+  all(
+    summary_actions$action[
+      summary_actions$missing_required == 0L
+    ] == "send to human source review"
+  ),
+  all(summary_actions$action %in% c(
+    "revise",
+    "send to human source review"
+  ))
+)
+```
+
+This check is intentionally incomplete. It cannot detect a changed relation, a
+number attached to the wrong thing, an unsupported cause, or a fluent
+generalization. Those require reading the source and candidate together.
+In this render, the first candidate changes the boundary on volunteer help.
+The second uses negative wording while changing the relationship to restricted
+storage. The surface table catches part of the problem, and source comparison
+catches the rest.
+Likewise, n-gram overlap metrics such as ROUGE measure reference overlap under a
+specified normalization rule. They do not measure the share of claims supported
+by the source.
+
+## Record the review boundary
+
+Execution can establish that a model ran, stayed inside the configured budgets,
+and returned text. It cannot grant factual or editorial approval.
+
+```{r}
+summary_review <- tibble(
+  review = c(
+    "local model execution",
+    "prompt input within 256 tokens",
+    "output stopped at EOS or token cap",
+    "required-fact surface screen",
+    "human source-support review",
+    "human usefulness and prose review"
+  ),
+  status = c(
+    sprintf(
+      "completed: %d candidates",
+      sum(nzchar(summary_results$generated_summary))
+    ),
+    sprintf(
+      "within budget: %d/%d candidates",
+      sum(summary_inputs$input_tokens <= 256L),
+      nrow(summary_inputs)
+    ),
+    sprintf(
+      "recorded: %d/%d candidates",
+      sum(summary_results$ended_by_eos | summary_results$hit_token_cap),
+      nrow(summary_results)
+    ),
+    sprintf(
+      "held: %d/%d candidates missing required facts",
+      sum(summary_actions$missing_required > 0L),
+      nrow(summary_actions)
+    ),
+    "pending",
+    "pending"
+  )
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  summary_review,
+  col.names = c("Review gate", "Status"),
+  caption = "Automatic execution checks remain separate from human review",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  !any(summary_review$status == "passed"),
+  identical(tail(summary_review$status, 2L), c("pending", "pending"))
+)
+```
+
+A publishable summary needs a reader to trace each claim to the source, decide
+whether the brief's essential information survived, and reject unsupported
+additions. A fluent one-sentence result is only a candidate.
+
+## What to remember
+
+- Abstractive summarization generates wording; extractive summarization selects
+  source text.
+- Count the complete prompt with the model tokenizer and do not hide truncation.
+- Compression describes length, not coverage or source support.
+- Check omissions and additions against a brief written before generation.
+- Names, numbers, and negation flags are prompts for review, not semantic proof.
+- Keep model execution separate from human factual and editorial approval.
+
+## Sources
+
+- [Maynez et al. on faithfulness and factuality in abstractive summarization](https://aclanthology.org/2020.acl-main.173/)
+- [Lin on ROUGE and reference n-gram overlap](https://aclanthology.org/W04-1013/)
+- [Pagnoni et al. on classes of factual errors in summaries](https://aclanthology.org/2021.naacl-main.383/)
+- [Qwen2.5-1.5B-Instruct model card](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct)
+- [Transformers text-generation controls](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation)

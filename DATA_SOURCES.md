@@ -17,10 +17,175 @@ The files below are fictional and were created for this project:
 - `data/workforce/training-flyer-degraded-ocr-5.3.2.txt`
 - `data/workforce/training-flyer-metadata.csv`
 - `data/workforce/training-flyer.png`
+- `data/riverton/`, including the reference entities, aliases, gazetteer,
+  language samples, inbox, handbook, question-answering probes, search
+  judgments, review collection, and monitoring stream
 
 They contain no real workers, applicants, employers, customers, or research
 participants. Their purpose is to make code and research-design problems small
 enough to inspect. They must not be used to make claims about a population.
+
+### Riverton handbook, review collection, and monitoring stream
+
+Lessons 70 to 72 read one invented fall-program handbook for the Riverton
+Skills Centre. `data-raw/build-riverton-handbook.R` writes three files together,
+before any lesson retrieves or generates anything:
+
+- `riverton-handbook.csv`: 15 short passages with durable passage IDs;
+- `riverton-handbook-questions.csv`: six question-answering probes with an
+  expected action (answer, abstain, or flag a false premise), a gold passage,
+  and acceptable short answers; and
+- `riverton-search-judgments.csv`: a relevance judgment for every pair of 8
+  search queries and 15 passages.
+
+Lesson 74 reads `riverton-review-collection.csv`, a constructed collection of
+240 fictional records for one review request (records about hiding Calder Yard
+inspection delays, changing inspection logs, or deleting related messages; 36
+are author-labelled responsive), and `riverton-monitoring-stream.csv`, 24
+fictional dated items with arrival order, explicit syndicated near-duplicates,
+and ambiguous Riverton mentions. `data-raw/build-riverton-review-collection.R`
+writes both. Every row carries an `author_note` marking it as fictional, and a
+`near_duplicate_of` column names the original of each deliberate near-duplicate.
+Each record is a short note wrapped in one of 12 frames, such as "Reminder:" at
+the start or "Thanks." at the end, and each frame holds exactly 3 responsive and
+17 non-responsive records. One of the 12 frames leaves the note bare. Record IDs
+are assigned after seeded permutations and never appear in the text.
+
+Frames are assigned by one fixed rule, with no random draw. Within each class,
+the builder splits the notes into those that match the keyword rule and the
+rest, and it places the matching notes first. Each group is taken in order of
+the SHA-256 digest of the note's text. Each note gets the frame that has the
+fewest notes from its group so far. A tie goes to the lower-numbered frame, and a
+frame without room left in the class for the note, or for both notes of a pair,
+is skipped. A
+near-duplicate pair is placed as one unit, at the position of its member with the
+smaller digest, and shares one frame. In the committed collection, the frame
+counts within each group differ by at most one.
+Because the frame rule does not look at a note's own opening words, three
+records (RYD-0048, RYD-0125 and RYD-0185) begin "Please note: Please"; they are
+left as built.
+
+The builder refuses to write the files when base-text variety falls below its
+declared threshold, or when any surface check reaches positive F1 of 0.60 or
+balanced accuracy of 0.75. It stops if any check returns a missing value. Its
+checks cover:
+
+- single values, and value sets learned on half the records and tested on the
+  other half (20 seeded splits), of record features: length, punctuation,
+  pronouns, digits, month, weekday, record-ID digit and order, date rank, file
+  position, construction-ID order, first word, first two words, first three
+  tokens, sentence count, colon, source type, sender role, and subject;
+- the first word, first two words, first three tokens, and colon of each
+  record's core note, and the frame itself;
+- each frame paired with the first word of the core note, both as label-free
+  rules that flag rare pairs and as a held-out pair ranker scored by stratified
+  five-fold cross-validation under the three fold seeds;
+- the frames among records that match the keyword rule and among records that
+  do not, judged on balanced accuracy;
+- the 20 most frequent tokens outside the review request's own topic words;
+- two out-of-fold rankers, each fitted with `glmnet` ridge and lasso and scored
+  by stratified five-fold cross-validation under three fold seeds, at the top 36
+  records. One ranker sees counts of every word on the snowball stop-word list,
+  and the other sees format cues (length, punctuation, capitalization, and
+  digits);
+- a frame-only ranker; and
+- a cap of 15 percent on any frame or core opening among non-responsive
+  records.
+
+In the sweep description stored in the metadata, "core opening" means the note's
+first two words in the 15 percent share cap and its first word in CK-D1.
+
+`--sweep-only` runs the record-level checks on any collection file.
+`--negative-controls` confirms that they refuse four earlier versions of the
+collection: the ones committed at `0a5a5af9`, `a3478085`, and `49a9b67a`, and an
+intermediate version from the final revision, which the function-word ranker
+refuses.
+The intermediate version is not in the repository, so a clone cannot run
+`--negative-controls`. From a clone, write each committed version to a file with
+`git show <commit>:data/riverton/riverton-review-collection.csv` and run
+`--sweep-only` on that file; each of the three is refused. Both check-only modes
+need their file argument: without it, the script runs the full build, which
+rewrites the collection, stream and metadata files.
+The `git show` route needs the commits `0a5a5af9`, `a3478085` and `49a9b67a` to
+be present in the clone. In Windows PowerShell 5.1, `>` saves that output as
+UTF-16, and `--sweep-only` then stops with an error instead of refusing the
+file; on Windows, run the `git show` step from `cmd`.
+
+Run the builder in a UTF-8 locale; in the C locale its frame-reading check stops
+the build before it writes anything.
+
+The same person wrote these records, their questions, their reference answers,
+their relevance judgments, and the lessons that score against them. They are
+disclosed teaching fixtures, not independent benchmarks or ground truth. The
+handbook, its questions, and its judgments were written and fingerprinted before
+any lesson retrieved or generated anything. The review collection was not. It
+was revised several times during development to remove shortcuts:
+
+- a record-ID shortcut;
+- repeated templates;
+- a dominant sentence frame;
+- department names as first words;
+- non-responsive notes generated from a template grid, whose function words
+  separated the classes; and
+- frames assigned in construction order, which let a frame together with a
+  note's first word, and the frame among keyword matches, carry label
+  information.
+
+Lesson 74 was executed on earlier versions of the collection, including one
+intermediate version during the final revision, and the outputs of those runs
+were discarded. The final non-responsive everyday notes were written by a writer
+who had not seen any lesson 74 output. That writer revised the first draft once
+before the collection was committed, to vary record length more naturally and to
+remove the repeated situations the writer had been told about. Two reviews of
+the committed collection, made before lesson 74 ran on it, then found more notes
+that described the same situation as another record, and found the
+construction-order frame assignment. A checks commit then added the two frame
+checks. One corrective commit replaced every member but one of each repeated
+group those reviews listed and reassigned the frames by the rule above. No other
+note was reworded, and three groups of records outside the correction still
+describe overlapping situations. Neither the writer's drafts nor the corrected
+collection was run through lesson 74 before it was committed, and the published
+results come from the first execution on the corrected collection.
+
+The builder's metadata records its seeds:
+
+- the base seed 7401 and the row-shuffle seed 7403;
+- the date, record-ID, and stream-ID seeds, each chosen by a rule written in
+  the builder;
+- the split-half seeds 7501 to 7520; and
+- the ranker fold seeds 7601, 7602, and 7603.
+
+The lesson's single elusion sample uses the predeclared seed 7401. During
+drafting, that seed was briefly changed to 7402 after development draws had
+been inspected. It was restored to 7401 before the draft was frozen.
+
+`riverton-handbook-metadata.csv` and `riverton-review-collection-metadata.csv`
+record row counts, class counts, and line-normalised SHA-256 fingerprints that
+`scripts/check-data-fingerprints.R` verifies.
+
+### Language-model labels for the review collection
+
+The guide page `using-language-models.qmd` reads
+`riverton-llm-review-labels.csv`: one saved yes-or-no answer from the pinned
+local Qwen2.5-1.5B-Instruct model for each of the 240 records in the review
+collection above, with the parsed label, the number of output tokens, and
+whether the model stopped on its own. `data-raw/build-llm-review-labels.R`
+produced the file by sending the prompt in `riverton-llm-review-prompt.json`
+once per record with greedy decoding.
+
+The prompt was written from the review request alone, before the model saw any
+record, and was not revised after the model's answers were read. The labels are
+model output, not reference labels. The guide compares them with the
+collection's author-written reference labels on a random sample.
+
+`riverton-llm-review-labels-metadata.csv` records the model ID and revision,
+the prompt and collection fingerprints, the decoding settings, the platform
+and library versions used for the run, the run date, and the labels file's
+line-normalised SHA-256. The guide stops if any of those no longer match, and
+`scripts/check-data-fingerprints.R` verifies the labels fingerprint. Rerunning
+the builder on another computer or library version can change some answers,
+so a rebuild must be committed together with its metadata. The files are
+released under the MIT licence, as part of this repository.
 
 ## Bing Liu opinion lexicon
 
@@ -80,10 +245,11 @@ compares recognised text against `training-flyer-ground-truth.txt` rather than
 treating OCR output as correct by default.
 
 ## United States presidential inaugural addresses
-Tasks 43 to 62 use `quanteda::data_corpus_inaugural`, the 60 inaugural addresses
-delivered between 1789 and 2025. The speeches are works of the United States
-federal government and are in the public domain; quanteda packages and
-distributes them, and quanteda itself is GPL-3.
+Tasks 43 to 64 use `quanteda::data_corpus_inaugural`, the 60 inaugural addresses
+delivered between 1789 and 2025. Tasks 75, 77, 80, and 81 read the same
+paragraphs, and task 78 plots the word2vec model trained on them. The speeches
+are works of the United States federal government and are in the public domain;
+quanteda packages and distributes them, and quanteda itself is GPL-3.
 
 `R/inaugural-corpus.R` is the only place the corpus is reshaped. It splits each
 speech on blank lines, keeps blocks of at least 25 words, and returns 1,377
@@ -108,9 +274,50 @@ It records, for each replicate, the model's accuracy and balanced accuracy
 alongside two trivial-rule baselines and a paragraph-length rule, so that no
 score in the lessons is reported without something to compare it against.
 
+The same directory holds `model-comparison.csv` and
+`model-comparison-folds.csv`, generated by
+`data-raw/build-model-comparison.R`. The comparison uses five folds grouped by
+speech inside the training set. It compares ridge and lasso logistic regression
+with a random forest, across 14 settings, without reading the final 14 test
+speeches. `model-comparison-metadata.csv` records the seeds, grids, model
+settings, source, license, and SHA-256 fingerprints.
+
+`topic-k-diagnostic-runs.csv` and `topic-k-diagnostics.csv` compare topic
+counts 3 through 8 under three VEM starts. The vocabulary is built from
+training speeches only. Semantic coherence and adjusted top-word exclusivity
+are computed on training paragraphs; perplexity is computed on held-out
+speeches. `data-raw/build-topic-k-diagnostics.R` rebuilds the files, and
+`topic-k-diagnostics-metadata.csv` records settings and fingerprints.
+
+The next-token study uses speech-level training, validation, and test splits.
+It builds a training-only 2,500-token vocabulary, evaluates paragraph-bounded
+contexts, and chooses context length and interpolation strength on validation
+speeches before opening the test set. The split holds out speeches rather than
+speakers, so presidents with multiple inaugurals can appear in more than one
+split. `data-raw/build-next-token-study.R` writes the split, validation, test,
+and paired-speech files. `next-token-study-metadata.csv` records settings,
+source, license, and SHA-256 fingerprints for those four artifacts.
+
 Party labels in this corpus span 236 years and do not describe a stable thing
 across that range. Lessons use them only as a data column, never as a
 description of any party, president, or policy.
+
+## United States state names, centres, and boundaries
+
+Task 80 matches state names from `datasets::state.name` and places reviewed
+state symbols at `datasets::state.center`. Both are distributed with R's
+`datasets` package. The R documentation gives the source as the U.S.
+Department of Commerce, Bureau of the Census, *Statistical Abstract of the
+United States* (1977) and *County and City Data Book*. The centres are
+approximate, the documentation says Alaska and Hawaii are placed just off the
+West Coast for compact map drawing, and the data have no District of Columbia
+entry. The lesson therefore draws no Alaska or Hawaii symbol.
+
+The basemap comes from the `maps` package state database (maps 3.4.3, GPL-2),
+read through `ggplot2::map_data("state")` without attaching `maps`. Its
+documentation says the database was generated from U.S. Census data. It covers
+the lower 48 states and the District of Columbia; the boundary vintage is not
+stated. The lesson does not use it for historical boundaries or exact areas.
 
 ## O*NET attribution
 
@@ -221,3 +428,60 @@ license, language, size, and known limitations:
 There is no single license or consent determination for every Hub dataset.
 Researchers must inspect the card, repository files, source provenance, and
 applicable terms before downloading or transmitting data.
+
+## Local generation models
+
+Lessons 65 through 68, 70, 71, and 72 prepare three public model snapshots
+before rendering. `data/nlg-models.csv` records their immutable revisions, task
+scope, model-card links, and review date. `data/nlg-model-files.csv` binds every
+recorded weight, tokenizer, vocabulary/merge, SentencePiece, configuration, and
+generation-configuration file to the same model ID and revision, with its
+exact byte count and SHA-256 fingerprint.
+
+- `Helsinki-NLP/opus-mt-en-fr` at revision
+  `dd7f6540a7a48a7f4db59e5c0b9c42c8eea67f18` is an English-to-French
+  Marian translation model under Apache-2.0.
+- `Qwen/Qwen2.5-1.5B-Instruct` at revision
+  `989aa7980e4cf806f80c7fef2b1adb7bc71aa306` is an instruction-tuned
+  causal language model under Apache-2.0. The lessons use it for small,
+  constructed summarization, paraphrasing, multi-section generation,
+  question-answering, and dialogue demonstrations.
+- `sentence-transformers/all-MiniLM-L6-v2` at revision
+  `1110a243fdf4706b3f48f1d95db1a4f5529b4d41` is a six-layer sentence-embedding
+  model under Apache-2.0. Its model card says it was fine-tuned with a
+  contrastive objective on a concatenation of public datasets totalling more
+  than one billion sentence pairs, that training sequences were limited to 128
+  tokens, and that input longer than 256 word pieces is truncated by default.
+  Lesson 72 uses it to embed the constructed handbook passages. Besides the
+  weights and tokenizer, the manifest records the model's pooling, module, and
+  sequence-length configuration files because the lesson reads them.
+
+The model cards document software provenance and intended use, but they do not
+establish that generated lesson outputs are correct. The lessons preserve
+visible omissions and unsupported additions and keep human factual, bilingual,
+and prose review pending. Constructed records are teaching probes, not random
+held-out benchmarks, and unknown pretraining overlap prevents a claim that the
+models have never seen similar wording.
+
+Model weights are downloaded by `scripts/setup-nlg-models.py` into the ignored
+`data-raw/.cache/nlg-models/` directory. They are not redistributed in this
+repository. Setup verifies every recorded file after download or cache restore,
+and an existing mismatched snapshot fails closed rather than being repaired by
+a silent redownload. The R loader repeats that verification before loading.
+Rendering sets Hugging Face and Transformers offline modes and fails if a
+prepared snapshot is absent or changed.
+
+## Source Sans 3 font
+
+`fonts/SourceSans3-Regular.ttf` and `fonts/SourceSans3-Semibold.ttf` are the
+static TrueType files from Adobe's Source Sans 3 release 3.052R
+(<https://github.com/adobe-fonts/source-sans>). Source Sans is the typeface of
+the site's text, so the figures use it too. `R/lesson-figures.R` registers the
+two files with systemfonts, and knitr draws figures with ragg, so the figures
+look the same on Windows, macOS, and Linux without installing the font.
+
+The fonts are licensed under the SIL Open Font License 1.1. The licence and
+copyright notice are kept beside them in `fonts/OFL.txt`, as the licence
+requires. Word clouds in lesson 77 keep the default font, because ggwordcloud
+measures each word on a separate graphics device that cannot see a registered
+font.

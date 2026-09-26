@@ -1,7 +1,6 @@
 ---
 title: "Loading a structured data file"
 subtitle: "Open a CSV file and check what R received"
-author: "Alex Farach"
 description: "Learn how rows, columns, missing values, and text encodings affect a CSV file in R."
 categories: [source data loading, CSV, data quality]
 ---
@@ -43,8 +42,6 @@ By the end of this lesson, you will be able to:
 options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
-
-The first code chunk loads the packages used for reading, checking, and displaying the feedback file.
 
 ## What makes a file structured?
 
@@ -92,12 +89,10 @@ stopifnot(
 )
 ```
 
-The `stopifnot()` lines are **assertions**, checks that make R stop if an
-expected result changes. They verify the line count, header, and quoted first
-comment. There are six lines in all: one header and five records. The first
-comment contains a comma, and its quotation marks keep the full sentence in one
-field rather than splitting it across columns. This line count works because
-the teaching file has no quoted line breaks.
+The file has six lines: one header and five records. The first comment contains
+a comma, and its quotation marks keep the full sentence in one field rather
+than splitting it across columns. This line count works because the teaching
+file has no quoted line breaks.
 
 ## Load the CSV into R
 
@@ -119,6 +114,10 @@ feedback <- read_csv(
     comment = col_character()
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   feedback,
@@ -183,6 +182,10 @@ column_types <- map_chr(
   feedback,
   \(column) class(column)[1]
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -226,6 +229,10 @@ feedback <- feedback |>
       format = "%Y-%m-%d"
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   feedback |>
@@ -264,6 +271,10 @@ missing_counts <- map_int(
   feedback,
   \(column) sum(is.na(column))
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -300,6 +311,10 @@ unknown rating out of the comparison rather than treating it as high or low.
 low_ratings <- feedback |>
   filter(!is.na(rating), rating <= 2) |>
   select(feedback_id, rating, comment)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   low_ratings,
@@ -415,6 +430,10 @@ parse_problems <- problems(messy_feedback) |>
     expected,
     actual
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   parse_problems,
@@ -458,8 +477,8 @@ value does not always come from a parse problem.
 The transferable idea is not the function name. Declaring column types and
 missing-value rules at read time, and keeping the parser's complaint, is the
 same discipline that `dtype` and `na_values` serve in pandas or an explicit
-schema serves in Arrow. A parser that guesses quietly is the hazard in every
-language.
+schema serves in Arrow. A parser that guesses without reporting the guess is
+the hazard in every language.
 
 ### Check the things a parser cannot know
 
@@ -503,6 +522,10 @@ status_counts <- row_report |>
 
 quarantined <- row_report |>
   filter(str_starts(status, "quarantine"))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   row_report |>

@@ -1,7 +1,6 @@
 ---
 title: "De-identifying text"
 subtitle: "Mask personal identifiers and measure what leaks"
-author: "Alex Farach"
 description: "Learn how simple masking rules find invented personal identifiers and why de-identification is judged by leaks."
 categories: [entity enrichment, de-identification, workforce research]
 ---
@@ -98,6 +97,10 @@ masking_rules <- tibble(
   ),
   replacement = c("[EMAIL]", "[PHONE]", "[DATE_OF_BIRTH]", "[STREET_ADDRESS]", "[PERSON]")
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   identifiers,
@@ -168,6 +171,10 @@ mask_accounting <- tibble(
     nrow(leaked_identifiers)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   found_missed_accounting,
@@ -247,6 +254,10 @@ spacy_accounting <- tibble(
 )
 
 spacy_finalize()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   spacy_people,

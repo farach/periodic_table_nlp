@@ -1,7 +1,6 @@
 ---
 title: "Inspecting provider schemas and provenance"
 subtitle: "Check schema, units, provenance, and rights before combining records"
-author: "Alex Farach"
 description: "Use onet2r, cmapr, and huggingfaceR fixtures to inspect what an outside source records and what it cannot establish."
 categories: [training data, data providers, workforce research]
 ---
@@ -95,6 +94,10 @@ version_table <- tibble(
   version = unname(package_versions),
   commit = unname(package_commits)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   version_table |>
@@ -164,6 +167,10 @@ onet_display <- onet_tasks |>
     release_version,
     source_date
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   onet_display,
@@ -223,6 +230,10 @@ cmap_transitions <- read_csv(
     si_to = col_double()
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   cmap_transitions |>
@@ -372,6 +383,10 @@ provider_units <- tibble(
     length(classification_tasks)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   provider_units,
@@ -450,6 +465,10 @@ join_report <- tibble(
     )
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   join_report,

@@ -1,7 +1,6 @@
 ---
 title: "Loading data from an API"
 subtitle: "Ask an online service for information and check its reply"
-author: "Alex Farach"
 description: "Learn how an API request becomes a checked data table in R."
 categories: [source data loading, API, JSON]
 ---
@@ -38,8 +37,6 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-The first code chunk loads the packages needed to build the request, read files, shape tibbles, and protect displayed text. A tibble is a table that prints its size and each column's type.
-
 ## Start with a request and a reply
 
 Every API exchange in this lesson has two parts:
@@ -67,7 +64,6 @@ library(purrr)
 library(stringr)
 library(httr2)
 library(digest)
-library(jsonlite)
 library(htmltools)
 
 book_request <- httr2::request(
@@ -105,12 +101,9 @@ stopifnot(
 )
 ```
 
-Those `stopifnot()` calls are **assertions**. Each one stops the page from
-building if the result it names ever changes. They confirm that httr2 built a
-request for the
-intended address. The printed request begins with `GET`, the standard method
-used here to ask a service to send information. Printing it lets us inspect the
-destination and search choices without contacting the service again.
+The printed request begins with `GET`, the standard method used here to ask a
+service to send information. Printing it lets us inspect the destination and
+search choices without contacting the service again.
 
 The choices added to the address are called **query parameters**:
 
@@ -129,10 +122,11 @@ not guarantee that an unavailable service will respond.
 
 ## Understand what happened when the request was sent
 
-The request was sent once on the retrieval date recorded below. httr2's
-`req_perform()` function performed the exchange and would have stopped on an
-unsuccessful HTTP status such as 404 or 500. The response returned status `200`,
-which means the service completed that request successfully.
+The original request was sent once on the retrieval date recorded below. During
+this lesson, `req_perform()` receives the same request but uses a local mock that
+replays the saved response bytes. That exercises the request-to-response step
+without contacting Open Library again. A normal `req_perform()` call would stop
+on an unsuccessful HTTP status such as 404 or 500.
 
 **JSON**, short for JavaScript Object Notation, is a text format that can hold
 named values, lists, and records. Many programming languages can read it, which
@@ -168,6 +162,10 @@ fixture_md5 <- digest::digest(
   algo = "md5",
   serialize = FALSE
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -224,15 +222,77 @@ The MD5 fingerprint detects an accidental change to the saved file. It is not
 proof that the source is accurate or trustworthy. The request address and API
 documentation remain in the metadata file for a later audit.
 
+## Perform the request against the saved reply
+
+A **mock** replaces the network exchange with a local function. httr2 still
+passes the prepared request into `req_perform()` and returns an
+`httr2_response`; the mock supplies the dated status, header, and JSON body.
+
+```{r}
+replay_saved_response <- function(req) {
+  httr2::response(
+    status_code = as.integer(fixture_metadata$http_status),
+    url = req$url,
+    method = "GET",
+    headers = list(
+      `content-type` = fixture_metadata$content_type
+    ),
+    body = charToRaw(paste(fixture_lines, collapse = "\n"))
+  )
+}
+
+fixture_response <- httr2::req_perform(
+  book_request,
+  mock = replay_saved_response
+)
+
+response_summary <- tibble(
+  detail = c("Response class", "HTTP status", "Content type"),
+  value = c(
+    class(fixture_response)[[1]],
+    as.character(httr2::resp_status(fixture_response)),
+    httr2::resp_header(fixture_response, "content-type")
+  )
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  response_summary,
+  col.names = c("Response detail", "Value"),
+  caption = "The prepared request returns a replayed httr2 response",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  inherits(fixture_response, "httr2_response"),
+  identical(httr2::resp_status(fixture_response), 200L),
+  identical(
+    httr2::resp_header(fixture_response, "content-type"),
+    "application/json"
+  ),
+  identical(
+    rawToChar(httr2::resp_body_raw(fixture_response)),
+    paste(fixture_lines, collapse = "\n")
+  )
+)
+```
+
 ## Turn the saved response into a table
 
 Open Library places search results inside a JSON section named `docs`.
-`jsonlite::fromJSON()` translates that section into rows and columns because
-this response has the same fields for each catalog record.
+`resp_body_json()` translates that section into rows and columns because this
+response has the same fields for each catalog record.
 
 ```{r}
-fixture_data <- jsonlite::fromJSON(
-  fixture_path,
+fixture_data <- httr2::resp_body_json(
+  fixture_response,
   simplifyVector = TRUE
 )
 book_records <- as_tibble(fixture_data$docs)
@@ -285,6 +345,10 @@ display_books <- books |>
     first_published = first_published,
     catalog_link = catalog_links
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   display_books,
@@ -314,8 +378,8 @@ stopifnot(
   all(str_length(books$title) > 0),
   all(
     str_detect(
-     books$catalog_url,
-     fixed("https://openlibrary.org/works/")
+      books$catalog_url,
+      fixed("https://openlibrary.org/works/")
     )
   )
 )
@@ -360,10 +424,11 @@ built inside the lesson with `httr2::response()`. No request leaves the machine.
 
 ```{r}
 saved_response <- function(
-    status,
-    body,
-    url = book_request$url,
-    extra_headers = list()) {
+  status,
+  body,
+  url = book_request$url,
+  extra_headers = list()
+) {
   httr2::response(
     status_code = status,
     url = url,
@@ -415,7 +480,7 @@ page_one <- saved_response(
       sprintf("/works/OL%d", 1:5),
       sprintf("Candidate title %d", 1:5)
     ),
-    ']}'
+    "]}"
   ),
   url = page_one_request$url
 )
@@ -428,7 +493,7 @@ page_two <- saved_response(
       c("/works/OL5", "/works/OL6"),
       c("Candidate title 5", "Candidate title 6")
     ),
-    ']}'
+    "]}"
   ),
   url = page_two_request$url
 )
@@ -438,7 +503,7 @@ field_renamed <- saved_response(
   str_c(
     '{"numFound": 1, "start": 0, "docs": [',
     '{"key": "/works/OL7", "name": "Title moved to a new field"}',
-    ']}'
+    "]}"
   ),
   url = page_one_request$url
 )
@@ -503,9 +568,10 @@ parse_retry_after <- function(value, now) {
 }
 
 read_saved_page <- function(
-    response,
-    page_size,
-    retry_now = retry_reference_time) {
+  response,
+  page_size,
+  retry_now = retry_reference_time
+) {
   status <- httr2::resp_status(response)
 
   if (identical(status, 429L)) {
@@ -558,10 +624,10 @@ read_saved_page <- function(
 
   top_level_types_valid <-
     is.numeric(body$numFound) &&
-    length(body$numFound) == 1L &&
-    is.numeric(body$start) &&
-    length(body$start) == 1L &&
-    is.list(body$docs)
+      length(body$numFound) == 1L &&
+      is.numeric(body$start) &&
+      length(body$start) == 1L &&
+      is.list(body$docs)
   if (!top_level_types_valid) {
     return(list(
       outcome = "schema failure: invalid top-level types",
@@ -653,6 +719,10 @@ collected <- bind_rows(
 distinct_records <- collected |>
   distinct(key, .keep_all = TRUE)
 shortfall <- first_page$reported_total - nrow(distinct_records)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -728,7 +798,7 @@ stopifnot(
 ```
 
 Six saved replies exercised two retry formats, two result pages, and two schema
-failures. None became a quietly empty result table.
+failures. None produced an empty result table without an error.
 
 The refusal returned no records and a waiting time taken from the
 `Retry-After` header, which is the service telling the client how long to pause.
@@ -740,7 +810,7 @@ so `start + records returned < numFound` supplies the next offset. The second
 page reports `start = 5`; adding its two records reaches the reported total, so
 the client stops. A full page alone would not prove that another page exists.
 
-The renamed field is the quiet one. The record still parsed as JSON and still
+The renamed field is harder to catch. The record still parsed as JSON and still
 had a key. Only the explicit list of required fields turned it into a reported
 failure instead of a table with a missing column.
 
@@ -765,6 +835,10 @@ pagination_report <- tibble(
     shortfall
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   pagination_report,

@@ -1,7 +1,6 @@
 ---
 title: "Making text comparable"
 subtitle: "Normalize carefully and keep the display text intact"
-author: "Alex Farach"
 description: "Learn how case, spacing, punctuation, and Unicode normalization change workforce text."
 categories: [word processing, normalization, workforce research]
 ---
@@ -134,6 +133,10 @@ case_space_examples <- tibble(
   lowercased = str_to_lower(raw_text),
   squished = str_squish(raw_text)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   case_space_examples,
@@ -172,6 +175,10 @@ punctuation_examples <- tibble(
 )
 
 unicode_punctuation_check <- str_remove_all("“paid—training”", "[[:punct:]]")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   punctuation_examples,
@@ -224,6 +231,10 @@ unicode_forms <- tibble(
   bytes_utf8 = nchar(text, type = "bytes"),
   code_points = map_chr(text, \(value) paste(utf8ToInt(value), collapse = ", "))
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   unicode_forms,
@@ -268,6 +279,10 @@ display_and_match <- sentences |>
       str_squish() |>
       str_to_lower()
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   display_and_match,

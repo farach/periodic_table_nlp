@@ -1,7 +1,6 @@
 ---
 title: "Identifying document language"
 subtitle: "Treat language guesses as fallible classifications"
-author: "Alex Farach"
 description: "Learn how two language detectors behave on short Riverton text samples and why abstention can be safer than a wrong route."
 categories: [documents, language identification, workforce research]
 ---
@@ -112,6 +111,10 @@ display_samples <- language_samples |>
       "</span>"
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   detector_versions,
@@ -198,6 +201,10 @@ detected_samples <- language_samples |>
 
 open_house <- detected_samples |>
   filter(text == "Open house.")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   detected_samples |>
@@ -247,7 +254,7 @@ stopifnot(
 
 For this installed version, both detectors abstain on `Open house.` by returning
 `NA`. That is a useful failure for routing, because the item can be sent to human
-review rather than silently routed by a wrong code.
+review rather than routed under a wrong code without review.
 
 ## Count matches, abstentions, and label differences
 
@@ -271,6 +278,10 @@ detector_counts <- tibble(
     differed_from_recorded_label =
       nrow(detected_samples) - matched_recorded_label - no_label
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   detector_counts,
@@ -320,6 +331,10 @@ length_summary <- detected_samples |>
     .groups = "drop"
   ) |>
   arrange(length_group)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   length_summary,
@@ -373,6 +388,10 @@ short_probe <- tibble(
     cld2_match = !is.na(cld2_language) & cld2_language == recorded_language,
     cld3_match = !is.na(cld3_language) & cld3_language == recorded_language
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   short_probe |>

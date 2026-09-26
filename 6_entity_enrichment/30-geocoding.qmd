@@ -1,7 +1,6 @@
 ---
 title: "Geocoding place names"
 subtitle: "Join text mentions to an offline gazetteer"
-author: "Alex Farach"
 description: "Learn how a gazetteer turns place names into coordinates while preserving ambiguous and not-found results."
 categories: [entity enrichment, geocoding, workforce research]
 ---
@@ -103,6 +102,10 @@ gazetteer_hash <- digest(
 expected_hash <- metadata |>
   filter(artifact == "riverton-gazetteer.csv") |>
   pull(fingerprint)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   gazetteer,
@@ -170,6 +173,10 @@ geocoded_rows <- place_mentions |>
     by = join_by(mention == place_name),
     relationship = "many-to-many"
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   geocoded_rows,
@@ -225,6 +232,10 @@ status_counts <- tibble(status = c("resolved", "ambiguous", "not found")) |>
     by = join_by(status)
   ) |>
   mutate(mentions = coalesce(mentions, 0L))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   mention_status,
@@ -276,6 +287,10 @@ supplied_context <- tibble(
 with_parent_context <- riverton_candidates |>
   inner_join(supplied_context, by = join_by(mention)) |>
   filter(parent == parent_context)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   riverton_candidates,
@@ -322,7 +337,7 @@ When using a live service, several boundaries and limits apply:
 - Geocoding turns a place mention into coordinates.
 - Joining by name can return more than one coordinate pair.
 - A miss should stay a miss rather than becoming a guess.
-- Context such as a parent region can narrow candidates.
+- Context such as a parent region can reduce the candidate list.
 - `ambiguous` and `not found` are first-class geocoding answers.
 
 This teaching gazetteer can map `Riverton Skills Centre` and `Bellhaven`. The

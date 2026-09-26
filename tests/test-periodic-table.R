@@ -45,8 +45,8 @@ stopifnot(
     as.integer(table(task_map$group_id)),
     expected_group_sizes
   ),
-  identical(which(has_lesson), 1:62),
-  identical(sum(has_lesson), 62L),
+  identical(which(has_lesson), 1:81),
+  identical(sum(has_lesson), 81L),
   all(task_map$status %in% c("available", "planned")),
   all(nzchar(task_map$item_type)),
   all(nzchar(task_map$lesson_path[has_lesson])),
@@ -127,11 +127,11 @@ stopifnot(
   identical(rendered_task_numbers, 1:81),
   identical(
     count_matches('data-status="available"', html),
-    62L
+    81L
   ),
   identical(
     count_matches('data-status="planned"', html),
-    19L
+    0L
   ),
   identical(
     count_matches('data-item-type="[^"]+"', html),
@@ -165,7 +165,7 @@ stopifnot(
       '(?s)<div class="nlp-element is-planned"[^>]*>.*?<span class="element-status">Planned</span>',
       html
     ),
-    19L
+    0L
   ),
   identical(
     rendered_hrefs,
@@ -192,6 +192,9 @@ stopifnot(
     html,
     fixed = TRUE
   ),
+  !grepl("Lesson planned", html, fixed = TRUE),
+  !grepl("Dashed tiles are planned", html, fixed = TRUE),
+  grepl("All 81 lessons are written.", html, fixed = TRUE),
   identical(
     count_matches('class="available-routes"', html),
     1L

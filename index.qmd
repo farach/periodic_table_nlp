@@ -7,34 +7,8 @@ sidebar: false
 body-classes: task-map-page
 ---
 
-Computers work with human language constantly and mostly out of sight: a search
-box, a spam filter, a translation, a reply that arrives too fast to have been
-typed. The field that studies how they do it is called natural language
-processing, usually shortened to **NLP**. It covers dozens of connected tasks,
-from reading a file without corrupting it to generating a paragraph. Each tile
-below is one of them.
-
-## The tasks {#periodic-table-heading}
-
-Related tasks share a column, and the columns run roughly from getting text in,
-on the left, through cutting it into usable pieces, to models, generation,
-systems, and visual explanation. The arrangement is editorial: position tells
-you what a task is filed near and nothing else about it. Laying the field out
-at once means a lesson can be found by where it sits rather than by remembering
-its name. Sixty-two of the eighty-one lessons are written. The rest are planned,
-and their tiles stay visible so you can see what is coming.
-
-::: {.callout-tip}
-## Start here
-
-For a course, read in number order because the R code builds on earlier
-lessons. For a specific problem, open any available lesson; each page introduces
-its own NLP idea and points out the assumptions it needs.
-:::
-
 ```{r}
-#| echo: false
-#| output: asis
+#| include: false
 
 options(warn = 2)
 
@@ -66,6 +40,48 @@ available <- task_map |>
 planned <- task_map |>
   filter(status == "planned")
 
+availability_sentence <- if (nrow(planned) == 0L) {
+  sprintf("All %d lessons are written.", nrow(task_map))
+} else {
+  sprintf(
+    paste(
+      "%d of the %d lessons are written. The rest are planned, and their",
+      "tiles stay visible so you can see what is coming."
+    ),
+    nrow(available),
+    nrow(task_map)
+  )
+}
+```
+
+Computers work with human language constantly and mostly out of sight: a search
+box, a spam filter, a translation, a reply that arrives too fast to have been
+typed. The field that studies how they do it is called natural language
+processing, usually shortened to **NLP**. It covers dozens of connected tasks,
+from reading a file without corrupting it to generating a paragraph. Each tile
+below is one of them.
+
+## The tasks {#periodic-table-heading}
+
+Related tasks share a column, and the columns run roughly from getting text in,
+on the left, through cutting it into usable pieces, to models, generation,
+systems, and visual explanation. The arrangement is editorial: position tells
+you what a task is filed near and nothing else about it. Laying the field out
+at once means a lesson can be found by where it sits rather than by remembering
+its name. `r availability_sentence`
+
+::: {.callout-tip}
+## Start here
+
+For a course, read in number order because the R code builds on earlier
+lessons. For a specific problem, open any available lesson; each page introduces
+its own NLP idea and points out the assumptions it needs.
+:::
+
+```{r}
+#| echo: false
+#| output: asis
+
 group_sizes <- task_map |>
   count(group_id) |>
   pull(n)
@@ -86,7 +102,10 @@ stopifnot(
   identical(task_map$task_number, 1:81),
   identical(sort(unique(task_map$group_id)), 1:15),
   identical(group_sizes, expected_group_sizes),
-  identical(which(task_map$status == "available"), 1:62),
+  identical(
+    which(task_map$status == "available"),
+    seq_len(nrow(available))
+  ),
   identical(length(unique(task_map$symbol)), 81L),
   all(task_map$status %in% c("available", "planned")),
   all(nzchar(available$lesson_path)),
@@ -275,9 +294,26 @@ stopifnot(
   ),
   identical(
     str_count(table_html, fixed('class="nlp-element is-available"')),
-    62L
+    nrow(available)
   )
 )
+
+planned_key <- if (nrow(planned) > 0L) {
+  paste0(
+    '<span class="task-map-key-item">',
+    '<span class="task-map-key-swatch" aria-hidden="true"></span>',
+    "Lesson planned",
+    "</span>"
+  )
+} else {
+  ""
+}
+
+planned_instruction <- if (nrow(planned) > 0L) {
+  "Dashed tiles are planned. "
+} else {
+  ""
+}
 
 cat(
   '<div class="task-map-key">',
@@ -285,17 +321,15 @@ cat(
   '<span class="task-map-key-swatch available" aria-hidden="true"></span>',
   'Read lesson',
   '</span>',
-  '<span class="task-map-key-item">',
-  '<span class="task-map-key-swatch" aria-hidden="true"></span>',
-  'Lesson planned',
-  '</span>',
+  planned_key,
   '</div>',
   '<div class="task-map-stage-key" aria-label="Task stages">',
   stage_key,
   '</div>',
   '<p class="task-map-instructions" id="task-map-instructions">',
   'Select a solid-bordered tile to open its lesson. ',
-  'Dashed tiles are planned. If the map is wider than the window, ',
+  planned_instruction,
+  'If the map is wider than the window, ',
   'use the buttons, arrow keys, or horizontal scrolling.',
   '</p>',
   '<div class="task-map-scroll-controls" ',
@@ -356,7 +390,7 @@ The number might be right. The question is how anyone would know.
 Start with the word. Before anything can be counted, someone has to say what a
 complaint is. Is a blunt question a complaint? A compliment with one sharp
 clause? A report of a broken link? Some answer gets applied to all 40,000
-comments, quietly and consistently, whether or not a person chose it. A more
+comments, in every run, whether or not a person chose it. A more
 capable model does not settle this, because the difficulty is not what the
 model can do. It is what you meant.
 
@@ -382,7 +416,7 @@ That part has not moved, because it is where the tool gets its instructions and
 where its output is accepted or rejected.
 
 You can still buy the work. Labelled data is for sale, annotation vendors are
-easy to hire, and a model will label almost anything you give it, while quietly
+easy to hire, and a model will label almost anything you give it, while
 refusing a few things. Each of those arrives with a number describing how much
 its labels agree. Reading that number and knowing what it conceals are
 different skills, and in my experience the second comes from having produced
@@ -396,12 +430,26 @@ capability gap but the shape of a measurement: the definition, the comparison,
 and the text that actually arrived. The useful amount of checking depends on
 your text and on the cost of a wrong answer; this page cannot set it for you.
 
+The guide [Using a language model in a reproducible analysis](using-language-models.qmd)
+works through that shape on a constructed collection. It records a local model
+as an instrument, checks its labels against a random sample reviewed by a
+person, and corrects an estimate for the errors that sample reveals.
+
 The first thirteen lessons cover getting text out of files, web pages, and scans
 without damaging it, then building labels you can defend. Lessons 14 through 42
 follow the text through tokens and vocabularies, word forms and grammar links,
 phrases and entities, sentence and paragraph boundaries, and whole-document
 cleaning, comparison, metadata, and language identification. Together they show
 where each transformation helps and what information it can lose.
+
+Lessons 43 through 68 train, test, and explain models, then use them to
+classify, discover, compare, and generate text, keeping a baseline or a stated
+limit beside each result. Lessons 69 through 74 combine those parts into small
+systems: a relation extractor, a knowledge base filled from announcements, a
+question answerer that cites a handbook, a scripted enrollment conversation, a
+search index, and a document review with a recall estimate. Lessons 75 through
+81 show results to people through an app, annotated text, charts, maps, and
+graphs, and ask what each picture can honestly claim.
 
 ## About this site
 

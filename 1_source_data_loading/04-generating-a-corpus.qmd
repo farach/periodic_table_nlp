@@ -1,7 +1,6 @@
 ---
 title: "Building a text corpus"
 subtitle: "Turn separate documents into an organized collection"
-author: "Alex Farach"
 description: "Learn how to collect text, attach useful labels, and check a corpus before analysis."
 categories: [source data loading, corpus, data quality]
 ---
@@ -42,8 +41,6 @@ By the end of this lesson, you will be able to:
 options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
-
-The first code chunk loads the packages needed to read files, build tibbles, repeat work, and handle text. A tibble is a table that prints its size and each column's type.
 
 ## Decide what one document means
 
@@ -104,10 +101,9 @@ stopifnot(
 )
 ```
 
-The `stopifnot()` line is an **assertion**, a check that makes R stop if an
-expected result changes. It confirms that R found all three file names in
-alphabetical order. We keep those names as the first labels in the collection
-so each result can still be traced to the file that supplied its text.
+R prints all three file names in alphabetical order. We keep those names as the
+first labels in the collection so each result can still be traced to the file
+that supplied its text.
 
 ## Read every document
 
@@ -209,6 +205,10 @@ corpus <- tibble(
   source_text = unname(source_documents),
   analysis_text = unname(analysis_documents)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   corpus |>
@@ -281,6 +281,10 @@ collection_record <- tibble(
     "one complete article"
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   collection_record,
@@ -329,6 +333,10 @@ corpus <- corpus |>
       count_whitespace_tokens
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   corpus |>
@@ -425,6 +433,10 @@ matching_documents <- corpus |>
     )
   ) |>
   select(document_id, topic, analysis_text)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   matching_documents,
@@ -533,6 +545,10 @@ pair_scores <- tibble(
     containment
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   pair_scores |>
@@ -581,9 +597,9 @@ disagree about how strong the resemblance is.
 
 Character similarity reaches 0.65 for the reprint. The added courtesy line
 holds it down, because every extra character counts as a difference. Word
-containment asks a narrower question, whether one document's words all appear in
-the other, and returns 1.00. When a copy is extended rather than edited,
-containment is the measure that keeps working.
+containment asks whether one document's words all appear in the other, and
+returns 1.00. When a copy is extended rather than edited, containment is the
+measure that keeps working.
 
 The thresholds used here, 0.6 and 0.9, are decisions rather than discoveries.
 Any threshold belongs in the record with the measure that produced it, because
@@ -630,6 +646,10 @@ split_is_family_consistent <- assigned |>
   summarise(splits = n_distinct(split), .by = family_id) |>
   pull(splits) |>
   max()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   assigned |>
@@ -638,8 +658,6 @@ knitr::kable(
   caption = "Four candidates, three kept, one removed with its family recorded",
   row.names = FALSE
 )
-
-removed$analysis_text
 ```
 
 ```{r}
@@ -658,6 +676,22 @@ stopifnot(
     removed$family_id,
     "account-access-family"
   )
+)
+```
+
+The text that left the corpus is printed in full, not summarized:
+
+```{r}
+removed$analysis_text
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(removed$document_id, "seasonal-faq-account"),
+  identical(removed$analysis_text, candidate_text),
+  str_detect(removed$analysis_text, fixed("help desk"))
 )
 ```
 

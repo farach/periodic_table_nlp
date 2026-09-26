@@ -1,0 +1,717 @@
+---
+title: "Projecting word vectors onto a map"
+subtitle: "Measure what the picture keeps and what it loses"
+description: "Learn how PCA and t-SNE draw word embeddings in two dimensions while preserving only part of the original neighbourhoods."
+categories: [information visualization, word embeddings, dimensionality reduction]
+---
+
+Theo wants to show a small word-vector model on one slide. A scatterplot feels
+like a map, and maps invite stories.
+
+This picture needs a warning label. Each word begins as 50 numbers. A
+two-dimensional drawing can keep some nearby neighbours and lose others.
+
+**Word embedding visualization** draws word vectors as points by projecting many
+numeric dimensions into two. The plot is a question to check, not a finding
+about topics, clusters, or meaning.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- verify the pinned inaugural word2vec model before loading it;
+- scale each word vector to length 1 so straight-line distance ranks
+  neighbours the same way as cosine similarity;
+- choose a stated set of frequent words to plot;
+- mark, in the plot itself, which nearest neighbours a projection keeps;
+- compare PCA with t-SNE, and two t-SNE seeds, by neighbour preservation; and
+- avoid reading clusters, gaps, sizes, and axis directions as evidence.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load and verify the pinned model
+
+The model comes from lesson 61. It is deliberately small: the metadata records
+134,419 cleaned training tokens and a 50-dimensional skip-gram word2vec fit. In
+lesson 61, even the easy pair `freedom / liberty` landed below the median of all
+pairwise similarities, so this lesson measures whether the picture keeps the
+model's neighbours. It does not claim the model learned reliable meaning.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(stringr)
+library(readr)
+library(purrr)
+library(tidytext)
+library(quanteda)
+library(word2vec)
+library(Rtsne)
+library(ggplot2)
+library(digest)
+
+source("R/inaugural-corpus.R")
+source("R/lesson-figures.R")
+
+metadata <- read_csv(
+  "data/word2vec/word2vec-metadata.csv",
+  na = character(),
+  col_types = cols(
+    field = col_character(),
+    value = col_character()
+  )
+)
+metadata_values <- setNames(metadata$value, metadata$field)
+
+model_path <- "data/word2vec/inaugural-word2vec.bin"
+model_sha256 <- digest(file = model_path, algo = "sha256")
+expected_model_sha256 <- metadata_values[["sha256_model"]]
+
+stopifnot(
+  identical(model_sha256, expected_model_sha256)
+)
+
+word2vec_model <- word2vec::read.word2vec(model_path)
+embedding_matrix <- as.matrix(word2vec_model)
+```
+
+```{r}
+#| echo: false
+
+tibble(
+  item = c(
+    "training tokens",
+    "vocabulary rows",
+    "dimensions",
+    "algorithm",
+    "model SHA-256 matches metadata"
+  ),
+  value = c(
+    metadata_values[["training_tokens"]],
+    metadata_values[["vocabulary_rows"]],
+    metadata_values[["dimensions"]],
+    metadata_values[["algorithm"]],
+    as.character(identical(model_sha256, expected_model_sha256))
+  )
+) |>
+  knitr::kable(
+    col.names = c("Model check", "Value"),
+    caption = "Pinned word2vec model loaded for projection",
+    row.names = FALSE
+  )
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(model_sha256, expected_model_sha256),
+  identical(model_sha256, "b182100ecb33cb339f16fdf5df5cea783dd113843a3a89e7e65393b921e448dd"),
+  identical(nrow(embedding_matrix), as.integer(metadata_values[["vocabulary_rows"]])),
+  identical(ncol(embedding_matrix), as.integer(metadata_values[["dimensions"]])),
+  identical(metadata_values[["training_tokens"]], "134419"),
+  identical(metadata_values[["algorithm"]], "skip-gram")
+)
+```
+
+The fingerprint check fails closed if the binary changes. Rendering does not
+train, download, or update a model.
+
+## Choose the plotted words
+
+The full saved vocabulary has 2,709 rows, including the trainer's `</s>` marker.
+This page plots the 300 most frequent training words that also have vectors.
+Changing the subset can change the projection.
+
+```{r}
+paragraphs <- inaugural_paragraphs()
+
+training_text <- tokens(
+  str_to_lower(paragraphs$paragraph, locale = "en"),
+  remove_punct = TRUE,
+  remove_numbers = TRUE
+) |>
+  vapply(paste, character(1), collapse = " ")
+
+training_frequencies <- tibble(text = training_text) |>
+  unnest_tokens(word, text) |>
+  count(word, sort = TRUE, name = "cleaned_paragraph_count") |>
+  filter(word %in% rownames(embedding_matrix), word != "</s>")
+
+selected_words <- training_frequencies |>
+  slice_head(n = 300)
+
+selected_embeddings <- embedding_matrix[selected_words$word, , drop = FALSE]
+normalized_embeddings <- selected_embeddings / sqrt(rowSums(selected_embeddings^2))
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  selected_words |>
+    slice_head(n = 12),
+  col.names = c("Word", "Count in cleaned paragraphs"),
+  caption = "The most frequent plotted words before projection",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+row_lengths <- sqrt(rowSums(normalized_embeddings^2))
+
+stopifnot(
+  identical(nrow(selected_words), 300L),
+  identical(rownames(normalized_embeddings), selected_words$word),
+  identical(ncol(normalized_embeddings), 50L),
+  all(abs(row_lengths - 1) < 1e-10),
+  identical(selected_words$word[1], "the"),
+  identical(max(selected_words$cleaned_paragraph_count), 10003L),
+  all(c("government", "people", "freedom", "union", "peace", "constitution") %in%
+    selected_words$word)
+)
+```
+
+The 300 plotted words range from
+`r format(min(selected_words$cleaned_paragraph_count), big.mark = ",")` to
+`r format(max(selected_words$cleaned_paragraph_count), big.mark = ",")` uses.
+The count column is an approximate training count rebuilt from the cleaned
+paragraphs with tidytext's tokenizer, not a byte-for-byte count from word2vec's
+internal splitter.
+
+Dividing each vector by its length, a step called L2 normalization, makes every
+row length equal to 1. On rows of length 1, straight-line (Euclidean) distance
+ranks neighbours the same way as cosine similarity, the measure used in lesson
+61. The neighbour lists below are computed that way in all 50 dimensions, and
+the same kind of distance is then measured in each two-dimensional drawing.
+
+## Decide what counts as a kept neighbour
+
+A plot of words is only useful if nearby points were nearby in the model. For
+each word, the code below finds its 10 nearest neighbours among the 300 plotted
+words, measured in all 50 dimensions, and later its 10 nearest points in a
+two-dimensional drawing. A neighbour is **kept** when it is also among the
+word's 10 nearest points in the drawing. A neighbour that is not kept may sit
+just outside that top ten or far away; the count does not say which.
+
+```{r}
+nearest_by_similarity <- function(matrix, k = 10L) {
+  similarity <- tcrossprod(matrix)
+  diag(similarity) <- NA_real_
+  t(apply(
+    similarity,
+    1,
+    \(values) names(sort(values, decreasing = TRUE))[seq_len(k)]
+  ))
+}
+
+nearest_by_distance <- function(points, k = 10L) {
+  distances <- as.matrix(dist(points))
+  diag(distances) <- Inf
+  t(apply(
+    distances,
+    1,
+    \(values) names(sort(values))[seq_len(k)]
+  ))
+}
+
+full_space_neighbours <- nearest_by_similarity(normalized_embeddings, 10L)
+
+label_words <- c(
+  "government", "people", "freedom", "union",
+  "peace", "constitution", "war", "america"
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(dim(full_space_neighbours), c(300L, 10L)),
+  identical(rownames(full_space_neighbours), selected_words$word),
+  all(label_words %in% rownames(full_space_neighbours)),
+  !any(full_space_neighbours == rownames(full_space_neighbours))
+)
+```
+
+The eight words in `label_words` get their own panel in each figure below. They
+are landmarks for matching the two figures by eye, not cluster names.
+
+## Project with PCA
+
+**PCA**, short for principal component analysis, finds the directions along
+which the normalized vectors spread out most. The plot uses the first two.
+
+```{r}
+pca_fit <- prcomp(normalized_embeddings, center = TRUE, scale. = FALSE)
+pca_variance <- pca_fit$sdev^2 / sum(pca_fit$sdev^2)
+pca_scores <- pca_fit$x[, 1:2, drop = FALSE]
+
+# A component's sign is arbitrary, so fix it with named words before plotting.
+if (pca_scores["government", "PC1"] < 0) {
+  pca_scores[, "PC1"] <- -pca_scores[, "PC1"]
+}
+
+if (pca_scores["freedom", "PC2"] < 0) {
+  pca_scores[, "PC2"] <- -pca_scores[, "PC2"]
+}
+
+pca_neighbours <- nearest_by_distance(pca_scores, 10L)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(rownames(pca_scores), rownames(full_space_neighbours)),
+  identical(rownames(pca_neighbours), rownames(full_space_neighbours)),
+  sum(pca_variance[1:2]) > 0.20,
+  sum(pca_variance[1:2]) < 0.30,
+  identical(round(100 * sum(pca_variance[1:2]), 1), 23.9),
+  pca_variance[1] > pca_variance[2]
+)
+```
+
+The first two components hold
+`r sprintf("%.1f%%", 100 * sum(pca_variance[1:2]))` of the variance in the
+normalized vectors. The rest is invisible in this plot.
+
+The function below turns a set of two-dimensional coordinates into one panel
+per landmark word. In each panel, every 50-dimensional neighbour of the landmark is
+marked as kept or not kept, and the panel title counts how many were kept.
+
+```{r}
+anchor_panels <- function(points, neighbours_2d) {
+  plotted <- as_tibble(points, rownames = "word", .name_repair = "minimal") |>
+    setNames(c("word", "x", "y"))
+
+  map(label_words, \(anchor) {
+    true_neighbours <- full_space_neighbours[anchor, ]
+    kept <- intersect(true_neighbours, neighbours_2d[anchor, ])
+
+    plotted |>
+      mutate(
+        anchor_word = anchor,
+        kept_count = length(kept),
+        role = case_when(
+          word == anchor ~ "landmark",
+          word %in% kept ~ "kept",
+          word %in% true_neighbours ~ "not kept",
+          TRUE ~ "other"
+        )
+      )
+  }) |>
+    list_rbind() |>
+    mutate(
+      panel = factor(
+        str_c(anchor_word, ": ", kept_count, " of 10 kept"),
+        levels = unique(str_c(anchor_word, ": ", kept_count, " of 10 kept"))
+      )
+    )
+}
+
+draw_projection <- function(panels) {
+  # A square window gives every panel the same shape on every computer. A
+  # t-SNE run can come out wider or taller, and coord_equal() alone would then
+  # change the panel shape.
+  half_span <- max(diff(range(panels$x)), diff(range(panels$y))) / 2
+  x_centre <- mean(range(panels$x))
+  y_centre <- mean(range(panels$y))
+
+  ggplot(panels, aes(x = x, y = y)) +
+    geom_point(
+      data = \(d) filter(d, role == "other"),
+      colour = lesson_colours[["context"]],
+      size = 0.7
+    ) +
+    geom_point(
+      data = \(d) filter(d, role == "not kept"),
+      shape = 22,
+      fill = lesson_colours[["paper"]],
+      colour = lesson_colours[["contrast"]],
+      stroke = 0.9,
+      size = 2.3
+    ) +
+    geom_point(
+      data = \(d) filter(d, role == "kept"),
+      shape = 22,
+      fill = lesson_colours[["accent"]],
+      colour = lesson_colours[["paper"]],
+      stroke = 0.4,
+      size = 2.6
+    ) +
+    geom_point(
+      data = \(d) filter(d, role == "landmark"),
+      shape = 24,
+      fill = lesson_colours[["ink"]],
+      colour = lesson_colours[["paper"]],
+      stroke = 0.6,
+      size = 3.8
+    ) +
+    facet_wrap(vars(panel), ncol = 4) +
+    coord_equal(
+      xlim = x_centre + c(-1, 1) * half_span,
+      ylim = y_centre + c(-1, 1) * half_span
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_lesson(grid = "none") +
+    theme(
+      axis.text = element_blank(),
+      panel.background = element_rect(fill = "#F4F6F8", colour = NA)
+    )
+}
+
+key_subtitle <- str_c(
+  "Each panel shows one landmark word (dark triangle) and its 10 nearest ",
+  "neighbours<br>among the 300 words, measured in all 50 dimensions. ",
+  lesson_key("Filled squares", lesson_text_colours[["accent"]]),
+  " are still among<br>its 10 nearest points here; ",
+  lesson_key("hollow squares", lesson_text_colours[["contrast"]]),
+  " are not."
+)
+
+pca_panels <- anchor_panels(pca_scores, pca_neighbours)
+```
+
+```{r}
+#| include: false
+
+pca_kept <- pca_panels |>
+  distinct(anchor_word, kept_count)
+
+pca_alt_text <- str_c(
+  "Eight-panel PCA plot, one panel per landmark word. Each panel shows the 300 ",
+  "projected words as faint dots, the landmark as a dark triangle, and its 10 ",
+  "nearest neighbours in the 50-dimensional vectors as squares, filled when they ",
+  "stay among its 10 nearest points in the plot and hollow when they do not. ",
+  "The number kept ranges from ",
+  min(pca_kept$kept_count), " to ", max(pca_kept$kept_count),
+  " of 10 across the eight landmarks."
+)
+
+stopifnot(
+  identical(nrow(pca_panels), 300L * length(label_words)),
+  identical(sum(pca_panels$role == "landmark"), length(label_words)),
+  all(
+    pca_panels |>
+      filter(role %in% c("kept", "not kept")) |>
+      count(anchor_word) |>
+      pull(n) == 10L
+  ),
+  identical(pca_kept$anchor_word, label_words),
+  all(pca_kept$kept_count <= 5L),
+  mean(pca_kept$kept_count) < 3,
+  all(is.finite(pca_panels$x)),
+  all(is.finite(pca_panels$y))
+)
+```
+
+```{r}
+#| label: fig-word-pca
+#| fig-cap: "PCA projection of 300 word vectors, one panel per landmark word. Squares mark the landmark's 10 nearest neighbours among the 300 words, measured in all 50 dimensions."
+#| fig-alt: !expr pca_alt_text
+#| fig-width: 8
+#| fig-height: 5.4
+
+pca_plot <- draw_projection(pca_panels) +
+  labs(
+    title = "PCA keeps few of each landmark's 10 nearest neighbours",
+    subtitle = key_subtitle
+  )
+
+pca_plot
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nlevels(pca_panels$panel), length(label_words)),
+  identical(
+    length(unique(ggplot_build(pca_plot)$layout$layout$PANEL)),
+    length(label_words)
+  )
+)
+```
+
+PCA axes can flip sign across software builds, so the code fixes the signs with
+named words before plotting. The plot has no axis labels because left, right,
+up, and down mean nothing here; only nearness inside a panel matters. Each
+panel title reports how many of the landmark's 10 nearest neighbours stayed among
+its 10 nearest points in the drawing.
+
+## Project with t-SNE
+
+**t-SNE** is a stochastic method that tries to keep local neighbours together in
+the drawing. It can also create groups and gaps that are not stable evidence.
+Here, perplexity 30 sets roughly how many neighbours each point considers; it
+is unrelated to the language-model perplexity in lessons 63 and 64. Theta 0.5
+trades a little accuracy for speed, and 750 iterations is the number of
+optimization updates. The run also uses seed 7801, no initial PCA step, no
+extra normalization, and one thread.
+
+```{r}
+run_tsne <- function(seed) {
+  set.seed(seed)
+  fit <- Rtsne(
+    normalized_embeddings,
+    dims = 2,
+    perplexity = 30,
+    theta = 0.5,
+    max_iter = 750L,
+    pca = FALSE,
+    normalize = FALSE,
+    check_duplicates = FALSE,
+    num_threads = 1,
+    verbose = FALSE
+  )
+  coordinates <- fit$Y
+  rownames(coordinates) <- rownames(normalized_embeddings)
+  coordinates
+}
+
+tsne_seed_7801 <- run_tsne(7801)
+tsne_neighbours_7801 <- nearest_by_distance(tsne_seed_7801, 10L)
+tsne_panels <- anchor_panels(tsne_seed_7801, tsne_neighbours_7801)
+```
+
+```{r}
+#| include: false
+
+tsne_kept <- tsne_panels |>
+  distinct(anchor_word, kept_count)
+
+tsne_alt_text <- str_c(
+  "Eight-panel t-SNE plot using seed 7801, one panel per landmark word, drawn ",
+  "the same way as the PCA figure. The number of 50-dimensional neighbours kept ",
+  "among the landmark's 10 nearest points ranges from ",
+  min(tsne_kept$kept_count), " to ", max(tsne_kept$kept_count),
+  " of 10 across the eight landmarks. The preservation table below gives the ",
+  "average over all 300 words."
+)
+
+stopifnot(
+  !any(duplicated(as.data.frame(normalized_embeddings))),
+  3 * 30 < nrow(normalized_embeddings) - 1,
+  identical(dim(tsne_seed_7801), c(300L, 2L)),
+  identical(rownames(tsne_neighbours_7801), rownames(full_space_neighbours)),
+  identical(nrow(tsne_panels), 300L * length(label_words)),
+  identical(tsne_kept$anchor_word, label_words),
+  sum(tsne_kept$kept_count) > sum(pca_kept$kept_count),
+  any(tsne_kept$kept_count < 10L),
+  all(is.finite(tsne_panels$x)),
+  all(is.finite(tsne_panels$y))
+)
+```
+
+```{r}
+#| label: fig-word-tsne
+#| fig-cap: "t-SNE projection of the same 300 word vectors with seed 7801, drawn the same way as the PCA figure."
+#| fig-alt: !expr tsne_alt_text
+#| fig-width: 8
+#| fig-height: 5.4
+
+tsne_plot <- draw_projection(tsne_panels) +
+  labs(
+    title = "t-SNE keeps more neighbours close, but not all of them",
+    subtitle = key_subtitle
+  )
+
+tsne_plot
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nlevels(tsne_panels$panel), length(label_words)),
+  identical(
+    length(unique(ggplot_build(tsne_plot)$layout$layout$PANEL)),
+    length(label_words)
+  )
+)
+```
+
+The panels hold the same landmarks as the PCA figure, so the two pictures can
+be compared by eye. The counts in the panel titles are the evidence; the shapes
+of the groups are not.
+
+## Measure neighbour preservation
+
+A **10-nearest-neighbour preservation** score averages the panel-title count
+over every plotted word, not just the eight landmarks, and divides by 10.
+Chance is 10 divided by 299, or
+`r sprintf("%.1f%%", 100 * 10 / (nrow(normalized_embeddings) - 1))`. A second
+t-SNE run with seed 7802 shows how much of the picture depends on the seed.
+
+```{r}
+neighbour_overlap <- function(first, second) {
+  mean(vapply(
+    seq_len(nrow(first)),
+    \(row) sum(first[row, ] %in% second[row, ]) / ncol(first),
+    numeric(1)
+  ))
+}
+
+tsne_seed_7802 <- run_tsne(7802)
+tsne_neighbours_7802 <- nearest_by_distance(tsne_seed_7802, 10L)
+
+preservation_table <- tibble(
+  comparison = c(
+    "PCA versus 50-dimensional neighbours",
+    "t-SNE seed 7801 versus 50-dimensional neighbours",
+    "t-SNE seed 7802 versus 50-dimensional neighbours",
+    "t-SNE seed 7801 versus t-SNE seed 7802",
+    "chance level for a random 10-word set"
+  ),
+  preservation = c(
+    neighbour_overlap(full_space_neighbours, pca_neighbours),
+    neighbour_overlap(full_space_neighbours, tsne_neighbours_7801),
+    neighbour_overlap(full_space_neighbours, tsne_neighbours_7802),
+    neighbour_overlap(tsne_neighbours_7801, tsne_neighbours_7802),
+    10 / (nrow(normalized_embeddings) - 1)
+  )
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  preservation_table |>
+    mutate(preservation = sprintf("%.1f%%", 100 * preservation)),
+  col.names = c("Comparison", "Average 10-neighbour overlap"),
+  caption = "Neighbour preservation for two-dimensional projections",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+pca_preservation <- preservation_table$preservation[1]
+tsne_preservation_7801 <- preservation_table$preservation[2]
+tsne_preservation_7802 <- preservation_table$preservation[3]
+cross_seed_agreement <- preservation_table$preservation[4]
+chance_preservation <- preservation_table$preservation[5]
+
+display_preservation <- sprintf("%.1f%%", 100 * preservation_table$preservation)
+
+stopifnot(
+  identical(rownames(tsne_neighbours_7802), rownames(full_space_neighbours)),
+  identical(dim(tsne_neighbours_7802), c(300L, 10L)),
+  chance_preservation > 0.03,
+  chance_preservation < 0.04,
+  pca_preservation > chance_preservation * 4,
+  pca_preservation < 0.35,
+  tsne_preservation_7801 > pca_preservation * 2,
+  tsne_preservation_7802 > pca_preservation * 2,
+  tsne_preservation_7801 < 0.90,
+  cross_seed_agreement > tsne_preservation_7801,
+  cross_seed_agreement < 0.90
+)
+```
+
+The measured result is modest but useful. PCA keeps about
+`r display_preservation[1]` of each word's 10 neighbours. The plotted t-SNE run
+keeps about `r display_preservation[2]`, and the second seed keeps about
+`r display_preservation[3]`. The two t-SNE runs agree with each other on about
+`r display_preservation[4]` of neighbours. That is well above chance, but it is
+not perfect stability.
+
+## Inspect labelled words as rows
+
+The table below is the text alternative for the landmark panels. It lists
+neighbours from the full vector space and from the two plotted projections, so
+no one has to infer them from point positions.
+
+```{r}
+neighbour_table <- tibble(word = label_words) |>
+  mutate(
+    full_space = map_chr(word, \(w) str_c(full_space_neighbours[w, 1:5], collapse = ", ")),
+    pca_plot = map_chr(word, \(w) str_c(pca_neighbours[w, 1:5], collapse = ", ")),
+    tsne_plot = map_chr(word, \(w) str_c(tsne_neighbours_7801[w, 1:5], collapse = ", "))
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  neighbour_table,
+  col.names = c(
+    "Landmark word",
+    "Nearest in 50 dimensions",
+    "Nearest in PCA plot",
+    "Nearest in t-SNE plot"
+  ),
+  caption = "Five nearest neighbours of each landmark word, in the model and in the two projections",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(neighbour_table$word, label_words),
+  all(str_count(neighbour_table$full_space, ",") == 4L),
+  all(str_count(neighbour_table$pca_plot, ",") == 4L),
+  all(str_count(neighbour_table$tsne_plot, ",") == 4L),
+  all(!str_detect(neighbour_table$full_space, fixed("</s>")))
+)
+```
+
+If a nearby label looks interesting, the next step is to read the texts or the
+neighbour table. The picture alone is not evidence that the words
+form a topic.
+
+## What this does not show
+
+The t-SNE plot does not give meaningful cluster sizes, gap sizes, group
+positions, or axis directions. PCA directions are mathematical summaries, but
+their signs can flip, and this plot still leaves most of the variance out.
+
+The preservation scores describe how faithfully the projection draws this small
+model, not how faithfully the model captures meaning. Small-corpus embeddings
+can change their neighbour lists when trained again, which is why this model is
+pinned. The same t-SNE seed can also draw a different layout on another
+computer, because low-level numerical details can differ, so every count on
+this page is computed during the render.
+
+## What to remember
+
+- Each plotted point began as a 50-number word vector.
+- Rows were scaled to length 1 before PCA and t-SNE, so distance in the
+  50-dimensional space ranks neighbours the same way as cosine similarity; a
+  projection can still change that order.
+- PCA's first two components explain about
+  `r sprintf("%.1f%%", 100 * sum(pca_variance[1:2]))` of the variance here.
+- Mark kept and lost neighbours in the plot instead of trusting how groups look.
+- t-SNE preserves more local neighbours than PCA in this run, but two seeds
+  still disagree on many neighbours.
+- Do not interpret clusters, gaps, sizes, positions, or axis directions as
+  findings.
+
+Keep the scatterplot beside the preservation table. The table says what the
+picture kept.
+
+## Sources
+
+- [Lesson 61, Training word vectors](../12_similarity/61-distributed-word-representations.qmd)
+- [van der Maaten and Hinton on t-SNE](https://jmlr.org/papers/v9/vandermaaten08a.html)
+- [Rtsne package documentation](https://cran.r-project.org/package=Rtsne)
+- [Kobak and Berens on t-SNE art and analysis](https://doi.org/10.1038/s41467-019-13056-x)
+- [Wattenberg, Viégas, and Johnson on how to use t-SNE effectively](https://doi.org/10.23915/distill.00002)
+- [Antoniak and Mimno on stability of word embeddings](https://aclanthology.org/Q18-1008/)
+- [R `prcomp` documentation](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/prcomp.html)

@@ -1,7 +1,6 @@
 ---
 title: "Choosing which examples to label next"
 subtitle: "Use active learning without confusing uncertainty with truth"
-author: "Alex Farach"
 description: "Learn how a small model can rank unlabeled workforce sentences for human review."
 categories: [training data, active learning, workforce research]
 ---
@@ -95,6 +94,10 @@ annotation_pool <- annotation_view |>
 held_back_labels <- annotation_view |>
   filter(document_id %in% c("J006", "F001")) |>
   select(sentence_id, reference_label)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   annotation_pool,
@@ -263,6 +266,10 @@ score_training <- function(text) {
 }
 
 training_scores <- score_training(annotation_pool$text)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -348,6 +355,10 @@ selection_table <- tibble(
   arrange(distance_from_half, sentence_id)
 selected_for_review <- selection_table |>
   slice_head(n = 2)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   selection_table |>
@@ -416,6 +427,10 @@ updated_labels <- bind_rows(
   initial_labels,
   newly_labeled
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   reviewed_selection,
@@ -518,6 +533,10 @@ pool_accuracy <- mean(
   pool_outcomes$predicted_training ==
     (pool_outcomes$is_training == 1L)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   selection_comparison |>
@@ -561,8 +580,8 @@ selection rule differed.
 Neither direction is a law. A rule that finds hard cases usually flatters the
 data and punishes the score; a rule that finds easy cases does the reverse; a
 rule that happens to select a class the model handles well can make a weak model
-look strong. What can be said in general is narrower and more useful: any
-estimate computed on a selected subset describes that subset.
+look strong. The more defensible statement is also more useful: any estimate
+computed on a selected subset describes that subset.
 
 The remedy has not changed. Keep a fixed evaluation set drawn at random,
 disjoint by document from anything active learning touches, and report pool-level

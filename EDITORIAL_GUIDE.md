@@ -71,6 +71,30 @@ Review every factual claim against its source. Look for missing qualifications,
 conflicting findings, outdated practice, weak comparisons, and claims that move
 from correlation to cause.
 
+### Round 6: record-boundary review
+
+When a lesson processes several messages, documents, or rows, pick one match and
+trace it back to the source record. Search the code for `collapse`, `list_c()`,
+`unlist()`, and global summaries. Each use needs a reason. Keep row-level results
+as the default and derive corpus-wide lists from them only when the lesson asks a
+corpus-wide question.
+
+Check names as well as values. A row position is not a source ID, and a column
+called `date` should not contain only the first date when more could exist.
+
+### Round 7: comparison and null review
+
+For every side-by-side rate, verify that the unit, denominator, case policy,
+tokenizer, and preprocessing match. Trace derived labels back through a keyed
+join rather than trusting row order.
+
+Put a same-split, deployable baseline beside each model score. Record whether a
+rule was written before or after its evaluation rows were read. For repeated
+splits, check paired wins, ties, and losses before writing `always` or `never`.
+For a permutation null, preserve nuisance structure that could create the
+statistic. A check run only after selecting one parameter value cannot justify
+that selection.
+
 ## Sign off on the rendered page
 
 The last read happens in the browser after code execution. Check the title,

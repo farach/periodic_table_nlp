@@ -1,7 +1,6 @@
 ---
 title: "Finding similar documents"
 subtitle: "Nearest neighbours depend on the representation"
-author: "Alex Farach"
 description: "Learn how speech-level document similarity changes under raw counts, tf-idf, and stopword removal."
 categories: [similarity, document similarity, inaugural addresses]
 ---
@@ -49,7 +48,6 @@ library(purrr)
 library(stringr)
 library(quanteda)
 library(quanteda.textstats)
-library(knitr)
 
 source("R/inaugural-corpus.R")
 source("R/permutation-null.R")
@@ -149,15 +147,19 @@ identity_table <- tibble(
   item = c("speeches", "people", "surnames", "surnames used by two people"),
   value = c(nrow(speeches), n_distinct(speeches$president), n_distinct(speeches$surname), nrow(surname_collisions))
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   representation_table,
   col.names = c("Representation", "Documents", "Features"),
   caption = "Three speech representations used for similarity comparisons",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   retention_by_era |>
     mutate(share_retained = round(share_retained, 3)),
   col.names = c("Era", "Speeches", "Original words", "Retained words", "Share retained", "Median kept paragraph words"),
@@ -165,7 +167,7 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   identity_table,
   col.names = c("Item", "Count"),
   caption = "The corpus has 60 speeches by 40 people but only 36 surnames",
@@ -258,8 +260,12 @@ pair_table <- bind_rows(most_similar_pairs, least_similar_pairs) |>
 least_with_short_washington <- least_similar_pairs |>
   filter(first == "1793-Washington" | second == "1793-Washington") |>
   nrow()
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   pair_table,
   col.names = c("Group", "First speech", "Second speech", "First president", "Second president", "First tokens", "Second tokens", "Cosine similarity"),
   caption = "Most and least similar speech pairs under speech-level tf-idf",
@@ -301,8 +307,12 @@ length_similarity_table <- mean_tfidf_similarity |>
     measure = "Mean tf-idf similarity and speech token count",
     correlation = cor(mean_similarity, speech_tokens)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   length_similarity_table |>
     mutate(correlation = round(correlation, 3)),
   col.names = c("Measure", "Correlation"),
@@ -366,8 +376,12 @@ nearest_table <- bind_rows(
     speech_tokens,
     similarity = round(similarity, 4)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   nearest_table,
   col.names = c("Target", "Representation", "Nearest neighbour", "Year", "President", "Neighbour tokens", "Cosine similarity"),
   caption = "One target speech gets three nearest neighbours under three representations",
@@ -427,8 +441,12 @@ raw_hub_table <- raw_neighbours |>
 harrison_hub_count <- raw_neighbours |>
   filter(neighbour == "1841-Harrison") |>
   nrow()
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   raw_hub_table,
   col.names = c("Raw-count nearest neighbour", "Number of target speeches"),
   caption = "How often each speech is the nearest neighbour under raw counts",
@@ -496,15 +514,19 @@ same_president_null <- permutation_null(
   seed = 6002L,
   alternative = "greater"
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   authorship_examples,
   col.names = c("Target", "Nearest neighbour", "President", "Cosine similarity"),
   caption = "Examples where a speech's nearest tf-idf neighbour has the same president",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   same_president_null |>
     mutate(across(where(is.numeric), ~ round(.x, 3))),
   col.names = c("Observed", "Null mean", "Null 5th pct", "Null 95th pct", "p-value", "Replicates", "Alternative"),

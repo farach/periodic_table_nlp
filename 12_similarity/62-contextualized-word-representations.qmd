@@ -1,7 +1,6 @@
 ---
 title: "Reading words in context"
 subtitle: "Compare one word vector with one token occurrence vector"
-author: "Alex Farach"
 description: "Learn how spaCy returns a context-sensitive token representation and why two uses of the same word can have different vectors."
 categories: [similarity, contextual embeddings, spaCy]
 ---
@@ -46,7 +45,6 @@ library(reticulate)
 library(spacyr)
 library(dplyr)
 library(tibble)
-library(knitr)
 
 source("R/use-spacy.R")
 
@@ -66,8 +64,12 @@ pipeline_table <- tibble(
     as.character(nlp$vocab$vectors$shape[[2]])
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   pipeline_table,
   col.names = c("Item", "Value"),
   caption = "The pinned small spaCy pipeline has no static word-vector table",
@@ -118,8 +120,12 @@ token_table <- tibble(
     TRUE ~ "other token"
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   token_table,
   col.names = c("Position", "Token", "Role in this lesson"),
   caption = "Tokens in the sentence and the positions compared below",
@@ -186,8 +192,12 @@ comparison_table <- tibble(
   cosine_similarity = c(bank_cosine, the_cosine),
   percentile_of_all_pairs = c(bank_percentile, the_percentile)
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   all_pair_summary |>
     mutate(cosine = round(cosine, 4)),
   col.names = c("All-pair baseline", "Cosine"),
@@ -195,7 +205,7 @@ kable(
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   comparison_table |>
     mutate(
       cosine_similarity = round(cosine_similarity, 4),
@@ -280,8 +290,12 @@ role_gap <- abs(
   bank_control_sentences$cosine_similarity[bank_control_sentences$comparison == "different senses, different roles"] -
     bank_control_sentences$cosine_similarity[bank_control_sentences$comparison == "same financial sense, different roles"]
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   bank_control_sentences |>
     mutate(cosine_similarity = round(cosine_similarity, 4)),
   col.names = c("Comparison", "Sentences", "Cosine similarity"),
@@ -308,9 +322,10 @@ stopifnot(
 
 The reversal is the lesson. Same financial sense in different grammatical roles
 scores about 0.3447, almost the same as different senses in different roles at
-about 0.3466. Same financial sense in the same role scores about 0.9422. In this
-small pipeline, syntactic role moves the vectors more than the dictionary sense
-of `bank`.
+about 0.3466. Same financial sense in the same role scores about 0.9422. In these
+four probes, the grammatical-role contrast is at least as large as the
+dictionary-sense contrast. This is an illustration, not a word-sense evaluation:
+there is no benchmark or independent sense labeling here.
 
 ## Contrast with one vector per word
 
@@ -337,8 +352,12 @@ final_checks <- tibble(
     as.character(nlp$vocab$vectors$shape[[1]])
   )
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   final_checks,
   col.names = c("Check", "Value"),
   caption = "Final checks for the contextual representation example",
@@ -367,8 +386,8 @@ stopifnot(
 - The sentence produces a 15 by 96 tensor.
 - The two `bank` occurrence vectors score about 0.3466, above most token pairs in
   that sentence.
-- In this model, same-sense controls point to grammatical role rather than word
-  sense.
+- In these four probes, grammatical role matters at least as much as the
+  dictionary-sense contrast; that is not a word-sense benchmark.
 
 The student keeps both underlines and adds a note: same spelling, different
 occurrence vectors, not a sense label.

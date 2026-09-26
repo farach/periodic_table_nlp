@@ -1,7 +1,6 @@
 ---
 title: "Chopping word endings"
 subtitle: "Use Snowball stems without mistaking them for words"
-author: "Alex Farach"
 description: "Learn how stemming groups some workforce word forms and creates non-word stems."
 categories: [word processing, stemming, workforce research]
 ---
@@ -15,8 +14,8 @@ the list grows. If endings are chopped too aggressively, different meanings can
 collapse into one code.
 
 **Stemming** removes or changes word endings using fixed rules. In linguistics,
-a stem is the part of a word that an ending attaches to. Here the word is used
-more narrowly: a **stem** is whatever string these rules return. It is a
+a stem is the part of a word that an ending attaches to. In this lesson, a
+**stem** is whatever string these rules return. It is a
 comparison key. It may or may not be a word.
 
 ::: {.callout-note}
@@ -95,6 +94,10 @@ stemmed_vocabulary <- tibble(
     changed = word != stem,
     stem_in_dictionary = known_to_hunspell(stem)
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   stemmed_vocabulary |>
@@ -134,6 +137,10 @@ example_stems <- tibble(
   word = c("shifts", "requires", "required"),
   stem = wordStem(word, language = "en")
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   example_stems,
@@ -183,6 +190,10 @@ non_word_examples <- stemmed_vocabulary |>
   filter(changed, !stem_in_dictionary) |>
   arrange(word) |>
   slice_head(n = 8)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   stem_quality,
@@ -239,6 +250,10 @@ collision_groups <- stemmed_vocabulary |>
     .groups = "drop"
   ) |>
   arrange(stem)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   collision_groups,
@@ -284,6 +299,10 @@ miss_pairs <- tribble(
     stem_b = wordStem(word_b, language = "en"),
     same_stem = stem_a == stem_b
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   miss_pairs,

@@ -1,0 +1,7 @@
+question_id,question,probe_type,expected_action,gold_passage_id,acceptable_answers,author_note
+Q1,How much is the weekly training stipend?,direct number,answer,H08,$150|$150 per week|$150 a week|150 dollars per week,"Invented by the site author for teaching; not a real program, policy, or benchmark."
+Q2,When do applications close?,direct date,answer,H14,October 15|Oct. 15|October 15th,"Invented by the site author for teaching; not a real program, policy, or benchmark."
+Q3,Where can my kid stay while I study at night?,paraphrase with no shared content word,answer,H13,Room 104|in Room 104|free child care in Room 104,"Invented by the site author for teaching; not a real program, policy, or benchmark."
+Q4,Do I need data experience to join the Data Support Certificate?,yes or no,answer,H12,No|no prior data experience is required,"Invented by the site author for teaching; not a real program, policy, or benchmark."
+Q5,How much does parking cost at the centre?,"unanswerable on topic, with dollar amounts nearby",abstain,,,"Invented by the site author for teaching; not a real program, policy, or benchmark."
+Q6,When does the Saturday forklift session start?,false premise contradicted by a passage,flag premise,H11,,"Invented by the site author for teaching; not a real program, policy, or benchmark."

@@ -1,0 +1,782 @@
+---
+title: "Adding facts to a knowledge base"
+subtitle: "Keep provenance, conflicts, NIL records, and review decisions visible"
+description: "Learn how knowledge base population links mentions, adds typed facts, and records why some candidates stay out of the knowledge base."
+categories: [systems, knowledge base population, entity linking]
+---
+
+Grace receives a week of short announcements about Riverton training programs.
+Some repeat each other. Two give different deadlines for the same program.
+Another uses the name `Riverton`, which could mean two different places in the
+reference table.
+
+**Knowledge base population** reads documents, links entity mentions, and adds
+typed facts to a knowledge base with provenance. A knowledge base is not a truth
+machine. It is a structured record of claims, sources, conflicts, and review
+decisions.
+
+::: {.callout-note}
+The Riverton records in this lesson are fictional teaching examples about training programs, places, and organisations.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+By the end of this lesson, you will be able to:
+
+- distinguish entity linking from fact insertion;
+- declare single-valued and list-valued slots before merging;
+- keep document dates, evidence text, and offsets for every fact;
+- merge duplicate facts without losing provenance;
+- keep conflicting dated values instead of overwriting them; and
+- route negated, hedged, ambiguous, NIL, and type-failed candidates to review.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the Riverton reference list
+
+The existing knowledge base starts with entity IDs and aliases. The lesson reads
+the local CSV files with fixed column types, computes each file's SHA-256
+fingerprint, and compares it with the fingerprint recorded when the file was
+made. A mismatch stops the page before any fact is added.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(digest)
+
+entities <- read_csv(
+  "data/riverton/riverton-entities.csv",
+  na = character(),
+  col_types = cols(
+    entity_id = col_character(),
+    canonical_name = col_character(),
+    entity_type = col_character(),
+    description = col_character()
+  )
+) |>
+  select(entity_id, canonical_name, entity_type)
+
+aliases <- read_csv(
+  "data/riverton/riverton-aliases.csv",
+  na = character(),
+  col_types = cols(
+    entity_id = col_character(),
+    alias = col_character()
+  )
+) |>
+  left_join(entities, by = "entity_id")
+
+metadata <- read_csv(
+  "data/riverton/riverton-reference-metadata.csv",
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    license = col_character(),
+    created_on = col_character(),
+    fingerprint = col_character()
+  )
+)
+
+entity_hash <- digest(
+  paste(read_lines("data/riverton/riverton-entities.csv"), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+alias_hash <- digest(
+  paste(read_lines("data/riverton/riverton-aliases.csv"), collapse = "\n"),
+  algo = "sha256",
+  serialize = FALSE
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  entities,
+  col.names = c("Entity ID", "Canonical name", "Type"),
+  caption = "Existing Riverton entity IDs used by the population step",
+  row.names = FALSE
+)
+
+tibble(
+  artifact = c("riverton-entities.csv", "riverton-aliases.csv"),
+  rows = c(nrow(entities), nrow(aliases)),
+  computed = c(entity_hash, alias_hash)
+) |>
+  left_join(
+    metadata |>
+      select(artifact, recorded = fingerprint),
+    by = "artifact"
+  ) |>
+  mutate(matches = computed == recorded) |>
+  knitr::kable(
+    col.names = c(
+      "Artifact", "Rows", "Computed SHA-256", "Recorded SHA-256", "Match"
+    ),
+    caption = "Reference files checked against their recorded fingerprints before use",
+    row.names = FALSE
+  )
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(entities), 8L),
+  identical(nrow(aliases), 17L),
+  identical(
+    entity_hash,
+    metadata$fingerprint[metadata$artifact == "riverton-entities.csv"]
+  ),
+  identical(
+    alias_hash,
+    metadata$fingerprint[metadata$artifact == "riverton-aliases.csv"]
+  ),
+  sum(aliases$alias == "Riverton") == 2L
+)
+```
+
+The table prints names and types only. It does not repeat the description field
+for the forklift credential because this lesson is about provenance, and that
+description is not evidence for a job-board claim.
+
+## Declare slot rules before merging
+
+A **slot** is a typed place where the knowledge base stores a value. Some slots
+can hold a list. Others are single-valued for a named time period, so a second
+dated value becomes a conflict to review.
+
+```{r}
+slot_schema <- tribble(
+  ~slot, ~subject_type, ~object_type, ~cardinality, ~merge_rule,
+  "offers", "organisation", "credential", "list-valued",
+  "One fact per subject-object pair; repeated evidence adds provenance.",
+  "requires", "organisation", "credential", "list-valued",
+  "One fact per subject-object pair; negated or hedged statements stay out of facts.",
+  "application_deadline", "organisation", "date literal", "single-valued",
+  "Keep each dated value, flag conflict, and let review decide."
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  slot_schema,
+  col.names = c("Slot", "Subject type", "Object type", "Cardinality", "Merge rule"),
+  caption = "Slot cardinality and merge rules declared before population",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  "single-valued" %in% slot_schema$cardinality,
+  "list-valued" %in% slot_schema$cardinality,
+  all(c("offers", "requires", "application_deadline") %in% slot_schema$slot)
+)
+```
+
+The slot schema tells the code what counts as a duplicate and what counts as a
+conflict. Without that rule, a pipeline might replace a deadline without
+reporting the value recorded on 4 September, or turn two offerings into an
+error.
+
+## Prepare dated announcements
+
+The documents below are constructed announcements. They include one duplicate,
+one single-valued conflict, one negated statement, one hedged
+statement, an ambiguous `Riverton` mention, one NIL organisation, one
+undeclared slot, and one visible type-check failure.
+
+```{r}
+extractor_version <- "riverton-kbp-rules-1.0"
+
+documents <- tribble(
+  ~document_id, ~document_date, ~text,
+  "A001", as.Date("2026-09-01"), "Riverton Skills Centre offers the Data Support Certificate.",
+  "A002", as.Date("2026-09-03"), "The Skills Centre offers DATA SUPPORT CERTIFICATE.",
+  "A003", as.Date("2026-09-04"), "Riverton Skills Centre application deadline is October 15.",
+  "A004", as.Date("2026-09-06"), "Riverton Skills Centre application deadline is November 1.",
+  "A005", as.Date("2026-09-07"), "Marrow County Transit does not require the Forklift Operator Licence.",
+  "A006", as.Date("2026-09-08"), "Riverton will host the Data Support Certificate.",
+  "A007", as.Date("2026-09-09"), "Riverton Transit offers forklift certification.",
+  "A008", as.Date("2026-09-10"), "Bellhaven offers the Data Support Certificate.",
+  "A009", as.Date("2026-09-11"), "Riverton Skills Centre may offer the Forklift Operator Licence.",
+  "A010", as.Date("2026-09-12"), "Riverton Skills Centre promotes the Data Support Certificate."
+)
+
+candidate_plan <- tribble(
+  ~candidate_id, ~document_id, ~slot, ~subject_mention, ~object_mention, ~status, ~expected_action,
+  "CAND-001", "A001", "offers", "Riverton Skills Centre", "Data Support Certificate", "asserted", "add fact",
+  "CAND-002", "A002", "offers", "Skills Centre", "DATA SUPPORT CERTIFICATE", "asserted", "merge duplicate",
+  "CAND-003", "A003", "application_deadline", "Riverton Skills Centre", "October 15", "asserted", "add fact",
+  "CAND-004", "A004", "application_deadline", "Riverton Skills Centre", "November 1", "asserted", "flag conflict",
+  "CAND-005", "A005", "requires", "Marrow County Transit", "Forklift Operator Licence", "negated", "reject negated",
+  "CAND-006", "A006", "offers", "Riverton", "Data Support Certificate", "asserted", "hold ambiguous",
+  "CAND-007", "A007", "offers", "Riverton Transit", "forklift certification", "asserted", "hold NIL",
+  "CAND-008", "A008", "offers", "Bellhaven", "Data Support Certificate", "asserted", "reject type",
+  "CAND-009", "A009", "offers", "Riverton Skills Centre", "Forklift Operator Licence", "hedged", "hold hedged",
+  "CAND-010", "A010", "promotes", "Riverton Skills Centre", "Data Support Certificate", "asserted", "reject undeclared slot"
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  documents,
+  col.names = c("Document ID", "Document date", "Evidence text"),
+  caption = "Constructed dated announcements for knowledge base population",
+  row.names = FALSE
+)
+
+knitr::kable(
+  candidate_plan,
+  col.names = c(
+    "Candidate ID", "Document ID", "Slot", "Subject mention", "Object mention",
+    "Status", "Expected action"
+  ),
+  caption = "Same-author expected actions written before the pipeline runs",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(documents), 10L),
+  identical(nrow(candidate_plan), 10L),
+  all(candidate_plan$status %in% c("asserted", "negated", "hedged")),
+  any(candidate_plan$expected_action == "hold NIL"),
+  any(candidate_plan$expected_action == "hold hedged"),
+  any(candidate_plan$expected_action == "reject undeclared slot"),
+  any(candidate_plan$expected_action == "flag conflict")
+)
+```
+
+These expected actions are not a benchmark. They are a checklist for a teaching
+pipeline written by the same author as the examples.
+They are hand-supplied candidates, standing in for an extractor such as lesson
+69's relation extractor. The code below links their mentions, checks types and
+status, and applies population rules.
+
+## Link mentions and keep offsets
+
+The linker below accepts an alias only when it has one candidate. If the mention
+is absent from the alias table, the code creates a provisional NIL ID for a
+subject mention; a candidate whose object is not in the table is held for
+review. If the alias has several candidates, the candidate goes to review
+instead of choosing a nearby name.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show the mention-linking code"
+
+normalize_text <- function(value) {
+  str_to_lower(value, locale = "en")
+}
+
+alias_lookup <- aliases |>
+  mutate(normalized_alias = normalize_text(alias)) |>
+  distinct(normalized_alias, entity_id, canonical_name, entity_type)
+
+link_mention <- function(mention) {
+  rows <- alias_lookup |>
+    filter(normalized_alias == normalize_text(mention))
+
+  if (nrow(rows) == 0L) {
+    return(tibble(
+      linked_id = NA_character_,
+      linked_type = NA_character_,
+      link_status = "NIL"
+    ))
+  }
+
+  if (n_distinct(rows$entity_id) > 1L) {
+    return(tibble(
+      linked_id = paste(sort(unique(rows$entity_id)), collapse = "; "),
+      linked_type = paste(sort(unique(rows$entity_type)), collapse = "; "),
+      link_status = "ambiguous"
+    ))
+  }
+
+  tibble(
+    linked_id = rows$entity_id[[1]],
+    linked_type = rows$entity_type[[1]],
+    link_status = "linked"
+  )
+}
+
+locate_mention <- function(text, mention) {
+  location <- str_locate(
+    text,
+    regex(escape_regex(mention), ignore_case = TRUE)
+  )
+  tibble(
+    start = as.integer(location[1, 1]),
+    end = as.integer(location[1, 2])
+  )
+}
+
+escape_regex <- function(value) {
+  str_replace_all(value, "([.\\\\|()\\[\\]{}^$*+?])", "\\\\\\1")
+}
+
+nil_mentions <- candidate_plan |>
+  distinct(subject_mention) |>
+  mutate(link = map(subject_mention, link_mention)) |>
+  unnest(link) |>
+  filter(link_status == "NIL") |>
+  mutate(provisional_id = sprintf("NIL-%04d", row_number()))
+
+candidates <- candidate_plan |>
+  left_join(documents, by = "document_id") |>
+  mutate(
+    subject_link = map(subject_mention, link_mention),
+    object_link = map2(
+      slot,
+      object_mention,
+      \(current_slot, current_mention) {
+        if (current_slot == "application_deadline") {
+          tibble(
+            linked_id = current_mention,
+            linked_type = "date literal",
+            link_status = "literal value (not linked)"
+          )
+        } else {
+          link_mention(current_mention)
+        }
+      }
+    ),
+    subject_offsets = map2(text, subject_mention, locate_mention),
+    object_offsets = map2(text, object_mention, locate_mention)
+  ) |>
+  unnest(subject_link) |>
+  rename(
+    subject_id = linked_id,
+    subject_type = linked_type,
+    subject_link_status = link_status
+  ) |>
+  unnest(object_link) |>
+  rename(
+    object_id = linked_id,
+    object_type = linked_type,
+    object_link_status = link_status
+  ) |>
+  unnest(subject_offsets) |>
+  rename(subject_start = start, subject_end = end) |>
+  unnest(object_offsets) |>
+  rename(object_start = start, object_end = end) |>
+  left_join(
+    nil_mentions |>
+      select(subject_mention, provisional_id),
+    by = "subject_mention"
+  ) |>
+  mutate(
+    subject_id = if_else(subject_link_status == "NIL", provisional_id, subject_id),
+    subject_type = if_else(subject_link_status == "NIL", "organisation", subject_type),
+    object_value = case_when(
+      slot == "application_deadline" ~ object_mention,
+      TRUE ~ object_id
+    )
+  )
+
+link_table <- candidates |>
+  select(
+    candidate_id,
+    subject_mention,
+    subject_id,
+    subject_type,
+    subject_link_status,
+    object_mention,
+    object_id,
+    object_type,
+    object_link_status
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  link_table,
+  col.names = c(
+    "Candidate ID", "Subject mention", "Subject ID", "Subject type",
+    "Subject link status", "Object mention", "Object ID", "Object type",
+    "Object link status"
+  ),
+  caption = "Mention linking outcomes before fact insertion",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(candidates$subject_link_status[candidates$candidate_id == "CAND-006"], "ambiguous"),
+  identical(candidates$subject_link_status[candidates$candidate_id == "CAND-007"], "NIL"),
+  all(
+    candidates$object_link_status[candidates$slot == "application_deadline"] ==
+      "literal value (not linked)"
+  ),
+  !any(is.na(candidates$object_id[candidates$slot == "application_deadline"])),
+  identical(candidates$subject_id[candidates$candidate_id == "CAND-007"], "NIL-0001"),
+  str_detect(candidates$subject_id[candidates$candidate_id == "CAND-006"], "LOC-0001"),
+  str_detect(candidates$subject_id[candidates$candidate_id == "CAND-006"], "LOC-0002"),
+  all(!is.na(candidates$subject_start)),
+  all(!is.na(candidates$object_start))
+)
+```
+
+The `Riverton` row keeps both candidate IDs in the review record. It is not
+auto-linked to either place. The `Riverton Transit` row gets a provisional NIL
+ID and is not merged into Marrow County Transit.
+
+## Apply slot, status, and type decisions
+
+The action table is the evaluation for this lesson. It shows whether the
+pipeline made the expected decision for each candidate. It is not precision and
+recall.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show the slot and type checks"
+
+schema_checks <- candidates |>
+  left_join(slot_schema, by = "slot") |>
+  mutate(
+    declared_slot = !is.na(subject_type.y),
+    subject_type_ok = declared_slot & subject_type.x == subject_type.y,
+    object_type_ok = case_when(
+      !declared_slot ~ FALSE,
+      object_type.y == "date literal" ~ str_detect(object_mention, "^[A-Z][a-z]+ [0-9]+$"),
+      TRUE ~ object_type.x == object_type.y
+    ),
+    type_check = subject_type_ok & object_type_ok,
+    fact_key = paste(slot, subject_id, object_value, sep = "|")
+  )
+
+first_seen <- schema_checks |>
+  filter(status == "asserted", subject_link_status == "linked", type_check) |>
+  arrange(document_date, candidate_id) |>
+  distinct(fact_key, .keep_all = TRUE) |>
+  transmute(first_candidate_id = candidate_id, fact_key)
+
+single_value_seen <- schema_checks |>
+  filter(status == "asserted", subject_link_status == "linked", type_check) |>
+  filter(cardinality == "single-valued") |>
+  count(slot, subject_id, name = "single_value_count")
+
+first_single_seen <- schema_checks |>
+  filter(status == "asserted", subject_link_status == "linked", type_check) |>
+  filter(cardinality == "single-valued") |>
+  arrange(document_date, candidate_id) |>
+  group_by(slot, subject_id) |>
+  slice_head(n = 1) |>
+  ungroup() |>
+  transmute(slot, subject_id, first_single_candidate_id = candidate_id)
+
+candidate_actions <- schema_checks |>
+  left_join(first_seen, by = "fact_key") |>
+  left_join(single_value_seen, by = c("slot", "subject_id")) |>
+  left_join(first_single_seen, by = c("slot", "subject_id")) |>
+  mutate(
+    single_value_count = coalesce(single_value_count, 0L),
+    actual_action = case_when(
+      status == "negated" ~ "reject negated",
+      status == "hedged" ~ "hold hedged",
+      subject_link_status == "ambiguous" ~ "hold ambiguous",
+      subject_link_status == "NIL" ~ "hold NIL",
+      !declared_slot ~ "reject undeclared slot",
+      object_link_status == "NIL" | is.na(type_check) ~ "hold NIL",
+      !type_check ~ "reject type",
+      candidate_id != first_candidate_id ~ "merge duplicate",
+      cardinality == "single-valued" &
+        single_value_count > 1L &
+        candidate_id != first_single_candidate_id ~ "flag conflict",
+      TRUE ~ "add fact"
+    ),
+    action_matches = actual_action == expected_action,
+    action_reason = case_when(
+      status == "negated" ~ "negated statements never become facts",
+      status == "hedged" ~ "hedged statements wait for review",
+      subject_link_status == "ambiguous" ~ "alias maps to more than one ID",
+      subject_link_status == "NIL" ~ "new name receives a provisional ID for review",
+      !declared_slot ~ "slot is not declared in the schema",
+      object_link_status == "NIL" | is.na(type_check) ~ "object mention is not linked",
+      !type_check ~ "slot type check failed",
+      candidate_id != first_candidate_id ~ "same fact already exists; keep provenance",
+      cardinality == "single-valued" &
+        single_value_count > 1L &
+        candidate_id != first_single_candidate_id ~ "single-valued slot has dated conflict",
+      TRUE ~ "asserted, linked, and type-compatible"
+    )
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  candidate_actions |>
+    select(candidate_id, expected_action, actual_action, action_matches, action_reason),
+  col.names = c("Candidate ID", "Expected action", "Pipeline action", "Match", "Reason"),
+  caption = "Expected-versus-actual action table for candidate facts",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(candidate_actions$action_matches),
+  identical(
+    candidate_actions$actual_action[candidate_actions$candidate_id == "CAND-005"],
+    "reject negated"
+  ),
+  identical(
+    candidate_actions$actual_action[candidate_actions$candidate_id == "CAND-004"],
+    "flag conflict"
+  ),
+  identical(
+    candidate_actions$actual_action[candidate_actions$candidate_id == "CAND-008"],
+    "reject type"
+  ),
+  identical(
+    candidate_actions$actual_action[candidate_actions$candidate_id == "CAND-009"],
+    "hold hedged"
+  ),
+  identical(
+    candidate_actions$actual_action[candidate_actions$candidate_id == "CAND-010"],
+    "reject undeclared slot"
+  )
+)
+```
+
+The type failure is visible: `Bellhaven` is a place ID, not an organisation.
+The negated requirement row is rejected rather than stored as a negative fact or
+used to delete anything.
+
+## Build facts and provenance
+
+The final fact table keeps one fact for the duplicate offer and two dated
+deadline values for the conflict. Provenance stays in a separate table so one
+fact can point to several source records.
+
+```{r}
+accepted_candidates <- candidate_actions |>
+  filter(actual_action %in% c("add fact", "merge duplicate", "flag conflict"))
+
+fact_keys <- accepted_candidates |>
+  distinct(slot, subject_id, object_value, fact_key) |>
+  arrange(slot, subject_id, object_value) |>
+  mutate(fact_id = sprintf("FACT-%03d", row_number()))
+
+populated_facts <- accepted_candidates |>
+  inner_join(fact_keys, by = c("slot", "subject_id", "object_value", "fact_key")) |>
+  group_by(fact_id, slot, subject_id, object_value) |>
+  summarise(
+    provenance_records = n(),
+    conflict_flag = first(cardinality) == "single-valued" &
+      n_distinct(candidate_actions$object_value[
+        candidate_actions$slot == first(slot) &
+          candidate_actions$subject_id == first(subject_id) &
+          candidate_actions$actual_action %in% c("add fact", "flag conflict")
+      ]) > 1L,
+    .groups = "drop"
+  ) |>
+  arrange(fact_id)
+
+fact_provenance <- accepted_candidates |>
+  inner_join(fact_keys, by = c("slot", "subject_id", "object_value", "fact_key")) |>
+  transmute(
+    fact_id,
+    candidate_id,
+    document_id,
+    document_date,
+    evidence_text = text,
+    subject_start,
+    subject_end,
+    object_start,
+    object_end,
+    candidate_source = "hand-supplied candidate",
+    pipeline_rules_version = extractor_version
+  ) |>
+  arrange(fact_id, document_id)
+
+review_queue <- candidate_actions |>
+  filter(!actual_action %in% c("add fact", "merge duplicate", "flag conflict")) |>
+  transmute(
+    candidate_id,
+    document_id,
+    subject_mention,
+    object_mention,
+    provisional_or_candidate_id = subject_id,
+    review_reason = action_reason
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  populated_facts,
+  col.names = c(
+    "Fact ID", "Slot", "Subject ID", "Object value",
+    "Provenance records", "Conflict flagged"
+  ),
+  caption = "Populated facts after duplicate and conflict handling",
+  row.names = FALSE
+)
+
+knitr::kable(
+  fact_provenance,
+  col.names = c(
+    "Fact ID", "Candidate ID", "Document ID", "Document date",
+    "Evidence text", "Subject start", "Subject end",
+    "Object start", "Object end", "Candidate source",
+    "Pipeline rules version"
+  ),
+  caption = "Provenance records for every populated fact",
+  row.names = FALSE
+)
+
+knitr::kable(
+  review_queue,
+  col.names = c(
+    "Candidate ID", "Document ID", "Subject mention", "Object mention",
+    "Provisional or candidate ID", "Review reason"
+  ),
+  caption = "Candidates held out of the fact table for review",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(!is.na(fact_provenance$document_id)),
+  all(!is.na(fact_provenance$document_date)),
+  all(nzchar(fact_provenance$evidence_text)),
+  all(!is.na(fact_provenance$subject_start)),
+  all(!is.na(fact_provenance$object_start)),
+  all(fact_provenance$candidate_source == "hand-supplied candidate"),
+  all(!is.na(fact_provenance$pipeline_rules_version)),
+  !any(fact_provenance$candidate_id == "CAND-005"),
+  !anyNA(populated_facts$object_value),
+  populated_facts$provenance_records[populated_facts$slot == "offers"] == 2L,
+  all(populated_facts$conflict_flag[populated_facts$slot == "application_deadline"]),
+  any(review_queue$provisional_or_candidate_id == "NIL-0001")
+)
+```
+
+One offer fact has two provenance records. The two deadline facts both remain,
+and both are flagged because a later document might be an update, an error, or a
+different session. The candidate set adds `r nrow(populated_facts)` populated
+facts after the review rules run. The table records the conflict; it does not
+resolve it.
+The `FACT-` values here are display IDs minted during this render; a real
+knowledge base keeps issued fact IDs stable once it publishes them.
+
+## Prepare the graph facts used in the visualization lesson
+
+Lesson 81 redraws a small graph from the same IDs. The table below is a compact
+edge view of the populated facts. The two Riverton place IDs stay separate
+because entity IDs, not labels, are the keys.
+
+```{r}
+graph_facts <- populated_facts |>
+  left_join(
+    fact_provenance |>
+      group_by(fact_id) |>
+      summarise(document_ids = paste(document_id, collapse = "; "), .groups = "drop"),
+    by = "fact_id"
+  ) |>
+  transmute(
+    subject_id,
+    relation = slot,
+    object_value,
+    document_ids,
+    source = "populated fact"
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  graph_facts,
+  col.names = c("Subject ID", "Relation", "Object value", "Document IDs", "Source"),
+  caption = "Fact edges rebuilt in the graph visualization lesson",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c("LOC-0001", "LOC-0002") %in% entities$entity_id),
+  "LOC-0002" %in% setdiff(entities$entity_id, graph_facts$subject_id),
+  any(graph_facts$relation == "offers"),
+  any(graph_facts$object_value == "November 1"),
+  !any(graph_facts$subject_id == "NIL-0001"),
+  all(graph_facts$source == "populated fact"),
+  all(graph_facts$document_ids %in% c("A001; A002", "A003", "A004"))
+)
+```
+
+These graph edges are still KB records, not proof about the real world. The
+source column says they came from the constructed population step, and the
+document IDs point back to the provenance table above. The two `Riverton` place
+IDs remain in the entity table, but their shared label is a naming note for the
+visualization lesson rather than a factual relation.
+
+## What the knowledge base does not know
+
+A missing edge is not evidence that a relation is false. This is the open-world
+caveat: the KB records what it has seen and accepted under its current policy.
+It may be incomplete, stale, or contradicted by a later document. Provenance
+helps a reviewer inspect a claim; it does not certify the claim as true.
+
+## What to remember
+
+- Knowledge base population combines linking and slot filling.
+- Slot cardinality must be declared before merging facts.
+- Duplicate facts can share one fact ID with several provenance records.
+- Single-valued conflicts keep both dated values until review.
+- Negated and hedged statements do not become facts.
+- `Riverton` stays ambiguous, and a NIL organisation receives a provisional ID.
+
+Grace ends with fewer automatic facts than candidate statements. That is the
+point: a useful KBP step records what it added, what it held, and why.
+
+## Sources
+
+- [Ji and Grishman (2011), Knowledge Base Population: Successful Approaches and Challenges](https://aclanthology.org/P11-1115/)
+- [NIST TAC KBP 2014 Cold Start track](https://tac.nist.gov/2014/KBP/ColdStart/index.html)
+- [Wikidata Help:Qualifiers](https://www.wikidata.org/wiki/Help:Qualifiers)
+- [Wikidata Help:Ranking](https://www.wikidata.org/wiki/Help:Ranking)
+- [Hogan et al. (2021), Knowledge Graphs](https://arxiv.org/abs/2003.02320)
+- [Zhang et al. (2017), TACRED](https://aclanthology.org/D17-1004/)

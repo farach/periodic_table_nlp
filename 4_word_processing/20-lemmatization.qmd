@@ -1,7 +1,6 @@
 ---
 title: "Choosing dictionary forms"
 subtitle: "Compare teaching lemmas with a released pipeline"
-author: "Alex Farach"
 description: "Learn how lemmas differ from stems and why lemmatizers built in different ways disagree on workforce text."
 categories: [word processing, lemmatization, workforce research]
 ---
@@ -123,6 +122,10 @@ spacy_parsed <- spacy_parse(
   nounphrase = TRUE
 ) |>
   as_tibble()
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   spacy_info_table,
@@ -213,6 +216,10 @@ lemma_stem_comparison <- same_word_lemmas |>
     spacy_known = known_to_hunspell(spacy_lemma)
   ) |>
   arrange(match(word, comparison_words))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   lemma_stem_comparison,
@@ -271,6 +278,10 @@ lemma_variation <- bind_rows(
   ) |>
   filter(distinct_lemmas > 1L) |>
   arrange(system, word)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   lemma_variation,
@@ -301,8 +312,8 @@ contrast into a causal story about training size alone.
 ## Count dictionary failures
 
 A cheap screen asks whether each lemma appears in hunspell's dictionary. It
-answers one narrow question: did the model return a string that is not an English
-word? It cannot tell a correct lemma that the dictionary happens not to hold,
+answers one specific question: did the model return a string that is not an
+English word? It cannot tell a correct lemma that the dictionary happens not to hold,
 such as `riverton`, from a genuine error. It is also blind to a wrong lemma that
 is a real word. If a model returned `leave` as the lemma of `left` in the phrase
 `the left column`, this check would pass it. The counts below measure broken
@@ -350,6 +361,10 @@ flagged_comparison <- compared_word_lemmas |>
     udpipe_broken_string,
     spacy_broken_string
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   lemma_quality,
@@ -429,14 +444,18 @@ final_check <- tibble(
   )
 )
 
+invisible(suppressMessages(spacy_finalize()))
+```
+
+```{r}
+#| echo: false
+
 knitr::kable(
   final_check,
   col.names = c("Model", "Lemma for provided"),
   caption = "A final check on the clearest contrast",
   row.names = FALSE
 )
-
-invisible(suppressMessages(spacy_finalize()))
 ```
 
 ```{r}

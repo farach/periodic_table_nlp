@@ -40,7 +40,9 @@ For each lesson, keep:
 - the strongest supporting source;
 - the strongest credible counterevidence;
 - the populations, languages, domains, and time periods covered;
-- licensing, consent, and provenance concerns; and
+- licensing, consent, and provenance concerns, including publisher
+  text-and-data-mining terms that can forbid bulk download or model training
+  even when a few records are visible in a browser; and
 - a note about what remains unknown.
 
 The current review record lives in `data/lesson_reviews.csv`. An available
@@ -70,7 +72,9 @@ Later lessons should consider these developments when they affect the task:
 
 Do not force every topic into every lesson. Character encoding does not need an
 LLM section. Corpus construction does need provenance and consent because large
-models depend on collected text.
+models depend on collected text. Citation databases and bibliometric exports
+are licensed data products. Treat co-word or co-citation maps as an application
+of graph and trend methods, not as a separate NLP task.
 
 ## Describe decoding methods precisely
 
@@ -124,6 +128,37 @@ the intervention, outcome, comparison or counterfactual, identifying
 assumptions, plausible confounders, and conditions under which the conclusion
 would fail. A citation count cannot repair an unidentified causal claim.
 
+## Use a language model as an instrument
+
+When a lesson or guide uses a language model to label, extract, judge, or
+summarize text that feeds a reported result, treat the model as a measuring
+instrument:
+
+1. Write the codebook and prompt before the first run, store them in a file,
+   and record the file's SHA-256. Do not tune the prompt on the rows used to
+   report results without saying so.
+2. Record the model ID and exact revision or dated version, the decoding
+   settings, the software versions, the platform, and the run date.
+3. Save every raw output with the ID of its input. The saved outputs are the
+   record; a rerun is a check on them. Temperature 0 and greedy decoding do not
+   guarantee identical output across machines, library versions, or batch
+   sizes, so report how many rerun answers matched instead of asserting that
+   they do.
+4. Compare model labels with a random, known-probability sample reviewed by
+   people, and report both kinds of error rather than accuracy alone.
+5. Any estimate built from model labels must be corrected with that sample,
+   using the difference estimator, prediction-powered inference, or
+   design-based supervised learning. Model-only numbers are not findings.
+6. Validate a model used as a judge the same way, including a swap of answer
+   order, before reporting its scores.
+7. Check structured output for content as well as schema validity.
+8. Keep hosted models out of the render path. Published examples use pinned,
+   locally verified open-weight models or saved outputs.
+9. Read and rerun any analysis code an assistant wrote, and keep a reference
+   calculation for key numbers.
+10. Describe the model's role with a reporting checklist such as GUIDE-LLM for
+    behavioural and social science or TRIPOD-LLM for biomedical work.
+
 ## Minimum source set for a fast-moving lesson
 
 A lesson about models or modern methods needs:
@@ -155,3 +190,7 @@ the examples and evaluation support it.
 - [Data Statements for Natural Language Processing](https://aclanthology.org/Q18-1041/)
 - [Datasheets for Datasets](https://arxiv.org/abs/1803.09010)
 - [Model Cards for Model Reporting](https://arxiv.org/abs/1810.03993)
+- [Prediction-Powered Inference](https://doi.org/10.1126/science.adi6000)
+- [Using Imperfect Surrogates for Downstream Inference (design-based supervised learning)](https://arxiv.org/abs/2306.04746)
+- [A reporting checklist for large language models in behavioural science (GUIDE-LLM)](https://doi.org/10.1038/s41562-026-02492-7)
+- [The TRIPOD-LLM reporting guideline](https://doi.org/10.1038/s41591-024-03425-5)

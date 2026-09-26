@@ -69,6 +69,18 @@ Lesson code uses the tidyverse: `readr` to read files, `tibble` to build
 tables, `dplyr` to reshape them, `tidyr` to pivot, `purrr` to iterate, and
 `stringr` for strings. Use the native pipe `|>`.
 
+Follow the [tidyverse style guide](https://style.tidyverse.org/). Before
+committing, run:
+
+```powershell
+Rscript scripts/check-r-style.R
+```
+
+That command uses `styler` in dry-run mode and fails when any lesson would be
+changed. In RStudio, use the **Style active file** add-in or run
+`styler::style_file("path/to/lesson.qmd")` to apply the same rules. Review the
+diff afterwards; formatting should never change what the code computes.
+
 Use the standard text packages where they are the natural tool rather than
 hand-rolling equivalents: `tidytext::unnest_tokens()` to go from documents to
 tokens, `quanteda` where a corpus or document-feature matrix reads more
@@ -76,7 +88,9 @@ clearly, and `ggplot2` for a chart that earns its place.
 
 - Load packages by name in a visible chunk near the top of the lesson and
   assert that they attached. Do not use `library(tidyverse)`; naming each
-  package shows the reader which one does which job.
+  package shows the reader which one does which job. knitr is the exception:
+  display chunks call `knitr::kable()` by its full name, so the reader never
+  sees `library(knitr)`.
 - Give `readr::read_csv()` an explicit `col_types = cols(...)` and a deliberate
   `na =`. Column types are a teaching point, so never rely on type guessing.
 - Keep base R where it is the subject of the lesson or has no tidyverse
@@ -85,6 +99,49 @@ clearly, and `ggplot2` for a chart that earns its place.
 - `stringr` uses the ICU regular expression engine. Base R uses TRE, or PCRE2
   with `perl = TRUE`. When a lesson explains how a pattern behaves, say which
   engine produced that behaviour and confirm it by running the code.
+- Keep one row per source record through extraction, with the source identifier
+  and original text attached. Use a list-column when one record can produce
+  several matches. Flatten or collapse records only when the question truly
+  asks for a corpus-wide result, and give that operation a name such as
+  `collect_unique_order_ids()` that makes the loss of row boundaries explicit.
+- A row position from `seq_along()` is a display number, not a durable ID.
+  Preserve identifiers supplied by the source. Name first-match columns
+  `first_date` or `first_email` when another match could exist.
+- Join derived labels and features back by a source key. Do not delete the key
+  and rely on `bind_cols()` or row order, even when the current output happens
+  to align.
+- Compare rates only when the unit, denominator, case policy, tokenizer, and
+  other preprocessing choices match. If a comparison changes more than one of
+  those, separate the effects or state that the rates are not directly
+  comparable.
+- For model comparisons, create the final test split first. Compare and tune
+  candidates only inside the training data, using grouped folds when several
+  rows come from one source document. Open the final test set once, after the
+  candidate and settings are fixed.
+- Label candidate selection, final testing, and robustness resampling as
+  different operations. A repeated holdout is not another untouched test set.
+  When prose describes a direction across replicates, report paired
+  win/tie/loss counts rather than inferring “always” or “never” from means.
+  Keep the candidate set small enough that each model adds a distinct teaching
+  point.
+- A baseline must be available at the same decision point as the model score.
+  Mark whether each comparator is training-only, held out, or shaped after
+  reading all rows. A split cannot make a hand-written rule out-of-sample if its
+  terms were chosen from the full dataset.
+- Monitoring code that claims exact model-input coverage must reuse the fitted
+  tokenizer, stop-word source, and vocabulary definition. A
+  reproducibility-motivated substitute must be labeled as an approximation and
+  name the preprocessing difference it introduces.
+- For unsupervised models, state what each parameter controls and compare
+  candidate values with more than one diagnostic. Choose the diagnostics before
+  reading the most appealing output. Topic count, cluster count, and outlier
+  threshold are modeling decisions, not facts discovered by the software.
+- A null should preserve nuisance structure that can create the statistic, such
+  as repeated high-frequency terms. A stability check run only for the selected
+  setting can describe that setting, but it cannot choose among settings that
+  did not receive the same check.
+- Keep the document unit explicit. A paragraph, speech, and corpus create
+  different unsupervised problems even when the words are unchanged.
 - While editing, run one lesson at a time with
   `Rscript scripts/run-lesson.R <path>`. It executes every chunk in order and
   fails on any warning. The full render remains the gate before publishing.
@@ -121,6 +178,57 @@ pipeline <- use_project_spacy()
 The helper finds that environment, quiets the library's startup output, and
 stops with instructions if the environment is missing. Nothing is downloaded
 during a render. Call `spacy_finalize()` when the lesson is done with it.
+
+## Set up local generation models once
+
+Lessons 65 through 68, 70, 71, and 72, and the guide page
+`using-language-models.qmd`, use public Hugging Face models through
+the pinned `huggingfaceR` and `reticulate` packages. They use a separate Python
+environment because a single R session cannot switch safely between the spaCy
+and generation interpreters after Python has initialized.
+
+```powershell
+python -m venv .venv-nlg
+.venv-nlg/Scripts/python -m pip install -r requirements-nlg.txt
+.venv-nlg/Scripts/python scripts/setup-nlg-models.py
+.venv-nlg/Scripts/python tests/test-nlg-runtime.py
+Rscript tests/test-nlg-runtime.R
+```
+
+On Linux, replace `Scripts/python` with `bin/python`. The pinned
+`requirements-nlg.txt` installation has been validated on Windows and Linux.
+Its `torch==2.9.1+cpu` wheel source is not a macOS compatibility claim; use a
+separately compatible environment on macOS.
+
+The setup script downloads only the runtime files listed in
+`data/nlg-model-files.csv`, from the immutable revisions in
+`data/nlg-models.csv`. It verifies every listed file's byte count and SHA-256
+after download or cache restore. An existing incomplete or mismatched snapshot
+stops with the exact path and is not overwritten. Remove only that named cache
+directory if you intend to replace it, then rerun setup. Model weights stay
+under `data-raw/.cache/` and are not committed.
+
+In an NLG lesson, initialize the local runtime before loading a pipeline:
+
+```r
+library(huggingfaceR)
+library(reticulate)
+source("R/use-nlg.R")
+model <- load_nlg_pipeline("qwen_1_5b_instruct", "text-generation")
+```
+
+The sentence-embedding model used for search indexing loads the same way with
+`load_nlg_pipeline("minilm_l6_v2", "feature-extraction")`. Its pipeline returns
+one vector per token; the lesson averages them and scales the result to unit
+length, which is the pooling and normalization recorded in the model's own
+`1_Pooling/config.json` and `modules.json`. Do not use `hf_embed()` or other
+helpers that call a hosted inference service.
+
+The helper selects `.venv-nlg`, verifies every runtime file again before model
+loading, forces offline access during rendering, and stops with a path-specific
+error if the environment or snapshot is missing or changed. Render a spaCy
+lesson and an NLG lesson in separate R sessions rather than trying to attach
+both Python environments at once.
 
 The project-level Quarto settings execute every R chunk and stop on errors. The
 GitHub Actions workflow restores the locked R environment and renders every
@@ -170,6 +278,34 @@ evidence.
 
 ## Keep project invariants intact
 
+- Show the reader the code that does the work, not the code that formats the
+  page. A table is built in the visible chunk and printed from an
+  `#| echo: false` display chunk placed straight after it, so the reader sees
+  the computation and then the table, never the `knitr::kable()` call.
+  Display-only helpers such as alt-text builders, sentence builders for inline
+  prose, and one-off summary tibbles go in the display chunk or in the hidden
+  verification chunk. `scripts/check-lessons.R` fails any chunk a reader can
+  see that calls `kable()`. A display chunk may sit between a computation and
+  the hidden verification chunk that checks it.
+- Figures use the shared style in `R/lesson-figures.R`: `theme_lesson()`,
+  the `lesson_colours` and `lesson_text_colours` palettes, and the bundled
+  Source Sans 3 font. Knitr draws with `ragg_png`, set in `_quarto.yml`. Give
+  each figure a takeaway title that the data support, a subtitle that says
+  what is plotted, direct labels in place of a legend where possible, and a
+  cue besides colour. Text drawn in a series colour uses the darker
+  `lesson_text_colours` value so it meets 4.5:1 contrast. Assert any claim a
+  title makes in the hidden chunk after the figure, and inspect the rendered
+  PNG before publishing, on Linux as well as your own machine when the layout
+  comes from an algorithm. Break a long subtitle with `<br>`; element_markdown
+  does not wrap. `scripts/check-lessons.R` fails a rendered figure that draws
+  into its outer margin, which catches text running off the image but not text
+  clipped inside a panel.
+- In the visualization lessons, 75 to 81, the plotting code is the lesson and
+  stays visible. Elsewhere, fold supporting plotting code with
+  `#| code-fold: true` and `#| code-summary: "Show the plotting code"`. A long
+  mechanical chunk may also be folded with a summary that names what it does,
+  but only when the prose around it explains the method in words.
+
 - Every R chunk in a lesson is covered by `stopifnot()`, either inside the chunk
   or in an `#| include: false` verification chunk placed directly after it.
   Prefer the second form. Assertions are a build guarantee, not reading matter,
@@ -206,6 +342,80 @@ evidence.
 - Planned map tiles remain static `div` elements. Do not add button semantics,
   `aria-disabled`, or click handlers. Stage and status must never depend on
   color alone.
+
+## Rules from the systems and visualization lessons
+
+- A displayed result must come from the method the page names. Never build an
+  "extracted", "server", or "graph" table by copying or filtering the reference
+  answers, and never type a result by hand beside computed ones without saying
+  so. Add a hidden assertion on the method's own output.
+- Constructed labeled collections need permuted IDs, real variety, and a sweep
+  that can fail. Assign record IDs after a seeded permutation, keep no column
+  that encodes construction order, and include record ID, date, file position,
+  sentence frame, first word, and frequent non-topical tokens in the builder's
+  superficial-feature sweep. Do not append filler text to make records unique;
+  name deliberate near-duplicates in their own column.
+- A sampling seed is part of the design. Fix it by a stated rule before the
+  first draw, draw once, and report whatever the sample shows. Every number in
+  prose that depends on the sample is computed inline.
+- Pandoc parses Markdown inside default `knitr::kable()` pipe-table cells: an
+  apostrophe turns curly, `*text*` becomes emphasis, and raw HTML is read as
+  markup. Tables that show verbatim source text, model output, user input, or
+  markup-bearing strings use `knitr::kable(format = "html", escape = TRUE)`.
+  Build inline annotation markup with `htmltools` tag objects, never with
+  `HTML()`, `paste0()`, or `cat()` of markup.
+- Never print a Shiny app object in a lesson; printing calls `runApp()` and the
+  render waits forever. Test server logic with `shiny::testServer()`, build any
+  table of server results from the test's recorded values, and show the UI as
+  text rather than live controls.
+- Do not attach `maps` with `library(maps)` after purrr; it masks `purrr::map()`.
+  Call `ggplot2::map_data()` instead. `datasets::state.center` places Alaska and
+  Hawaii off the West Coast, so neither may be drawn on a lower-48 basemap.
+- When layers draw different subsets of rows on a discrete axis, add
+  `scale_*_discrete(drop = FALSE)`. Otherwise the axis orders levels by the
+  first layer that contains each one, not by the factor, and a row can jump to
+  the wrong end of a timeline.
+- ggwordcloud places each word by first measuring it on a `grDevices::png()`
+  device. Draw a word cloud chunk on that same device with `#| dev: png` and
+  `theme_lesson(base_family = "sans")`. Drawn with ragg, the words can use a
+  wider font than the one they were measured in (on Linux, DejaVu Sans against
+  a Helvetica substitute), and they overlap.
+- A projection drawn with `coord_equal()` changes shape when its layout does,
+  and a t-SNE layout is wider on one computer and taller on another. Give each
+  panel a square window with `xlim` and `ylim` so the panels, and the strip
+  titles above them, keep the same size everywhere.
+- Stochastic or chaotic layouts (t-SNE, force-directed graphs, word clouds) get
+  seeds and single threads, but assertions and prose must not depend on their
+  coordinates. When labels would collide, redesign the figure with small
+  multiples, a deterministic layout, or a key table; do not drop labels with
+  `check_overlap = TRUE`.
+- A retrieval result with a score of zero was not retrieved, so never fill a
+  top-k list by ID order. Score an abstention or a parse failure as an empty
+  answer, and never let a screen read the answer key.
+- Batch model calls only with pooling that ignores padding tokens; a check that
+  compares two code paths that are identical by construction is not evidence.
+- Generated text can differ between Windows and Linux. Show raw model output in
+  tables, assert only its structure, and write any sentence about what the model
+  did with inline R computed from the parsed result.
+- Safety and routing rules belong in code that runs before any model call. A
+  system prompt is not a control.
+- Keys, not positions: label hand-reviewed rows by a stable key such as
+  paragraph ID plus offset, never by `row_number()`.
+
+## Keep later methods on existing tiles
+
+Do not add a new map tile when a method already has a home:
+
+- Pointwise mutual information for adjacent pairs belongs in lesson 24.
+- KWIC / concordance inspection belongs in lesson 25.
+- Keyness, weighted log-odds, and lexical dispersion belong in lesson 53
+  (keyword extraction and keyness).
+- Document clustering belongs in lesson 55 (topic modeling and clustering).
+- Burst detection belongs in lesson 56 (trend and burst detection).
+- Co-word or citation networks belong in lesson 81 as one use of
+  knowledge-graph visualisation, not as a bibliometrics tile.
+- Publisher TDM licences belong in research notes and
+  [RESEARCH_STANDARDS.md](RESEARCH_STANDARDS.md), not on the map.
 
 ## Review before publishing
 

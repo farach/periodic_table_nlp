@@ -1,7 +1,6 @@
 ---
 title: "Scoring customer feeling"
 subtitle: "Compare a word list with labels from the domain"
-author: "Alex Farach"
 description: "Learn why sentiment scores from word lists and trained labels can disagree, especially with short feedback."
 categories: [classification, sentiment analysis, emotion analysis]
 ---
@@ -69,6 +68,10 @@ feedback <- read_csv(
   mutate(
     rating = if_else(rating == "", NA_integer_, as.integer(rating))
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   feedback,
@@ -138,6 +141,10 @@ lexicon_scores <- token_scores |>
 zero_match_feedback_ids <- lexicon_scores |>
   filter(matched_words == 0L) |>
   pull(feedback_id)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   lexicon_scores |>
@@ -227,6 +234,10 @@ coverage_by_length <- inaugural_lexicon |>
     .by = length_bin
   ) |>
   arrange(length_bin)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   inaugural_silence |>
@@ -274,10 +285,13 @@ stopifnot(
 
 On the larger corpus, 41 of 1,377 paragraphs have no Bing match, a share of
 0.0298 after the 25-word filter. The median paragraph has 6 matched words. The
-length table gives the more honest finding: 7.48 percent of 25-49 word paragraphs
-are silent, 1.61 percent of 50-99 word paragraphs are silent, and none of the 439
-paragraphs with at least 100 words are silent. That explains why 3 of the 5 short
-feedback comments are silent while long paragraphs almost never are.
+length table gives the more honest finding: 7.48 percent of 25-49 word
+paragraphs have no match, 1.61 percent of 50-99 word paragraphs have no match,
+and none of the 439 paragraphs with at least 100 words lack a match. That
+shows the direction expected from document length. It does not estimate the
+feedback result: those comments are shorter than every paragraph measured here
+and come from another domain. The `1-24 words` bin is empty because the shared
+corpus helper keeps paragraphs of at least 25 words.
 
 ## Read the failures before trusting the score
 
@@ -320,6 +334,10 @@ negation_examples <- tibble(
     lexicon_score = sum(token_score),
     .by = phrase
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   failure_cases,
@@ -361,6 +379,13 @@ A trained approach starts with labels from the setting that matters. Here the
 rating field supplies three tiny labels for demonstration: ratings of 5 become
 `satisfied`, rating 2 becomes `frustrated`, and rating 4 is left out because it
 is mild. The seed before this deterministic fit is 4901.
+
+The score is an equal-prior, Laplace-smoothed multinomial naive Bayes
+calculation. Adding one to every word count prevents an unseen word from making
+a class probability zero. “Equal-prior” means the calculation gives the two
+labels equal starting weight instead of using the two-to-one training-row
+imbalance; a deployed naive Bayes classifier would make that prior choice
+explicit.
 
 ```{r}
 set.seed(4901)
@@ -430,7 +455,7 @@ trained_scores <- feedback |>
   mutate(
     training_role = case_when(
       feedback_id %in% labeled_feedback$feedback_id ~ "fitting row",
-      feedback_id == 1002L ~ "held-out rated row",
+      feedback_id == 1002L ~ "excluded mild rating (no reference label)",
       TRUE ~ "unrated row"
     ),
     trained_score = map_dbl(comment, score_with_labels),
@@ -446,6 +471,10 @@ trained_scores <- feedback |>
     by = join_by(feedback_id)
   ) |>
   relocate(lexicon_score, .before = trained_score)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   trained_scores |>
@@ -476,7 +505,13 @@ stopifnot(
   identical(nrow(vocabulary), 15L),
   identical(
     trained_scores$training_role,
-    c("fitting row", "held-out rated row", "unrated row", "fitting row", "fitting row")
+    c(
+      "fitting row",
+      "excluded mild rating (no reference label)",
+      "unrated row",
+      "fitting row",
+      "fitting row"
+    )
   ),
   identical(
     trained_scores$trained_label,
@@ -493,11 +528,13 @@ stopifnot(
 
 This trained scorer learns from only three labelled rows, so it is a mechanics
 example rather than an evaluation. Rows 1001, 1004, and 1005 are fitting rows,
-and reporting success on them would be resubstitution. Row 1002 is the only rated
-row held away from fitting, and this scorer sends it to `frustrated`. The table
-therefore shows inspection output, not accuracy. A larger trained model can use
-context if the training labels record the domain you care about. Its cost is that
-labels must be collected, checked, and kept in step with the way people write.
+and reporting success on them would be resubstitution. Row 1002 was excluded
+because its mild rating has no reference label in this two-class scheme. The
+scorer still returns `frustrated`, but that is inspection output with no
+right-or-wrong answer, not a held-out evaluation. A larger trained model can use
+context if the training labels record the domain you care about. Its cost is
+that labels must be collected, checked, and kept in step with the way people
+write.
 
 ## Emotion needs stronger evidence
 
@@ -506,10 +543,6 @@ for labels such as anger, fear, sadness, joy, or surprise. That claim is much
 stronger.
 
 ```{r}
-#| label: fig-feedback-score-counts
-#| fig-cap: "Only two Bing lexicon scores appear in the five fictional feedback comments."
-#| fig-alt: "Bar chart showing three comments with lexicon score 0 and two comments with lexicon score 1."
-
 score_range <- lexicon_scores |>
   summarise(
     lowest = min(lexicon_score),
@@ -520,6 +553,10 @@ score_range <- lexicon_scores |>
 
 score_plot <- lexicon_scores |>
   count(lexicon_score, name = "comments")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   score_plot,
@@ -527,14 +564,6 @@ knitr::kable(
   caption = "Only two lexicon scores appear in the feedback file",
   row.names = FALSE
 )
-
-ggplot(score_plot, aes(x = factor(lexicon_score), y = comments)) +
-  geom_col(fill = "#4C78A8") +
-  labs(
-    x = "Lexicon score",
-    y = "Comments"
-  ) +
-  theme_minimal()
 ```
 
 ```{r}
@@ -545,6 +574,50 @@ stopifnot(
   identical(score_range$highest, 1L),
   identical(score_range$distinct_scores, 2L),
   identical(score_plot$comments, c(3L, 2L))
+)
+```
+
+```{r}
+#| label: fig-feedback-score-counts
+#| fig-cap: "Only two Bing lexicon scores appear in the five fictional feedback comments."
+#| fig-alt: "Horizontal bar chart with two bars: three comments have lexicon score 0 and two comments have lexicon score 1."
+#| fig-height: 2.6
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
+
+ggplot(
+  score_plot,
+  aes(x = comments, y = str_c("score ", lexicon_score))
+) +
+  geom_col(fill = lesson_colours[["accent"]], width = 0.6) +
+  geom_text(
+    aes(label = str_c(comments, " comments")),
+    hjust = 0,
+    nudge_x = 0.05,
+    family = lesson_font,
+    size = 10,
+    size.unit = "pt",
+    colour = lesson_colours[["body"]]
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.35))) +
+  labs(
+    title = "Five comments collapse onto two lexicon scores",
+    subtitle = "Bing lexicon score for each fictional feedback comment",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_lesson(grid = "none") +
+  theme(axis.text.x = element_blank())
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(sum(score_plot$comments), nrow(lexicon_scores)),
+  identical(nrow(score_plot), 2L)
 )
 ```
 

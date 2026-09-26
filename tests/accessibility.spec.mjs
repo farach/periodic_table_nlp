@@ -26,7 +26,12 @@ function lessonPages() {
 }
 
 const lessonPagePaths = lessonPages();
-const pages = ["/", "/accessibility.html", ...lessonPagePaths];
+const pages = [
+  "/",
+  "/accessibility.html",
+  "/using-language-models.html",
+  ...lessonPagePaths
+];
 const totalTasks = 81;
 
 if (pages.length < 3) {
@@ -89,17 +94,21 @@ test("periodic table supports keyboard navigation", async ({ page }) => {
 
   const availableTiles = page.locator(".nlp-element.is-available");
   const plannedTiles = page.locator(".nlp-element.is-planned");
+  const plannedCount = totalTasks - lessonPagePaths.length;
 
   await expect(availableTiles).toHaveCount(lessonPagePaths.length);
-  await expect(plannedTiles).toHaveCount(totalTasks - lessonPagePaths.length);
-  await expect(plannedTiles.first()).not.toHaveAttribute("aria-disabled");
-  await expect(plannedTiles.first()).not.toHaveAttribute("aria-label");
-  await expect(
-    plannedTiles.first().locator(".element-status")
-  ).toBeVisible();
-  await expect(
-    plannedTiles.first().locator(".element-status")
-  ).toHaveText("Planned");
+  await expect(plannedTiles).toHaveCount(plannedCount);
+
+  if (plannedCount > 0) {
+    await expect(plannedTiles.first()).not.toHaveAttribute("aria-disabled");
+    await expect(plannedTiles.first()).not.toHaveAttribute("aria-label");
+    await expect(
+      plannedTiles.first().locator(".element-status")
+    ).toBeVisible();
+    await expect(
+      plannedTiles.first().locator(".element-status")
+    ).toHaveText("Planned");
+  }
 
   const labels = await availableTiles.evaluateAll((tiles) =>
     tiles.map((tile) => tile.getAttribute("aria-label"))
@@ -269,14 +278,27 @@ test("tile status survives forced colors and reduced motion", async ({
   });
   await page.goto("/");
 
+  const plannedCount = totalTasks - lessonPagePaths.length;
   const available = page.locator(".nlp-element.is-available").first();
   const planned = page.locator(".nlp-element.is-planned").first();
 
   await expect(available.getByText("Read lesson")).toBeVisible();
-  await expect(planned.locator(".element-status")).toHaveText("Planned");
-  await expect(
-    page.getByText("Lesson planned", { exact: true })
-  ).toBeVisible();
+
+  if (plannedCount > 0) {
+    await expect(planned.locator(".element-status")).toHaveText("Planned");
+    await expect(
+      page.getByText("Lesson planned", { exact: true })
+    ).toBeVisible();
+  } else {
+    // A finished map has nothing planned, so it must not offer a key or
+    // instructions for a tile state that no longer appears.
+    await expect(
+      page.getByText("Lesson planned", { exact: true })
+    ).toHaveCount(0);
+    await expect(page.locator("#task-map-instructions")).not.toContainText(
+      "Dashed tiles"
+    );
+  }
 
   const styles = await page.evaluate(() => {
     const availableTile = document.querySelector(
@@ -286,17 +308,22 @@ test("tile status survives forced colors and reduced motion", async ({
       ".nlp-element.is-planned"
     );
     const availableStyle = getComputedStyle(availableTile);
-    const plannedStyle = getComputedStyle(plannedTile);
 
     return {
       availableBorder: availableStyle.borderTopStyle,
-      plannedBorder: plannedStyle.borderTopStyle,
+      plannedBorder: plannedTile
+        ? getComputedStyle(plannedTile).borderTopStyle
+        : null,
       transitionDuration: availableStyle.transitionDuration
     };
   });
 
   expect(styles.availableBorder).toBe("solid");
-  expect(styles.plannedBorder).toBe("dashed");
+  if (plannedCount > 0) {
+    expect(styles.plannedBorder).toBe("dashed");
+  } else {
+    expect(styles.plannedBorder).toBeNull();
+  }
   expect(Number.parseFloat(styles.transitionDuration)).toBeLessThanOrEqual(
     0.01
   );

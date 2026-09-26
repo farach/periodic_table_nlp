@@ -1,7 +1,6 @@
 ---
 title: "Extracting document metadata"
 subtitle: "Describe a source before analyzing its text"
-author: "Alex Farach"
 description: "Learn how to extract HTML metadata and compute provenance fields for a Riverton source file."
 categories: [documents, metadata, workforce research]
 ---
@@ -75,6 +74,10 @@ meta_table <- tibble(
     \(attributes) str_c(names(attributes), attributes, sep = "=", collapse = "; ")
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   bind_rows(
@@ -135,6 +138,10 @@ link_targets <- job_page |>
   rvest::html_attr("href")
 
 link_markup_count <- sum(str_detect(job_page_lines, "<a(\\s|>)"))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   heading_summary,
@@ -181,6 +188,10 @@ document_metadata <- tibble(
     str_c(link_targets, collapse = " | ")
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   document_metadata,
@@ -256,6 +267,10 @@ provenance <- document_metadata |>
     sha256 = content_fingerprint,
     .after = document_id
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   provenance |>

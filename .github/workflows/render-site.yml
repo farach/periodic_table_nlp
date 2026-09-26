@@ -42,7 +42,14 @@ jobs:
             libsodium-dev \
             libglpk-dev \
             libpng-dev \
+            libjpeg-dev \
             libx11-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libharfbuzz-dev \
+            libfribidi-dev \
+            libtiff5-dev \
+            libwebp-dev \
             cmake \
             poppler-data \
             tesseract-ocr \
@@ -61,6 +68,25 @@ jobs:
           .venv-spacy/bin/python -m pip install -r requirements-spacy.txt
           .venv-spacy/bin/python -c "import spacy; spacy.load('en_core_web_sm')"
 
+      - name: Cache pinned generation models
+        uses: actions/cache@v4
+        with:
+          path: data-raw/.cache/nlg-models
+          key: ${{ runner.os }}-nlg-models-${{ hashFiles('data/nlg-models.csv', 'data/nlg-model-files.csv') }}
+
+      - name: Install and prepare local generation models
+        run: |
+          python -m venv .venv-nlg
+          .venv-nlg/bin/python -m pip install --upgrade pip
+          .venv-nlg/bin/python -m pip install --no-cache-dir -r requirements-nlg.txt
+          .venv-nlg/bin/python -c "import sys, torch, transformers; print(sys.executable, torch.__version__, transformers.__version__)"
+          .venv-nlg/bin/python scripts/setup-nlg-models.py
+
+      - name: Test local generation runtime
+        run: |
+          .venv-nlg/bin/python tests/test-nlg-runtime.py
+          Rscript tests/test-nlg-runtime.R
+
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
@@ -76,6 +102,9 @@ jobs:
 
       - name: Check repetition across lessons
         run: Rscript scripts/check-repetition.R
+
+      - name: Check R code style
+        run: Rscript scripts/check-r-style.R
 
       - name: Check for models scored on their training data
         run: Rscript scripts/check-resubstitution.R

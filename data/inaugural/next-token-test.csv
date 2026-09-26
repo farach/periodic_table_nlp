@@ -1,0 +1,4 @@
+split,model,context_tokens,interpolation_strength,next_token_rows,oov_target_share,seen_context_share,mean_log_loss,perplexity,top_1_accuracy,role
+test,uniform,0,NA,24337,0.11747544890495952,NA,7.824046010856292,2499.9999999999995,NA,uniform vocabulary floor
+test,unigram,0,NA,24337,0.11747544890495952,NA,5.483415219358395,240.66723683884746,0.11747544890495952,predeclared frequency baseline
+test,trigram,2,100,24337,0.11747544890495952,0.7379709906726384,4.978849742453045,145.30714484936158,0.19209434194847352,validation-selected model

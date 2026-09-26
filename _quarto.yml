@@ -5,6 +5,7 @@ project:
   render:
     - index.qmd
     - accessibility.qmd
+    - using-language-models.qmd
     - 1_source_data_loading/*.qmd
     - 2_training_data_generation/*.qmd
     - 3_word_parsing/*.qmd
@@ -17,6 +18,9 @@ project:
     - 10_classification/*.qmd
     - 11_signals_and_discovery/*.qmd
     - 12_similarity/*.qmd
+    - 13_natural_language_generation/*.qmd
+    - 14_systems/*.qmd
+    - 15_information_visualization/*.qmd
 
 website:
   title: "Periodic Table of NLP Tasks in R"
@@ -35,6 +39,8 @@ website:
     contents:
       - href: index.qmd
         text: Home
+      - href: using-language-models.qmd
+        text: Using a language model reproducibly
       - href: 1_source_data_loading/01-bits-to-character-encoding.qmd
         text: How computers store text
       - href: 1_source_data_loading/02-manual-typewriting.qmd
@@ -159,6 +165,44 @@ website:
         text: Training word vectors
       - href: 12_similarity/62-contextualized-word-representations.qmd
         text: Reading words in context
+      - href: 13_natural_language_generation/63-next-token-prediction.qmd
+        text: Predicting the next token
+      - href: 13_natural_language_generation/64-report-writing.qmd
+        text: Writing a report from checked claims
+      - href: 13_natural_language_generation/65-machine-translation.qmd
+        text: Translating a notice to French
+      - href: 13_natural_language_generation/66-abstractive-summarization.qmd
+        text: Writing a shorter account
+      - href: 13_natural_language_generation/67-paraphrasing.qmd
+        text: Rewriting without changing meaning
+      - href: 13_natural_language_generation/68-long-text-generation.qmd
+        text: Building a document in sections
+      - href: 14_systems/69-relation-extraction.qmd
+        text: Finding relations between named things
+      - href: 14_systems/70-question-answering.qmd
+        text: Answering questions from retrieved passages
+      - href: 14_systems/71-chatbot-dialogue.qmd
+        text: Keeping dialogue state outside the model
+      - href: 14_systems/72-semantic-search-indexing.qmd
+        text: Building a semantic search index
+      - href: 14_systems/73-knowledge-base-population.qmd
+        text: Adding facts to a knowledge base
+      - href: 14_systems/74-e-discovery-and-media-monitoring.qmd
+        text: Reviewing documents for discovery and alerts
+      - href: 15_information_visualization/75-interactive-app-creation.qmd
+        text: Creating a small text app
+      - href: 15_information_visualization/76-annotated-text-visualization.qmd
+        text: Drawing labels on text spans
+      - href: 15_information_visualization/77-word-clouds.qmd
+        text: Reading a word cloud carefully
+      - href: 15_information_visualization/78-word-embedding-visualization.qmd
+        text: Projecting word vectors into two dimensions
+      - href: 15_information_visualization/79-events-on-a-timeline.qmd
+        text: Putting events on a timeline
+      - href: 15_information_visualization/80-locations-on-a-map.qmd
+        text: Mapping place mentions
+      - href: 15_information_visualization/81-knowledge-graph-visualization.qmd
+        text: Drawing a knowledge graph
       - href: accessibility.qmd
         text: Accessibility
   page-footer:
@@ -194,5 +238,6 @@ execute:
 knitr:
   opts_chunk:
     message: false
+    dev: ragg_png
 
 lang: en

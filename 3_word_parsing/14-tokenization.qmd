@@ -1,7 +1,6 @@
 ---
 title: "Deciding what counts as a word"
 subtitle: "Compare word, sentence, and subword tokenization"
-author: "Alex Farach"
 description: "Learn why tokenization is a rule-based decision before any word count can begin."
 categories: [word parsing, tokenization, workforce research]
 ---
@@ -83,6 +82,10 @@ document_counts <- sentences |>
   count(source_group, name = "rows")
 
 first_sentence <- sentences$text[1]
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   document_counts,
@@ -129,6 +132,10 @@ whitespace_tokens <- str_split(
   "\\s+",
   simplify = FALSE
 )[[1]]
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -164,6 +171,10 @@ six tokens: `paid`, `12`, `week`, `training`, `is`, and `provided`.
 
 ```{r}
 default_word_tokens <- tokenize_words(first_sentence)[[1]]
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -217,6 +228,10 @@ token_count_summary <- tibble(
     length(case_punctuation_tokens)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   token_count_summary,
@@ -258,6 +273,10 @@ source_sentence_counts <- sentences |>
     pieces = sum(sentence_pieces),
     .by = document_id
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   source_sentence_counts,
@@ -313,6 +332,10 @@ bpe_model <- bpe(
 
 first_vocabulary_rows <- bpe_model$vocabulary |>
   slice_head(n = 10)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   first_vocabulary_rows,
@@ -370,6 +393,10 @@ subword_summary <- tibble(
     str_c(unseen_phrase_subwords, collapse = " | ")
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   subword_summary,
@@ -479,6 +506,10 @@ piece_report <- tibble(
       TRUE ~ shown_as_subwords
     )
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   piece_report |>
@@ -546,6 +577,10 @@ round_trip <- piece_report |>
     ),
     recovers_input = decoded == text
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   round_trip |>

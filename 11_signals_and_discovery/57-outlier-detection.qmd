@@ -1,7 +1,6 @@
 ---
 title: "Finding speeches unlike the rest"
 subtitle: "Rank cosine distance and test length"
-author: "Alex Farach"
 description: "Learn how outlier detection depends on the text representation and why length belongs beside distance."
 categories: [signals and discovery, outlier detection, inaugural addresses]
 ---
@@ -38,7 +37,6 @@ library(dplyr)
 library(tibble)
 library(quanteda)
 library(proxy)
-library(knitr)
 
 source("R/inaugural-corpus.R")
 source("R/permutation-null.R")
@@ -96,8 +94,12 @@ representation_summary <- tibble(
   documents = c(ndoc(content_dfm), ndoc(content_tfidf_dfm), ndoc(all_words_dfm)),
   features = c(nfeat(content_dfm), nfeat(content_tfidf_dfm), nfeat(all_words_dfm))
 )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   representation_summary,
   col.names = c("Representation", "Documents", "Features"),
   caption = "Three speech representations for outlier detection",
@@ -153,8 +155,12 @@ rank_table <- bind_rows(most_distant, most_typical) |>
     shortest_in_corpus = if_else(total_words == min(lengths$total_words), "yes", "no"),
     distance = round(distance, 3)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   rank_table,
   col.names = c("Group", "Speech", "Year", "President", "Total words", "Content words", "Shortest in corpus", "Cosine distance"),
   caption = "Most and least distant speeches using content-word raw counts",
@@ -217,15 +223,19 @@ restricted_top <- all_rankings |>
     total_words,
     distance = round(distance, 3)
   )
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   length_correlations,
   col.names = c("Representation", "Correlation between total words and distance"),
   caption = "Distance is strongly related to speech length",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   restricted_top,
   col.names = c("Representation", "Speech", "Year", "Total words", "Cosine distance"),
   caption = "Top outliers after restricting to speeches with at least 1,000 words",
@@ -335,15 +345,19 @@ rank_agreement_null <- permutation_null(
 
 rank_agreement_display <- rank_agreement_null |>
   mutate(across(c(observed, null_mean, null_low, null_high, p_value), \(x) round(x, 3)))
+```
 
-kable(
+```{r}
+#| echo: false
+
+knitr::kable(
   feature_comparison,
   col.names = c("Representation", "Speech", "Year", "President", "Total words", "Content words", "Cosine distance"),
   caption = "Top five outliers across three representations",
   row.names = FALSE
 )
 
-kable(
+knitr::kable(
   rank_agreement_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
   caption = "Permutation null for rank agreement across representations",

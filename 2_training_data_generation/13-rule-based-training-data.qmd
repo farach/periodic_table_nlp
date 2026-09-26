@@ -1,7 +1,6 @@
 ---
 title: "Labeling text with written rules"
 subtitle: "Measure rule coverage, conflicts, and mistakes"
-author: "Alex Farach"
 description: "Learn how rule-based weak labels can expand workforce training data without becoming ground truth."
 categories: [training data, weak supervision, workforce research]
 ---
@@ -186,6 +185,10 @@ result_counts <- tibble(weak_label = result_order) |>
     by = join_by(weak_label)
   ) |>
   mutate(rows = coalesce(rows, 0L))
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   weak_results |>
@@ -236,6 +239,10 @@ rule_summary <- tibble(
     mean(weak_results$rule_count == 1L)
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_summary |>
@@ -284,6 +291,10 @@ rule_agreement <- foundryR::foundry_agreement(
   estimate = "weak_label",
   truth = "reference_label"
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_agreement,
@@ -340,6 +351,10 @@ all_row_accounting <- tibble(
       nrow()
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   all_row_accounting,
@@ -400,6 +415,10 @@ rule_diagnostics <- map(
   mutate(
     precision_when_alone = alone_and_correct / rows_fired_alone
   )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_diagnostics |>
@@ -495,6 +514,10 @@ rule_pairs <- expand.grid(
     )
   ) |>
   arrange(desc(fired_together), first, second)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   rule_pairs,
@@ -585,6 +608,10 @@ abstain_outcomes <- tibble(
   sentence_id = rule_votes$sentence_id[abstain_rows],
   reference_label = reference_labels[abstain_rows]
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   conflict_outcomes,
@@ -630,9 +657,9 @@ evidence. The order was chosen by someone who had read the codebook rule saying
 timing takes precedence, and it was applied to two rows. Two successes chosen
 after the fact do not establish that the order generalizes.
 
-The three silent rows are more informative. All three carry the reference label
-`other`, which is the one category no rule was written for. Silence here is
-correct behavior expressed badly: the rules abstain because they have nothing to
+The three rows where every rule abstained are more informative. All three carry
+the reference label `other`, which is the one category no rule was written for.
+The abstentions are correct behavior expressed badly: the rules have nothing to
 say, and a fifth rule for `other` would be worse, since `other` is defined by
 the absence of the other four rather than by any words of its own.
 
@@ -703,6 +730,10 @@ stress_results <- stress_cases |>
     )
   ) |>
   select(-rule_count, -voted_label)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   stress_results,

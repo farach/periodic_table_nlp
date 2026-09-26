@@ -1,7 +1,6 @@
 ---
 title: "Tagging words by their job"
 subtitle: "Read part-of-speech tags from a small trained model"
-author: "Alex Farach"
 description: "Learn how a part-of-speech tagger labels workforce text and why held-out accuracy has limits."
 categories: [word parsing, part-of-speech tagging, workforce research]
 ---
@@ -154,6 +153,10 @@ reproducibility_table <- tibble(
     R.version.string
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   metadata_display,
@@ -241,6 +244,10 @@ tagged <- udpipe_annotate(
 paid_sentence_tags <- tagged |>
   filter(doc_id == "s001") |>
   select(token, upos, lemma)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   paid_sentence_tags,
@@ -320,6 +327,10 @@ expected_tag_counts <- tibble(
   ),
   n = c(45L, 25L, 24L, 20L, 17L, 16L, 11L, 7L, 6L, 2L, 2L, 1L, 1L, 1L)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tag_counts,
@@ -541,6 +552,10 @@ accuracy_comparison <- tibble(
   ),
   accuracy = round(correct / tokens, 4)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   learning_curve_display,

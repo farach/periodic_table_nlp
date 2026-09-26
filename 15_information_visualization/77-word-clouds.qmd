@@ -1,0 +1,522 @@
+---
+title: "Reading a word cloud carefully"
+subtitle: "Compare the picture with the count table that made it"
+description: "Learn how word clouds encode word counts, why the layout can mislead, and how to check the same words in a sorted bar chart and table."
+categories: [information visualization, word clouds, inaugural addresses]
+---
+
+Twenty-two words can fill Iris's slide about the inaugural addresses. The table
+behind the picture matters more than the shape of the picture itself.
+
+The tempting part is also the risk. A large word can mean a high count, a long
+spelling, or a lucky position in the packing algorithm.
+
+**Word clouds** draw words from a count table with larger type for larger
+counts. They are useful for a quick look at a vocabulary. They are weak for
+exact comparisons, rank order, meaning, and change over time.
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- build one corpus-wide word-count table from inaugural paragraphs;
+- use a named stop-word list and check what it removes;
+- draw a sorted bar chart and a word cloud from the same counts;
+- read size, position, and colour in a cloud honestly;
+- test the word-length trap with real words from the data; and
+- give the cloud a two-part text alternative.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Build one count table
+
+The corpus helper returns one row per paragraph. This lesson asks one
+corpus-wide question: after a stated cleanup, which words occur most often
+across all inaugural paragraphs? Pooling every paragraph gives long speeches
+more weight than short ones, so the result is a preview of the vocabulary, not
+a claim about importance.
+
+The figures use the site's shared style, `theme_lesson()`, from
+`R/lesson-figures.R`. That keeps the plotting code below focused on the choices
+that belong to each chart.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(stringr)
+library(tidytext)
+library(ggplot2)
+library(ggwordcloud)
+library(purrr)
+
+source("R/inaugural-corpus.R")
+source("R/lesson-figures.R")
+
+paragraphs <- inaugural_paragraphs()
+
+all_word_tokens <- paragraphs |>
+  select(paragraph_id, speech_id, paragraph) |>
+  unnest_tokens(word, paragraph)
+
+dropped_by_letters_filter <- all_word_tokens |>
+  filter(!str_detect(word, "^[a-z]+$"))
+
+word_tokens <- all_word_tokens |>
+  filter(str_detect(word, "^[a-z]+$"))
+
+onix_stop_words <- stop_words |>
+  filter(lexicon == "onix") |>
+  distinct(word)
+
+inaugural_word_counts <- word_tokens |>
+  anti_join(onix_stop_words, by = join_by(word)) |>
+  count(word, sort = TRUE, name = "count") |>
+  mutate(letters = str_length(word))
+
+cloud_words <- inaugural_word_counts |>
+  slice_head(n = 22)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  cloud_words,
+  col.names = c("Word", "Count", "Letters"),
+  caption = "Top words after removing the onix stop-word list from inaugural paragraphs",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+top_five <- cloud_words |>
+  slice_head(n = 5)
+
+bar_alt_text <- paste0(
+  "Horizontal bar chart of the 22 most common words after onix stop-word ",
+  "removal. The five longest bars are ",
+  paste0(top_five$word, " (", top_five$count, ")", collapse = ", "),
+  ". The bar for so is highlighted because onix does not list so as a stop word."
+)
+
+cloud_alt_seed_7701 <- paste(
+  "Word cloud of the same 22 words from the count table.",
+  "The largest words are government, used 585 times, and people, used 561 times;",
+  "the positions of the words are not data.",
+  "The count table above is the long text alternative."
+)
+
+stopifnot(
+  identical(nrow(paragraphs), 1377L),
+  "america's" %in% dropped_by_letters_filter$word,
+  n_distinct(word_tokens$paragraph_id) == 1377L,
+  "states" %in% onix_stop_words$word,
+  !"united" %in% onix_stop_words$word,
+  !"so" %in% onix_stop_words$word,
+  identical(nrow(cloud_words), 22L),
+  !anyDuplicated(cloud_words$word),
+  identical(top_five$word, c("government", "people", "so", "country", "world")),
+  identical(top_five$count, c(585L, 561L, 384L, 306L, 305L)),
+  top_five$count[2] - top_five$count[3] > 150L,
+  identical(min(cloud_words$count), 157L),
+  identical(
+    str_match_all(bar_alt_text, "([a-z]+) \\(([0-9]+)\\)")[[1]][, 2],
+    top_five$word
+  ),
+  identical(
+    as.integer(str_match_all(bar_alt_text, "([a-z]+) \\(([0-9]+)\\)")[[1]][, 3]),
+    top_five$count
+  )
+)
+```
+
+The onix list removes `states` but keeps `united`, so a phrase such as
+`United States` can leave `united` standing alone. A different stop-word list
+would produce a different table.
+
+`unnest_tokens()` lowercases the paragraphs and splits punctuation away from
+words, except an apostrophe inside a word. The `^[a-z]+$` filter then keeps
+only tokens made entirely of letters, so it drops whole tokens such as
+`america's`; in this corpus it drops `r nrow(dropped_by_letters_filter)`
+tokens. After that filter, `so` survives
+`r inaugural_word_counts$count[inaugural_word_counts$word == "so"]` times
+because onix does not list it as a stop word.
+
+## Show the counts before the cloud
+
+A sorted bar chart puts the same words on a common scale. People compare
+positions along a common scale more accurately than areas, so the chart is the
+check Iris should read before the cloud. Cleveland and McGill placed area below
+position in their hypothesized ranking of graphical perception tasks; they did
+not test word clouds themselves.
+
+Each bar carries its count as a label, so the chart needs no numeric axis. The
+one highlighted bar is the stop-word decision the reader should notice.
+
+```{r}
+#| label: fig-word-cloud-bars
+#| fig-cap: "The 22 words used in the word cloud, sorted by count after onix stop-word removal."
+#| fig-alt: !expr bar_alt_text
+#| fig-width: 7
+#| fig-height: 5.6
+
+bar_data <- cloud_words |>
+  mutate(
+    kept_by_onix = word == "so",
+    bar_label = if_else(
+      kept_by_onix,
+      str_c(count, ", not an onix stop word"),
+      as.character(count)
+    )
+  )
+
+bar_plot <- ggplot(bar_data, aes(x = count, y = reorder(word, count))) +
+  geom_col(aes(fill = kept_by_onix), width = 0.72, show.legend = FALSE) +
+  geom_text(
+    aes(label = bar_label),
+    hjust = 0,
+    nudge_x = 6,
+    family = lesson_font,
+    size = 9.5,
+    size.unit = "pt",
+    colour = lesson_colours[["body"]]
+  ) +
+  scale_fill_manual(
+    values = c(
+      `FALSE` = lesson_colours[["accent"]],
+      `TRUE` = lesson_colours[["contrast"]]
+    )
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.32))) +
+  labs(
+    title = "Two words lead the count by a wide margin",
+    subtitle = "Uses in 1,377 inaugural paragraphs after removing onix stop words",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_lesson(grid = "none") +
+  theme(axis.text.x = element_blank())
+
+bar_plot
+```
+
+```{r}
+#| include: false
+
+extract_bar_layer <- function(plot) {
+  built <- ggplot_build(plot)
+  bars <- built$data[[1]]
+  axis_labels <- built$layout$panel_params[[1]]$y$get_labels()
+  tibble(
+    word = axis_labels[bars$y],
+    built_count = bars$x
+  )
+}
+
+bar_layer_check <- extract_bar_layer(bar_plot) |>
+  left_join(cloud_words, by = join_by(word))
+
+stopifnot(
+  identical(nrow(bar_layer_check), 22L),
+  all(bar_layer_check$built_count == bar_layer_check$count),
+  setequal(bar_layer_check$word, cloud_words$word),
+  identical(
+    bar_layer_check |>
+      arrange(desc(built_count), word) |>
+      slice_head(n = 5) |>
+      pull(word),
+    top_five$word
+  ),
+  identical(sum(bar_data$kept_by_onix), 1L)
+)
+```
+
+The bar chart and the table use the same `word` and `count` values. Nothing
+about a word's position in the cloud below is evidence of a relationship
+between words.
+
+## Draw the same counts as a cloud
+
+The cloud below uses `geom_text_wordcloud()` with one colour and no rotation.
+`scale_size_area()` sets the type size so that the area of each letter grows in
+step with the count: a word used four times as often gets letters twice as
+tall. The scale does nothing about word length, so a long word with a modest
+count can still cover more of the slide than a short word used more often.
+
+```{r}
+#| label: fig-word-cloud-seed-one
+#| fig-cap: "A word cloud drawn from the same 22 counts as the bar chart, using layout seed 7701."
+#| fig-alt: !expr cloud_alt_seed_7701
+#| fig-width: 7
+#| fig-height: 4.4
+#| dev: png
+
+draw_cloud <- function(seed) {
+  ggplot(cloud_words, aes(label = word, size = count)) +
+    # ggwordcloud places each word by first measuring it on a grDevices::png()
+    # device. These figures are drawn on that same device, with its default
+    # font, so each word is drawn exactly as wide as it was measured.
+    geom_text_wordcloud(
+      seed = seed,
+      colour = lesson_colours[["accent"]],
+      angle = 0,
+      grid_margin = 2,
+      rm_outside = FALSE
+    ) +
+    scale_size_area(max_size = 16, guide = "none") +
+    theme_lesson(grid = "none", base_family = "sans")
+}
+
+cloud_plot_seed_7701 <- draw_cloud(seed = 7701) +
+  labs(
+    title = "The first word drawn takes the centre",
+    subtitle = "Type size follows the count. Position, neighbours, and colour carry no meaning."
+  )
+
+cloud_plot_seed_7701
+```
+
+```{r}
+#| include: false
+
+extract_cloud_layer <- function(plot) {
+  ggplot_build(plot)$data[[1]] |>
+    transmute(
+      word = as.character(label),
+      plotted_size = size
+    ) |>
+    left_join(cloud_words, by = join_by(word))
+}
+
+cloud_layer_seed_7701 <- extract_cloud_layer(cloud_plot_seed_7701)
+cloud_size_ratio_seed_7701 <- cloud_layer_seed_7701$plotted_size^2 /
+  cloud_layer_seed_7701$count
+
+stopifnot(
+  identical(nrow(cloud_layer_seed_7701), nrow(cloud_words)),
+  !anyNA(cloud_layer_seed_7701$count),
+  setequal(cloud_layer_seed_7701$word, cloud_words$word),
+  max(cloud_size_ratio_seed_7701) - min(cloud_size_ratio_seed_7701) < 1e-10,
+  identical(cloud_words$word[1], "government"),
+  identical(packageVersion("ggwordcloud"), package_version("0.6.2"))
+)
+```
+
+The word in the middle is the first row drawn, not the topic of the speeches.
+The table is sorted by count, so `government` is drawn first. If the table were
+alphabetical, a different word could start in the centre. The packing also
+depends on the seed, the drawing device, and the fonts, so the page makes no
+claim about where any word should sit.
+
+`area_corr`, an option in ggwordcloud, makes a different trade. It resizes
+labels so each word's whole text box follows the count, which removes the
+length bias but gives short words taller type. Felix, Franconeri, and Bertini
+later found that people judged values more accurately from bar length than
+from font size.
+
+The short part of the text alternative is the cloud's alt text:
+"`r cloud_alt_seed_7701`" The long part is the sorted count table above, which
+lists every word and count used in the cloud.
+
+## Change the seed, not the data
+
+The next cloud calls the same function with a different layout seed. The
+counts are unchanged.
+
+```{r}
+#| label: fig-word-cloud-seed-two
+#| fig-cap: "The same 22 count-table words drawn again with layout seed 7702."
+#| fig-alt: "Second word cloud with the same words and counts as the first cloud but a different layout seed. Government is still used 585 times and people 561 times; every change in position is a layout artefact."
+#| fig-width: 7
+#| fig-height: 4.4
+#| dev: png
+
+cloud_plot_seed_7702 <- draw_cloud(seed = 7702) +
+  labs(
+    title = "A new seed moves every word; the counts stay the same",
+    subtitle = "Same 22 words and counts as the previous cloud, layout seed 7702"
+  )
+
+cloud_plot_seed_7702
+```
+
+```{r}
+#| include: false
+
+cloud_layer_seed_7702 <- extract_cloud_layer(cloud_plot_seed_7702)
+cloud_size_ratio_seed_7702 <- cloud_layer_seed_7702$plotted_size^2 /
+  cloud_layer_seed_7702$count
+
+stopifnot(
+  identical(nrow(cloud_layer_seed_7702), nrow(cloud_words)),
+  !anyNA(cloud_layer_seed_7702$count),
+  setequal(cloud_layer_seed_7702$word, cloud_layer_seed_7701$word),
+  max(cloud_size_ratio_seed_7702) - min(cloud_size_ratio_seed_7702) < 1e-10,
+  identical(sum(cloud_layer_seed_7702$count), sum(cloud_words$count))
+)
+```
+
+If the two pictures feel different, that feeling is the warning. The counts did
+not change.
+
+## Check preprocessing sensitivity
+
+Stop-word lists are editorial choices. The table below recomputes the top ten
+words under three named choices: onix only, snowball only, and all three
+tidytext lists together.
+
+```{r}
+stopword_choices <- list(
+  "onix only" = stop_words |>
+    filter(lexicon == "onix") |>
+    distinct(word),
+  "snowball only" = stop_words |>
+    filter(lexicon == "snowball") |>
+    distinct(word),
+  "all tidytext lexicons" = stop_words |>
+    distinct(word)
+)
+
+sensitivity_table <- imap(
+  stopword_choices,
+  \(stop_table, stop_choice) {
+    word_tokens |>
+      anti_join(stop_table, by = join_by(word)) |>
+      count(word, sort = TRUE, name = "count") |>
+      slice_head(n = 10) |>
+      mutate(stop_choice = stop_choice, rank = row_number(), .before = 1)
+  }
+) |>
+  list_rbind()
+```
+
+```{r}
+#| echo: false
+
+sensitivity_table |>
+  mutate(entry = str_c(word, " (", count, ")")) |>
+  select(rank, stop_choice, entry) |>
+  pivot_wider(names_from = stop_choice, values_from = entry) |>
+  knitr::kable(
+    col.names = c("Rank", "Onix only", "Snowball only", "All tidytext lexicons"),
+    caption = "Top ten words, with counts, under three stop-word choices",
+    row.names = FALSE
+  )
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(sensitivity_table), 30L),
+  identical(
+    sensitivity_table$word[sensitivity_table$stop_choice == "onix only"][1:2],
+    c("government", "people")
+  ),
+  "states" %in% sensitivity_table$word[
+    sensitivity_table$stop_choice == "snowball only"
+  ],
+  !"states" %in% sensitivity_table$word[
+    sensitivity_table$stop_choice == "onix only"
+  ],
+  "united" %in% inaugural_word_counts$word
+)
+```
+
+With snowball only, common words such as `will`, `us`, and `states` remain.
+With onix, `states` is removed while `united` remains. A cloud without this
+preprocessing note would look more objective than it is.
+
+## Check the word-length trap
+
+The next table compares real words from the count table. The rough space score
+is `letters * sqrt(count)`. It is not a model of perception; it only shows why
+a long word can take more horizontal room even when its count is lower.
+Alexander and coauthors tested word-length effects in word clouds directly.
+
+```{r}
+length_pairs <- inaugural_word_counts |>
+  filter(word %in% c("constitution", "time", "peace", "government", "people")) |>
+  mutate(rough_horizontal_space = round(letters * sqrt(count), 1)) |>
+  arrange(desc(rough_horizontal_space))
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  length_pairs,
+  col.names = c("Word", "Count", "Letters", "Rough space score"),
+  caption = "Long words can cover more space than shorter words with higher counts",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+constitution_space <- length_pairs |>
+  filter(word == "constitution") |>
+  pull(rough_horizontal_space)
+time_space <- length_pairs |>
+  filter(word == "time") |>
+  pull(rough_horizontal_space)
+peace_space <- length_pairs |>
+  filter(word == "peace") |>
+  pull(rough_horizontal_space)
+
+stopifnot(
+  identical(length_pairs$count[length_pairs$word == "constitution"], 207L),
+  identical(length_pairs$count[length_pairs$word == "time"], 214L),
+  constitution_space > time_space,
+  constitution_space > peace_space,
+  length_pairs$letters[length_pairs$word == "constitution"] == 12L,
+  length_pairs$letters[length_pairs$word == "time"] == 4L
+)
+```
+
+`constitution` appears 207 times and `time` appears 214 times. The longer word
+can still take about `r round(constitution_space / time_space, 1)` times the
+horizontal space under this simple geometry check. That is why Iris should not
+ask readers to compare close counts from font size.
+
+## What this cloud does not show
+
+The cloud does not show word order, phrases, relationships, distinctiveness,
+change over time, or importance. It also hides that `united` and `states` were
+once part of a phrase before tokenizing and the stop-word list split them.
+
+Use a cloud as a doorway to the table, not as the table's replacement.
+
+## What to remember
+
+- A word cloud starts from a count table; keep that table visible.
+- The onix stop-word list removes `states` but keeps `united` in this corpus.
+- The bar chart and both clouds here use the same 22 counts.
+- Placement, neighbours, the centre, and colour in a cloud carry no meaning.
+- Long words can look stronger than shorter words with similar counts.
+- The sorted counts are the long text alternative for the cloud.
+
+Iris keeps the cloud, but the slide title points to the count table: "Common
+words after one stated cleanup."
+
+## Sources
+
+- [ggwordcloud vignette](https://lepennec.github.io/ggwordcloud/articles/ggwordcloud.html)
+- [tidytext stop-word documentation](https://juliasilge.github.io/tidytext/reference/stop_words.html)
+- [Cleveland and McGill on graphical perception](https://doi.org/10.1080/01621459.1984.10478080)
+- [Heer and Bostock on crowdsourced graphical perception](https://doi.org/10.1145/1753326.1753357)
+- [Alexander et al. on word-length effects in word clouds](https://doi.org/10.1109/TVCG.2017.2723397)
+- [Felix, Franconeri, and Bertini on word-cloud magnitude judgments](https://doi.org/10.1109/TVCG.2017.2746018)
+- [Hearst and Rosner on tag-cloud limits](https://doi.org/10.1109/HICSS.2008.422)
+- [W3C guidance on complex image text alternatives](https://www.w3.org/WAI/tutorials/images/complex/)

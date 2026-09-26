@@ -120,7 +120,12 @@ count_matches <- function(pattern, text) {
   if (locations[1] == -1) 0L else length(locations)
 }
 
-for (lesson_file in lesson_files) {
+# Guide pages sit outside the task map and the review manifest, but they follow
+# the same page and chunk rules as lessons.
+guide_files <- "using-language-models.qmd"
+stopifnot(all(file.exists(guide_files)))
+
+for (lesson_file in c(lesson_files, guide_files)) {
   lines <- readLines(
     lesson_file,
     encoding = "UTF-8",
@@ -147,6 +152,16 @@ for (lesson_file in lesson_files) {
     failures <- c(
       failures,
       sprintf("%s is missing a description", lesson_file)
+    )
+  }
+
+  if (any(grepl("^author\\s*:", lines))) {
+    failures <- c(
+      failures,
+      sprintf(
+        "%s repeats the site author in its front matter",
+        lesson_file
+      )
     )
   }
 
@@ -222,12 +237,25 @@ for (lesson_file in lesson_files) {
       ignore.case = TRUE,
       perl = TRUE
     )
+    # A display chunk shows its output but not its code. Tables are formatted
+    # in these chunks so the reader sees the table rather than the kable() call
+    # that built it. A display chunk may sit between a computation and the
+    # hidden verification chunk that checks it.
+    is_display <- !is_hidden & grepl(
+      "#\\|\\s*echo:\\s*false",
+      chunks,
+      ignore.case = TRUE,
+      perl = TRUE
+    )
     asserts <- grepl("stopifnot(", chunks, fixed = TRUE)
 
     for (chunk_number in seq_along(chunks)) {
       if (asserts[chunk_number]) next
 
       next_number <- chunk_number + 1L
+      while (next_number <= length(chunks) && is_display[next_number]) {
+        next_number <- next_number + 1L
+      }
       covered_by_next <- next_number <= length(chunks) &&
         is_hidden[next_number] &&
         asserts[next_number]
@@ -238,6 +266,22 @@ for (lesson_file in lesson_files) {
         failures,
         sprintf(
           "%s chunk %d has no expected-result assertion, in itself or in a hidden verification chunk after it",
+          lesson_file,
+          chunk_number
+        )
+      )
+    }
+
+    # Table formatting is presentation, not method. A reader should see the
+    # code that computes a table and then the table, never the kable() call.
+    shows_table_code <- !is_hidden & !is_display &
+      grepl("\\bkable\\(", chunks, perl = TRUE)
+
+    for (chunk_number in which(shows_table_code)) {
+      failures <- c(
+        failures,
+        sprintf(
+          "%s chunk %d shows kable() to the reader; move it into an `#| echo: false` display chunk",
           lesson_file,
           chunk_number
         )
@@ -313,6 +357,54 @@ for (lesson_file in lesson_files) {
   }
 }
 
+# theme_lesson() keeps a margin on every side of a figure, so ink in the
+# outermost pixels means a title, label, or legend ran off the image. This
+# catches text that overflows the figure, not text clipped inside a panel.
+figure_files <- if (dir.exists("_site")) {
+  list.files("_site", pattern = "[.]png$", recursive = TRUE, full.names = TRUE)
+} else {
+  character()
+}
+figure_files <- figure_files[grepl("figure-html", figure_files, fixed = TRUE)]
+
+edges_with_ink <- function(path, band = 6L) {
+  image <- png::readPNG(path)
+  if (length(dim(image)) == 2L) {
+    image <- array(image, dim = c(dim(image), 1L))
+  }
+  channels <- dim(image)[3]
+  has_alpha <- channels %in% c(2L, 4L)
+  colour_channels <- seq_len(if (has_alpha) channels - 1L else channels)
+  brightness <- rowMeans(image[, , colour_channels, drop = FALSE], dims = 2L)
+  opacity <- if (has_alpha) image[, , channels] else 1
+  ink <- brightness < 0.78 & opacity > 0.1
+
+  rows <- nrow(ink)
+  columns <- ncol(ink)
+  edges <- c(
+    top = any(ink[seq_len(band), ]),
+    bottom = any(ink[rows - seq_len(band) + 1L, ]),
+    left = any(ink[, seq_len(band)]),
+    right = any(ink[, columns - seq_len(band) + 1L])
+  )
+  names(edges)[edges]
+}
+
+for (figure_file in figure_files) {
+  edges <- edges_with_ink(figure_file)
+
+  if (length(edges) > 0L) {
+    failures <- c(
+      failures,
+      sprintf(
+        "%s draws to its %s edge; shorten or wrap the text",
+        figure_file,
+        paste(edges, collapse = " and ")
+      )
+    )
+  }
+}
+
 if (length(failures) > 0) {
   cat(paste(failures, collapse = "\n"), "\n")
   quit(status = 1)
@@ -335,10 +427,11 @@ if (
 cat(
   sprintf(
     paste0(
-      "Checked %d lessons, %d executed R chunks, ",
+      "Checked %d lessons, %d executed R chunks, %d rendered figures, ",
       "and the review manifest.\n"
     ),
     length(lesson_files),
-    source_chunk_total
+    source_chunk_total,
+    length(figure_files)
   )
 )

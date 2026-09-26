@@ -1,7 +1,6 @@
 ---
 title: "Finding noun chunks from grammar links"
 subtitle: "Compare spaCy phrases with small dependency chunks"
-author: "Alex Farach"
 description: "Learn how noun chunks group nouns with attached words, using spaCy and a local UDPipe dependency parse."
 categories: [phrases and entities, noun chunks, workforce research]
 ---
@@ -111,6 +110,10 @@ pipeline_table <- tibble(
   field = names(pipeline_info),
   value = unlist(pipeline_info, use.names = FALSE)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   pipeline_table,
@@ -223,6 +226,10 @@ udpipe_chunks <- annotated |>
     chunk = map2_chr(doc_id, token_id, collect_chunk)
   ) |>
   select(doc_id, chunk)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   token_count_gap,
@@ -307,6 +314,10 @@ spreadsheet_examples <- bind_rows(
     mutate(method = "UDPipe-built")
 ) |>
   select(method, doc_id, chunk)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   comparison_summary,

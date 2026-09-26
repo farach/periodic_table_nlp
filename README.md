@@ -4,13 +4,13 @@ This repository contains the source for a plain-language teaching site about
 natural language processing in R. The canonical published site is
 <https://workforcefutures.net/learn/nlp/>. The lessons use small examples,
 explain technical terms when they appear, and show the output produced by the
-code. The home page rebuilds the 81-task periodic table as an accessible map.
-Finished tiles open lessons; planned tiles show where the project is going.
+code. The home page rebuilds the 81-task periodic table as an accessible map,
+and every tile opens a lesson.
 
 ## Lessons
 
-The canonical map and publishing manifest currently identify 62 available
-lessons. This list is checked against `data/periodic_table.csv`.
+The canonical map and publishing manifest identify 81 available lessons. This
+list is checked against `data/periodic_table.csv`.
 
 - **Source data loading (1-7):**
   [encoding](1_source_data_loading/01-bits-to-character-encoding.qmd),
@@ -86,15 +86,46 @@ lessons. This list is checked against `data/periodic_table.csv`.
   [document similarity](12_similarity/60-document-similarity.qmd),
   [word vectors](12_similarity/61-distributed-word-representations.qmd), and
   [words in context](12_similarity/62-contextualized-word-representations.qmd).
+- **Natural language generation (63-68):**
+  [next-token prediction](13_natural_language_generation/63-next-token-prediction.qmd),
+  [report writing](13_natural_language_generation/64-report-writing.qmd),
+  [machine translation](13_natural_language_generation/65-machine-translation.qmd),
+  [abstractive summarization](13_natural_language_generation/66-abstractive-summarization.qmd),
+  [paraphrasing](13_natural_language_generation/67-paraphrasing.qmd), and
+  [long-text generation](13_natural_language_generation/68-long-text-generation.qmd).
+- **Systems (69-74):**
+  [relation extraction](14_systems/69-relation-extraction.qmd),
+  [question answering](14_systems/70-question-answering.qmd),
+  [chatbot dialogue](14_systems/71-chatbot-dialogue.qmd),
+  [semantic search indexing](14_systems/72-semantic-search-indexing.qmd),
+  [knowledge base population](14_systems/73-knowledge-base-population.qmd), and
+  [e-discovery and media monitoring](14_systems/74-e-discovery-and-media-monitoring.qmd).
+- **Information visualization (75-81):**
+  [interactive apps](15_information_visualization/75-interactive-app-creation.qmd),
+  [annotated text](15_information_visualization/76-annotated-text-visualization.qmd),
+  [word clouds](15_information_visualization/77-word-clouds.qmd),
+  [word embedding plots](15_information_visualization/78-word-embedding-visualization.qmd),
+  [timelines](15_information_visualization/79-events-on-a-timeline.qmd),
+  [maps](15_information_visualization/80-locations-on-a-map.qmd), and
+  [knowledge graphs](15_information_visualization/81-knowledge-graph-visualization.qmd).
 
 The topic map comes from Rob van Zoest's
 [Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).
+
+A separate guide,
+[Using a language model in a reproducible analysis](using-language-models.qmd),
+shows how to treat a local language model as a research instrument: record the
+model and prompt, save its outputs, check them against a random sample reviewed
+by a person, and correct an estimate for the model's errors. It reads a saved
+run built by `data-raw/build-llm-review-labels.R`.
 
 ## Teaching standard
 
 Lessons marked available in the source are written for first-time,
 non-technical readers. Every R code chunk is executed during the site build,
 and important outputs are checked in code. A failed example stops the build.
+Readers see the code that does the work; table formatting runs in hidden
+display chunks, and figures share one style from `R/lesson-figures.R`.
 
 The workforce lessons use
 [onet2r](https://farach.github.io/onet2r/),
@@ -110,7 +141,9 @@ published examples executable.
 - [RESEARCH_STANDARDS.md](RESEARCH_STANDARDS.md) defines evidence, currency,
   and skeptical-review requirements.
 - [MODERNIZATION_NOTES.md](MODERNIZATION_NOTES.md) maps transformer- and
-  LLM-era changes onto future lessons.
+  LLM-era changes onto the lessons and their later revisions.
+- [FOLLOW_UPS.md](FOLLOW_UPS.md) lists the open review items and the next
+  steps for the finished lessons.
 - [accessibility.qmd](accessibility.qmd) explains the accessibility target,
   automated checks, and remaining manual tests.
 - [DATA_SOURCES.md](DATA_SOURCES.md) records teaching fixtures, external
@@ -126,6 +159,11 @@ $env:RENV_CONFIG_SANDBOX_ENABLED = "FALSE"
 Rscript -e "renv::restore()"
 python -m venv .venv-spacy
 .venv-spacy/Scripts/python -m pip install -r requirements-spacy.txt
+python -m venv .venv-nlg
+.venv-nlg/Scripts/python -m pip install -r requirements-nlg.txt
+.venv-nlg/Scripts/python scripts/setup-nlg-models.py
+.venv-nlg/Scripts/python tests/test-nlg-runtime.py
+Rscript tests/test-nlg-runtime.R
 npm ci
 npx playwright install chromium
 Rscript scripts/check-prose.R
@@ -137,10 +175,17 @@ Rscript tests/test-workforce-data.R
 npm run test:a11y
 ```
 
-On macOS and Linux, install the Python requirements with
-`.venv-spacy/bin/python -m pip install -r requirements-spacy.txt`. Native
-dependencies for OCR, PDF processing, and `cld3` are listed in the render
-workflow.
+On Linux, replace `Scripts/python` with `bin/python`. The
+`requirements-nlg.txt` lock uses the CPU-only PyTorch wheel index and has been
+validated on Windows and Linux. It is not presented as a working macOS lock;
+macOS contributors need a separately compatible local environment.
+
+The generation setup downloads immutable public model snapshots before
+rendering. It verifies the SHA-256 and byte size of every runtime-loaded weight,
+tokenizer, vocabulary, merge, SentencePiece, and configuration file against
+`data/nlg-model-files.csv`. A corrupt existing snapshot fails closed instead of
+being overwritten. Lesson execution is offline. Native dependencies for OCR,
+PDF processing, and `cld3` are listed in the render workflow.
 
 The automated accessibility suite uses axe-core and browser interaction tests
 across every page. It does not replace manual testing with screen readers,
@@ -149,8 +194,10 @@ keyboard-only navigation, zoom, and forced-colors mode.
 Use `quarto preview` for local development. Quarto writes the generated site
 to `_site/`.
 
-Package versions are recorded in `renv.lock` and
-`requirements-spacy.txt`. The source documents and configuration are tracked;
-generated site files and local environments are not. CI uploads the exact
-rendered `_site` artifact for inspection but does not deploy it. Deployment to
-the canonical host is managed outside this repository.
+Package versions are recorded in `renv.lock`, `requirements-spacy.txt`, and
+`requirements-nlg.txt`. Model IDs, revisions, and licenses are recorded in
+`data/nlg-models.csv`; revision-bound per-file fingerprints are recorded in
+`data/nlg-model-files.csv`. The source documents and configuration are tracked;
+generated site files, model weights, and local environments are not. CI uploads
+the exact rendered `_site` artifact for inspection but does not deploy it.
+Deployment to the canonical host is managed outside this repository.

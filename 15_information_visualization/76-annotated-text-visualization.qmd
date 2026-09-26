@@ -1,0 +1,792 @@
+---
+title: "Drawing labels on text spans"
+subtitle: "Use offsets, escaping, and visible labels for annotated text"
+description: "Learn how to draw safe inline annotations from spaCy offsets and why a table of spans must stay beside the highlights."
+categories: [information visualization, annotated text, named entities]
+---
+
+Sam is reviewing short job-board and flyer sentences. A table of entity rows is
+accurate, but it is hard to see which words were labeled without reading the
+same sentence twice.
+
+**Annotated text visualization** draws labels on spans of text while leaving the
+source text unchanged. A **span** is a stretch of text located by character
+offsets. The display can help readers inspect labels quickly, but the offsets,
+escaping, and overlap rules have to be honest.
+
+::: {.callout-note}
+The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- use spaCy token offsets instead of searching for entity strings;
+- convert 0-based, end-exclusive offsets for R's `substr()`;
+- draw labels with htmltools tag objects that escape text;
+- keep annotation layers separate when spans overlap;
+- provide a captioned table with every span; and
+- record the spaCy and model versions beside the display.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Start from offsets, not searched text
+
+The spaCy pipeline returns each token's `idx`, the 0-based character position
+where that token starts in the original string. The end of a span is the first
+character after it. R's `substr()` starts counting at 1 and includes its end
+position, so the slice uses `start + 1` and `end`.
+
+```{r}
+library(dplyr)
+library(htmltools)
+library(purrr)
+library(readr)
+library(spacyr)
+library(stringr)
+library(tibble)
+
+source("R/use-spacy.R")
+
+sentences <- read_csv(
+  "data/workforce/workforce_sentences.csv",
+  na = character(),
+  col_types = cols(
+    sentence_id = col_character(),
+    document_id = col_character(),
+    source_line = col_character(),
+    text = col_character(),
+    reference_label = col_character(),
+    uncertainty = col_character(),
+    annotator_id = col_character(),
+    rationale = col_character(),
+    codebook_version = col_character(),
+    codebook_hash = col_character(),
+    derived = col_character(),
+    transformation = col_character()
+  )
+)
+
+display_sentences <- sentences |>
+  filter(sentence_id %in% c("s001", "s023", "s028")) |>
+  transmute(
+    sentence_id,
+    source_text = text
+  )
+
+pipeline <- use_project_spacy()
+pipeline_info <- spacy_pipeline_version()
+
+parsed <- spacy_parse(
+  setNames(display_sentences$source_text, display_sentences$sentence_id),
+  pos = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  additional_attributes = "idx"
+) |>
+  as_tibble()
+
+entity_tokens <- parsed |>
+  filter(nzchar(entity)) |>
+  mutate(
+    label = str_remove(entity, "_[BI]$"),
+    begins_span = str_detect(entity, "_B$")
+  ) |>
+  group_by(doc_id) |>
+  mutate(span_number = cumsum(begins_span)) |>
+  ungroup()
+
+model_spans <- entity_tokens |>
+  left_join(
+    display_sentences,
+    by = c("doc_id" = "sentence_id")
+  ) |>
+  group_by(doc_id, span_number, source_text, label) |>
+  summarise(
+    start = min(idx),
+    end = max(idx + nchar(token, type = "chars")),
+    .groups = "drop"
+  ) |>
+  transmute(
+    sentence_id = doc_id,
+    layer = "spaCy model",
+    start,
+    end,
+    text = substr(source_text, start + 1L, end),
+    label,
+    reviewed = "model output"
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  tibble(
+    field = c("spacyr", names(pipeline_info)),
+    value = c(
+      as.character(packageVersion("spacyr")),
+      unname(unlist(pipeline_info))
+    )
+  ),
+  col.names = c("Field", "Value"),
+  caption = "spaCy runtime and English model used for this display",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c(
+    "dplyr", "htmltools", "purrr", "readr",
+    "spacyr", "stringr", "tibble"
+  ) %in% loadedNamespaces()),
+  identical(nrow(display_sentences), 3L),
+  identical(pipeline$model, "en_core_web_sm"),
+  identical(pipeline_info$version, "3.8.0"),
+  identical(pipeline_info$spacy, "3.8.7"),
+  identical(pipeline_info$license, "MIT"),
+  identical(nrow(model_spans), 3L),
+  identical(model_spans$text, c("12-week", "HOUSE", "October 15")),
+  identical(model_spans$label, c("DATE", "ORG", "DATE")),
+  identical(model_spans$start, c(5L, 21L, 9L)),
+  identical(model_spans$end, c(12L, 26L, 19L))
+)
+```
+
+The model labels `HOUSE` as `ORG`. That wrong span stays visible. Lesson 27
+checks the named-entity output; this lesson only shows how to draw labels
+without losing the source positions.
+
+The entity tags use `B` for the first token in a span and `I` for later tokens
+inside the same span. In `s001`, the three tagged tokens start at character 5,
+7, and 8; together they make the span from 5 up to, but not including, 12.
+
+```{r}
+s001_token_offsets <- parsed |>
+  filter(doc_id == "s001") |>
+  transmute(
+    token,
+    start = idx,
+    end = idx + nchar(token, type = "chars"),
+    entity_tag = if_else(nzchar(entity), entity, "outside")
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  s001_token_offsets,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Token", "Start", "End", "Entity tag"),
+  caption = "spaCy token offsets and entity tags for sentence s001",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(s001_token_offsets$token[2:4], c("12", "-", "week")),
+  identical(s001_token_offsets$start[2:4], c(5L, 7L, 8L)),
+  identical(s001_token_offsets$end[2:4], c(7L, 8L, 12L)),
+  identical(s001_token_offsets$entity_tag[2:4], c("DATE_B", "DATE_I", "DATE_I"))
+)
+```
+
+Searching for an entity string rebuilt with spaces can fail even when the
+offsets are right.
+
+```{r}
+s001_source <- display_sentences |>
+  filter(sentence_id == "s001") |>
+  pull(source_text)
+
+offset_slice <- model_spans |>
+  filter(sentence_id == "s001") |>
+  transmute(
+    search_text = "12 - week",
+    search_found = !is.na(str_locate(s001_source, fixed(search_text))[, 1]),
+    offset_slice = substr(s001_source, start + 1L, end)
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  offset_slice,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Searched text", "Search found", "Offset slice"),
+  caption = "Offset slicing recovers the span when a searched string fails",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  isFALSE(offset_slice$search_found[[1]]),
+  identical(offset_slice$offset_slice, "12-week")
+)
+```
+
+## Check code-point units with an accented name
+
+Offsets need a counting rule. spaCy's Python strings count Unicode code points,
+and R's `substr()` here slices by character positions, not bytes. The sentence
+below includes accented characters so the byte count differs from the character
+count.
+
+```{r}
+accent_text <- "Renée Díaz runs the Tools & Dies class at Riverton Skills Centre in October."
+accent_parsed <- spacy_parse(
+  c(accent = accent_text),
+  pos = TRUE,
+  entity = TRUE,
+  dependency = TRUE,
+  additional_attributes = "idx"
+) |>
+  as_tibble()
+
+accent_person <- accent_parsed |>
+  filter(str_detect(entity, "^PERSON")) |>
+  summarise(
+    start = min(idx),
+    end = max(idx + nchar(token, type = "chars")),
+    text = substr(accent_text, start + 1L, end),
+    .groups = "drop"
+  )
+
+byte_offset <- function(text, position) {
+  if (position == 0L) {
+    return(0L)
+  }
+
+  nchar(substr(text, 1L, position), type = "bytes")
+}
+
+person_byte_start <- byte_offset(accent_text, accent_person$start)
+person_byte_end <- byte_offset(accent_text, accent_person$end)
+wrong_byte_as_character_slice <- substr(
+  accent_text,
+  accent_person$start + 1L,
+  person_byte_end
+)
+
+accent_units <- tibble(
+  example = "accented constructed sentence",
+  characters = nchar(accent_text, type = "chars"),
+  bytes = nchar(accent_text, type = "bytes"),
+  person_start = accent_person$start,
+  person_end = accent_person$end,
+  byte_start = person_byte_start,
+  byte_end = person_byte_end,
+  wrong_slice_if_bytes_are_positions = wrong_byte_as_character_slice,
+  sliced_text = accent_person$text
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  accent_units,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Example",
+    "Characters",
+    "Bytes",
+    "Start",
+    "End",
+    "Byte start",
+    "Byte end",
+    "Wrong slice if bytes are used as positions",
+    "Sliced text"
+  ),
+  caption = "Character offsets still slice the accented name correctly",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(accent_units$characters, 76L),
+  identical(accent_units$bytes, 78L),
+  identical(accent_units$person_start, 0L),
+  identical(accent_units$person_end, 10L),
+  identical(accent_units$byte_start, 0L),
+  identical(accent_units$byte_end, 12L),
+  identical(accent_units$wrong_slice_if_bytes_are_positions, "Renée Díaz r"),
+  identical(accent_units$sliced_text, "Renée Díaz"),
+  accent_units$bytes > accent_units$characters
+)
+
+riverton_span <- accent_parsed |>
+  filter(token %in% c("Riverton", "Skills", "Centre")) |>
+  summarise(
+    start = min(idx),
+    end = max(idx + nchar(token, type = "chars")),
+    byte_start = byte_offset(accent_text, start),
+    byte_end = byte_offset(accent_text, end),
+    text = substr(accent_text, start + 1L, end),
+    .groups = "drop"
+  )
+
+stopifnot(
+  identical(riverton_span$text, "Riverton Skills Centre"),
+  identical(riverton_span$start, 42L),
+  identical(riverton_span$end, 64L),
+  identical(riverton_span$byte_start, 44L),
+  identical(riverton_span$byte_end, 66L)
+)
+```
+
+Do not use byte offsets as character offsets. In this example, the byte offsets
+would take two extra characters (`Renée Díaz r`), and every later span in the
+sentence would slide to the right.
+
+## Draw one layer only when spans do not overlap
+
+The renderer below accepts one sentence and one layer of non-overlapping spans.
+It builds the line with htmltools tags, so source text is escaped by
+construction. The label appears as visible text inside each mark; the background
+color is only a backup cue. The colors and borders come from two classes in the
+site's stylesheet, so the code only names them.
+
+```{r}
+has_layer_overlap <- function(spans) {
+  ordered <- spans |>
+    arrange(start, end)
+
+  if (nrow(ordered) < 2L) {
+    return(FALSE)
+  }
+
+  any(ordered$start[-1] < ordered$end[-nrow(ordered)])
+}
+
+render_annotation_layer <- function(sentence_id, layer_name, spans, source_text) {
+  if (has_layer_overlap(spans)) {
+    stop("This layer has overlapping spans; show it as a table.", call. = FALSE)
+  }
+
+  ordered <- spans |>
+    arrange(start, end)
+  cursor <- 0L
+  parts <- list(
+    tags$strong(paste(layer_name, ": ", sep = ""))
+  )
+  plain_parts <- character()
+
+  for (row_index in seq_len(nrow(ordered))) {
+    span <- ordered[row_index, ]
+
+    if (span$start > cursor) {
+      before <- substr(source_text, cursor + 1L, span$start)
+      parts <- append(parts, list(before))
+      plain_parts <- c(plain_parts, before)
+    }
+
+    span_text <- substr(source_text, span$start + 1L, span$end)
+    label_text <- paste("[", span$label, "]", sep = "")
+
+    parts <- append(
+      parts,
+      list(
+        tags$mark(
+          class = "annotation-mark",
+          .noWS = "outside",
+          span_text,
+          tags$span(class = "annotation-label", label_text)
+        )
+      )
+    )
+    plain_parts <- c(plain_parts, span_text)
+    cursor <- span$end
+  }
+
+  if (cursor < nchar(source_text, type = "chars")) {
+    after <- substr(source_text, cursor + 1L, nchar(source_text, type = "chars"))
+    parts <- append(parts, list(after))
+    plain_parts <- c(plain_parts, after)
+  }
+
+  list(
+    sentence_id = sentence_id,
+    layer = layer_name,
+    plain_text = paste(plain_parts, collapse = ""),
+    html = tags$p(
+      class = "annotated-text-example",
+      do.call(tagList, parts)
+    )
+  )
+}
+
+model_lines <- display_sentences |>
+  mutate(
+    spans = map(
+      sentence_id,
+      \(current_id) {
+        model_spans |>
+          filter(sentence_id == current_id, layer == "spaCy model")
+      }
+    ),
+    rendered = pmap(
+      list(sentence_id, spans, source_text),
+      \(sentence_id, spans, source_text) {
+        render_annotation_layer(
+          sentence_id = sentence_id,
+          layer_name = "spaCy model",
+          spans = spans,
+          source_text = source_text
+        )
+      }
+    )
+  )
+
+tagList(map(model_lines$rendered, "html"))
+```
+
+```{r}
+#| include: false
+
+plain_model_text <- map_chr(model_lines$rendered, "plain_text")
+
+stopifnot(
+  identical(plain_model_text, display_sentences$source_text),
+  all(map_lgl(model_lines$spans, \(spans) !has_layer_overlap(spans))),
+  all(str_detect(
+    as.character(tagList(map(model_lines$rendered, "html"))),
+    fixed("<mark")
+  )),
+  all(str_detect(
+    as.character(tagList(map(model_lines$rendered, "html"))),
+    fixed("[")
+  ))
+)
+```
+
+The marks are useful because the original words stay in order. The table below
+is still necessary: it gives the offsets and labels in a form that does not
+depend on color or inline layout.
+
+## Keep a table of every span
+
+Sam also wants to show a reviewer layer for a constructed nested example:
+`Riverton` can be a `GPE`, spaCy's label for a geopolitical place such as a
+town, inside `Riverton Skills Centre`, an organisation name. The two annotations
+are kept in separate layers so each line can be drawn without overlap.
+
+```{r}
+review_sentence <- tibble(
+  sentence_id = "constructed-01",
+  source_text = "Riverton Skills Centre will run evening classes in October."
+)
+
+review_spans <- tibble(
+  sentence_id = c("constructed-01", "constructed-01"),
+  layer = c("reviewer organisation", "reviewer place"),
+  start = c(0L, 0L),
+  end = c(22L, 8L),
+  text = c("Riverton Skills Centre", "Riverton"),
+  label = c("ORG", "GPE"),
+  reviewed = c("author-written layer", "author-written layer")
+)
+
+all_visible_spans <- bind_rows(
+  model_spans,
+  review_spans
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  all_visible_spans |>
+    arrange(sentence_id, layer, start, end),
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Sentence ID",
+    "Layer",
+    "Start",
+    "End",
+    "Text",
+    "Label",
+    "Review status"
+  ),
+  caption = "Every span used in the inline annotated-text displays",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+span_sources <- bind_rows(display_sentences, review_sentence)
+
+span_slices <- all_visible_spans |>
+  left_join(span_sources, by = "sentence_id") |>
+  mutate(sliced = substr(source_text, start + 1L, end))
+
+stopifnot(
+  identical(nrow(all_visible_spans), 5L),
+  identical(span_slices$text, span_slices$sliced),
+  all(c("sentence_id", "layer", "start", "end", "label") %in%
+    names(all_visible_spans)),
+  identical(review_spans$text, c("Riverton Skills Centre", "Riverton"))
+)
+```
+
+Now each reviewer layer can be drawn on its own line.
+
+```{r}
+review_lines <- review_spans |>
+  group_by(layer) |>
+  group_split() |>
+  map(
+    \(layer_spans) {
+      render_annotation_layer(
+        sentence_id = "constructed-01",
+        layer_name = layer_spans$layer[[1]],
+        spans = layer_spans,
+        source_text = review_sentence$source_text[[1]]
+      )
+    }
+  )
+
+tagList(map(review_lines, "html"))
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(map_chr(review_lines, "plain_text"), rep(review_sentence$source_text, 2L)),
+  all(!map_lgl(
+    split(review_spans, review_spans$layer),
+    has_layer_overlap
+  ))
+)
+```
+
+The two reviewer labels are not a spaCy result. They are an author-written
+example showing why layers matter.
+
+## Show overlap instead of forcing it inline
+
+If those two reviewer spans are put into one layer, they overlap. This lesson
+does not try to squeeze them into one inline row. It switches to the table view
+for that layer.
+
+```{r}
+overlap_spans <- review_spans |>
+  mutate(layer = "combined reviewer layer")
+
+overlap_report <- overlap_spans |>
+  mutate(
+    inline_display = if_else(
+      has_layer_overlap(overlap_spans),
+      "table view only: spans overlap within the layer",
+      "safe for inline display"
+    )
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  overlap_report,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Sentence ID",
+    "Layer",
+    "Start",
+    "End",
+    "Text",
+    "Label",
+    "Review status",
+    "Display decision"
+  ),
+  caption = "Overlapping spans are kept in a table instead of one inline layer",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  has_layer_overlap(overlap_spans),
+  all(str_detect(overlap_report$inline_display, fixed("table view only")))
+)
+
+overlap_error <- tryCatch(
+  render_annotation_layer(
+    sentence_id = "constructed-01",
+    layer_name = "combined reviewer layer",
+    spans = overlap_spans,
+    source_text = review_sentence$source_text[[1]]
+  ),
+  error = conditionMessage
+)
+
+stopifnot(
+  identical(overlap_error, "This layer has overlapping spans; show it as a table.")
+)
+```
+
+Nested spans can be drawn by some specialized tools. Crossing spans are harder
+because one tag cannot contain the other. For a first lesson, the safer rule is
+simple: draw one non-overlapping layer at a time and keep the complete table.
+
+## Escape source text by construction
+
+The renderer treats source text as text. The example below contains `<b>` and
+`&`. They should appear as characters, not as an HTML tag or entity.
+
+```{r}
+escape_text <- "Sam wrote <b> & kept it as text."
+escape_span <- tibble(
+  sentence_id = "constructed-escape",
+  layer = "escaping check",
+  start = 10L,
+  end = 13L,
+  text = "<b>",
+  label = "TEXT",
+  reviewed = "constructed hostile text"
+)
+
+escape_line <- render_annotation_layer(
+  sentence_id = "constructed-escape",
+  layer_name = "escaping check",
+  spans = escape_span,
+  source_text = escape_text
+)
+
+escape_line$html
+```
+
+```{r}
+#| include: false
+
+escaped_html <- as.character(escape_line$html)
+
+stopifnot(
+  identical(substr(escape_text, escape_span$start + 1L, escape_span$end), "<b>"),
+  str_detect(escaped_html, fixed("&lt;b&gt;")),
+  !str_detect(escaped_html, fixed("<b>")),
+  str_detect(escaped_html, fixed("&amp;")),
+  identical(escape_line$plain_text, escape_text)
+)
+```
+
+The same rule applies to tables that show source text. Use an escaping HTML
+table so text such as `<b>` remains visible.
+
+```{r}
+escape_table <- escape_span |>
+  select(sentence_id, layer, start, end, text, label, reviewed)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  escape_table,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Sentence ID",
+    "Layer",
+    "Start",
+    "End",
+    "Text",
+    "Label",
+    "Review status"
+  ),
+  caption = "Markup-like source text preserved as table text",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(escape_table$text, "<b>"),
+  identical(escape_table$label, "TEXT")
+)
+```
+
+```{r}
+#| include: false
+
+invisible(suppressMessages(spacy_finalize()))
+spacy_closed <- TRUE
+
+stopifnot(spacy_closed)
+```
+
+## What this display does not prove
+
+The highlights show where the model or reviewer layer placed labels. They do not
+prove that the labels are correct. The `HOUSE` example is deliberately left in
+place because it is a model-output error from the earlier NER lesson.
+
+The page also does not certify accessibility. The visible label text inside each
+mark keeps color from carrying the meaning alone, and the contrast is designed
+for the automated scan. Screen-reader behavior and forced-colors behavior still
+need manual review.
+
+## What to remember
+
+- An annotated text visualization draws labels on spans while keeping source
+  text unchanged.
+- spaCy's `idx` gives 0-based token starts; R's `substr()` needs `start + 1`.
+- Slice spans from offsets instead of searching for joined entity strings.
+- Build inline HTML with tag objects so source text is escaped as text.
+- Put visible labels inside the marks; do not rely on color alone.
+- Draw one non-overlapping layer at a time and keep a captioned span table.
+
+Sam can now read the highlights and still trace every label back to a sentence
+ID, a layer, and an offset pair.
+
+## Sources
+
+- [brat rapid annotation tool paper](https://aclanthology.org/E12-2021/)
+- [brat standoff format](https://brat.nlplab.org/standoff.html)
+- [W3C Web Annotation Data Model: Text Quote Selector](https://www.w3.org/TR/annotation-model/#text-quote-selector)
+- [W3C Web Annotation Data Model: Text Position Selector](https://www.w3.org/TR/annotation-model/#text-position-selector)
+- [Finkel and Manning on nested named entity recognition](https://aclanthology.org/D09-1015/)
+- [spaCy visualizers](https://spacy.io/usage/visualizers)
+- [spaCy token API](https://spacy.io/api/token#attributes)
+- [spaCy document API](https://spacy.io/api/doc#char_span)
+- [spacyr `spacy_parse()` reference](https://spacyr.quanteda.io/reference/spacy_parse.html)
+- [htmltools `htmlEscape()` reference](https://rstudio.github.io/htmltools/reference/htmlEscape.html)
+- [OWASP Cross Site Scripting Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html)
+- [W3C WCAG 2.2 use of color](https://www.w3.org/TR/WCAG22/#use-of-color)
+- [Understanding WCAG 2.2 use of color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html)
+- [Neves and Seva review of manual annotation tools](https://doi.org/10.1093/bib/bbz130)

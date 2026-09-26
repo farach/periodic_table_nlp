@@ -1,7 +1,6 @@
 ---
 title: "Creating additional training examples"
 subtitle: "Augment text without assuming the label survived"
-author: "Alex Farach"
 description: "Learn how to create workforce text variants and test whether they still support the intended label."
 categories: [training data, augmentation, workforce research]
 ---
@@ -44,7 +43,7 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Start with a narrow purpose
+## Start with one purpose
 
 The team wants more examples of explicit training offers. It will not claim
 that the examples describe real employers or estimate how often training is
@@ -80,6 +79,10 @@ workforce_sentences <- read_csv(
 )
 training_examples <- workforce_sentences |>
   filter(reference_label == "training")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   training_examples |>
@@ -217,6 +220,10 @@ augmentation_counts <- tibble(label = augmentation_label_order) |>
 source_families <- augmented_rows |>
   distinct(source_family_id) |>
   arrange(source_family_id)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   augmented_rows,
@@ -345,6 +352,10 @@ accepted_rows <- reviewed_candidates |>
   filter(decision == "accept")
 rejected_rows <- reviewed_candidates |>
   filter(decision == "reject")
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   reviewed_candidates |>
@@ -470,8 +481,10 @@ ablation <- tibble(
   ),
   items = nrow(held_out)
 )
+```
 
-new_terms <- setdiff(with_augmentation, without_augmentation)
+```{r}
+#| echo: false
 
 knitr::kable(
   ablation,
@@ -484,8 +497,6 @@ knitr::kable(
   caption = "The same held-out units judged with and without the augmented rows",
   row.names = FALSE
 )
-
-new_terms
 ```
 
 ```{r}
@@ -500,14 +511,29 @@ stopifnot(
   identical(sum(is_training), 2L),
   identical(ablation$distinctive_terms, c(13L, 18L)),
   identical(ablation$correct, c(10L, 10L)),
+  identical(
+    predict_training(without_augmentation, held_out$text),
+    predict_training(with_augmentation, held_out$text)
+  )
+)
+```
+
+`setdiff()` lists the terms that exist only in the augmented vocabulary:
+
+```{r}
+new_terms <- setdiff(with_augmentation, without_augmentation)
+
+new_terms
+```
+
+```{r}
+#| include: false
+
+stopifnot(
   identical(length(new_terms), 5L),
   identical(
     new_terms,
     c("analyst", "assistant", "developer", "junior", "pathway")
-  ),
-  identical(
-    predict_training(without_augmentation, held_out$text),
-    predict_training(with_augmentation, held_out$text)
   )
 )
 ```
@@ -609,6 +635,10 @@ meaning_check <- tibble(
         !str_detect(lower_text, "\\bnot\\b")
   ) |>
   select(-lower_text)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   meaning_check,
@@ -642,7 +672,7 @@ stopifnot(
 )
 ```
 
-Both sentences satisfy the keyword-only check. The narrow negation rule
+Both sentences satisfy the keyword-only check. The small negation rule
 separates this pair, but it is not a general language-understanding method.
 Label preservation still requires review at the meaning level.
 
@@ -659,8 +689,8 @@ Check:
 7. how conclusions change when synthetic examples are removed.
 
 Large language models can generate many variants, but scale does not settle
-these questions. Repeated training on generated text can also narrow a model's
-representation of the underlying distribution.
+these questions. Repeated training on generated text can also make a model's
+representation of the underlying distribution less varied.
 
 ## What to remember
 

@@ -52,9 +52,9 @@ runs.
 
 Five hostile reviews ran across the twenty-five lessons. The ones that mattered:
 
-1. **A real bug.** Lesson 29's price parser silently corrupted any number of
-   four or more digits without a thousands separator: `$38000 a year` parsed as
-   `380`. Fixed; the score moved from 12 to 13.
+1. **A real bug.** Lesson 29's price parser turned any unseparated number of
+   four or more digits into the wrong value with no error: `$38000 a year`
+   parsed as `380`. Fixed; the score moved from 12 to 13.
 2. **A number that was wrong three ways.** Lesson 38 reported a Flesch score of
    32.81, which conventionally means very difficult, for plain job-board
    sentences. Its 22 "sentences" were an artefact of an undisclosed

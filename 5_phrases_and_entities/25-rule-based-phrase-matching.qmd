@@ -1,7 +1,6 @@
 ---
 title: "Finding phrases with readable rules"
 subtitle: "Score a credential pattern before trusting it"
-author: "Alex Farach"
 description: "Learn how simple string rules find credential phrases, how concordances help inspection, and why rules need maintenance."
 categories: [phrases and entities, rule-based matching, workforce research]
 ---
@@ -86,6 +85,10 @@ rule_results <- sentences |>
 matched_rows <- rule_results |>
   filter(rule_match | hand_required_credential) |>
   select(sentence_id, text, matched_word, rule_match, hand_required_credential)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   matched_rows,
@@ -164,6 +167,10 @@ problem_examples <- tibble(
     "The line says a diploma is required, but diploma was not in the rule."
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   score_counts,
@@ -219,6 +226,10 @@ credential_kwic <- kwic(
   as.data.frame() |>
   as_tibble() |>
   select(docname, pre, keyword, post)
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   credential_kwic,

@@ -50,6 +50,21 @@ sources <- list(
     hash_column = "fingerprint", dir = "data/inaugural", algo = "sha256"
   ),
   list(
+    metadata = "data/inaugural/model-comparison-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/inaugural", algo = "sha256"
+  ),
+  list(
+    metadata = "data/inaugural/topic-k-diagnostics-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/inaugural", algo = "sha256"
+  ),
+  list(
+    metadata = "data/inaugural/next-token-study-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/inaugural", algo = "sha256"
+  ),
+  list(
     metadata = "data/treebank/treebank-metadata.csv",
     shape = "artifact", name_column = "artifact",
     hash_column = "fingerprint", dir = "data/treebank", algo = "sha256"
@@ -61,6 +76,21 @@ sources <- list(
   ),
   list(
     metadata = "data/riverton/riverton-inbox-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/riverton", algo = "sha256"
+  ),
+  list(
+    metadata = "data/riverton/riverton-handbook-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/riverton", algo = "sha256"
+  ),
+  list(
+    metadata = "data/riverton/riverton-review-collection-metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/riverton", algo = "sha256"
+  ),
+  list(
+    metadata = "data/riverton/riverton-llm-review-labels-metadata.csv",
     shape = "artifact", name_column = "artifact",
     hash_column = "fingerprint", dir = "data/riverton", algo = "sha256"
   ),

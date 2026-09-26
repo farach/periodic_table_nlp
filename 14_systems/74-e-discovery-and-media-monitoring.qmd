@@ -1,0 +1,962 @@
+---
+title: "Reviewing documents for discovery and alerts"
+subtitle: "Estimate what search and ranked review leave unseen"
+description: "Learn how keyword terms, ranked review, an elusion sample, and a small monitoring stream expose missed records."
+categories: [systems, e-discovery, media monitoring]
+---
+
+A fictional request asks for records about the Calder Yard contract. It is not asking for a few good examples. It asks for the responsive records in a fixed collection, including the ones that do not use the words a searcher guesses first.
+
+**E-discovery** is electronic discovery: finding records that must be reviewed or produced for a legal request. **Technology-assisted review** uses a model to rank unreviewed records so people can review likely responsive records first. **Media monitoring** watches new items as they arrive and sends alerts for items that matter.
+
+Grossman and Cormack report that in Blair and Maron's legal-search study, searchers believed they had found at least 75 percent of the relevant documents, while average recall was about 20 percent for the studied requests.
+
+Ranked review is not the same as lesson 9's active learning. Active learning chooses uncertain examples to improve a model; ranked review chooses high-scoring unreviewed records so responsive material is found sooner.
+
+The **elusion rate** is the share of unreviewed records that are responsive. A low elusion rate can still hide many misses. Suppose a review of 600 records from a 10,000-record collection finds 70 of its 100 responsive records. The 9,400 unreviewed records still hold 30 responsive records, so the elusion rate is 30 / 9,400, about 0.32 percent, while recall is 70 / 100, or 70 percent.
+
+::: {.callout-note}
+The records in this lesson are constructed teaching examples. They do not describe a real legal matter, company, person, news source, or monitoring target.
+:::
+
+::: {.callout-tip}
+## What you will learn
+
+This lesson shows how to:
+
+- predeclare keyword terms and read their precision and recall;
+- train a keyword-seeded ranked review model without scoring its training rows;
+- stop review by a fixed rule chosen before sampling;
+- estimate missed responsive records with one finite-population sample;
+- explain why the fictional answer key is stronger than real reviewers usually have; and
+- process a short monitoring stream in arrival order with duplicate suppression.
+:::
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Load the constructed review collection
+
+The builder created a short review collection for one request. It also wrote a monitoring stream and metadata fingerprints. Each row carries a fiction notice. The reference labels were written by the page author, so they are labels for this constructed collection rather than ground truth.
+
+```{r}
+suppressPackageStartupMessages({
+  library(digest)
+  library(dplyr)
+  library(ggplot2)
+  library(glmnet)
+  library(purrr)
+  library(readr)
+  library(stringdist)
+  library(stringr)
+  library(tibble)
+  library(tidymodels)
+  library(textrecipes)
+  library(tidyr)
+})
+
+hash_lines <- function(path) {
+  digest(
+    paste(read_lines(path), collapse = "\n"),
+    algo = "sha256",
+    serialize = FALSE
+  )
+}
+
+collection_path <- "data/riverton/riverton-review-collection.csv"
+stream_path <- "data/riverton/riverton-monitoring-stream.csv"
+metadata_path <- "data/riverton/riverton-review-collection-metadata.csv"
+
+review_records <- read_csv(
+  collection_path,
+  na = c("", "NA"),
+  col_types = cols(
+    doc_id = col_character(),
+    record_type = col_character(),
+    doc_date = col_date(),
+    source_type = col_character(),
+    sender_role = col_character(),
+    subject = col_character(),
+    review_request = col_character(),
+    reference_responsive = col_logical(),
+    reference_reason = col_character(),
+    construction_subtype = col_character(),
+    near_duplicate_of = col_character(),
+    text = col_character(),
+    author_note = col_character(),
+    construction_id = col_character(),
+    file_position = col_integer()
+  )
+)
+
+monitoring_stream <- read_csv(
+  stream_path,
+  na = c("", "NA"),
+  col_types = cols(
+    stream_id = col_character(),
+    record_type = col_character(),
+    arrival_order = col_integer(),
+    doc_date = col_date(),
+    source_type = col_character(),
+    text = col_character(),
+    reference_alert = col_logical(),
+    reference_reason = col_character(),
+    near_duplicate_of = col_character(),
+    author_note = col_character()
+  )
+)
+
+review_metadata <- read_csv(
+  metadata_path,
+  na = character(),
+  col_types = cols(
+    artifact = col_character(),
+    description = col_character(),
+    source = col_character(),
+    license = col_character(),
+    created_on = col_character(),
+    purpose = col_character(),
+    rows = col_integer(),
+    class_counts = col_character(),
+    fingerprint = col_character(),
+    rng_kind = col_character(),
+    seed = col_character(),
+    effective_seeds = col_character(),
+    review_request = col_character(),
+    shortcut_sweep = col_character()
+  )
+)
+
+actual_fingerprints <- tibble(
+  artifact = c(
+    "riverton-review-collection.csv",
+    "riverton-monitoring-stream.csv"
+  ),
+  fingerprint = c(hash_lines(collection_path), hash_lines(stream_path))
+)
+
+collection_summary <- review_records |>
+  count(reference_responsive, name = "records") |>
+  mutate(label = if_else(reference_responsive, "responsive", "not responsive"))
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  collection_summary |>
+    select(label, records),
+  col.names = c("Reference label", "Records"),
+  caption = "Constructed review collection labels for one fictional request",
+  row.names = FALSE
+)
+
+knitr::kable(
+  tibble(review_request = review_metadata$review_request[[1]]),
+  format = "html",
+  escape = TRUE,
+  col.names = "Review request",
+  caption = "Fictional request used to define responsiveness",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(review_records), 240L),
+  identical(sum(review_records$reference_responsive), 36L),
+  identical(nrow(monitoring_stream), 24L),
+  identical(
+    actual_fingerprints$fingerprint,
+    review_metadata$fingerprint[
+      match(actual_fingerprints$artifact, review_metadata$artifact)
+    ]
+  ),
+  all(nzchar(review_records$author_note)),
+  all(nzchar(monitoring_stream$author_note)),
+  identical(review_metadata$seed[1], "7401")
+)
+```
+
+The constructed prevalence is `r sprintf("%.0f%%", 100 * mean(review_records$reference_responsive))`, much higher than many legal-review matters. It was chosen so a small teaching page has enough responsive examples to inspect.
+
+Each record is a short note wrapped in one of 12 frames, such as "Reminder:" at the start or "Thanks." at the end; one frame leaves the note bare. Every frame holds the same number of responsive records and the same number of non-responsive records. Before writing the file, the builder tested whether the surface features it lists could separate the two classes. It would have refused to write the file if a check reached an F1 of 0.60 or a balanced accuracy of 0.75; the frame checks within keyword groups use only the balanced-accuracy limit.
+
+Passing means that no listed check separated the classes that well, not that surface features carry no signal. Both scores rise as a check separates the classes better: balanced accuracy, from lesson 44, averages the share of each class that a check gets right, and F1 combines the precision and recall defined in the keyword section below. The table below is the builder's own record of those checks.
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  tibble(builder_checks = review_metadata$shortcut_sweep[[1]]),
+  format = "html",
+  escape = TRUE,
+  col.names = "Surface checks recorded by the builder",
+  caption = "Checks the builder ran before writing the review collection",
+  row.names = FALSE
+)
+```
+
+The table uses the builder's own shorthand:
+
+- A **held-out** check learns a rule from some of the records and tests it on records it did not see.
+- **Out-of-fold** scores come from cross-validation (lesson 43): each record is scored by a model that did not train on it. **Top 36** means the 36 highest scores, as many as there are responsive records.
+- **Ridge** and **lasso** are two kinds of penalized regression, the same family as the ranker later on this page. **Snowball stop words** are a standard list of common words such as "the" and "to".
+- The **core** is the note inside the frame, and its **opening** is its first word or first two words.
+- A **rarity rule** flags records whose frame-and-first-word pair occurs at most k times, without using labels.
+- **CK-D1** and **CK-D2** are the builder's names for its two frame checks. CK-D1 looks at each frame together with the first word of the note inside it, and CK-D2 compares the frames separately among records that contain a keyword and records that do not.
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(dplyr::n_distinct(review_metadata$shortcut_sweep), 1L),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("F1 >= 0.60")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("balanced accuracy >= 0.75")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("snowball")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("ridge and lasso")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("CK-D1")),
+  stringr::str_detect(review_metadata$shortcut_sweep[[1]], stringr::fixed("CK-D2"))
+)
+```
+
+## Search predeclared keywords
+
+The keyword terms below are fixed before scoring. They are plausible terms for the written request, but they are still guesses. Keyword recall is knowable here only because the collection is fictional and the reference labels are already in the file.
+
+```{r}
+keyword_terms <- c(
+  "inspection",
+  "inspect",
+  "delete",
+  "deleted",
+  "delay",
+  "delayed",
+  "log",
+  "Calder Yard"
+)
+
+keyword_pattern <- regex(
+  paste0(
+    "\\b(",
+    paste(keyword_terms[keyword_terms != "Calder Yard"], collapse = "|"),
+    ")\\b|\\bCalder Yard\\b"
+  ),
+  ignore_case = TRUE
+)
+
+review_scored <- review_records |>
+  mutate(
+    keyword_hit = str_detect(text, keyword_pattern),
+    label = factor(
+      if_else(reference_responsive, "responsive", "not responsive"),
+      levels = c("responsive", "not responsive")
+    )
+  )
+
+keyword_metrics <- review_scored |>
+  summarise(
+    hits = sum(keyword_hit),
+    responsive_hits = sum(keyword_hit & reference_responsive),
+    responsive_total = sum(reference_responsive),
+    precision = responsive_hits / hits,
+    recall = responsive_hits / responsive_total
+  )
+
+keyword_examples <- bind_rows(
+  review_scored |>
+    filter(keyword_hit, reference_responsive) |>
+    arrange(doc_id) |>
+    slice_head(n = 4),
+  review_scored |>
+    filter(keyword_hit, !reference_responsive) |>
+    arrange(doc_id) |>
+    slice_head(n = 4)
+) |>
+  transmute(
+    doc_id,
+    reference_label = if_else(reference_responsive, "responsive", "not responsive"),
+    construction_subtype,
+    text
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  keyword_metrics |>
+    mutate(across(c(precision, recall), \(value) round(value, 3))),
+  col.names = c("Keyword hits", "Responsive hits", "Responsive records", "Precision", "Recall"),
+  caption = "Predeclared keyword terms on the constructed collection",
+  row.names = FALSE
+)
+
+knitr::kable(
+  keyword_examples,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Document", "Reference label", "Construction note", "Text"),
+  caption = "Keyword hits include both responsive records and false hits",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(keyword_metrics$hits, 39L),
+  identical(keyword_metrics$responsive_hits, 22L),
+  identical(keyword_metrics$responsive_total, 36L),
+  identical(round(keyword_metrics$precision, 3), 0.564),
+  identical(round(keyword_metrics$recall, 3), 0.611),
+  keyword_metrics$responsive_hits >= 8L,
+  keyword_metrics$hits - keyword_metrics$responsive_hits >= 8L
+)
+```
+
+Precision is the share of reviewed hits that are responsive. Recall is the share of all responsive records that were found. The terms match whole words, plus the phrase `Calder Yard`; for example, `log` does not match `chronology`. In this fixture, the terms find `r keyword_metrics$hits` records. Of those, `r keyword_metrics$responsive_hits` are responsive under the constructed labels. That precision, `r keyword_metrics$responsive_hits` divided by `r keyword_metrics$hits`, is visible after reviewing the hits. The recall, `r keyword_metrics$responsive_hits` divided by `r keyword_metrics$responsive_total`, is not normally visible; the fictional labels let the lesson show what the keyword search missed.
+
+## Rank the rest from the reviewed seed
+
+The reviewed seed is the keyword-hit set. It has at least eight records of each class, which avoids the `glmnet` warning for very small classes under `options(warn = 2)`. The model uses tf-idf features and penalized logistic regression. It trains only on reviewed records and scores only records not yet reviewed.
+
+The stopping rule is also fixed before the model runs: review the keyword-hit seed, then review two ranked batches of ten. That rule has no statistical guarantee. It is a budget rule, and the elusion sample is what estimates the remaining miss.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show the ranking code"
+
+fit_review_model <- function(training_rows) {
+  class_counts <- table(training_rows$label)
+  stopifnot(min(class_counts) >= 8L)
+
+  review_recipe <- recipe(label ~ text, data = training_rows) |>
+    step_tokenize(text) |>
+    step_tokenfilter(text, max_tokens = 80) |>
+    step_tfidf(text)
+
+  review_model <- logistic_reg(penalty = 0.01, mixture = 1) |>
+    set_engine("glmnet") |>
+    set_mode("classification")
+
+  workflow() |>
+    add_recipe(review_recipe) |>
+    add_model(review_model) |>
+    fit(data = training_rows)
+}
+
+base_columns <- names(review_scored)
+reviewed_records <- review_scored |>
+  filter(keyword_hit)
+unreviewed_records <- review_scored |>
+  filter(!keyword_hit)
+
+review_batches <- list()
+ranked_batches <- 2L
+batch_size <- 10L
+tie_rows <- integer(ranked_batches)
+pool_rows <- integer(ranked_batches)
+batch_tied_rows <- integer(ranked_batches)
+tie_crosses_batch_edge <- logical(ranked_batches)
+
+for (batch_id in seq_len(ranked_batches)) {
+  fitted_review <- fit_review_model(reviewed_records)
+  scored_pool <- unreviewed_records |>
+    bind_cols(
+      predict(
+        fitted_review,
+        new_data = unreviewed_records,
+        type = "prob"
+      )
+    ) |>
+    mutate(score = .pred_responsive) |>
+    arrange(desc(score), doc_id)
+
+  tied_in_pool <- duplicated(scored_pool$score) |
+    duplicated(scored_pool$score, fromLast = TRUE)
+  tie_rows[[batch_id]] <- sum(tied_in_pool)
+  pool_rows[[batch_id]] <- nrow(scored_pool)
+  batch_tied_rows[[batch_id]] <- sum(tied_in_pool[seq_len(batch_size)])
+  tie_crosses_batch_edge[[batch_id]] <- identical(
+    scored_pool$score[[batch_size]],
+    scored_pool$score[[batch_size + 1L]]
+  )
+
+  batch_rows <- scored_pool |>
+    slice_head(n = batch_size) |>
+    mutate(batch = batch_id)
+
+  review_batches[[batch_id]] <- batch_rows
+  reviewed_records <- bind_rows(
+    reviewed_records,
+    batch_rows |> select(all_of(base_columns))
+  )
+  unreviewed_records <- anti_join(
+    unreviewed_records,
+    batch_rows |> select(doc_id),
+    by = join_by(doc_id)
+  )
+}
+
+ranked_reviewed <- bind_rows(review_batches)
+
+ranked_review_display <- ranked_reviewed |>
+  transmute(
+    batch,
+    doc_id,
+    score = round(score, 3),
+    reference_label = if_else(reference_responsive, "responsive", "not responsive"),
+    construction_subtype,
+    text
+  )
+
+batch_summary <- ranked_reviewed |>
+  count(batch, reference_responsive, name = "records") |>
+  complete(
+    batch,
+    reference_responsive = c(FALSE, TRUE),
+    fill = list(records = 0L)
+  ) |>
+  mutate(label = if_else(reference_responsive, "responsive", "not responsive")) |>
+  select(batch, label, records)
+
+review_progress <- bind_rows(
+  tibble(
+    stage = "keyword seed",
+    reviewed_this_stage = nrow(review_scored |> filter(keyword_hit)),
+    responsive_found = sum(review_scored$keyword_hit & review_scored$reference_responsive)
+  ),
+  ranked_reviewed |>
+    group_by(batch) |>
+    summarise(
+      stage = paste0("ranked batch ", first(batch)),
+      reviewed_this_stage = n(),
+      responsive_found = sum(reference_responsive),
+      .groups = "drop"
+    ) |>
+    select(stage, reviewed_this_stage, responsive_found)
+) |>
+  mutate(
+    cumulative_reviewed = cumsum(reviewed_this_stage),
+    cumulative_responsive_found = cumsum(responsive_found),
+    fiction_only_recall = cumulative_responsive_found /
+      sum(review_scored$reference_responsive)
+  )
+
+review_stop <- tibble(
+  reviewed = nrow(reviewed_records),
+  responsive_found = sum(reviewed_records$reference_responsive),
+  unreviewed = nrow(unreviewed_records),
+  fiction_known_missed = sum(unreviewed_records$reference_responsive)
+)
+
+missed_records <- unreviewed_records |>
+  filter(reference_responsive) |>
+  transmute(
+    doc_id,
+    construction_subtype,
+    text
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  batch_summary,
+  col.names = c("Ranked batch", "Reference label", "Records"),
+  caption = "Ranked review batches after the keyword seed",
+  row.names = FALSE
+)
+
+knitr::kable(
+  review_progress |>
+    mutate(fiction_only_recall = round(fiction_only_recall, 3)),
+  col.names = c(
+    "Stage",
+    "Reviewed at stage",
+    "Responsive found at stage",
+    "Cumulative reviewed",
+    "Cumulative responsive found",
+    "Fiction-only recall"
+  ),
+  caption = "Review progress, with recall visible only because the collection is invented",
+  row.names = FALSE
+)
+
+knitr::kable(
+  review_stop,
+  col.names = c("Reviewed", "Responsive found", "Unreviewed", "Fiction-known missed"),
+  caption = "Predeclared stopping point before the elusion sample",
+  row.names = FALSE
+)
+
+knitr::kable(
+  ranked_review_display,
+  format = "html",
+  escape = TRUE,
+  col.names = c(
+    "Batch",
+    "Document",
+    "Review score",
+    "Reference label",
+    "Construction note",
+    "Text"
+  ),
+  caption = "Ranked records reviewed after the keyword seed",
+  row.names = FALSE
+)
+
+knitr::kable(
+  missed_records,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Document", "Construction note", "Text"),
+  caption = "Fiction-only responsive records still unreviewed at the stop",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+tie_edge_sentence <- if (any(tie_crosses_batch_edge)) {
+  paste0(
+    "In ranked batch ", paste(which(tie_crosses_batch_edge), collapse = " and "),
+    ", a tie crossed the batch edge, so the document-ID rule decided which of the tied records were reviewed."
+  )
+} else {
+  "No tie crossed the edge of a ranked batch, so the tie rule did not decide which records were reviewed."
+}
+
+mostly_tied_batches <- which(batch_tied_rows > batch_size / 2)
+tied_batch_sentence <- if (length(mostly_tied_batches) > 0L) {
+  paste0(
+    "Tied records fill most of ranked batch ", paste(mostly_tied_batches, collapse = " and "), ": ",
+    paste(batch_tied_rows[mostly_tied_batches], collapse = " and "), " of its ", batch_size,
+    " records share an exact score with another record, so their order says nothing about which is more likely to be responsive."
+  )
+} else {
+  ""
+}
+
+gain_alt_text <- paste0(
+  "Line chart of responsive records found against records reviewed; both axes start at zero. ",
+  "The line starts at zero and reaches ", review_progress$cumulative_responsive_found[[1]],
+  " found at ", review_progress$cumulative_reviewed[[1]], " reviewed, then ",
+  paste(
+    paste0(
+      review_progress$cumulative_responsive_found[-1], " at ",
+      review_progress$cumulative_reviewed[-1]
+    ),
+    collapse = " and "
+  ),
+  "."
+)
+
+stopifnot(
+  identical(ranked_batches, 2L),
+  identical(batch_size, 10L),
+  identical(nrow(reviewed_records), 59L),
+  identical(sum(reviewed_records$reference_responsive), 27L),
+  identical(nrow(unreviewed_records), 181L),
+  identical(sum(unreviewed_records$reference_responsive), 9L),
+  identical(nrow(missed_records), 9L),
+  all(table(review_scored$label[review_scored$keyword_hit]) >= 8L),
+  !any(ranked_reviewed$doc_id %in% review_scored$doc_id[review_scored$keyword_hit])
+)
+```
+
+The team can see how many responsive records it has found, because reviewers code those records as they review them. It cannot see recall in a real matter without more assessment. The recall column is labeled as fiction-only because it uses the hidden labels for records that were not reviewed. In the two scoring rounds, `r sum(tie_rows)` of `r sum(pool_rows)` scored-pool rows were part of exact score ties; ties are ordered by document ID so the run is reproducible, not because lower IDs are more relevant. `r tie_edge_sentence` `r tied_batch_sentence`
+
+```{r}
+#| label: fig-review-gain
+#| fig-cap: "Responsive records found as review proceeds through the keyword seed and two ranked batches."
+#| fig-alt: !expr gain_alt_text
+#| fig-height: 4.2
+#| code-fold: true
+#| code-summary: "Show the plotting code"
+
+source("R/lesson-figures.R")
+
+gain_points <- review_progress |>
+  add_row(
+    stage = "start",
+    responsive_found = 0L,
+    cumulative_reviewed = 0L,
+    cumulative_responsive_found = 0L,
+    .before = 1
+  ) |>
+  mutate(
+    point_label = case_when(
+      stage == "start" ~ "",
+      stage == "keyword seed" ~ str_c("keyword seed: ", responsive_found, " found"),
+      TRUE ~ str_c(stage, ": +", responsive_found)
+    )
+  )
+
+ggplot(
+  gain_points,
+  aes(x = cumulative_reviewed, y = cumulative_responsive_found)
+) +
+  geom_line(colour = lesson_colours[["accent"]], linewidth = 0.9) +
+  geom_point(colour = lesson_colours[["accent"]], size = 2.8) +
+  geom_text(
+    aes(label = point_label),
+    hjust = 0,
+    vjust = 1.8,
+    family = lesson_font,
+    size = 9.5,
+    size.unit = "pt",
+    colour = lesson_colours[["body"]]
+  ) +
+  scale_x_continuous(
+    breaks = c(0, review_progress$cumulative_reviewed),
+    limits = c(0, max(review_progress$cumulative_reviewed) + 12)
+  ) +
+  scale_y_continuous(
+    breaks = seq(0, 30, by = 10),
+    limits = c(0, 30)
+  ) +
+  coord_cartesian(clip = "off") +
+  labs(
+    title = "Returns shrink as review goes on: the ranked batches add 4, then 1",
+    subtitle = "Responsive records found against records reviewed, as the reviewers see it",
+    x = "Records reviewed",
+    y = "Responsive records found"
+  ) +
+  theme_lesson(grid = "both")
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(nrow(review_progress), 3L),
+  identical(review_progress$cumulative_reviewed, c(39L, 49L, 59L)),
+  identical(review_progress$cumulative_responsive_found, c(22L, 26L, 27L)),
+  identical(review_progress$responsive_found, c(22L, 4L, 1L))
+)
+```
+
+The gain curve is the reviewer-visible curve: responsive found versus records reviewed. It does not claim that ranked review beats keyword search. The collection was written by the same person who wrote the lesson, so comparative claims from it would be weak evidence.
+
+## Sample the unreviewed pile once
+
+An **elusion sample** reviews a random sample from the documents that were not reviewed. The seed and sample size are declared before sampling. The sample is drawn once and is not fed back into the model or the stopping decision.
+
+The interval below treats the unreviewed pile as a finite population sampled without replacement. It tests every possible number of missed responsive records, keeps the values that would not put the observed sample count in either 2.5 percent tail under `phyper()`, then converts missed-record bounds to recall bounds.
+
+```{r}
+elusion_seed <- 7401L
+elusion_n <- 50L
+
+set.seed(elusion_seed)
+elusion_sample <- unreviewed_records |>
+  slice_sample(n = elusion_n) |>
+  arrange(doc_id)
+
+observed_missed_in_sample <- sum(elusion_sample$reference_responsive)
+unreviewed_total <- nrow(unreviewed_records)
+found_total <- sum(reviewed_records$reference_responsive)
+
+possible_missed <- 0:unreviewed_total
+kept_missed <- possible_missed[
+  vapply(
+    possible_missed,
+    \(missed) {
+      lower_tail <- phyper(
+        observed_missed_in_sample,
+        missed,
+        unreviewed_total - missed,
+        elusion_n
+      )
+      upper_tail <- 1 - phyper(
+        observed_missed_in_sample - 1L,
+        missed,
+        unreviewed_total - missed,
+        elusion_n
+      )
+      lower_tail >= 0.025 && upper_tail >= 0.025
+    },
+    logical(1)
+  )
+]
+
+missed_interval <- range(kept_missed)
+recall_interval <- found_total / (found_total + rev(missed_interval))
+point_missed <- unreviewed_total *
+  observed_missed_in_sample / elusion_n
+point_recall <- found_total / (found_total + point_missed)
+known_recall <- found_total /
+  (found_total + sum(unreviewed_records$reference_responsive))
+
+elusion_result <- tibble(
+  unreviewed = unreviewed_total,
+  sample_size = elusion_n,
+  responsive_in_sample = observed_missed_in_sample,
+  point_recall = point_recall,
+  recall_low = recall_interval[1],
+  recall_high = recall_interval[2],
+  fiction_known_recall = known_recall
+)
+
+binomial_interval <- stats::binom.test(
+  observed_missed_in_sample,
+  elusion_n
+)$conf.int
+binomial_missed <- unreviewed_total * binomial_interval
+binomial_recall <- found_total / (found_total + rev(binomial_missed))
+maximum_possible_recall <- found_total /
+  (found_total + observed_missed_in_sample)
+
+binomial_warning <- tibble(
+  method = "binomial Clopper-Pearson on sampled elusion rate",
+  printed_recall_low = binomial_recall[1],
+  printed_recall_high = binomial_recall[2],
+  maximum_possible_recall = maximum_possible_recall
+)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  elusion_result |>
+    mutate(across(where(is.numeric), \(value) round(value, 3))),
+  col.names = c(
+    "Unreviewed",
+    "Sample size",
+    "Responsive in sample",
+    "Point recall",
+    "Interval low",
+    "Interval high",
+    "Fiction-known recall"
+  ),
+  caption = "One finite-population elusion sample after the stop",
+  row.names = FALSE
+)
+
+knitr::kable(
+  binomial_warning |>
+    mutate(across(where(is.numeric), \(value) round(value, 3))),
+  col.names = c(
+    "Method",
+    "Printed recall low",
+    "Printed recall high",
+    "Maximum possible recall after the sample"
+  ),
+  caption = "A binomial interval treats the fixed unreviewed pile as if it were very large",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(elusion_seed, 7401L),
+  identical(elusion_n, 50L),
+  identical(observed_missed_in_sample, 2L),
+  identical(unreviewed_total, 181L),
+  identical(found_total, 27L),
+  identical(missed_interval, c(2L, 22L)),
+  round(recall_interval[1], 3) == 0.551,
+  round(recall_interval[2], 3) == 0.931,
+  round(known_recall, 3) == 0.75,
+  binomial_warning$printed_recall_low < recall_interval[1]
+)
+```
+
+The elusion seed is `7401`, the builder's base seed, fixed by rule before the sample was drawn. The sample found `r observed_missed_in_sample` responsive records in `r elusion_n`. `r if (observed_missed_in_sample == 0L) "The point estimate reads as no missed records in the unreviewed pile, but" else sprintf("The point estimate scales that to about %.1f missed records in the unreviewed pile, and", point_missed)` the exact finite-population interval still allows `r missed_interval[1]` to `r missed_interval[2]` missed records. That becomes recall from about `r round(recall_interval[1], 3)` to `r round(recall_interval[2], 3)`. The fiction reveals that the true missed count is `r sum(unreviewed_records$reference_responsive)`.
+
+A binomial Clopper-Pearson interval treats the pile as if it were very large and samples with replacement. `r if (binomial_warning$printed_recall_low < recall_interval[1]) "Here it gives a wider lower recall bound than the finite-population interval." else "Here its lower recall bound is not wider than the finite-population one."` Confidence intervals describe a repeated-sampling procedure; they are not a 95 percent chance statement about this one interval.
+
+Repeatedly sampling, reviewing more records, and sampling again until the result looks acceptable would bias the report. The sample belongs after the stop, once.
+
+## Monitor new items in arrival order
+
+Media monitoring has a different shape. Items arrive over time, duplicate wire copies appear, and a name like Riverton can refer to more than one place. This short stream watches organizations and program names, not individual people. It stores item IDs, decisions, and duplicate links; real review sets may contain personal or privileged material, which this lesson leaves out.
+
+This use of "monitoring" is not lesson 47's deployed-model monitoring, and it is not burst detection from lesson 56. It is an alerting rule over incoming text.
+
+The watch phrases below were written after reading this constructed stream, so the alert count shows bookkeeping rather than transferable precision. The pattern watches `Calder Yard`, `contract records`, `inspection messages`, `route notes`, and `missed check`. A repeated alert is suppressed only when its character-trigram Jaccard distance to a prior alert is at most 0.35.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show the monitoring code"
+
+normalize_stream_text <- function(text) {
+  text |>
+    str_to_lower(locale = "en") |>
+    str_replace_all("[^a-z0-9]+", " ") |>
+    str_squish()
+}
+
+stream_decisions <- monitoring_stream |>
+  arrange(arrival_order) |>
+  mutate(
+    normalized_text = normalize_stream_text(text),
+    topic_hit = str_detect(
+      text,
+      regex("Calder Yard|contract records|inspection messages|route notes|missed check", ignore_case = TRUE)
+    ),
+    ambiguous_riverton = str_detect(text, regex("\\bRiverton\\b", ignore_case = TRUE)) &
+      !str_detect(text, regex("Calder|Skills Centre|Workforce Lab", ignore_case = TRUE)),
+    raw_alert = topic_hit & !ambiguous_riverton
+  )
+
+previous_alerts <- character()
+previous_alert_ids <- character()
+duplicate_of <- rep(NA_character_, nrow(stream_decisions))
+send_alert <- rep(FALSE, nrow(stream_decisions))
+
+for (row in seq_len(nrow(stream_decisions))) {
+  if (!stream_decisions$raw_alert[[row]]) {
+    next
+  }
+
+  if (length(previous_alerts) == 0L) {
+    send_alert[[row]] <- TRUE
+    previous_alerts <- c(previous_alerts, stream_decisions$normalized_text[[row]])
+    previous_alert_ids <- c(previous_alert_ids, stream_decisions$stream_id[[row]])
+    next
+  }
+
+  distances <- stringdist(
+    stream_decisions$normalized_text[[row]],
+    previous_alerts,
+    method = "jaccard",
+    q = 3
+  )
+  if (min(distances) <= 0.35) {
+    duplicate_of[[row]] <- previous_alert_ids[[which.min(distances)]]
+  } else {
+    send_alert[[row]] <- TRUE
+    previous_alerts <- c(previous_alerts, stream_decisions$normalized_text[[row]])
+    previous_alert_ids <- c(previous_alert_ids, stream_decisions$stream_id[[row]])
+  }
+}
+
+stream_decisions <- stream_decisions |>
+  mutate(
+    matched_prior_alert = duplicate_of,
+    alert_sent = send_alert,
+    decision = case_when(
+      alert_sent ~ "alert sent",
+      raw_alert & !is.na(matched_prior_alert) ~ "suppressed duplicate",
+      ambiguous_riverton ~ "needs review: ambiguous Riverton",
+      TRUE ~ "no alert"
+    )
+  )
+
+monitoring_results <- tibble(
+  alerts_sent = sum(stream_decisions$alert_sent),
+  relevant_alerts = sum(stream_decisions$alert_sent & stream_decisions$reference_alert),
+  false_alerts = sum(stream_decisions$alert_sent & !stream_decisions$reference_alert),
+  relevant_items_missed = sum(!stream_decisions$alert_sent & stream_decisions$reference_alert & is.na(stream_decisions$matched_prior_alert)),
+  suppressed_duplicates = sum(!is.na(stream_decisions$matched_prior_alert)),
+  repeated_alerts = sum(stream_decisions$alert_sent & !is.na(stream_decisions$near_duplicate_of)),
+  alert_precision = relevant_alerts / alerts_sent
+)
+
+stream_display <- stream_decisions |>
+  select(
+    arrival_order,
+    stream_id,
+    near_duplicate_of,
+    matched_prior_alert,
+    text,
+    decision,
+    reference_alert
+  ) |>
+  mutate(
+    near_duplicate_of = coalesce(near_duplicate_of, "not a copy"),
+    matched_prior_alert = coalesce(matched_prior_alert, "not suppressed")
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  stream_display,
+  format = "html",
+  escape = TRUE,
+  col.names = c("Arrival", "Item", "Fixture duplicate of", "Matched prior alert", "Text", "Rule decision", "Reference alert"),
+  caption = "Monitoring items are processed in arrival order",
+  row.names = FALSE
+)
+
+knitr::kable(
+  monitoring_results |>
+    mutate(alert_precision = round(alert_precision, 3)),
+  col.names = c(
+    "Alerts sent",
+    "Relevant alerts",
+    "False alerts",
+    "Relevant items missed",
+    "Suppressed duplicates",
+    "Repeated alerts",
+    "Alert precision"
+  ),
+  caption = "Alert precision uses alerts sent after duplicate suppression as the denominator",
+  row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(stream_decisions$arrival_order, seq_len(nrow(stream_decisions))),
+  any(stream_decisions$decision == "needs review: ambiguous Riverton"),
+  monitoring_results$alerts_sent > 0L,
+  monitoring_results$suppressed_duplicates >= 3L,
+  monitoring_results$alert_precision ==
+    monitoring_results$relevant_alerts / monitoring_results$alerts_sent,
+  identical(round(monitoring_results$alert_precision, 3), 0.875)
+)
+```
+
+Alert precision is `r monitoring_results$relevant_alerts` relevant alerts out of `r monitoring_results$alerts_sent` alerts sent. The denominator is alerts after duplicate suppression. Suppressed copies still count in the audit trail, but they do not consume a new alert slot. In a real stream, missed items are usually found by sampling non-alerts, the same idea as the elusion sample.
+
+The ambiguity rule is crude. It sends `r stream_decisions$stream_id[str_detect(stream_decisions$text, "Tidewater seafood")]`, the Tidewater seafood item, to review even though the text itself points away from Calder Yard.
+
+## What this does not show
+
+This page does not give legal advice, prove a review is defensible, or estimate a real system's recall. It also leaves out privilege review, redaction, email threading, family coding, dense retrieval, and language-model relevance labeling. The labels are perfectly consistent because the author wrote them; real reviewers disagree.
+
+The review model's scores are ranks for this workflow, not calibrated probabilities of responsiveness. The monitoring rule is a small constructed example and is not suitable for watching individual people.
+
+## What to remember
+
+- Keyword precision is visible after reviewing hits; keyword recall is not visible in real work without more assessment.
+- Ranked review must train on reviewed records and score only unreviewed records.
+- A gain curve shows responsive records found, not recall, unless a complete fictional answer key is being used.
+- Draw an elusion sample once, after the stop.
+- A finite-population interval matches a fixed pile sampled without replacement.
+- Monitoring streams need arrival order, duplicate suppression, ambiguity handling, and a named precision denominator.
+
+The review log goes forward with `r if (observed_missed_in_sample == 0L) "no sampled responsive records" else paste(observed_missed_in_sample, "sampled responsive records")` and a wide interval. The uncomfortable range is the lesson: stopping review does not make the unreviewed pile disappear.
+
+## Sources
+
+- [Blair and Maron on full-text retrieval effectiveness](https://doi.org/10.1145/3166.3197)
+- [Cormack and Grossman on continuous active learning](https://doi.org/10.1145/2600428.2609601)
+- [Lewis, Yang, and Frieder on recall estimation and elusion](https://doi.org/10.1145/3459637.3482415)
+- [R hypergeometric distribution documentation](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/Hypergeometric.html)
+- [R binomial test documentation](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/binom.test.html)
+- [TREC 2015 Total Recall Track overview](https://trec.nist.gov/pubs/trec24/papers/Overview-TR.pdf)
+- [TREC 2009 Legal Track overview](https://trec.nist.gov/pubs/trec18/papers/LEGAL09.OVERVIEW.pdf)
+- [Grossman and Cormack on technology-assisted review](https://jolt.richmond.edu/jolt-archive/v17i3/article11.pdf)
+- [TDT pilot study final report](https://ciir.cs.umass.edu/pubfiles/ir-137.pdf)
+- [Broder on resemblance and containment of documents](https://doi.org/10.1109/SEQUEN.1997.666900)

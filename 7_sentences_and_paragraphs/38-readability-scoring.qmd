@@ -1,7 +1,6 @@
 ---
 title: "Scoring readability formulas"
 subtitle: "Compute Flesch scores and measure the syllable shortcut"
-author: "Alex Farach"
 description: "Learn how readability formulas use sentence, word, and syllable counts, and why their limits are severe."
 categories: [sentences and paragraphs, readability scoring, workforce research]
 ---
@@ -160,6 +159,10 @@ expected_syllable_summary <- tibble(
   comparison = c("exact", "overcount", "undercount"),
   words = c(21L, 5L, 4L)
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   syllable_check,
@@ -298,6 +301,10 @@ syllable_sensitivity <- bind_rows(
     adjusted_job_syllables
   )
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   preprocessing_counts,

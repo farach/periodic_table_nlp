@@ -9,4 +9,6 @@
 *.udpipe binary
 *.bin binary
 *.png binary
+*.ttf binary
 renv/activate.R -whitespace
+renv.lock text eol=lf
