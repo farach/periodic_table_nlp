@@ -177,6 +177,7 @@ npx playwright install chromium
 Rscript scripts/check-prose.R
 Rscript scripts/check-repetition.R
 Rscript tests/test-system-evaluation.R
+Rscript tests/test-vocabulary-bpe.R
 quarto render
 Rscript scripts/check-lessons.R
 Rscript tests/test-periodic-table.R
