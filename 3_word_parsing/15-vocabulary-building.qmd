@@ -364,6 +364,11 @@ modeling choice that controls how many pieces the trainer can keep. The
 lowercased job-detail text. The special marker `<UNK>` is the model's way of
 saying it has no piece for this, short for "unknown".
 
+When two pairs occur equally often, the trainer can merge them in different
+orders, even with `threads = 1L`. The pieces and their counts can therefore
+differ between fits. We compute counts from the fitted model and check that
+its pieces and IDs agree and decode back to the held-out text.
+
 ::: {.callout-note}
 The explicit `model_path` sends the model to a temporary file during rendering.
 :::
@@ -458,29 +463,58 @@ knitr::kable(
 ```{r}
 #| include: false
 
+known_flyer_pieces <- flat_flyer_ids != unknown_id
+
 stopifnot(
   identical(nrow(job_bpe_model$vocabulary), 200L),
-  identical(length(flat_flyer_subwords), 68L),
-  identical(length(flat_flyer_ids), 68L),
   identical(as.integer(unknown_id), 1L),
+  identical(length(flyer_subwords), nrow(flyer_rows)),
+  identical(length(flyer_ids), nrow(flyer_rows)),
+  identical(lengths(flyer_subwords), lengths(flyer_ids)),
+  all(lengths(flyer_ids) > 0L),
+  identical(length(flat_flyer_subwords), length(flat_flyer_ids)),
+  all(flat_flyer_ids %in% job_bpe_model$vocabulary$id),
+  identical(
+    flat_flyer_subwords[known_flyer_pieces],
+    job_bpe_model$vocabulary$subword[
+      match(flat_flyer_ids[known_flyer_pieces], job_bpe_model$vocabulary$id)
+    ]
+  ),
+  identical(
+    unlist(bpe_decode(job_bpe_model, flyer_ids), use.names = FALSE),
+    tolower(flyer_rows$text)
+  ),
+  identical(length(flyer_word_ids), nrow(flyer_token_rows)),
+  all(lengths(flyer_word_ids) > 0L),
+  all(
+    unlist(flyer_word_ids, use.names = FALSE) %in% job_bpe_model$vocabulary$id
+  ),
+  identical(nrow(flyer_word_bpe), nrow(flyer_token_rows)),
+  identical(flyer_word_bpe$sentence_id, flyer_token_rows$sentence_id),
   identical(unknown_flyer_word_count, 0L),
   identical(unknown_flyer_piece_count, 0L),
+  identical(nrow(flyer_unknown_by_line), nrow(flyer_rows)),
   identical(flyer_unknown_by_line$sentence_id, flyer_rows$sentence_id),
-  identical(flyer_unknown_by_line$unknown_pieces, rep(0L, 6L))
+  identical(flyer_unknown_by_line$pieces, lengths(flyer_ids)),
+  identical(flyer_unknown_by_line$unknown_pieces, rep(0L, nrow(flyer_rows)))
 )
 ```
 
 The like-for-like comparison is now at the word-token level. The whole-word
-vocabulary has no entry for 10 of 20 flyer tokens. With both sources lowercased,
-none of the 20 word tokens contains a BPE unknown id, and none of the 68 BPE
-pieces is unknown. The subword model can assemble unseen words from characters
-and pieces learned in the job rows.
+vocabulary has no entry for `r nrow(unknown_flyer_rows)` of
+`r nrow(flyer_token_rows)` flyer tokens. With both sources lowercased,
+none of the `r nrow(flyer_word_bpe)` word tokens contains a BPE unknown id,
+and none of the `r length(flat_flyer_ids)` BPE pieces is unknown. The subword
+model can assemble unseen words from characters and pieces learned in the job
+rows.
 
-That result belongs to this 200-piece model and this case policy. It is not a
-general promise that BPE removes out-of-vocabulary material. Case-sensitive
-input, a different writing system, a smaller character coverage, or another
-tokenizer can produce unknown ids. Comparing 10 word tokens with 68 pieces would
-also mix denominators, so the conclusion uses the 20 word-token outcomes.
+That result belongs to this `r nrow(job_bpe_model$vocabulary)`-piece model and
+this case policy. It is not a general promise that BPE removes
+out-of-vocabulary material. Case-sensitive input, a different writing system,
+a smaller character coverage, or another tokenizer can produce unknown ids.
+Comparing `r nrow(unknown_flyer_rows)` word tokens with
+`r length(flat_flyer_ids)` pieces would also mix denominators, so the conclusion
+uses the `r nrow(flyer_word_bpe)` word-token outcomes.
 
 ## What to remember
 

@@ -57,6 +57,9 @@ jobs:
 
       - uses: r-lib/actions/setup-renv@v2
 
+      - name: Test vocabulary BPE fit invariants
+        run: Rscript tests/test-vocabulary-bpe.R
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"

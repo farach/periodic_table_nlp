@@ -351,6 +351,16 @@ Do not claim formal controlled-language certification.
 - Pass an explicit temporary `model_path` to `tokenizers.bpe::bpe()`. Count
   unknown pieces from `bpe_encode(type = "ids")`; the `subwords` display
   reconstructs surface text and can hide unknown IDs.
+- BPE training can resolve equal-frequency merges differently even with
+  `threads = 1L`. Compute piece counts in prose from the fitted model. Assert
+  per-row ID/subword alignment, valid vocabulary IDs, decoded source text, and
+  the intended unknown-token results instead of one incidental piece count.
+  Run `Rscript tests/test-vocabulary-bpe.R` before rendering. It replays a real
+  69-piece fit of the unchanged job-only corpus, then trains a fresh model.
+  The small text-format fixture in `tests/fixtures/vocabulary-69.bpe` was
+  generated locally from the fictional teaching data and preserved byte for
+  byte. The test verifies its fingerprint. It is not a pretrained external
+  model or a model used by the published lesson.
 - Keep `data/openlibrary-nlp-search.json` as a dated fixture. Rendering must not
   contact Open Library or any other live service.
 - The R `tesseract` package does not install the native OCR engine or language
