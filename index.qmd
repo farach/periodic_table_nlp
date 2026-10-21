@@ -80,6 +80,10 @@ will do part of the work, read the guide
 [Using a language model in a reproducible analysis](using-language-models.qmd).
 It shows how to record the model and check its labels against a sample that a
 person reviewed.
+
+To compare a complete system, start with
+[Beyond the periodic table](advanced/index.qmd).
+Its first lesson uses R to compare two versions and check a release rule.
 :::
 
 ```{r}

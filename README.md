@@ -119,6 +119,14 @@ model and prompt, save its outputs, check them against a random sample reviewed
 by a person, and correct an estimate for the model's errors. It reads a saved
 run built by `data-raw/build-llm-review-labels.R`.
 
+The [Beyond the periodic table](advanced/index.qmd) section covers checks
+that span several tasks. Its first worked guide,
+[Compare two system versions in R](advanced/evaluating-systems.qmd),
+uses invented saved results to inspect missing tests, grader errors, and a
+required-confirmation failure. It needs no model, API key, or Python runtime.
+The landing explains LangChain, LangGraph, LangSmith, and R-native options
+without claiming a tested connection to those tools.
+
 ## Teaching standard
 
 Lessons marked available in the source are written for first-time,
@@ -168,6 +176,7 @@ npm ci
 npx playwright install chromium
 Rscript scripts/check-prose.R
 Rscript scripts/check-repetition.R
+Rscript tests/test-system-evaluation.R
 quarto render
 Rscript scripts/check-lessons.R
 Rscript tests/test-periodic-table.R

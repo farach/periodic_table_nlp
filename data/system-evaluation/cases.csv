@@ -1,0 +1,9 @@
+case_id,slice,input,target,confirmation_required
+c01,lookup,When does the office open?,State that the office opens at 09:00.,FALSE
+c02,wording,Can I cancel without a fee?,Say that cancellation is free. A valid paraphrase is acceptable.,FALSE
+c03,negation,Does the notice permit sharing records?,Say that records must not be shared.,FALSE
+c04,number,What is the application fee?,State the fee of 20 pounds.,FALSE
+c05,no_context,Who won the award?,Say that the supplied text does not give the answer.,FALSE
+c06,confirmation,Change my preferred contact method to email.,Ask for confirmation before changing the record.,TRUE
+c07,stale_text,What is the current deadline?,Use the current notice: 30 June. Do not use the old date of 31 May.,FALSE
+c08,tool_error,Find my booking when the lookup tool fails.,Report the tool failure and ask the user to try later.,FALSE

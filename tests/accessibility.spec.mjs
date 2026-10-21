@@ -30,9 +30,64 @@ const pages = [
   "/",
   "/accessibility.html",
   "/using-language-models.html",
+  "/advanced/index.html",
+  "/advanced/evaluating-systems.html",
   ...lessonPagePaths
 ];
 const totalTasks = 81;
+
+test("advanced lesson keeps its expected results and routes", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("main a[href$='advanced/index.html']").click();
+  await expect(page.locator("h1")).toHaveText("Beyond the periodic table");
+  for (const name of ["LangChain", "LangGraph", "LangSmith", "vitals"]) {
+    await expect(page.locator("main")).toContainText(name);
+  }
+  await page.locator("main a[href$='evaluating-systems.html']").first().click();
+  await expect(page.locator("h1")).toHaveText("Compare two system versions in R");
+  await expect(page.locator("main")).toContainText("Do not release B.");
+  const scores = page.locator("table").filter({
+    has: page.locator("caption", { hasText: "Task success improves" })
+  });
+  await expect(scores.locator("tbody tr")).toHaveCount(2);
+  const cells = await scores.locator("tbody tr").evaluateAll((rows) =>
+    rows.map((row) => [...row.querySelectorAll("td")].map((cell) => cell.textContent.trim()))
+  );
+  expect(cells).toEqual([
+    ["A", "16", "10", "10", "0", "1", "0", "62.5"],
+    ["B", "16", "12", "11", "1", "2", "1", "75.0"]
+  ]);
+  expect(await page.locator("main pre.sourceCode").allTextContents())
+    .not.toEqual(expect.arrayContaining([expect.stringContaining("knitr::kable")]));
+});
+
+test("advanced score table scrolls with the keyboard on a small screen", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  const response = await page.goto("/advanced/evaluating-systems.html");
+  expect(response.status()).toBe(200);
+  const output = page.locator(".cell-output-display").filter({
+    has: page.locator("caption", { hasText: "Task success improves" })
+  });
+  await expect(output).toHaveAttribute("tabindex", "0");
+  await expect(output).toHaveAttribute("role", "region");
+  await output.focus();
+  await output.press("ArrowRight");
+  await expect.poll(() => output.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
+});
+
+for (const path of ["/advanced/index.html", "/advanced/evaluating-systems.html"]) {
+  test(`advanced mobile WCAG scan: ${path}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    const response = await page.goto(path);
+    expect(response.status()).toBe(200);
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2))
+      .toEqual([]);
+  });
+}
 
 if (pages.length < 3) {
   throw new Error(
@@ -42,7 +97,8 @@ if (pages.length < 3) {
 
 for (const path of pages) {
   test(`WCAG 2.2 AA automated scan: ${path}`, async ({ page }) => {
-    await page.goto(path);
+    const response = await page.goto(path);
+    expect(response.status(), `${path} did not load`).toBe(200);
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
@@ -59,7 +115,8 @@ test("every page reflows to a 320-pixel viewport", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
 
   for (const path of pages) {
-    await page.goto(path);
+    const response = await page.goto(path);
+    expect(response.status(), `${path} did not load`).toBe(200);
     const widths = await page.evaluate(() => ({
       document: document.documentElement.scrollWidth,
       viewport: document.documentElement.clientWidth
@@ -74,17 +131,20 @@ test("every page reflows to a 320-pixel viewport", async ({ page }) => {
 
 test("every rendered table has a caption", async ({ page }) => {
   for (const path of pages) {
-    await page.goto(path);
-    const tables = page.locator("main table");
-    const tableCount = await tables.count();
+    const response = await page.goto(path);
+    expect(response.status(), `${path} did not load`).toBe(200);
+    const captions = await page.locator("main table").evaluateAll((tables) =>
+      tables.map((table) =>
+        [...table.querySelectorAll("caption")].map((caption) =>
+          caption.textContent.trim()
+        )
+      )
+    );
 
-    for (let index = 0; index < tableCount; index += 1) {
-      const caption = tables.nth(index).locator("caption");
-      await expect(
-        caption,
-        `${path} table ${index + 1} has no caption`
-      ).toHaveCount(1);
-      await expect(caption).not.toHaveText("");
+    for (const [index, texts] of captions.entries()) {
+      const message = `${path} table ${index + 1} must have one nonempty caption`;
+      expect(texts, message).toHaveLength(1);
+      expect(texts[0], message).not.toBe("");
     }
   }
 });
@@ -135,31 +195,22 @@ test("periodic table supports keyboard navigation", async ({ page }) => {
   );
 });
 
-test("every available tile opens its lesson", async ({ page }) => {
-  // Each rendered lesson file starts with its task number, so the map link
-  // and the page on disk can be checked against each other without a list
-  // that has to be maintained by hand.
-  const lessons = lessonPagePaths.map((path) => {
-    const fileName = path.split("/").pop();
-    const taskNumber = Number.parseInt(fileName, 10);
+for (const path of lessonPagePaths) {
+  const fileName = path.split("/").pop();
+  const taskNumber = Number.parseInt(fileName, 10);
 
-    if (!Number.isInteger(taskNumber)) {
-      throw new Error(`Lesson file does not start with a task number: ${path}`);
-    }
+  if (!Number.isInteger(taskNumber)) {
+    throw new Error(`Lesson file does not start with a task number: ${path}`);
+  }
 
-    return [taskNumber, fileName];
-  });
-
-  expect(lessons.length).toBe(lessonPagePaths.length);
-
-  for (const [taskNumber, fileName] of lessons) {
+  test(`available tile opens its lesson: ${fileName}`, async ({ page }) => {
     await page.goto("/");
     await page
       .locator(`[data-task-number="${taskNumber}"]`)
       .click();
     await expect(page).toHaveURL(new RegExp(`${fileName}$`));
-  }
-});
+  });
+}
 
 test("periodic table scrolls without widening the page", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });

@@ -112,6 +112,9 @@ jobs:
       - name: Check committed data against recorded fingerprints
         run: Rscript scripts/check-data-fingerprints.R
 
+      - name: Test system evaluation and failure cases
+        run: Rscript tests/test-system-evaluation.R
+
       - name: Render site
         run: quarto render
 

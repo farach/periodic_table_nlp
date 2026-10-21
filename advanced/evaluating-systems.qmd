@@ -1,0 +1,489 @@
+---
+title: "Compare two system versions in R"
+description: "Compare invented test results in R. Keep missing results, check grader errors, and stop a release when a required confirmation is absent."
+categories: [guide, evaluation, language models]
+---
+
+Mira checks a fictional document-help system.
+Version B answers more questions correctly than version A.
+Mira also needs it to ask for confirmation before it changes a record.
+Should she allow people to use B?
+
+All inputs, responses, and labels on this page are invented teaching data.
+They are not model outputs or independent human ratings.
+No record is changed, and no model runs.
+You will use R to inspect the same small example from several views.
+Run the code from the repository root.
+It reads CSV files that are included in the repository.
+A copy of the helper function alone is not enough.
+
+## What you will learn
+
+- Compare two versions on the same planned tests.
+- Keep errors and missing results in the total.
+- Find a grader mistake.
+- Explain why a required step can block a release.
+
+An **evaluation** checks a stated requirement.
+A **case** is one situation to test.
+A **trial** is one attempt at a case.
+A **grader** checks a result against a rule.
+The file calls its verdict `judge_pass`. Here, judge means grader.
+Release means allowing people to use a version.
+
+```{r}
+#| include: false
+
+options(warn = 2)
+stopifnot(identical(getOption("warn"), 2L))
+```
+
+## Write the rule before you see the score
+
+Mira uses this demonstration rule:
+
+1. If B skips a required confirmation, do not release B.
+2. Otherwise, check both versions for errors and missing results.
+   If either is present, the decision is inconclusive.
+3. Otherwise, compare task successes on the same cases.
+   If B has more, it passes this demonstration rule.
+4. Otherwise, the decision is inconclusive.
+
+**Inconclusive** means the evidence does not support a decision to release.
+Passing this small rule does not prove readiness for real use.
+Real release rules must reflect the intended use and its risks.
+
+The author wrote the cases, responses, labels, and expected results before the
+code ran.
+The data show a method. They do not test a real system.
+
+## Read the cases
+
+Each version has eight cases and two trials per case.
+Before you run the code, calculate the number of planned results per version.
+Write your answer before you run each code block.
+On a small screen, scroll a wide table to the right to read all columns.
+
+```{r}
+library(dplyr)
+library(readr)
+library(tidyr)
+
+source("R/system-evaluation.R")
+data <- read_evaluation()
+cases <- data$cases
+runs <- data$runs
+
+case_view <- cases |>
+  select(case_id, input, target)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  case_view,
+  col.names = c("Case", "Input", "Required behavior"),
+  caption = "Eight invented cases and their requirements."
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  all(c("package:dplyr", "package:readr", "package:tidyr") %in% search()),
+  nrow(cases) == 8L,
+  nrow(runs) == 31L,
+  nrow(case_view) == 8L,
+  identical(cases$case_id, sprintf("c%02d", 1:8))
+)
+```
+
+There are 16 planned results per version and 32 in total.
+Case c05 allows an answer that says the evidence is absent.
+Case c08 asks for a useful response when a tool fails.
+A response that reports the failure and asks the user to try later can pass.
+An execution error with no response cannot meet that requirement.
+
+The response and outcome columns are author-written labels.
+For c06, `task_met` means the record ends in the requested state.
+It does not mean that the system followed the required confirmation step.
+The separate `confirmed` field records that step.
+The c06 rule is "`r sub("[.]$", "", cases$target[cases$case_id == "c06"])`".
+In a real evaluation, check events and the resulting state.
+Do not infer a completed action from an answer that says "done."
+
+## Keep a place for each planned result
+
+B has no saved row for c08, trial 2.
+Should that trial leave the total?
+Predict the effect of dropping it before you continue.
+
+```{r}
+plan <- align_evaluation(cases, runs)
+
+coverage <- plan |>
+  count(version_id, status, name = "results") |>
+  complete(
+    version_id = c("A", "B"),
+    status = c("completed", "error", "missing"),
+    fill = list(results = 0L)
+  )
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  coverage,
+  col.names = c("Version", "Status", "Results"),
+  caption = "All 32 planned slots remain in the comparison."
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(plan) == 32L,
+  sum(plan$status == "completed") == 28L,
+  sum(plan$status == "error") == 3L,
+  sum(plan$status == "missing") == 1L,
+  identical(
+    plan |> filter(status == "missing") |> pull(case_id),
+    "c08"
+  )
+)
+```
+
+Keep the trial in the total.
+There are 31 saved rows, but only 28 completed results.
+Three rows record execution errors.
+The missing slot has no saved row.
+Neither an error nor a missing slot earns a success.
+If you remove them, you ask a different question.
+You would measure success only among the results that were returned.
+
+`align_evaluation()` checks the columns, keys, and labels before it joins them.
+A **key** identifies one result.
+Here it consists of `case_id`, `version_id`, and `trial_id`.
+The function stops on a duplicate key or an invalid label.
+Its source is in [R/system-evaluation.R](../R/system-evaluation.R).
+
+## Count task success and full behavior separately
+
+The saved labels contain 10 task successes for A and 12 for B.
+Each version has 16 planned results.
+Predict both percentages before you run the code.
+
+```{r}
+results <- plan |>
+  mutate(
+    task_pass = status == "completed" & coalesce(task_met, FALSE),
+    confirmation_failure = status == "completed" &
+      confirmation_required & !coalesce(confirmed, TRUE),
+    behavior_pass = task_pass & !confirmation_failure
+  )
+
+scores <- results |>
+  group_by(version_id) |>
+  summarise(
+    planned = n(),
+    task_successes = sum(task_pass),
+    behavior_successes = sum(behavior_pass),
+    confirmation_failures = sum(confirmation_failure),
+    errors = sum(status == "error"),
+    missing = sum(status == "missing"),
+    .groups = "drop"
+  ) |>
+  mutate(task_percent = 100 * task_successes / planned)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  scores,
+  digits = 1,
+  col.names = c(
+    "Version", "Planned", "Task success", "Full behavior success",
+    "Confirmation failures", "Errors", "Missing", "Task %"
+  ),
+  caption = "Task success improves, but B skips one required confirmation."
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(scores$version_id, c("A", "B")),
+  identical(scores$planned, c(16L, 16L)),
+  identical(scores$task_successes, c(10L, 12L)),
+  identical(scores$behavior_successes, c(10L, 11L)),
+  identical(scores$confirmation_failures, c(0L, 1L)),
+  identical(scores$errors, c(1L, 2L)),
+  identical(scores$missing, c(0L, 1L)),
+  identical(scores$task_percent, c(62.5, 75))
+)
+```
+
+A meets the task target in 10 of 16 planned trials.
+B meets it in 12 of 16.
+The increase is 12.5 percentage points.
+A **percentage-point change** subtracts one percentage from another.
+Here, 75 minus 62.5 equals 12.5.
+Full behavior also requires confirmation when the case calls for it.
+B meets that combined requirement in 11 of 16 trials.
+
+The `coalesce()` calls replace absent values for these counts only.
+They do not change a saved response or grade.
+An unknown confirmation is not proof that the system followed the rule.
+Errors and missing results will still block approval.
+
+## Inspect the required step
+
+B reaches the requested state in c06, trial 1.
+Predict which labels you need to check before you accept that result.
+
+```{r}
+confirmation_check <- results |>
+  filter(case_id == "c06", version_id == "B", trial_id == 1L) |>
+  select(target, response, task_met, confirmed, behavior_pass, judge_pass)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  confirmation_check,
+  col.names = c(
+    "Requirement", "Invented response", "Task met", "Confirmed",
+    "Full behavior met", "Grader passed"
+  ),
+  caption = "A correct end state can still break the required process."
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(confirmation_check) == 1L,
+  confirmation_check$task_met,
+  !confirmation_check$confirmed,
+  !confirmation_check$behavior_pass,
+  confirmation_check$judge_pass
+)
+```
+
+Do not accept this result. The author label says the requested state was reached.
+The confirmation label says the required step was skipped.
+The saved grader missed that failure.
+Checking only the final state would also miss it.
+
+## Check the grader
+
+A **false pass** occurs when a grader passes a result that fails the requirement.
+A **false fail** occurs when it rejects a result that meets the requirement.
+The c02 requirement is "`r sub("[.]$", "", cases$target[cases$case_id == "c02"])`".
+Predict whether "You can cancel at no cost" meets that requirement.
+The response uses different words.
+
+Audit only completed results with both labels.
+The task score kept 32 planned slots.
+This audit has 28 completed results because errors and missing results have no
+grader verdict.
+We leave them out of this audit only. They stay in the task score.
+
+```{r}
+audit <- results |>
+  filter(status == "completed") |>
+  mutate(
+    grader_error = case_when(
+      judge_pass & !behavior_pass ~ "False pass",
+      !judge_pass & behavior_pass ~ "False fail",
+      .default = "Agrees with author"
+    )
+  )
+
+grader_errors <- audit |>
+  filter(grader_error != "Agrees with author") |>
+  select(case_id, version_id, trial_id, target, response, grader_error)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  grader_errors,
+  col.names = c(
+    "Case", "Version", "Trial", "Requirement", "Invented response", "Grader error"
+  ),
+  caption = "Two false passes and one false fail in the invented labels."
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  nrow(audit) == 28L,
+  nrow(grader_errors) == 3L,
+  sum(audit$grader_error == "False pass") == 2L,
+  sum(audit$grader_error == "False fail") == 1L,
+  sum(audit$grader_error == "Agrees with author") == 25L
+)
+```
+
+The paraphrase meets the requirement. Its saved grader label is a false fail.
+The other errors pass a reversed meaning and a skipped confirmation.
+A valid answer need not match one reference string.
+A valid tool sequence need not match one reference path.
+Check the required behavior instead.
+
+These invented disagreements show how to inspect a grader.
+They do not measure a real grader's accuracy.
+For real work, use independent human review and keep disagreements visible.
+If a model grades answers, swap the answer order and check its verdict.
+Also check whether a longer answer changes its verdict without improving the answer.
+A different judge model alone does not prove that its scores are valid.
+
+## Compare each case
+
+A **regression** is a result that gets worse in a new version.
+What would you check to find a case that gets worse?
+Write your answer before you run the code.
+Compare the same cases, with two planned trials per version.
+This is a **paired comparison** because A and B use the same cases.
+
+```{r}
+paired <- results |>
+  group_by(case_id, version_id) |>
+  summarise(task_rate = mean(task_pass), .groups = "drop") |>
+  pivot_wider(names_from = version_id, values_from = task_rate) |>
+  mutate(change = B - A)
+```
+
+```{r}
+#| echo: false
+
+knitr::kable(
+  paired,
+  digits = 2,
+  col.names = c("Case", "A task rate", "B task rate", "B minus A"),
+  caption = "B improves on two cases, ties on five, and gets worse on one."
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(paired$change, c(0, 0, 1, 0.5, 0, 0, 0, -0.5)),
+  sum(paired$change > 0) == 2L,
+  sum(paired$change == 0) == 5L,
+  sum(paired$change < 0) == 1L,
+  mean(paired$change) == 0.125
+)
+```
+
+B does not improve on every case.
+It fixes c03 and improves c04, but it gets worse on c08.
+B has an error in c08, trial 1, and no saved row for trial 2.
+Neither trial earns a success.
+The average change is 0.125, or 12.5 percentage points.
+It describes this fixed example only.
+Two attempts at one case are not two independent user situations.
+They do not show how the system works for real users.
+
+## Apply the rule
+
+The average task score rises.
+The confirmation failure is still present.
+Predict the decision before you run this function.
+
+```{r}
+release_decision <- function(scores) {
+  if (scores$confirmation_failures[scores$version_id == "B"] > 0L) {
+    return("Do not release")
+  }
+  if (any(scores$errors + scores$missing > 0L)) {
+    return("Inconclusive")
+  }
+  rates <- setNames(scores$task_successes / scores$planned, scores$version_id)
+  if (rates[["B"]] > rates[["A"]]) {
+    return("Passes this demonstration rule")
+  }
+  "Inconclusive"
+}
+
+decision <- release_decision(scores)
+decision
+```
+
+```{r}
+#| include: false
+
+stopifnot(identical(decision, "Do not release"))
+```
+
+Do not release B.
+The first rule blocks it because it skipped confirmation.
+It also has errors and a missing result.
+Those problems would make the decision inconclusive even without the
+confirmation failure.
+More correct task answers cannot cancel a forbidden action.
+
+## Check your understanding
+
+If you change the failed confirmation label to `TRUE`, can B pass?
+Keep all other labels and rows the same.
+
+::: {.callout-note}
+## Answer
+
+No. Errors and a missing result remain.
+The rule returns "Inconclusive."
+Changing a label is not a repair to a real system.
+You would need to fix the system and run a new, recorded evaluation.
+:::
+
+If all B results were absent, would zero observed confirmation failures prove
+that it followed the rule?
+
+::: {.callout-note}
+## Answer
+
+No. You have no evidence of its behavior.
+Keep all 16 planned B slots and mark them missing.
+The decision remains inconclusive.
+:::
+
+## What to remember
+
+Compare the same planned cases.
+Keep errors and missing results visible.
+Check what a score measures before you use it.
+A required action and a correct answer are different checks.
+Use the release rule you wrote before you saw the results.
+
+Return to [Beyond the periodic table](index.qmd) for the tool distinctions.
+This lesson does not execute LangChain, LangGraph, LangSmith, ellmer, or vitals.
+
+## Sources
+
+- [CheckList](https://aclanthology.org/2020.acl-main.442/) motivates tests of
+  specific behavior alongside aggregate scores.
+- [tau-bench](https://arxiv.org/html/2406.12045v1), section 3, describes checks
+  of final state and notes that these can miss required confirmation.
+- [Judging LLM-as-a-Judge](https://arxiv.org/html/2306.05685v4), sections 3-4,
+  studies answer-order and verbosity effects. Its results do not validate
+  the invented grader on this page.
+- [RAGAs](https://aclanthology.org/2024.eacl-demo.16/) distinguishes contextual
+  support from answer relevance. These are different evaluation targets.
+
+The repository's `DATA_SOURCES.md` records the invented files and their limits.
+The data are in `data/system-evaluation/`.
+No platform comparison is made.

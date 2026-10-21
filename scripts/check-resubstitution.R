@@ -28,6 +28,9 @@ lesson_files <- sort(unlist(lapply(
   lesson_dirs,
   function(d) list.files(d, pattern = "\\.qmd$", full.names = TRUE)
 )))
+lesson_files <- c(
+  lesson_files, "using-language-models.qmd", "advanced/evaluating-systems.qmd"
+)
 
 if (length(lesson_files) == 0) {
   cat("No lesson files found.\n")

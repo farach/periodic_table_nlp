@@ -33,7 +33,11 @@ lesson_files <- list.dirs(".", recursive = FALSE, full.names = FALSE) |>
   list_c() |>
   sort()
 
-stopifnot(length(lesson_files) > 0)
+lesson_files <- c(
+  lesson_files, "using-language-models.qmd",
+  "advanced/index.qmd", "advanced/evaluating-systems.qmd"
+)
+stopifnot(length(lesson_files) > 0, all(file.exists(lesson_files)))
 
 strip_code <- function(lines) {
   fence <- cumsum(str_detect(lines, "^\\s*```")) %% 2

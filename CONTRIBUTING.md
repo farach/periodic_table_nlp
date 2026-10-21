@@ -278,6 +278,24 @@ evidence.
 
 ## Keep project invariants intact
 
+Non-numbered guides are tracked in `data/guide_reviews.csv`.
+The advanced landing is a prose page. It must not contain dummy R chunks.
+The worked advanced guide follows the executable lesson checks.
+Register new pages in `_quarto.yml`, the relevant source/style/repetition
+checks, and `tests/accessibility.spec.mjs`.
+Keep all 81 task IDs and the existing reproducibility guide URL unchanged.
+Review statuses are project records, not independent certification.
+Do not change pending human or manual accessibility approval to passed
+unless that review was done.
+
+For the saved-output evaluation guide, run
+`Rscript tests/test-system-evaluation.R` before rendering.
+It checks the predeclared results, sparse inputs, invalid annotations,
+fingerprints, and all three decision branches.
+Use short sentences and define technical terms near first use.
+Apply ASD-STE100 writing rules where they fit the explanation.
+Do not claim formal controlled-language certification.
+
 - Show the reader the code that does the work, not the code that formats the
   page. A table is built in the visible chunk and printed from an
   `#| echo: false` display chunk placed straight after it, so the reader sees

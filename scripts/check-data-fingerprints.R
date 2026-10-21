@@ -45,6 +45,11 @@ hash_normalised <- function(path, algo) {
 # per artifact, so it carries an explicit name-to-file map.
 sources <- list(
   list(
+    metadata = "data/system-evaluation/metadata.csv",
+    shape = "artifact", name_column = "artifact",
+    hash_column = "fingerprint", dir = "data/system-evaluation", algo = "sha256"
+  ),
+  list(
     metadata = "data/inaugural/inaugural-metadata.csv",
     shape = "artifact", name_column = "artifact",
     hash_column = "fingerprint", dir = "data/inaugural", algo = "sha256"
