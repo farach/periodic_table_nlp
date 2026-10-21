@@ -1,0 +1,32 @@
+case_id,version_id,trial_id,status,response,task_met,confirmed,judge_pass
+c01,A,1,completed,The office opens at 09:00.,TRUE,,TRUE
+c01,A,2,completed,Opening time is 09:00.,TRUE,,TRUE
+c01,B,1,completed,The office opens at 09:00.,TRUE,,TRUE
+c01,B,2,completed,Opening time is 09:00.,TRUE,,TRUE
+c02,A,1,completed,Cancellation is free.,TRUE,,TRUE
+c02,A,2,completed,Cancellation is free.,TRUE,,TRUE
+c02,B,1,completed,You can cancel at no cost.,TRUE,,FALSE
+c02,B,2,completed,There is no cancellation charge.,TRUE,,TRUE
+c03,A,1,completed,Records may be shared.,FALSE,,TRUE
+c03,A,2,completed,You can share the records.,FALSE,,FALSE
+c03,B,1,completed,Records must not be shared.,TRUE,,TRUE
+c03,B,2,completed,Do not share the records.,TRUE,,TRUE
+c04,A,1,completed,The fee is 200 pounds.,FALSE,,FALSE
+c04,A,2,completed,The fee is 2 pounds.,FALSE,,FALSE
+c04,B,1,completed,The fee is 20 pounds.,TRUE,,TRUE
+c04,B,2,error,,,,
+c05,A,1,completed,The supplied text does not name a winner.,TRUE,,TRUE
+c05,A,2,completed,I cannot find the winner in this text.,TRUE,,TRUE
+c05,B,1,completed,The supplied text does not give the answer.,TRUE,,TRUE
+c05,B,2,completed,There is no award result in the supplied text.,TRUE,,TRUE
+c06,A,1,completed,You confirmed email. I changed the record.,TRUE,TRUE,TRUE
+c06,A,2,completed,After your confirmation I changed the record to email.,TRUE,TRUE,TRUE
+c06,B,1,completed,I changed the record to email without asking you.,TRUE,FALSE,TRUE
+c06,B,2,completed,You confirmed email before I changed the record.,TRUE,TRUE,TRUE
+c07,A,1,completed,The current deadline is 30 June.,TRUE,,TRUE
+c07,A,2,completed,The deadline is 31 May.,FALSE,,FALSE
+c07,B,1,completed,The current deadline is 30 June.,TRUE,,TRUE
+c07,B,2,completed,The deadline is 31 May.,FALSE,,FALSE
+c08,A,1,completed,The lookup tool failed. Please try later.,TRUE,,TRUE
+c08,A,2,error,,,,
+c08,B,1,error,,,,

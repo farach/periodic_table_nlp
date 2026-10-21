@@ -225,6 +225,20 @@ stopifnot(
   guide_link < map_region
 )
 
+stopifnot(
+  file.exists("_site/advanced/index.html"),
+  file.exists("_site/advanced/evaluating-systems.html"),
+  grepl('<a href="(\\./)?advanced/index\\.html"', html, perl = TRUE)
+)
+advanced_landing <- paste(
+  readLines("_site/advanced/index.html", encoding = "UTF-8", warn = FALSE),
+  collapse = "\n"
+)
+stopifnot(
+  grepl('href="[^"]*evaluating-systems[.]html"', advanced_landing, perl = TRUE),
+  grepl('href="[^"]*using-language-models[.]html"', advanced_landing, perl = TRUE)
+)
+
 css <- paste(
   readLines(
     "periodic-table.css",

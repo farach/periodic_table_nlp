@@ -35,7 +35,10 @@ lesson_files <- unlist(
 )
 
 # Guide pages follow the same code style as lessons.
-lesson_files <- c(lesson_files, "using-language-models.qmd")
+lesson_files <- c(
+  lesson_files, "using-language-models.qmd", "advanced/evaluating-systems.qmd",
+  "R/system-evaluation.R", "tests/test-system-evaluation.R"
+)
 
 stopifnot(
   length(lesson_files) > 0L,

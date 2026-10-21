@@ -1,0 +1,114 @@
+---
+title: "Beyond the periodic table"
+description: "Use R to check a language-model system. Learn where evaluation, workflows, LangChain, LangGraph and LangSmith fit."
+---
+
+The table lists separate text tasks. A system can join several tasks.
+For example, it can find a document, write an answer, and update a record.
+You must check the whole system as well as each task.
+
+This section starts with one worked lesson:
+[Compare two system versions in R](evaluating-systems.qmd).
+You will check invented test results. You will not call a model.
+You do not need an account, an API key, or Python for this lesson.
+
+## Start with the right question
+
+An **evaluation** checks whether a system meets a stated requirement.
+A higher average score is not enough. A system can answer more questions
+correctly and still skip a required check before it changes a record.
+
+The worked lesson asks you to decide whether to **release** version B.
+Release means allowing people to use a version.
+You will compare it with version A on the same cases.
+You will keep missing results in the total and check the rule used to grade
+each result.
+
+## What to read first
+
+You need basic R. You should know data frames and the pipe, `|>`.
+You will run the supplied code and read its results.
+The lesson explains the evaluation terms when you need them.
+These pages give more detail:
+
+- [Evaluate a model](../9_model_development/44-evaluating-models.qmd)
+  explains baselines and test sets.
+- [Use a language model reproducibly](../using-language-models.qmd)
+  explains model records, saved outputs, and checks against people.
+- [Answer questions from passages](../14_systems/70-question-answering.qmd)
+  separates finding evidence from answering a question.
+- [Keep dialogue state in R](../14_systems/71-chatbot-dialogue.qmd)
+  separates state, policy, and wording.
+
+The new lesson only reads local files and computes results in R.
+Other lessons on this site can run pinned local models.
+
+## Where the tools fit
+
+The tool descriptions below were checked on 21 October 2026.
+They describe documented features. The worked lesson does not run these tools
+or test a connection between them.
+
+LangChain gives developers model and tool interfaces.
+It also supports agent loops. An **agent loop** lets a model choose a tool,
+read its result, and choose a next step.
+Its official framework examples use Python or JavaScript/TypeScript.
+
+LangGraph controls a workflow through explicit state and steps.
+**State** is the information kept between steps.
+A graph names the steps and the routes between them.
+It can support loops, pause for a person, and resume later.
+It does not require LangChain.
+The reviewed documentation does not list an official R version of LangGraph.
+
+LangSmith is a separate platform for traces, datasets, and evaluations.
+A **trace** records the steps taken during a run.
+An **SDK** is a set of code tools for a service.
+The reviewed SDK list includes Python, JavaScript/TypeScript, Go, and Java.
+It does not list R.
+That does not prove that R cannot use its APIs.
+An R connection through web requests or another runtime needs a separate test.
+No such connection is tested here.
+
+R also has native tools.
+The ellmer package supports model calls, tool use, and outputs with named fields.
+The vitals package organizes evaluation cases, solvers, scorers, and logs.
+A **solver** produces a result. A **scorer** assigns a score.
+These tools do not prove that R can save and resume workflows like LangGraph.
+
+::: {.callout-warning}
+## A local score can still need a network call
+
+In vitals, `generate()` makes model requests, and `$eval()` solves and scores.
+A scorer written in R does not make the solver network-free.
+The documented default uses the same model to solve and grade unless changed.
+A separate judge model also needs checks against independent human review.
+:::
+
+## Choose a workflow only when you need it
+
+A fixed sequence, such as extract, check, and report, can be one R function.
+Use that simple form when it meets the need.
+
+A different process may pause for a person, keep its state, and resume later.
+A graph runtime can help with that process.
+Before you claim that it recovers after a crash, test a real restart.
+A diagram, saved chat messages, or a checkpoint kept only in memory cannot
+prove that behavior.
+
+An optional later lesson can compare these designs.
+This section does not yet provide a Python lab or an R-to-LangSmith connection.
+
+## Sources
+
+- [LangChain overview](https://docs.langchain.com/oss/python/langchain/overview)
+  describes model, tool, and agent interfaces.
+- [LangGraph overview](https://docs.langchain.com/oss/python/langgraph/overview)
+  describes stateful workflows and its relation to LangChain.
+- [LangSmith SDK reference](https://docs.langchain.com/langsmith/reference.md)
+  lists the supported SDKs.
+- [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence)
+  explains checkpoints.
+- [ellmer](https://ellmer.tidyverse.org/) documents R model interfaces.
+- [vitals](https://vitals.tidyverse.org/articles/vitals.html) explains datasets,
+  solvers, scorers, and the default model judge.

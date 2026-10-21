@@ -120,10 +120,58 @@ count_matches <- function(pattern, text) {
   if (locations[1] == -1) 0L else length(locations)
 }
 
-# Guide pages sit outside the task map and the review manifest, but they follow
-# the same page and chunk rules as lessons.
-guide_files <- "using-language-models.qmd"
+# Executable guides follow lesson rules without becoming numbered tasks.
+guide_files <- c(
+  "using-language-models.qmd",
+  "advanced/evaluating-systems.qmd"
+)
 stopifnot(all(file.exists(guide_files)))
+
+guide_reviews <- read.csv(
+  "data/guide_reviews.csv",
+  colClasses = "character",
+  check.names = FALSE
+)
+stopifnot(
+  identical(
+    names(guide_reviews),
+    c(
+      "source_file", "page_type", "last_researched", "last_code_run",
+      "project_narrative_review", "project_adversarial_review",
+      "project_automated_accessibility", "manual_accessibility",
+      "human_approval", "open_limitations"
+    )
+  ),
+  identical(
+    guide_reviews$source_file,
+    c("advanced/evaluating-systems.qmd", "advanced/index.qmd", "using-language-models.qmd")
+  ),
+  identical(guide_reviews$page_type, c("executable", "prose", "executable")),
+  all(file.exists(guide_reviews$source_file)),
+  all(grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", guide_reviews$last_researched)),
+  all(
+    grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", guide_reviews$last_code_run) |
+      guide_reviews$last_code_run == "pending" |
+      (guide_reviews$page_type == "prose" & guide_reviews$last_code_run == "not-applicable")
+  ),
+  all(guide_reviews$project_narrative_review %in% c("pending", "passed")),
+  all(guide_reviews$project_adversarial_review %in% c("pending", "passed")),
+  all(guide_reviews$project_automated_accessibility %in% c("pending", "passed")),
+  all(guide_reviews$manual_accessibility %in% c("pending", "passed")),
+  all(guide_reviews$human_approval %in% c("pending", "approved")),
+  all(nzchar(guide_reviews$open_limitations))
+)
+
+landing <- paste(readLines("advanced/index.qmd", warn = FALSE), collapse = "\n")
+stopifnot(
+  grepl('description: "', landing, fixed = TRUE),
+  grepl("## What to read first", landing, fixed = TRUE),
+  grepl("(evaluating-systems.qmd)", landing, fixed = TRUE),
+  !grepl("```{r", landing, fixed = TRUE)
+)
+if (dir.exists("_site")) {
+  stopifnot(file.exists("_site/advanced/index.html"))
+}
 
 for (lesson_file in c(lesson_files, guide_files)) {
   lines <- readLines(

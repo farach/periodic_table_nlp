@@ -187,6 +187,39 @@ the builder on another computer or library version can change some answers,
 so a rebuild must be committed together with its metadata. The files are
 released under the MIT licence, as part of this repository.
 
+## System evaluation teaching data
+
+`data/system-evaluation/cases.csv` and `runs.csv` are author-invented data
+created on 21 October 2026 for `advanced/evaluating-systems.qmd`.
+They use no external text, model outputs, real people, or real tool actions.
+They are released under this repository's MIT license.
+
+Schema version 1 has eight cases, versions A and B, and trials 1 and 2.
+The plan contains 32 slots. The saved file contains 31 rows.
+B/c08/2 is deliberately absent. Three saved rows have status `error`.
+An error has no response, outcome, confirmation, or grader verdict.
+Completed rows have explicit outcome and grader labels.
+Only cases that require confirmation have a confirmation label.
+
+The input, response, task-outcome, confirmation, and grader labels were written
+by the author. They do not represent independent human review.
+The label `task_met` checks the requested outcome only.
+Full behavior also checks required confirmation.
+The invented grader wrongly passes A/c03/1 and B/c06/1 and wrongly fails
+B/c02/1. No model, prompt, cost, or latency is attributed to these rows.
+
+The expected results were fixed before the lesson code ran: 10/16 task
+successes for A, 12/16 for B, and one B confirmation failure.
+The demonstration release rule blocks B.
+The tests check these values and the malformed-input cases.
+This is not a held-out benchmark or evidence of real system performance.
+
+`metadata.csv` records line-normalized SHA-256 hashes of both CSVs.
+The hash is computed over UTF-8 text with CR removed, lines joined by LF,
+and no final newline. The lesson and fingerprint scan check those hashes.
+A hash detects a changed file. It does not verify the labels.
+Changes to a fixture need a new review of the expected results and hashes.
+
 ## Bing Liu opinion lexicon
 
 Some lessons access the Bing Liu positive/negative opinion lexicon through the

@@ -4,8 +4,21 @@
 }
 
 .quarto-title-banner .title,
-.quarto-title-banner .description {
+.quarto-title-banner .description,
+.quarto-title-banner .quarto-title-breadcrumbs .breadcrumb-item,
+.quarto-title-banner .quarto-title-breadcrumbs .breadcrumb .breadcrumb-item a,
+.quarto-title-banner .quarto-title-breadcrumbs .breadcrumb-item::before {
   color: #f7fbff;
+}
+
+.quarto-title-banner .quarto-title-breadcrumbs a:focus-visible {
+  outline: 3px solid #f7fbff;
+  outline-offset: 3px;
+}
+
+.quarto-page-breadcrumbs .breadcrumb-item a {
+  display: inline-block;
+  min-height: 24px;
 }
 
 #quarto-content {

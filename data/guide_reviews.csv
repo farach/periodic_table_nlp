@@ -1,0 +1,4 @@
+source_file,page_type,last_researched,last_code_run,project_narrative_review,project_adversarial_review,project_automated_accessibility,manual_accessibility,human_approval,open_limitations
+advanced/evaluating-systems.qmd,executable,2026-10-21,2026-10-21,passed,passed,passed,pending,pending,Invented labels only; no real model comparison or judge calibration; no formal ASD-STE100 certification.
+advanced/index.qmd,prose,2026-10-21,not-applicable,passed,passed,passed,pending,pending,Optional software paths are documented but not executed; no formal ASD-STE100 certification.
+using-language-models.qmd,executable,2026-09-25,2026-10-21,pending,pending,passed,pending,pending,Existing guide added to review tracking; prior approvals are not inferred; local model setup required.

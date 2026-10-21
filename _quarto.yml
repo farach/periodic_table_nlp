@@ -6,6 +6,8 @@ project:
     - index.qmd
     - accessibility.qmd
     - using-language-models.qmd
+    - advanced/index.qmd
+    - advanced/evaluating-systems.qmd
     - 1_source_data_loading/*.qmd
     - 2_training_data_generation/*.qmd
     - 3_word_parsing/*.qmd
@@ -41,6 +43,12 @@ website:
         text: Home
       - href: using-language-models.qmd
         text: Using a language model reproducibly
+      - section: "Beyond the periodic table"
+        contents:
+          - href: advanced/index.qmd
+            text: Systems and tools
+          - href: advanced/evaluating-systems.qmd
+            text: Compare two system versions
       - href: 1_source_data_loading/01-bits-to-character-encoding.qmd
         text: How computers store text
       - href: 1_source_data_loading/02-manual-typewriting.qmd
