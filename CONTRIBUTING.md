@@ -358,9 +358,9 @@ Do not claim formal controlled-language certification.
   Run `Rscript tests/test-vocabulary-bpe.R` before rendering. It replays a real
   69-piece fit of the unchanged job-only corpus, then trains a fresh model.
   The small text-format fixture in `tests/fixtures/vocabulary-69.bpe` was
-  generated locally from the fictional teaching data, with line endings
-  normalized to LF. It is not a pretrained external model or a model used by
-  the published lesson.
+  generated locally from the fictional teaching data and preserved byte for
+  byte. The test verifies its fingerprint. It is not a pretrained external
+  model or a model used by the published lesson.
 - Keep `data/openlibrary-nlp-search.json` as a dated fixture. Rendering must not
   contact Open Library or any other live service.
 - The R `tesseract` package does not install the native OCR engine or language

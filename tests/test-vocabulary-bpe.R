@@ -11,7 +11,11 @@ sentences <- readr::read_csv(
 # An actual tokenizers.bpe 0.1.6 fit of the lesson's unchanged training rows:
 # Windows R 4.6.1, coverage = 1, vocab_size = 200L, threads = 1L.
 # Fit 907 of 2,000 produced 69 pieces; the other 1,999 produced 68.
-# Only line endings were normalized in this saved regression fixture.
+# The fitted model is preserved byte for byte, including its CRLF line endings.
+stopifnot(identical(
+  unname(tools::md5sum(fixture)),
+  "33e0a141acfa0d91722aa9fcacffe85c"
+))
 variant <- tokenizers.bpe::bpe_load_model(fixture, threads = 1L)
 flyer_text <- tolower(sentences$text[sentences$document_id == "F001"])
 variant_ids <- tokenizers.bpe::bpe_encode(variant, flyer_text, type = "ids")
