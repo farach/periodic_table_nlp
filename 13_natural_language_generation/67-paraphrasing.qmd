@@ -177,9 +177,10 @@ stopifnot(
 ## Generate candidates without silent truncation
 
 The complete chat-formatted prompt must stay below 192 input tokens. Greedy
-decoding selects the highest-scoring next token. This method and a 72-token
-output limit make the call repeatable. Deterministic generation can still
-produce an incorrect paraphrase.
+decoding selects the highest-scoring next token and uses no random sampling.
+The output limit is 72 tokens. Small numerical differences between machines
+can still change a selection. Greedy decoding can also produce an incorrect
+paraphrase.
 
 ```{r}
 paraphrase_system <- paste(
@@ -540,13 +541,14 @@ stopifnot(
 )
 ```
 
-A table value of `held for human review` requires a human check. It does not prove a change
-in meaning. In this render, comparison with the source shows that the stress
-probe copies prompt labels and omits Room 2.
+A table value of `held for human review` requires a human check. It does not
+prove a change in meaning. Compare the stress-probe output with its source.
+Prompt labels are not part of the notice. The candidate must preserve the move
+from Room 2 to Room 5.
 
-The obligation probe replaces `must sign` with `authorized to sign`, changing
-obligation to permission. Its modality check also selects the row for
-a human check. However, the finite pattern list can also reject equivalent wording.
+If the obligation probe replaces `must sign` with `authorized to sign`, it
+changes obligation to permission. A modality mismatch requires a human check,
+but the pattern list can also reject equivalent wording.
 The conclusion therefore depends on human comparison, not the automatic check.
 
 ## Record check status

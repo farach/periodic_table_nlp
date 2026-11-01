@@ -528,7 +528,7 @@ knitr::kable(
     democratic_range |>
       transmute(label = "Democratic", first_year, last_year, paragraphs)
   ),
-  col.names = c("Label scope", "First year", "Last year", "Paragraphs"),
+  col.names = c("Labels included", "First year", "Last year", "Paragraphs"),
   caption = "Long time spans in the party labels",
   row.names = FALSE
 )

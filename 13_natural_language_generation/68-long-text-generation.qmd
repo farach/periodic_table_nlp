@@ -367,7 +367,8 @@ stopifnot(
 ## Generate all three sections
 
 The loop below makes three separate neural generation calls. Greedy decoding
-selects the highest-scoring next token and keeps this demonstration repeatable.
+selects the highest-scoring next token and uses no random sampling. Small
+numerical differences between machines can still change a selection.
 Research documents repetitive output as a risk of likelihood-maximizing decoding
 in open-ended tasks. This observed tendency does not mean every greedy output
 contains repetition.
@@ -654,14 +655,15 @@ These are limited structural checks. They do not detect an invented plant
 example, a cause absent from the source, a changed obligation, or a contradiction without
 a new numeral.
 
-This render exposes three failures. In SEC-01, `successfully` adds an evaluation absent
-from the ledger. The final section omits the statement that volunteers made no
-guarantee about seed growth. SEC-03 also restates the E05 evening request from
-continuity context, although E05 belongs to SEC-02.
+Compare each generated section with the ledger and its assigned evidence.
+In SEC-01, `successfully` would add an evaluation absent from the ledger.
+SEC-03 must retain the statement that volunteers made no guarantee about seed
+growth. Restating the E05 evening request in SEC-03 would violate the section
+limits because E05 belongs to SEC-02.
 
-The prompt supplied 29 to the model, so the numeral is not invented. Its reuse
-still violates the declared section limits. These findings require draft
-revision.
+The prompt supplies the number 29 in continuity context, so that number alone
+is not evidence of invention. Using it to restate E05 in SEC-03 would still
+require draft revision.
 
 ## Assemble the draft and make a decision
 

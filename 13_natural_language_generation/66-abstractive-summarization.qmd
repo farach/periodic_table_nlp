@@ -513,10 +513,11 @@ This check is intentionally incomplete. It cannot detect a changed relation, an
 incorrect number association, a cause absent from the source, or a fluent generalization.
 Those errors require comparison of the source and candidate.
 
-In this render, the first candidate changes the limit on volunteer help. The
-second mentions a limit but changes the relationship to restricted
-storage. The string checks find some errors. Comparison with the source
-reveals the others.
+Compare each summary with the volunteer and storage rules in its source.
+For SUM-01, volunteers offer Tuesday help but do not complete applications for
+visitors. For SUM-02, the session does not include access to restricted storage.
+A general statement about limits does not preserve either rule. The string
+checks can miss changes in these relationships.
 
 Likewise, n-gram overlap metrics such as ROUGE compare word sequences with a
 reference under a specified normalization rule. Normalization standardizes text

@@ -583,7 +583,7 @@ knitr::kable(
 
 knitr::kable(
   accuracy_comparison,
-  col.names = c("Scope", "System", "Correct", "Tokens", "Accuracy"),
+  col.names = c("Tokens included", "System", "Correct", "Tokens", "Accuracy"),
   caption = "The 500-sentence tagger compared with a lookup baseline",
   row.names = FALSE
 )
