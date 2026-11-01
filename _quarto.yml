@@ -131,7 +131,7 @@ website:
           - href: 7_sentences_and_paragraphs/36-paragraph-segmentation.qmd
             text: "36. Finding paragraph boundaries"
           - href: 7_sentences_and_paragraphs/37-grammar-checking.qmd
-            text: "37. Checking small grammar rules"
+            text: "37. Small grammar checks"
           - href: 7_sentences_and_paragraphs/38-readability-scoring.qmd
             text: "38. Scoring readability formulas"
           - href: 8_documents/39-deduplication.qmd
@@ -171,7 +171,7 @@ website:
           - href: 11_signals_and_discovery/55-topic-modeling.qmd
             text: "55. Reading topic-model output carefully"
           - href: 11_signals_and_discovery/56-trend-detection.qmd
-            text: "56. Checking word trends over time"
+            text: "56. Examining word trends over time"
           - href: 11_signals_and_discovery/57-outlier-detection.qmd
             text: "57. Finding speeches unlike the rest"
           - href: 12_similarity/58-wordnet-synsets.qmd

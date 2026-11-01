@@ -392,7 +392,7 @@ knitr::kable(
     "UDPipe broken string",
     "spaCy broken string"
   ),
-  caption = "Where either model's lemma is flagged by hunspell",
+  caption = "Where hunspell puts a mark on either model's lemma",
   row.names = FALSE
 )
 ```
@@ -418,7 +418,7 @@ stopifnot(
 ```
 
 Both parsers provide lemmas for 95 word types.
-Hunspell flags 8 UDPipe lemmas and 2 spaCy lemmas.
+Hunspell puts a mark on 8 UDPipe lemmas and 2 spaCy lemmas.
 Both systems have flags for `riverton` and `october`, which are not model
 errors. The first is a fictional place name.
 The second results from lowercasing before dictionary lookup.
@@ -478,7 +478,8 @@ stopifnot(
 - A lemma is a dictionary form chosen for a word in context.
 - A stem is a rule-based comparison string.
 - Tokenizers changed the comparison: `driver's` has no spaCy word-type match.
-- The dictionary screen flags unknown strings, not lemma correctness.
+- The automatic dictionary check puts a mark on unknown strings. It does not
+  measure lemma correctness.
 - Raw hunspell flags are 8 for UDPipe and 2 for spaCy on 95 word types.
 - Excluding coverage and case artifacts, the broken-string count is 6 for UDPipe
   and 0 for spaCy.

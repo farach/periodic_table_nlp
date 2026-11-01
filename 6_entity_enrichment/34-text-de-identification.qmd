@@ -297,12 +297,12 @@ must distinguish several concepts:
 
 - **Masking, pseudonymization, and anonymization**: Replacing a name with
   `[PERSON]` is masking. Under GDPR, it is pseudonymization only when separately
-  held, protected additional information can restore the link to a person.
+  kept, protected additional information can restore the link to a person.
   Pseudonymized data remains personal data. Anonymization asks whether a person
   is no longer reasonably identifiable. It does not promise that
   re-identification is impossible.
 - **Quasi-identifiers**: A unique medical symptom, exact timeline, or specific geographic area may not directly reveal a person's identity alone. Together, those details can uniquely reveal that identity.
-- **Category-wise recall**: An honest evaluation measures the share of true
+- **Category-wise recall**: An honest evaluation measures the share of
   identifiers found in each category. An overall score can hide a weak category.
 - **Legal regimes and residual risk**: GDPR processing needs an applicable
   lawful basis. HIPAA instead states how teams can use data. It gives two

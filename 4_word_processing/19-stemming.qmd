@@ -173,7 +173,7 @@ It can therefore return `requir`, `provid`, and `schedul`.
 ## Count stems that are words and stems that are not
 
 The next table separates changed stems that are dictionary words from changed
-stems that hunspell flags as unknown.
+stems that are unknown to hunspell.
 
 ```{r}
 stem_quality <- stemmed_vocabulary |>

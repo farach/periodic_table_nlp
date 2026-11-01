@@ -60,7 +60,7 @@ break, so one physical line does not always equal one record. A quotation mark
 inside a quoted field usually appears twice.
 
 Before asking R to make a table, the coordinator reads the file as plain lines.
-`read_lines()` from readr returns one text value for each physical line. This shows the stored lines, which the reader can count directly.
+`read_lines()` from readr returns one text value for each physical line. The output shows the first three stored lines.
 
 ```{r}
 library(readr)
@@ -164,7 +164,7 @@ The `col_types = cols(...)` setting tells readr which **data type** to use for
 each column. A data type records whether values should behave as text, whole
 numbers, dates, or another kind of information.
 
-- identification numbers are text because they label records.
+- identification numbers are text because they identify records.
 - dates begin as text so we can convert them deliberately.
 - ratings are whole numbers.
 - channels and comments are text.

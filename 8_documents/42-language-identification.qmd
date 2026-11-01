@@ -395,7 +395,7 @@ knitr::kable(
   short_probe |>
     select(text, recorded_language, cld2_language, cld3_language),
   col.names = c("Text", "Recorded language", "CLD2", "CLD3"),
-  caption = "Two short English probes and their detected languages",
+  caption = "Two short English examples and their detected languages",
   row.names = FALSE
 )
 ```
@@ -412,7 +412,7 @@ stopifnot(
 )
 ```
 
-`Evening class.` is English in this teaching probe. CLD2 returns `NA`, while CLD3
+`Evening class.` is English in this teaching example. CLD2 returns `NA`, while CLD3
 returns `lb`, the ISO 639-1 code for Luxembourgish. For routing, the abstention
 is safer because a person examines the item before selecting a queue.
 
@@ -426,7 +426,7 @@ reassurance.
 `fasttext` are common alternatives for fast language identification. Deployment
 requires these considerations:
 
-- **Language scope and BCP 47**: State which languages the project handles. Record languages with standard BCP 47 tags, such as `en-US`, rather than informal names.
+- **Language limits and BCP 47**: State which languages the project handles. Record languages with standard BCP 47 tags, such as `en-US`, rather than informal names.
 - **Per-language recall**: A model's overall accuracy hides its failures. Always measure recall *per language*, because models routinely fail on low-resource languages.
 - **Code-switching**: The single-label `cld2::detect_language()` and
   `cld3::detect_language()` calls used here return one document label. Mixed
@@ -444,7 +444,7 @@ requires these considerations:
 - Returning `NA` can be safer than sending text to the wrong language queue.
 
 People must examine items with `NA` results and codes from short text before
-routing them. The selected probe demonstrates a possible wrong code. The
+routing them. The selected example demonstrates a possible wrong code. The
 eight-row file demonstrates abstention instead of an incorrect assignment.
 
 ## Sources

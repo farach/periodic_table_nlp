@@ -10,8 +10,8 @@ cell. The dashboard needs a quick sentiment score, but short comments can
 reveal gaps in the scoring method.
 
 One row thanks the service. Another says a parcel arrived late. A third says the
-sender could not reset a password. The same column holds praise, complaint, and
-language the English word list will miss.
+sender could not reset a password. The same column contains praise, complaint,
+and language the English word list will miss.
 
 ::: {.callout-tip}
 ## What you will learn

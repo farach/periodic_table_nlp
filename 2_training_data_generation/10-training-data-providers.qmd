@@ -542,7 +542,7 @@ unknown.
 
 An open license does not establish that the people represented in source data
 consented to every later application. A contributor-declared license also does not by
-itself prove that the contributor held every necessary right.
+itself prove that the contributor had every necessary right.
 
 This page includes information from the
 [O*NET Resource Center](https://www.onetcenter.org/) by the U.S. Department of

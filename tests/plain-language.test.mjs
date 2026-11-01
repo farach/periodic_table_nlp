@@ -56,6 +56,13 @@ test("lowercase package names start separate sentences", () => {
   assert.deepEqual(inspectText("Use e.g. a local file. readr opens it."), []);
 });
 
+test("continued initialisms do not create extra sentences", () => {
+  const paragraph = "A U.S. map shows the states. " + "A result. ".repeat(5);
+  assert.deepEqual(inspectText(paragraph), []);
+  assert.match(inspectText(paragraph + "One more sentence.")[0], /limit 6/);
+  assert.match(inspectText("The map covers the U.S. " + "A result. ".repeat(6))[0], /limit 6/);
+});
+
 test("only source-section citation labels receive title treatment", () => {
   const source = `Read [${"word ".repeat(26)}](guide.qmd).\n\n## Sources\n\n- [${"word ".repeat(26)}](https://example.test/) describes the method.\n\n## Next\n\nRead [${"word ".repeat(26)}](guide.qmd).`;
   const blocks = sourceBlocks(source).blocks;

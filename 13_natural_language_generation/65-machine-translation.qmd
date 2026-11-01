@@ -277,7 +277,7 @@ nondeterministic or inferior.
 The output limit is 80 newly generated tokens. The returned record shows
 whether the decoder emitted its end-of-sequence token, or EOS. A separate field
 records whether generation used the full output allowance. Both fields can be
-true when the checkpoint forces EOS at the limit. Neither field proves that the
+`TRUE` when the checkpoint forces EOS at the limit. Neither field proves that the
 translation is complete for a reader.
 
 ```{r}
@@ -419,7 +419,7 @@ knitr::kable(
     "Protected-name screen",
     "French-negation screen"
   ),
-  caption = "Conservative surface screens for the constructed notices",
+  caption = "Conservative automatic surface checks for the constructed notices",
   row.names = FALSE
 )
 ```

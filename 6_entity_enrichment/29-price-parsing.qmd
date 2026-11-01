@@ -413,8 +413,8 @@ amounts, currencies, and locale-specific formats into structured data.
 - A parser must not return a partial number when the text contains a longer one.
 - These counts describe 13 teaching examples and one Riverton line.
 
-The parser can flag the stipend line as pay-related. The line gives no amount
-for a wage comparison.
+The parser can put a pay-related mark on the stipend line. The line gives no
+amount for a wage comparison.
 
 ## Sources
 

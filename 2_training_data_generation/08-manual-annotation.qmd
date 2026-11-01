@@ -377,8 +377,8 @@ stopifnot(
 )
 ```
 
-The counts describe this designed example only. The author did not sample jobs
-in Riverton or any real population.
+The counts describe this designed example only. The examples are not a sample of
+jobs in Riverton or any real population.
 
 ## Keep ambiguity visible
 
@@ -600,8 +600,9 @@ The historical `sentence_id` column remains a stable identifier.
 Its name does not mean that every row is a grammatical sentence.
 
 This pilot shows how disagreement can produce explicit rules.
-Its six designed items cannot estimate the effect of a pilot on a larger
-annotation task. They also cannot estimate the time that task would require.
+Its six designed items cannot give an estimate of the effect of a pilot on a
+larger annotation task. They also cannot give an estimate of the time that task
+would require.
 
 ## Protect the people doing the work
 

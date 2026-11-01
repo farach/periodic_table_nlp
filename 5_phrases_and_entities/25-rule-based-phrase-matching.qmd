@@ -136,9 +136,9 @@ reference standard.
 
 ## Score the rule
 
-A **false positive** is a text unit that the rule flags but the hand marking
-rejects. A **false negative** is a unit that the hand marking accepts but the
-rule misses. The pattern searches for credential words.
+A **false positive** is a text unit that the rule puts a mark on but the hand
+marking rejects. A **false negative** is a unit that the hand marking accepts
+but the rule misses. The pattern searches for credential words.
 The hand marking instead marks required credentials.
 The pattern has no requirement condition, so it can match `preferred` or a
 heading.

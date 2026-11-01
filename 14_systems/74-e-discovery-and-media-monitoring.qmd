@@ -190,7 +190,7 @@ Each record contains a short note in one of 12 text templates, called **frames**
 
 Before writing the file, the builder examined whether listed surface features could separate the two classes. It refuses to write the file if a check reaches F1 of 0.60 or balanced accuracy of 0.75. Frame checks within keyword groups use only the balanced-accuracy limit.
 
-Success means no listed check separated the classes that well. It does not establish that surface features contain no predictive information. Both scores increase with better class separation. **Balanced accuracy**, from lesson 44, averages the correctly classified share of each class. **F1** combines the precision and recall defined below. The table contains the builder's record of these checks.
+Success means no listed check separated the classes that well. It does not establish that surface features contain no predictive information. Both scores increase with better class separation. **Balanced accuracy**, from lesson 44, averages the correctly classified share of each class. **F1** combines the precision and recall described below. The table contains the builder's record of these checks.
 
 ```{r}
 #| echo: false
@@ -211,7 +211,7 @@ The table uses the builder's own shorthand:
 - **Out-of-fold** scores come from cross-validation (lesson 43). Each record receives a score from a model that did not train on it. **Top 36** means the 36 highest scores, matching the responsive-record count.
 - **Ridge** and **lasso** are two kinds of penalized regression, the same family as the ranker later on this page. **Snowball stop words** are a standard list of common words such as "the" and "to".
 - The **core** is the note inside the frame, and its **opening** is its first word or first two words.
-- A **rarity rule** flags records whose frame-and-first-word pair occurs at most k times, without using labels.
+- A **rarity rule** puts a mark on records whose frame-and-first-word pair occurs at most k times, without using labels.
 - **CK-D1** and **CK-D2** name the builder's two frame checks. CK-D1 examines each frame together with the note's first word. CK-D2 compares frames separately among records with and without a keyword.
 
 ```{r}
@@ -792,7 +792,7 @@ The elusion seed is `7401`, the builder's base seed. A rule fixes it before samp
 
 `r if (observed_missed_in_sample == 0L) "The point estimate indicates no missed records among the unreviewed records." else sprintf("The point estimate indicates about %.1f missed records among the unreviewed records.", point_missed)`
 
-The exact finite-population interval includes `r missed_interval[1]` to `r missed_interval[2]` missed records. This corresponds to recall from about `r round(recall_interval[1], 3)` to `r round(recall_interval[2], 3)`. The fictional reference reveals the true missed count: `r sum(unreviewed_records$reference_responsive)`.
+The exact finite-population interval includes `r missed_interval[1]` to `r missed_interval[2]` missed records. This corresponds to recall from about `r round(recall_interval[1], 3)` to `r round(recall_interval[2], 3)`. The fictional reference reveals the correct missed count: `r sum(unreviewed_records$reference_responsive)`.
 
 A binomial Clopper-Pearson interval treats the population as very large and assumes sample selection with replacement. `r if (binomial_warning$printed_recall_low < recall_interval[1]) "Here it gives a wider lower recall bound than the finite-population interval." else "Here its lower recall bound is not wider than the finite-population one."`
 

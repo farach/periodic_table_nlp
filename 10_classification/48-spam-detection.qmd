@@ -451,7 +451,7 @@ lookup rule on the same rows that informed it.
 The two blocked genuine messages deliberately contain scam vocabulary to
 demonstrate failure on reports about scams. The comparison below applies both
 methods to the same 19 rows. The rule is still in-sample because its terms came
-from all 60 messages, also the 19 comparison rows.
+from all 60 messages, which include the 19 comparison rows.
 
 ## Train a small filter
 

@@ -111,8 +111,7 @@ pattern-matching meaning.
 
 The support worker will eventually need one answer for every message.
 `str_detect()` asks whether each message contains a match, returning `TRUE` for
-yes and `FALSE` for no. We will display the answer as a tibble, a table that
-prints its size and each column's type.
+yes and `FALSE` for no. We will display the answer in a table.
 
 ```{r}
 has_order_prefix <- str_detect(messages, fixed("R-"))

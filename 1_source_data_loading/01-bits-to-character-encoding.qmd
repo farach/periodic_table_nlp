@@ -94,7 +94,7 @@ Two standards helped settle the size:
    unit of its storage formats. Its compatible machines became widely used.
    Software and hardware for those machines used the same byte size.
 
-Eight bits provide \(2^8 = 256\) patterns: enough to hold every ASCII value with
+Eight bits provide $2^8 = 256$ patterns: enough for every ASCII value with
 one unused bit. Today, a byte almost always means eight bits. Technical
 standards sometimes use **octet** when they need to exclude the older,
 variable-size meaning.
@@ -104,7 +104,7 @@ We will examine `A` and `é`, two characters with short byte sequences.
 R's `charToRaw()` function shows bytes. The word "raw" means that R should
 display the stored values without interpreting them as letters. `map()` from
 purrr applies that byte check to each text value and returns a list.
-The list can hold byte results of different lengths.
+The list can contain byte results of different lengths.
 
 ```{r}
 library(tibble)
@@ -217,7 +217,7 @@ page.
 A **string** is one text value. R may label a string as Latin-1, UTF-8,
 or a sequence of bytes. `Encoding()` reports that label, so
 we can examine how R will interpret the text it received. We will display the
-answer as a tibble, a table that prints its size and each column's type.
+answer in a table.
 
 ```{r}
 strings <- c(
@@ -349,6 +349,10 @@ stopifnot(
   is.na(strict_result),
   identical(marked_result, "Hi \uFFFD(")
 )
+```
+
+```{r}
+#| echo: false
 
 knitr::kable(
   tibble(
@@ -642,7 +646,7 @@ time and can split a multi-byte character.
 - Some byte sequences are invalid in every declared encoding. Decide whether
   to use `NA` or a replacement character. Record the choice.
 - A byte-order mark is invisible and still breaks an exact match.
-- One file can hold rows written under two encodings.
+- One file can contain rows written under two encodings.
 - An encoding label does not convert text.
 - UTF-8 is a practical working format for text from many languages.
 - Text that looks identical may need Unicode normalization before comparison.

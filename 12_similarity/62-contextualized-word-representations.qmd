@@ -324,8 +324,8 @@ stopifnot(
 The same financial sense in different grammatical roles scores about 0.3447.
 Different senses in different roles score almost the same, about 0.3466. The same
 financial sense in the same role scores about 0.9422. In these
-four probes, the grammatical-role contrast is at least as large as the
-dictionary-sense contrast. These probes illustrate the representation, not a
+four examples, the grammatical-role contrast is at least as large as the
+dictionary-sense contrast. These examples illustrate the representation, not a
 word-sense evaluation. There is no benchmark or independent sense labeling here.
 
 ## Contrast with one vector per word
@@ -388,8 +388,8 @@ stopifnot(
 - The example text produces a 15 by 96 tensor.
 - The two `bank` occurrence vectors score about 0.3466, above most token pairs in
   that text.
-- In these four probes, grammatical role matters at least as much as the
-  dictionary-sense contrast. These probes are not a word-sense benchmark.
+- In these four examples, grammatical role matters at least as much as the
+  dictionary-sense contrast. These examples are not a word-sense benchmark.
 
 ## Sources
 

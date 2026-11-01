@@ -20,7 +20,7 @@ request, confirm, and inform replies from approved facts.
 
 ::: {.callout-note}
 The Riverton Skills Centre conversations below are invented for this lesson.
-They are scripted probes, not real messages from residents or staff.
+They are scripted examples, not real messages from residents or staff.
 :::
 
 ::: {.callout-tip}
@@ -221,7 +221,7 @@ deciding when to abstain.
 ## Write scripted conversations before execution
 
 The page author wrote the scripted user turns and expected states and actions
-before loop execution. The page shows every mismatch. The probes examine
+before loop execution. The page shows every mismatch. The examples examine
 context, overwrite, a missed paraphrase, injection, paraphrased injection, and an
 unanswerable question. **Prompt injection** attempts to replace system
 instructions with instructions from user or source text.
@@ -298,7 +298,7 @@ stopifnot(
 
 These rules are intentionally small. They miss the paraphrase "spreadsheet
 career track", so the policy asks for clarification rather than guessing a
-program. The injection screen detects the first hostile wording. The policy
+program. The automatic injection check detects the first hostile wording. The policy
 also refuses the paraphrased version because it requests guaranteed approval.
 
 ```{r}
@@ -516,10 +516,10 @@ stopifnot(
 )
 ```
 
-The second hostile turn does not match the small injection screen. It still
+The second hostile turn does not match the small automatic injection check. It still
 leaves state unchanged and makes no model call because the policy treats
 approval and guarantee requests as staff-only actions.
-The author wrote that staff-approval pattern for this probe's wording. The
+The author wrote that staff-approval pattern for this example's wording. The
 broader defense is structural. The policy has no approve action, and no realizer
 prompt contains user text.
 
@@ -962,9 +962,9 @@ step. This lesson passes a repetition penalty of 1.05, which overrides the
 checkpoint's generation-config value of 1.1. Exact replies may vary across CPU
 settings, and the page does not depend on exact generated wording.
 
-## Screen generated replies and use a fixed fallback
+## Do automatic checks of generated replies and use a fixed fallback
 
-Screens examine only generated replies. They search for:
+Automatic checks examine only generated replies. They search for:
 
 - numerals or program names absent from selected facts
 - missing action-specific slot values
@@ -977,8 +977,9 @@ Screens examine only generated replies. They search for:
 The author wrote some patterns after reading earlier model replies. Examples
 include `will follow up`, `reach out`, `scheduled`, and bracketed placeholders.
 These patterns match those replies, not every possible failure. The workflow
-replaces flagged generated replies with fixed fallback text. Fixed refusal and
-hand-off text is not a model-screen result.
+replaces each generated reply that has the label `held for human review` with
+fixed fallback text. Fixed refusal and hand-off text is not a result of the
+automatic checks on model replies.
 
 ```{r}
 #| code-fold: true
@@ -1182,7 +1183,7 @@ knitr::kable(
     "Human checks",
     "Reply shown after fallback rule"
   ),
-  caption = "Reply screens and fixed fallback for generated wording",
+  caption = "Automatic reply checks and fixed fallback for generated wording",
   row.names = FALSE
 )
 ```
@@ -1211,7 +1212,7 @@ stopifnot(
 )
 ```
 
-The control replies below examine the screens without depending on model output.
+The control replies below examine the automatic checks without depending on model output.
 The table contains seven controls. These include a correct action-slots row, a
 wrong-program row, and two incomplete action-slots rows. The remaining controls
 cover a request-program row, a personal-detail request, and a promise-word reply.
@@ -1299,7 +1300,7 @@ knitr::kable(
     "Promise words",
     "Screen label"
   ),
-  caption = "Labeled control replies for deterministic screen checks",
+  caption = "Control replies with labels from deterministic automatic checks",
   row.names = FALSE
 )
 ```
@@ -1410,30 +1411,30 @@ stopifnot(
 )
 ```
 
-Replies that pass every screen can still add claims without source evidence or address
+Replies that pass every automatic check can still add claims without source evidence or address
 staff instead of the user. A person must therefore examine these replies.
 
-The label "not flagged by screen" is conservative. It does not mean the reply is
+The label `not flagged by screen` is conservative. It does not mean the reply is
 approved. In this render, the reply table has
 `r dialogue_screen_summary$turns[dialogue_screen_summary$reply_source == "Qwen realization" & dialogue_screen_summary$screen_label == "held for human review"]`
-generated turns held for human checks. Fixed-text refusal, hand-off, and abstention
-turns have `not applicable` screen status.
+generated turns with the label `held for human review`. Fixed-text refusal,
+hand-off, and abstention turns have `not applicable` automatic-check status.
 
-The generated-reply
-screens held `r screen_hold_summary$numerals` rows for numerals,
+Automatic generated-reply
+checks sent `r screen_hold_summary$numerals` rows to human review for numerals,
 `r screen_hold_summary$program_names` for program names,
 `r screen_hold_summary$action_slots` for action slots,
 `r screen_hold_summary$personal_details` for personal details, and
 `r screen_hold_summary$promise_words` for promise words.
 
 In this render, the workflow replaced `r fallback_reply_count` of
-`r generated_reply_count` generated replies with fixed fallback text. Screens
+`r generated_reply_count` generated replies with fixed fallback text. Automatic checks
 required replacement for `r fallback_screen_count` replies. A stopping condition
-required replacement for `r fallback_stop_count` replies after successful screens.
+required replacement for `r fallback_stop_count` replies after successful automatic checks.
 Those replies reached the token limit or did not end with an end-of-sequence
 token, or EOS.
 
-`r fallback_interpretation` Success on every screen is necessary, not sufficient.
+`r fallback_interpretation` Success on every automatic check is necessary, not sufficient.
 Human checks remain pending.
 
 ## Retain less text

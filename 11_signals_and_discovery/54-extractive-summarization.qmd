@@ -284,7 +284,7 @@ stopifnot(
 
 The two selections share 0 sentence positions. Random three-sentence selections from an 81-sentence speech usually share no positions with sentences 1 to 3. In 1,000 shuffles, the null mean was 0.113. The p-value for unusually low overlap was 0.889.
 
-Other checks examine whether TextRank selects widely separated or longer sentences. The observed range was 61 sentence positions, against a random mean of 41.346 (p = 0.189). The selected sentences averaged 26.33 words, against a random mean of 22.771 (p = 0.297). Neither result exceeds its chance baseline convincingly. TextRank supplies sentences for a person to examine, not evidence that these three sentences form a better summary.
+Other checks examine whether TextRank selects widely separated or longer sentences. The observed range was 61 sentence positions, against a random mean of 41.263 (p = 0.189). The selected sentences averaged 26.33 words, against a random mean of 22.761 (p = 0.297). Neither result exceeds its chance baseline convincingly. TextRank supplies sentences for a person to examine, not evidence that these three sentences form a better summary.
 
 Summarizers always return sentences. A null comparison measures the same statistic after random selection replaces the algorithm's selection. Without that comparison, a clear list can appear more meaningful than the evidence warrants.
 

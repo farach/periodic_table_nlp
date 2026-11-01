@@ -427,7 +427,8 @@ knitr::kable(
     mutate(probability = round(probability, 4)),
   col.names = c("Previous two tokens", "Possible next token", "Training count", "Probability"),
   caption = "Highest-probability next tokens from the selected trigram",
-  row.names = FALSE
+  row.names = FALSE,
+  format = "html"
 )
 ```
 
@@ -526,7 +527,7 @@ Greedy choice always selects the most common continuation. Sampling can select l
 common tokens and will change when the seed changes. Neither rule establishes whether
 a continuation is factual, useful, or appropriate for a reader.
 
-## Select context length and smoothing before testing
+## Select context length and smoothing before the final test
 
 The builder compares six interpolation strengths for both the bigram and trigram, plus
 the unigram baseline, on validation speeches.
@@ -620,7 +621,7 @@ stopifnot(
 ```
 
 The trigram with interpolation strength 100 has the lowest validation perplexity,
-133.3. The best bigram is close at 134.8. The tested strengths above and below
+133.3. The best bigram is close at 134.8. The compared strengths above and below
 100 score worse. The selected value is therefore not a boundary of the candidate
 grid.
 
@@ -713,7 +714,7 @@ knitr::kable(
     "Model",
     "Role",
     "Test next-token rows",
-    "Targets mapped to <unk>",
+    "Targets mapped to `<unk>`",
     "Test perplexity",
     "Top-1 accuracy"
   ),

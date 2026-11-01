@@ -137,6 +137,7 @@ squished_flyer <- str_squish(flyer_block)
 
 ```{r}
 #| echo: false
+#| html-table-processing: none
 
 knitr::kable(
   tibble(
@@ -145,6 +146,8 @@ knitr::kable(
   ),
   col.names = c("Version", "Text"),
   caption = "Whitespace squishing removes the flyer line layout",
+  format = "html",
+  table.attr = 'style="white-space: pre-line;"',
   row.names = FALSE
 )
 ```

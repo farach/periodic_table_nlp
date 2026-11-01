@@ -125,7 +125,7 @@ abbreviation.
 ## Score and guard the capital rule
 
 The lesson author examined every all-capital hit in the Riverton text and
-found no true short-form abbreviations. The guard below keeps only tokens that
+found no short-form abbreviations. The guard below keeps only tokens that
 are five characters or shorter and absent from the dictionary.
 
 ```{r}
@@ -211,7 +211,7 @@ stopifnot(
 ```
 
 The guard keeps zero candidates. It removes 7 hand-rejected heading words and
-finds 0 true abbreviations. Removing every match does not establish a good
+finds 0 abbreviations. Removing every match does not establish a good
 filter. Six tokens are dictionary words, and four exceed five characters.
 Only the length limit removes `RIVERTON`.
 
@@ -221,7 +221,7 @@ Results depend on the hunspell dictionary available at execution time.
 
 ## Find parenthetical definitions
 
-The Riverton text has no true `Long Form (SHORT)` examples.
+The Riverton text has no `Long Form (SHORT)` examples.
 This section uses a short author-created passage solely to demonstrate the
 pattern.
 
@@ -338,15 +338,15 @@ checks.
 ## What to remember
 
 - All-capital text is only a rough short-form signal.
-- The 7 capital-letter hits in the Riverton headings contain 0 true abbreviations.
-- Keeping 0 of 7 matches does not establish that the guard preserves true abbreviations.
+- The 7 capital-letter hits in the Riverton headings contain 0 abbreviations.
+- Keeping 0 of 7 matches does not establish that the guard preserves abbreviations.
 - The parenthetical rule finds 2 constructed positive cases and 0 Riverton definitions.
 - Parenthetical shape rules need an additional check of short-form letters
   against the long form.
 
 Reject the all-capital rule for these flyer headings.
 For future text, retain candidate short forms during rule evaluation.
-Evaluate both true examples and counter-examples before accepting the rule.
+Evaluate both examples and counter-examples before accepting the rule.
 
 ## Sources
 

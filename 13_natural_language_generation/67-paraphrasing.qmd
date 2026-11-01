@@ -10,7 +10,7 @@ However, a rewrite creates a new instruction if it changes who may enter or what
 visitors must bring.
 
 For this lesson, a **paraphrase** changes wording but preserves the notice's
-participants, quantities, negation, scope, and obligations. Linguistic research
+participants, quantities, negation, limits, and obligations. Linguistic research
 sometimes accepts approximate meaning. An operational notice needs a stricter
 rule because readers may act on one word such as `may`, `must`, or `not`.
 
@@ -155,7 +155,8 @@ knitr::kable(
     "Accepted surface markers"
   ),
   caption = "Constructed paraphrase probes and predeclared invariants",
-  row.names = FALSE
+  row.names = FALSE,
+  format = "html"
 )
 ```
 
@@ -506,14 +507,14 @@ knitr::kable(
     "Negation screen",
     "Modality screen"
   ),
-  caption = "Conservative screens for predeclared paraphrase invariants",
+  caption = "Conservative automatic checks for predeclared paraphrase invariants",
   row.names = FALSE
 )
 
 knitr::kable(
   paraphrase_actions,
   col.names = c("Probe ID", "Screen flags", "Next action"),
-  caption = "Screen flags select candidates for human checks of meaning",
+  caption = "Marks from automatic checks select candidates for human checks of meaning",
   row.names = FALSE
 )
 ```
@@ -539,7 +540,7 @@ stopifnot(
 )
 ```
 
-Any applicable `FALSE` value requires a human check. It does not prove a change
+A table value of `held for human review` requires a human check. It does not prove a change
 in meaning. In this render, comparison with the source shows that the stress
 probe copies prompt labels and omits Room 2.
 
@@ -618,7 +619,7 @@ flags supply evidence for human checks. None replaces those checks.
 - A paraphrase changes wording while preserving the information that matters.
 - Copying is a useful preservation baseline, but it is not a successful rewrite.
 - Token overlap measures wording, not semantic equivalence.
-- Examine names, numbers, negation, scope, permission, and obligation separately.
+- Examine names, numbers, negation, limits, permission, and obligation separately.
 - Keep failed model outputs visible when they reveal an invariant violation.
 - Record human checks of meaning and prose apart from automatic execution.
 

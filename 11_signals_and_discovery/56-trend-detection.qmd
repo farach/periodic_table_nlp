@@ -1,5 +1,5 @@
 ---
-title: "Checking word trends over time"
+title: "Examining word trends over time"
 subtitle: "Normalized counts and peak comparisons"
 description: "Learn how to compare word frequency across speeches and find peaks that depend on one short document."
 categories: [signals and discovery, trend detection, inaugural addresses]
@@ -18,7 +18,7 @@ This lesson shows how to:
 
 - count selected words by speech year.
 - normalize word counts per thousand alphabetic tokens.
-- flag rates from very short speeches.
+- put a mark on rates from very short speeches.
 - recompute each peak after removing its peak speech.
 - compare one trajectory with a permutation null.
 :::
@@ -163,7 +163,7 @@ The denominator counts lowercase ASCII alphabetic tokens because the tokenizer
 removes other tokens before measuring speech length. The table reports each
 word's count and highest rate on that scale.
 
-The analysis flags speeches with fewer than 500 alphabetic tokens. One
+The analysis puts a mark on speeches with fewer than 500 alphabetic tokens. One
 occurrence in those speeches contributes at least 2 occurrences per thousand.
 The median speech has about 1,959 alphabetic tokens. The cutoff therefore
 marks the smallest denominators without excluding most speeches.
@@ -346,7 +346,7 @@ Trend methods produce a series for the chosen words and dates. The null allocate
 
 - Normalize word counts per thousand alphabetic tokens before comparing
   speeches.
-- Flag rates from very short documents. This lesson uses a 500-token cutoff.
+- Put a mark on rates from very short documents. This lesson uses a 500-token cutoff.
 - The four tracked words have different coverage across the 60 speeches.
 - The `constitution` peak in 1793 comes from 1 occurrence in a 135-word speech.
 - Word-rate change can mix word choice, subject matter, transcription, and length.

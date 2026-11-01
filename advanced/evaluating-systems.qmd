@@ -489,8 +489,9 @@ This lesson does not execute LangChain, LangGraph, LangSmith, ellmer, or vitals.
 - [Judging LLM-as-a-Judge](https://arxiv.org/html/2306.05685v4), sections 3-4,
   studies answer-order and verbosity effects. Its results do not validate
   the invented grader on this page.
-- [RAGAs](https://aclanthology.org/2024.eacl-demo.16/) distinguishes contextual
-  support from answer relevance. These are different evaluation targets.
+- [RAGAs](https://aclanthology.org/2024.eacl-demo.16/) distinguishes evidence
+  for the answer in the retrieved context from answer relevance. These are
+  different evaluation targets.
 
 The repository's `DATA_SOURCES.md` records the invented files and their limits.
 The data are in `data/system-evaluation/`.

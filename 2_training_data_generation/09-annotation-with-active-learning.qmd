@@ -150,7 +150,7 @@ held-back pool. The code removes candidates absent from the labeled set.
 The shorthand `\(keyword)` defines a small function with one input named
 `keyword`.
 
-Without that removal, add-one smoothing could make an unseen term appear more
+Without that removal, half-count smoothing could make an unseen term appear more
 common in the smaller class. The difference would reflect only the smaller
 denominator.
 

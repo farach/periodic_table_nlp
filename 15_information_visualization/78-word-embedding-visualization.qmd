@@ -287,7 +287,7 @@ stopifnot(
 )
 ```
 
-The first two components hold
+The first two components contain
 `r sprintf("%.1f%%", 100 * sum(pca_variance[1:2]))` of the variance in the
 normalized vectors. The rest is invisible in this plot.
 

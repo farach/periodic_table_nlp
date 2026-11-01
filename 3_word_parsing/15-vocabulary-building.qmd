@@ -269,7 +269,7 @@ stopifnot(
 ```
 
 The minimum-frequency-1 row is a reference point: it keeps every job-detail
-type, so full coverage is true by construction. The stricter rows show how many
+type, so coverage is full by construction. The stricter rows show how many
 job-detail tokens lose their own word type under each cutoff.
 
 ## Measure out-of-vocabulary words

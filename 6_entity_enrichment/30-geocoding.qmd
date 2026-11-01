@@ -274,7 +274,7 @@ counts describe only the five mentions in this lesson.
 The name `Riverton` alone does not distinguish the two rows. The flyer gives
 no county, so the analyst supplies the context below to demonstrate the rule.
 A pipeline needs that value from a document header, posting address, or stated
-collection scope.
+collection limits.
 
 ```{r}
 riverton_candidates <- geocoded_rows |>
@@ -331,6 +331,7 @@ Packages such as `tidygeocoder` in R or `geopy` in Python provide interfaces
 to those services.
 
 When using a live service, several boundaries and limits apply:
+
 - **Match precision**: APIs can use fuzzy matching to compare similar names rather than require identical strings. Examine geocoding results with low confidence scores.
 - **Service boundaries**: Rate limits and Terms of Service often dictate how many requests you can make.
 - **Caching**: Locally stored results prevent redundant network calls and reduce processing time.

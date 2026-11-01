@@ -342,7 +342,8 @@ knitr::kable(
   first_vocabulary_rows,
   col.names = c("ID", "Subword"),
   caption = "The first rows of the BPE vocabulary",
-  row.names = FALSE
+  row.names = FALSE,
+  format = "html"
 )
 ```
 
@@ -556,10 +557,10 @@ normalization. The policy for unknown characters is especially important.
 This model can represent unfamiliar text with fewer pieces than familiar text.
 Replacing unknown text with `<UNK>` reduces piece counts but loses information.
 
-The `shown_as_subwords` column displays Chinese characters without corresponding
-vocabulary entries. The subword view reconstructs surface text instead of
-reporting vocabulary entries. Count unknowns from the IDs, not the printed
-pieces.
+The column "What the subword view shows" displays Chinese characters without
+corresponding vocabulary entries. The subword view reconstructs surface text
+instead of reporting vocabulary entries. Count unknowns from the IDs, not the
+printed pieces.
 
 ### Compare decoded text with the input
 
@@ -582,6 +583,7 @@ round_trip <- piece_report |>
 
 knitr::kable(
   round_trip |>
+    mutate(decoded = htmltools::htmlEscape(decoded)) |>
     select(display_text, pieces, unknown_pieces, decoded, recovers_input),
   col.names = c(
     "Text",

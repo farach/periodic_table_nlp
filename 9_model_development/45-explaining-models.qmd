@@ -5,7 +5,7 @@ description: "Learn how to read linear model coefficients and why a plausible ex
 categories: [model development, explanation, text classification]
 ---
 
-A reviewer asks why the model gave a paragraph the label modern. She needs to
+A reviewer asks why the model gave a paragraph the label `1900 or later`. She needs to
 examine the words that affected its score.
 
 A plausible explanation does not establish model quality. Even a weak model

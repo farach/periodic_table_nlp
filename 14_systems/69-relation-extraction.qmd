@@ -979,7 +979,7 @@ stopifnot(
 
 The pair table and triple table answer different questions. Co-occurrence can
 ask whether the right two IDs appeared together. It cannot answer which relation
-holds, which way the arrow points, or whether the sentence denied the claim.
+is correct, which way the arrow points, or whether the sentence denied the claim.
 The reported-verb test sentence is also visible as a false negative for this
 small dependency-pattern extractor.
 

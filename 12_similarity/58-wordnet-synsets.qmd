@@ -359,7 +359,7 @@ hypernym_path <- tibble(
 knitr::kable(
   hypernym_path,
   col.names = c("Level", "Synset ID", "Members", "Definition"),
-  caption = "A four-step hypernym path from chair to activity",
+  caption = "A four-level hypernym path from chair to activity",
   row.names = FALSE
 )
 ```

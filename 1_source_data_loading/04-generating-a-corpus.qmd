@@ -251,7 +251,7 @@ Record the population, selection rule, and exclusions.
 These three articles form a census within the stated frame, not a sample.
 The collection contains every active, non-archived article that this fictional
 help center published by the collection date.
-It does not sample the support questions that people actually ask.
+It is not a sample of the support questions that people actually ask.
 
 That distinction changes what the corpus can show later. A count over a
 census of published articles describes what the help center wrote. It does not
@@ -286,7 +286,7 @@ collection_record <- tibble(
 knitr::kable(
   collection_record,
   col.names = c("Field", "Recorded value"),
-  caption = "The collection's scope and exclusions",
+  caption = "The collection's limits and exclusions",
   row.names = FALSE
 )
 ```
@@ -307,7 +307,7 @@ stopifnot(
 ```
 
 Write this record before analysis. Otherwise, a researcher may describe the
-frame later in terms that exaggerate the results' scope.
+frame later in terms that exaggerate what the results can show.
 
 ## Add a simple measurement
 
@@ -474,7 +474,7 @@ its rows and columns are visible and easy to examine. The researcher can convert
 ## A near duplicate is not an exact duplicate
 
 A fourth file arrives. The support team copied the account-access article into
-a seasonal FAQ, changed the capitalization, replaced a hyphen, and added a
+a seasonal FAQ, replaced a hyphen, and added a
 courtesy line. To a reader it is the same article. To an exact comparison it is
 a new document.
 

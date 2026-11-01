@@ -381,7 +381,7 @@ label is correct under the scheme but does not specify a calendar date.
 ## Temporal parsing in production
 
 Temporal-span detection is only the first step, as spaCy's `DATE` label for
-`next Friday` shows. Full normalization requires a dedicated tool, such as
+`October 15` shows. Full normalization requires a dedicated tool, such as
 Meta's Duckling or Python's `dateparser`, rather than custom R branches.
 
 These tools distinguish concepts that custom rules can combine incorrectly:

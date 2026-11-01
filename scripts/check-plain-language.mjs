@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const abbreviation = /\b(?:e\.g\.|i\.e\.|et al\.|Dr\.|Mr\.|Mrs\.|Ms\.|Prof\.)/g;
+const continuedInitialism = /\b(?:[A-Z]\.){2,}(?=\s+\p{Ll})/gu;
 const instruction = /^(?:(?:if|before|after)\b[^,]+,\s*)?(?:do not\s+)?(?:add|allow|apply|calculate|choose|compare|convert|copy|create|define|describe|do|examine|execute|find|give|include|keep|load|make|name|open|predict|read|record|remove|repeat|replace|report|return|run|save|select|set|stop|use|write)\b/i;
 
 function quotationUnit(quotation, offset, source) {
@@ -31,6 +32,7 @@ export function plainText(value, citationTitles = false) {
 export function inspectText(value, kind = "paragraph", { deferLength = false } = {}) {
   const text = plainText(value, kind === "citation");
   const sentences = text.replace(abbreviation, (match) => match.replace(/\./g, "\uE000"))
+    .replace(continuedInitialism, (match) => match.replace(/\./g, "\uE000"))
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.replace(/\uE000/g, ".").trim())
     .filter((sentence) => /[\p{L}\p{N}]/u.test(sentence));

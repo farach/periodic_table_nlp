@@ -118,7 +118,7 @@ stopifnot(
 
 The code compares the fingerprint with a stored value. The fingerprint changes
 if the archived HTML changes and can reveal an accidental edit.
-It cannot prove that the postings are true or complete.
+It cannot prove that the postings are correct or complete.
 
 ## Read the page structure
 
@@ -454,7 +454,7 @@ stopifnot(
 )
 ```
 
-The container holds no characters. The job title exists only in the embedded
+The container contains no characters. The job title exists only in the embedded
 script payload, which rvest can read as text but does not render into the
 container.
 
@@ -500,7 +500,7 @@ collected or republished.
 ## What to remember
 
 - Scraping converts page structure into data. It does not establish that the
-  data is true or representative.
+  data is correct or representative.
 - Archive the source. Record its collection date.
 - Keep source IDs attached to extracted text.
 - Assert expected counts and content so selector failures cannot return zero

@@ -138,11 +138,14 @@ case_space_examples <- tibble(
 
 ```{r}
 #| echo: false
+#| html-table-processing: none
 
 knitr::kable(
   case_space_examples,
   col.names = c("Example", "Raw text", "Lowercased", "Spacing normalized"),
   caption = "Lowercasing and spacing changes",
+  format = "html",
+  table.attr = 'style="white-space: pre-wrap;"',
   row.names = FALSE
 )
 ```

@@ -11,7 +11,7 @@ covers a stipend, a class schedule, prior experience, and an application date.
 Losing or reversing a phrase would change what a person understood about the
 program.
 
-**Optical character recognition**, or **OCR**, estimates which text appears in
+**Optical character recognition**, or **OCR**, gives an estimate of the text in
 an image. The team will compare OCR output with a known reference transcript.
 It will keep the image and extracted text. Text recovery precedes classification
 of the flyer's claims.
@@ -614,7 +614,7 @@ visible and let another reviewer return to the source.
 - OCR output is an estimate, not a transcription guarantee.
 - Compare important output with a reference after human checks.
 - Report character and word error rates. Identify the source image.
-- One clean image cannot estimate accuracy on damaged material.
+- One clean image cannot give an estimate of accuracy on damaged material.
 - Measure errors. Examine cases where errors change meaning.
 - Preserve the image, raw output, corrected text, and correction history.
 

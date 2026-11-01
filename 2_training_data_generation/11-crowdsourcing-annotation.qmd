@@ -595,8 +595,8 @@ before choosing a reference label.
 ## Finish the adjudication
 
 A queue of disputed items alone does not resolve disagreements.
-A fourth reader adjudicated both flagged items using the codebook rather than
-the vote counts. That reader did not participate in the initial labeling.
+A fourth reader adjudicated both items in the queue using the codebook rather
+than the vote counts. That reader did not participate in the initial labeling.
 
 ```{r}
 adjudication <- tibble(
@@ -652,7 +652,7 @@ knitr::kable(
     "Reviewer C",
     "Adjudicated label"
   ),
-  caption = "Both flagged items resolved, with the reviewer answers kept",
+  caption = "Both items sent to adjudication resolved, with the reviewer answers kept",
   row.names = FALSE
 )
 ```

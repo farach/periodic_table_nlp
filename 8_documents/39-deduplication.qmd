@@ -124,12 +124,15 @@ documents <- tibble(
 
 ```{r}
 #| echo: false
+#| html-table-processing: none
 
 knitr::kable(
   documents |>
     select(doc_id, source, text),
   col.names = c("Document", "Source", "Text"),
   caption = "Six documents prepared for duplicate comparison",
+  format = "html",
+  table.attr = 'style="white-space: pre-wrap;"',
   row.names = FALSE
 )
 ```
@@ -180,6 +183,7 @@ exact_duplicate_pairs <- sum(choose(exact_groups$documents, 2))
 
 ```{r}
 #| echo: false
+#| html-table-processing: none
 
 knitr::kable(
   documents |>
@@ -190,6 +194,8 @@ knitr::kable(
     ),
   col.names = c("Document", "Text", "SHA-256 start"),
   caption = "Exact hashes before normalization",
+  format = "html",
+  table.attr = 'style="white-space: pre-wrap;"',
   row.names = FALSE
 )
 ```
@@ -460,7 +466,7 @@ stopifnot(
 ```{r}
 #| label: fig-dedup-threshold
 #| fig-cap: "Duplicate pairs found and distinct pairs wrongly joined at each evaluated threshold."
-#| fig-alt: "Step chart with two lines across Jaccard distance thresholds from 0 to 0.99. The true-duplicate count remains at 3 until threshold 0.35 and reaches all 6 afterward. The incorrectly joined distinct-pair count increases from 0 to 3 at threshold 0.3, then 4, then 9. No threshold finds 6 duplicates and incorrectly joins 0 distinct pairs."
+#| fig-alt: "Step chart with two lines across Jaccard distance thresholds from 0 to 0.99. The count of duplicate pairs found remains at 3 until threshold 0.35 and reaches all 6 afterward. The incorrectly joined distinct-pair count increases from 0 to 3 at threshold 0.3, then 4, then 9. No threshold finds 6 duplicates and incorrectly joins 0 distinct pairs."
 #| fig-height: 4.2
 #| code-fold: true
 #| code-summary: "Show the plotting code"

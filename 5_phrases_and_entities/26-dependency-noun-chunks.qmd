@@ -271,8 +271,8 @@ stopifnot(
 
 Different tokenization produces different row counts.
 In `s017`, spaCy separates `driver's` into `driver` and `'s`.
-UDPipe's tokenizer retains one token, which explains the 179 versus 178 rows.
-spaCy's displayed chunks still contain `Paid 12-week training` and
+The tokenizers package keeps one token for UDPipe, which explains the 179 versus 178 rows.
+spaCy's chunks still contain `Paid 12-week training` and
 `A valid driver's license`. The difference concerns token rows, not those
 chunk strings.
 

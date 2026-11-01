@@ -1,7 +1,7 @@
 ---
 title: "Examining dictionary unknowns"
-subtitle: "Measure dictionary flags and errors that remain unflagged"
-description: "Learn how hunspell flags unknown workforce words and how to examine constructed spelling errors."
+subtitle: "Measure dictionary flags and the errors without a flag"
+description: "Learn how hunspell puts a mark on unknown workforce words and how to examine constructed spelling errors."
 categories: [word processing, spell checking, workforce research]
 ---
 
@@ -28,10 +28,10 @@ examples from Riverton words.
 By the end of this lesson, you will be able to:
 
 - run `hunspell()` on the Riverton vocabulary.
-- count word types the dictionary flags.
+- count word types that the dictionary puts a mark on.
 - build a small constructed spelling test.
 - explain why known dictionary misses do not measure general error detection.
-- explain why a dictionary does not flag real-word errors.
+- explain why a dictionary does not put a mark on real-word errors.
 :::
 
 ```{r}
@@ -97,7 +97,7 @@ flagged_table <- tibble(flagged_word_type = flagged_types)
 knitr::kable(
   flagged_table,
   col.names = "Flagged word type",
-  caption = "Riverton word types flagged by hunspell",
+  caption = "Riverton word types that hunspell puts a mark on",
   row.names = FALSE
 )
 ```
@@ -113,7 +113,7 @@ stopifnot(
 )
 ```
 
-Hunspell flags 2 of the 96 source word types, `october` and `riverton`.
+Hunspell puts a mark on 2 of the 96 source word types, `october` and `riverton`.
 These are a lowercased month name and a fictional place name.
 The flags indicate dictionary unknowns, not proven spelling errors.
 
@@ -195,17 +195,17 @@ stopifnot(
 )
 ```
 
-Hunspell flags all 8 constructed misspellings.
+Hunspell puts a mark on all 8 constructed misspellings.
 Each is a non-word absent from this dictionary.
-It incorrectly flags 0 of the 8 source words.
+It incorrectly puts a mark on 0 of the 8 source words.
 Those source words exclude the two known dictionary unknowns.
 The selected examples show expected dictionary behavior, not general spelling
 quality. The next example addresses an excluded error type.
 
 ## Show the real-word limit
 
-A dictionary will not flag a typo if the typo is also a real word. `form` and
-`from` are both dictionary words.
+A dictionary will not put a mark on a typo if the typo is also a real word.
+`form` and `from` are both dictionary words.
 
 ```{r}
 real_word_error <- tibble(
@@ -245,12 +245,12 @@ Both strings are dictionary entries. Detecting the error requires context.
 
 - `hunspell()` returns dictionary unknowns.
 - Unknown does not always mean misspelled.
-- Individual checks of the 96 word types flag `october` and `riverton`.
+- Individual checks of the 96 word types put a mark on `october` and `riverton`.
 - The constructed 8/8 check is a demonstration because it contains only non-word
   errors.
 - Real-word errors need context as well as a dictionary.
 
-Use hunspell to create a queue for checks. Read the flagged words in context.
+Use hunspell to create a queue for checks. Read each word with a flag in context.
 A dictionary separates known and unknown strings.
 People must still decide whether the sentence is correct.
 

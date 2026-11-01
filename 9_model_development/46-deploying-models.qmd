@@ -329,7 +329,8 @@ stable. The assertions examine the generated file before those replacements.
 
 A deployment record needs the selected candidate, settings, data source, split
 scheme, score, baseline, and date. This example uses ridge logistic regression
-with penalty `0.01` on inaugural paragraphs. Its split holds out whole speeches.
+with penalty `0.01` on inaugural paragraphs. Its split puts whole speeches in
+the held-out set.
 
 The live accuracy is `r round(live_accuracy, 4)`. The same-split
 training-majority baseline is `r round(live_majority_accuracy, 4)`. The

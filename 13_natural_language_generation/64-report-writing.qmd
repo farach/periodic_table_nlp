@@ -12,7 +12,7 @@ not a folder of CSV files and not a guess about why one model scored better.
 **data-to-text** workflow selects content with source evidence and orders the claims. It
 converts the claims into sentences and compares the result with its sources.
 Templates or a language model can produce the sentences. Neither method makes a
-claim true.
+claim correct.
 
 ::: {.callout-tip}
 ## What you will learn
@@ -150,7 +150,7 @@ evidence_ledger <- tribble(
   "E6", "next-token-test-by-speech.csv", "test", "speech-level wins",
   paired_test$trigram_wins, "speeches",
   "paired against the unigram on the same test speeches",
-  "E7", "next-token-test.csv", "test", "targets mapped to <unk>",
+  "E7", "next-token-test.csv", "test", "targets mapped to `<unk>`",
   test_trigram$oov_target_share, "share",
   "the original unseen token is not recovered",
   "E8", "data-raw/build-next-token-study.R", "study", "token rule",
@@ -217,7 +217,7 @@ stopifnot(
 )
 ```
 
-The records contain more than numbers. Each records the split, unit, role, and
+The records contain more than numbers. Each records the split, measure, unit, and
 limit. E1 contains no final test results. E2 through E4 are comparable
 because they use the same test rows, tokenizer, and vocabulary.
 

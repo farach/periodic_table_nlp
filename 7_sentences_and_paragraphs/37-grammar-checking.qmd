@@ -1,5 +1,5 @@
 ---
-title: "Checking small grammar rules"
+title: "Small grammar checks"
 subtitle: "Score three checks and keep the limits visible"
 description: "Learn how small grammar checks can find planted errors and why they are not a full grammar checker."
 categories: [sentences and paragraphs, grammar checking, workforce research]
@@ -297,14 +297,14 @@ stopifnot(
 
 The checks and expected answers share an author, so the score is a teaching
 check rather than an accuracy estimate. A true positive is a planted error that a
-check flags. A false positive is a correct sentence that a check flags. A false
-negative is a planted error that a check misses. A true negative is a correct
-sentence it leaves alone.
+check puts a mark on. A false positive is a correct sentence that a check puts a
+mark on. A false negative is a planted error that a check misses. A true
+negative is a correct sentence it leaves alone.
 
 The subject-verb number check finds all three planted number errors in this
 small set. The doubled-word check finds both repeated-word examples. The
-article check finds the two planted `a` mistakes but also flags the correct
-phrases `an hour` and `A university`.
+article check finds the two planted `a` mistakes but also puts a mark on the
+correct phrases `an hour` and `A university`.
 
 That rule uses the first letter, while English article choice depends on
 sound. `Hour` begins with a vowel sound because its h is silent.
@@ -321,7 +321,7 @@ failure.
 
 The code applies the same three checks to the 28 Riverton sentences. The
 output selects sentences for a person to examine. It does not prove that
-unflagged sentences are correct.
+sentences without a mark are correct.
 
 ```{r}
 riverton_vertical <- sentences$text |>
@@ -404,7 +404,7 @@ stopifnot(
 )
 ```
 
-The three checks flag no Riverton sentence. The subject-verb check finds only
+No check puts a mark on a Riverton sentence. The subject-verb check finds only
 four subject-and-verb pairs in all 28 sentences. It requires a number feature
 on the verb, which English verbs rarely have. It cannot evaluate the other
 24 sentences. Zero flags therefore mainly reflect limited coverage, not
@@ -425,7 +425,7 @@ provide broader functionality. Production systems distinguish these issues:
 - Spelling checks examine words. Grammar checks examine word relationships.
 - A small subject-verb check can use UDPipe's `feats` and `nsubj` labels.
 - A doubled-word pattern is simple and useful for one common typo.
-- The article-letter rule falsely flags `an hour` and `A university`.
+- The article-letter rule falsely puts a mark on `an hour` and `A university`.
 - These three checks are demonstrations, not an offline grammar checker for R.
 - No Riverton flags here means low coverage, not clean grammar.
 

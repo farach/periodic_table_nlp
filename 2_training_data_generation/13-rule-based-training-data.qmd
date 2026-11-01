@@ -319,8 +319,8 @@ stopifnot(
 )
 ```
 
-The rule labels 21 of the 23 usable rows the same way as the reference
-annotation. It incorrectly labels `RIVERTON SKILLS OPEN HOUSE` as `skill` and
+The rules label 21 of the 23 usable rows the same way as the reference
+annotation. They incorrectly label `RIVERTON SKILLS OPEN HOUSE` as `skill` and
 `DATA SUPPORT CERTIFICATE` as `training`. The trigger words are present, but
 the headings alone do not make either claim.
 
@@ -385,7 +385,7 @@ broader concept.
 
 ## Examine each rule separately
 
-The pooled 21-of-23 figure conceals differences between individual rules.
+The 21-of-23 figure for all rules conceals differences between individual rules.
 Each rule has separate coverage and error counts.
 Errors can differ between rows with one matching rule and rows with several
 matching rules.
@@ -492,8 +492,8 @@ new data. Such results cannot show whether absent cases would cause errors.
 
 Several rules can match one row with conflicting labels or repeated evidence.
 Those cases have different consequences. The following example contains
-opposing-label conflicts. It does not estimate correlation or demonstrate
-confidence inflation.
+opposing-label conflicts. It does not give an estimate of correlation or
+demonstrate confidence inflation.
 
 ```{r}
 vote_matrix <- as.matrix(rule_votes[rule_labels])
@@ -561,9 +561,9 @@ and schedule patterns.
 These overlaps are conflicts, not duplicate votes for one label.
 Correlated same-label votes occur when two rules tend to propose one label from
 shared evidence. Two training rules with nearly identical keyword lists would
-provide an example. A label model can estimate rule accuracy and dependence
-under stronger data and modeling assumptions. This table does not supply that
-evidence.
+provide an example. A label model can give estimates of rule accuracy and
+dependence under stronger data and modeling assumptions. This table does not
+supply that evidence.
 
 This lesson does not fit a label model.
 Four rules, 28 rows, and two conflicting overlaps provide insufficient
@@ -776,7 +776,7 @@ When applying rules to more data:
 2. preserve each rule vote and abstention.
 3. measure coverage and conflict by source, language, and group.
 4. reserve independently reviewed data for evaluation.
-5. sample apparent successes for human audit.
+5. select a sample of apparent successes for human audit.
 6. run checks for negation, polysemy, and unseen wording.
 7. compare conclusions with and without weak labels.
 
@@ -788,7 +788,7 @@ source's systematic errors, or remove the need for people who understand the dom
 - A weak label is a rule's proposal, not ground truth.
 - Rules should permit abstention and show conflicts.
 - Coverage, conflict, and agreement answer different questions.
-- Report each rule separately. A pooled score hides weaker rules.
+- Report each rule separately. A score for all rules hides weaker rules.
 - Rules that share trigger words are not independent votes.
 - In-sample success can reflect rules written around the examples.
 - Designed challenge cases expose known limitations.

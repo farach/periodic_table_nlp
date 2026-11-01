@@ -703,8 +703,8 @@ zero_width_draws <- sum(
 long_run_sentence <- paste0(
   "Both methods average close to the true share. Corrected intervals have ",
   "an average width of ", points_text(corrected_width), ". Sample-only intervals average ",
-  points_text(sample_width), ". The model's labels agree with the person's labels on most records. ",
-  "The person's labels therefore show the model's errors.\n\nCorrected intervals ",
+  points_text(sample_width), ". Corrected intervals are narrower because the model's labels agree with the person's labels on most records. ",
+  "The sample therefore must measure only the model's errors.\n\nCorrected intervals ",
   "contain the true share in ", percent_text(corrected_coverage), " of samples. ",
   "This is slightly below the nominal 95%. Sample-only intervals contain it in ",
   percent_text(sample_coverage), " of samples. The simple normal-approximation ",

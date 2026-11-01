@@ -108,7 +108,9 @@ era_length_summary <- paragraphs |>
 knitr::kable(
   tibble(
     item = c("paragraphs", "held-out paragraphs", "held-out accuracy"),
-    value = c(nrow(paragraphs), nrow(era_testing), round(held_out_accuracy, 4))
+    value = as.character(
+      c(nrow(paragraphs), nrow(era_testing), round(held_out_accuracy, 4))
+    )
   ),
   col.names = c("Item", "Value"),
   caption = "Model and corpus size for the monitoring replay",

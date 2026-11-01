@@ -1,7 +1,7 @@
 ---
 title: "Building a document one section at a time"
 subtitle: "Separate evidence, continuity, generation, and publication approval"
-description: "Learn a three-section local generation workflow with explicit evidence scopes, token budgets, continuity state, and publication decisions."
+description: "Learn a three-section local generation workflow with explicit evidence limits, token budgets, continuity state, and publication decisions."
 categories: [natural language generation, long-text generation, evaluation]
 ---
 
@@ -205,7 +205,7 @@ knitr::kable(
     "Evidence IDs",
     "Output budget"
   ),
-  caption = "A three-section document plan fixes scope before generation",
+  caption = "A three-section document plan fixes evidence limits before generation",
   row.names = FALSE
 )
 ```
@@ -478,7 +478,7 @@ stopifnot(
 
 EOS says the model selected a termination token. It does not establish that the
 section is complete, accurate, or ready to publish. The EOS and token-limit flags
-describe separate conditions. Both may be true when a model forces EOS on the
+describe separate conditions. Both may be `TRUE` when a model forces EOS on the
 last permitted new token.
 
 ## Examine repetition and section-specific evidence
@@ -490,7 +490,7 @@ trigrams. The lesson claims no universal publication threshold.
 
 The evidence flags are simpler: each planned fact has a surface pattern. A
 missing pattern is a reason to revise. A present pattern cannot prove that the
-fact has the correct relation or scope.
+fact has the correct relation or limits.
 
 ```{r}
 distinct_ngram_ratio <- function(text, n = 3L) {
@@ -626,7 +626,7 @@ knitr::kable(
     "Context-only evidence",
     "Restated outside assigned scope"
   ),
-  caption = "Continuity-fact scope check",
+  caption = "Continuity-fact check against assigned section limits",
   row.names = FALSE
 )
 ```
@@ -654,13 +654,13 @@ These are limited structural checks. They do not detect an invented plant
 example, a cause absent from the source, a changed obligation, or a contradiction without
 a new numeral.
 
-This render exposes three failures. `Successfully` adds an evaluation absent
+This render exposes three failures. In SEC-01, `successfully` adds an evaluation absent
 from the ledger. The final section omits the statement that volunteers made no
 guarantee about seed growth. SEC-03 also restates the E05 evening request from
 continuity context, although E05 belongs to SEC-02.
 
 The prompt supplied 29 to the model, so the numeral is not invented. Its reuse
-still violates the declared section scope. These findings require draft
+still violates the declared section limits. These findings require draft
 revision.
 
 ## Assemble the draft and make a decision
@@ -811,8 +811,8 @@ approval.
 
 ## What to remember
 
-- Long-text generation starts with document planning and section-scoped
-  evidence.
+- Long-text generation starts with document planning and evidence limits for
+  each section.
 - Decoder-only prompts and outputs share one context window.
 - Pass compact continuity state from assigned evidence instead of unbounded raw
   history.

@@ -386,7 +386,7 @@ knitr::kable(
   bm25_preview |>
     mutate(score = round(score, 3)),
   col.names = c("Query", "Rank", "Passage", "Topic", "BM25 score"),
-  caption = "BM25 top passages for the child-care and course-code probes",
+  caption = "BM25 top passages for the child-care and course-code queries",
   row.names = FALSE
 )
 
@@ -873,7 +873,7 @@ S8 asks for a cafeteria lunch menu. The judgments list no relevant passage. BM25
 
 ## Evaluate the ranks query by query
 
-The table below reports each method on each query. **Recall at 1** asks whether the relevant passage appears first. **Recall at 3** asks whether it appears in the first three. Because these probes have at most one relevant passage, recall at *k* is the same as success at *k*. **Reciprocal rank** is `1 / rank` for the first relevant passage. S8 has no relevant passage, so these columns are not applicable.
+The table below reports each method on each query. **Recall at 1** asks whether the relevant passage appears first. **Recall at 3** asks whether it appears in the first three. Because these queries have at most one relevant passage, recall at *k* is the same as success at *k*. **Reciprocal rank** is `1 / rank` for the first relevant passage. S8 has no relevant passage, so these columns are not applicable.
 
 ```{r}
 #| code-fold: true
@@ -1143,9 +1143,9 @@ stopifnot(
 
 Dense search resolves the child-care wording mismatch in S1 and the stipend wording mismatch in S3. It misses the transit passage in the first three results. BM25 performs well on identifiers and exact wording, but some paraphrases receive no nonzero score. RRF helps S1 and S3 and preserves several exact matches. It still misses the transit passage in the first three results.
 
-For S4, dense search ranks the relevant H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "dense" & rank_evaluation$query_id == "S4"]`. RRF ranks H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "RRF hybrid" & rank_evaluation$query_id == "S4"]`. H05 appears only in the dense list, so it receives no BM25 rank contribution. These are paired demonstrations on seven author-written probes, not a benchmark.
+For S4, dense search ranks the relevant H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "dense" & rank_evaluation$query_id == "S4"]`. RRF ranks H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "RRF hybrid" & rank_evaluation$query_id == "S4"]`. H05 appears only in the dense list, so it receives no BM25 rank contribution. These are paired demonstrations on seven author-written queries, not a benchmark.
 
-Larger evaluations do not establish one universally best method. BEIR reported BM25 as a strong zero-shot baseline across varied retrieval tasks. **Zero-shot** means the method receives no training for the specific evaluation task. Dense passage retrieval reported large gains on open-domain question answering. Entity-question research found that dense retrievers can miss questions about rarely seen named entities. One `DSC-104` probe in a 15-passage handbook cannot establish general identifier-search performance.
+Larger evaluations do not establish one universally best method. BEIR reported BM25 as a strong zero-shot baseline across varied retrieval tasks. **Zero-shot** means the method receives no training for the specific evaluation task. Dense passage retrieval reported large gains on open-domain question answering. Entity-question research found that dense retrievers can miss questions about rarely seen named entities. One `DSC-104` query in a 15-passage handbook cannot establish general identifier-search performance.
 
 ## What approximate search would change
 

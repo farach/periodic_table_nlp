@@ -45,8 +45,7 @@ Every API exchange in this lesson has two parts:
 2. The service sends a **response** back.
 
 The request records the librarian's question. The response contains a status
-code, descriptive details called headers, and a body holding the requested
-data.
+code, descriptive details called headers, and a body with the requested data.
 
 Our request uses this **endpoint**, the web address assigned to book searches:
 `https://openlibrary.org/search.json`.
@@ -128,7 +127,7 @@ bytes through a local mock. The example exercises the request-to-response step
 without contacting Open Library again. A normal `req_perform()` call stops
 on unsuccessful HTTP statuses such as 404 or 500.
 
-**JSON**, short for JavaScript Object Notation, is a text format that can hold
+**JSON**, short for JavaScript Object Notation, is a text format that can contain
 named values, lists, and records. Many programming languages can read it, which
 makes it common in API responses.
 

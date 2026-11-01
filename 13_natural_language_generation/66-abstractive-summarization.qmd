@@ -412,7 +412,7 @@ necessary content, or both. Length cannot distinguish those cases.
 Rosa writes a checklist before reading the output. A **regular expression** is a
 pattern for matching text. The expressions below find visible strings
 related to that checklist. A missing match suggests a possible omission to
-examine. A match does not establish the correct role or scope of a name, number,
+examine. A match does not establish the correct role or limits of a name, number,
 or negative statement.
 
 ```{r}
@@ -514,7 +514,7 @@ incorrect number association, a cause absent from the source, or a fluent genera
 Those errors require comparison of the source and candidate.
 
 In this render, the first candidate changes the limit on volunteer help. The
-second uses negative wording but changes the relationship to restricted
+second mentions a limit but changes the relationship to restricted
 storage. The string checks find some errors. Comparison with the source
 reveals the others.
 

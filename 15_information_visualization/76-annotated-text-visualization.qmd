@@ -168,7 +168,7 @@ Lesson 27 examines the named-entity output. This lesson shows how to draw labels
 without losing the source positions.
 
 The entity tags use `B` for the first token in a span and `I` for later tokens
-inside the same span. In `s001`, the three tagged tokens start at character 5,
+inside the same span. In `s001`, the three tagged tokens start at characters 5,
 7, and 8. Together they form the span from 5 to 12, with position 12 excluded.
 
 ```{r}

@@ -228,7 +228,7 @@ that label to the test set. It scores 0.3324.
 An **oracle baseline** instead chooses the majority label after reading the
 test labels. It also scores 0.3324 by coincidence on this split. A deployed
 system cannot choose that rule in advance. The confusion matrix shows many
-1907-1965 test paragraphs with predictions of 1966-2025.
+1966-2025 test paragraphs with predictions of 1907-1965.
 
 ## Compare recall by class
 

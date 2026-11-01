@@ -162,7 +162,7 @@ evidence for a job-board claim.
 ## Declare slot rules before merging
 
 A **slot** is a field with a specified value type. Some slots
-can hold a list. Others are single-valued for a named time period, so a second
+can contain a list. Others are single-valued for a named time period, so a second
 dated value becomes a conflict to examine. **Cardinality** specifies how many
 values a slot can contain.
 

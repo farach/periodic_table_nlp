@@ -29,8 +29,8 @@ This lesson shows how to:
 - show when a gold passage shares no content words with the question
 - compare an extractive sentence baseline with a generated short answer
 - parse a strict two-line model reply without rewriting it
-- keep action correctness, reference agreement, source-evidence screens, and human
-  checks separate
+- keep action correctness, reference agreement, automatic source-evidence checks,
+  and human checks separate
 - explain why abstention, citations, and fluent wording are not enough.
 :::
 
@@ -688,7 +688,7 @@ knitr::kable(
   escape = TRUE,
   col.names = c(
     "Question",
-    "Raw reader output (`⏎` marks a line break)",
+    "Raw reader output (⏎ marks a line break)",
     "Output tokens",
     "EOS emitted",
     "Hit token cap"
@@ -1055,7 +1055,7 @@ qa_action_summary <- score_table |>
 In this render, the parsed reader actions include
 `r qa_action_summary$answer_actions` answer actions,
 `r qa_action_summary$abstain_actions` abstentions, and
-`r qa_action_summary$premise_actions` premise flags. Exact action matched the
+`r qa_action_summary$premise_actions` `flag premise` actions. Exact action matched the
 predeclared reference on `r qa_action_summary$exact_action_matches` of 6 rows.
 Retrieval failed before reading on `r qa_action_summary$retrieval_failures` row
 because it did not return the gold passage.
@@ -1068,9 +1068,9 @@ The sentence baseline used a different unit: whether the copied sentence
 contained an acceptable answer. These numbers do not provide a model
 comparison. In this render, `r right_action_em_zero$reason`.
 
-## Examine citations and source-evidence screens
+## Examine citations and automatic source-evidence checks
 
-The source-evidence screen examines six mechanical conditions:
+The automatic source-evidence check examines six mechanical conditions:
 
 - the row parsed
 - the cited IDs exist
@@ -1080,8 +1080,9 @@ The source-evidence screen examines six mechanical conditions:
 - answer numerals appear in cited passages after removal of citation tokens
 
 The action table scores false-premise handling against the author's reference.
-No screen on this page detects a false premise from text alone. A screen can
-miss number words or a correct number associated with the wrong item.
+No automatic check on this page detects a false premise from text alone. An
+automatic check can miss number words or a correct number associated with the
+wrong item.
 
 ```{r}
 #| code-fold: true
@@ -1200,7 +1201,7 @@ knitr::kable(
     "Source-evidence screen",
     "Human checks of source evidence"
   ),
-  caption = "Cited text and source-evidence screen labels for every reader output",
+  caption = "Cited text and automatic source-evidence check labels for every reader output",
   row.names = FALSE
 )
 ```
@@ -1245,18 +1246,18 @@ qa_screen_summary <- screen_results |>
 ```
 
 A person must examine whether the cited passage alone establishes each answer claim.
-This page does not make that human judgment. In this render, the surface screen
-selects
+This page does not make that human judgment. In this render, the automatic
+surface check selects
 `r qa_screen_summary$questions[qa_screen_summary$screen_label == "held for human review"]`
 reader rows for human checks. It records
 `r qa_screen_summary$questions[qa_screen_summary$screen_label == "not flagged by screen"]`
-rows as not flagged by the screen.
+rows as `not flagged by screen`.
 
-## Show screen controls
+## Show controls for the automatic check
 
-Even if a render produces no flagged answers, readers need evidence that the
-screen detects known errors. The next two rows are author-written control
-strings, not model outputs.
+Even if a render selects no answers for human checks, readers need evidence that the
+automatic check detects known errors. The next two rows are author-written
+control strings, not model outputs.
 
 ```{r}
 control_outputs <- tibble(
@@ -1308,7 +1309,7 @@ knitr::kable(
   format = "html",
   escape = TRUE,
   col.names = c("Control", "Control answer", "Cited IDs", "Failed screen checks", "Screen label"),
-  caption = "Author-written control strings that the source-evidence screen selects for human checks",
+  caption = "Author-written control strings that the automatic source-evidence check selects for human checks",
   row.names = FALSE
 )
 ```
@@ -1327,8 +1328,8 @@ stopifnot(
 )
 ```
 
-These controls do not prove that the screen is complete. They show only that
-the screen detects two known failure patterns.
+These controls do not prove that the automatic check is complete. They show
+only that the automatic check detects two known failure patterns.
 
 ## Count action choices
 
@@ -1430,7 +1431,7 @@ rather than trusting retrieved or typed text.
 
 Another approach asks a second language model whether the cited passages establish each answer claim.
 Recent benchmark work finds such judges close to chance on difficult answers without source evidence. Their scores provide at most a
-preliminary screening signal. Keep mechanical screens like those above.
+preliminary signal. Keep automatic checks like those above.
 
 Ask a person to compare a random sample of answers with their sources.
 Complete this comparison before reporting the rate of answers with source evidence.
@@ -1441,7 +1442,7 @@ Complete this comparison before reporting the rate of answers with source eviden
 - A lexical retriever can miss an answerable question before the reader starts.
 - EM and F1 score short answer strings. They do not measure source evidence.
 - A citation needs a check. It does not prove that the cited passage establishes the answer.
-- Screens can select obvious failures for human checks. Human checks of source evidence remain pending.
+- Automatic checks can select obvious failures for human checks. Human checks of source evidence remain pending.
 - Examine abstention on answerable and unanswerable questions.
 
 ## Sources

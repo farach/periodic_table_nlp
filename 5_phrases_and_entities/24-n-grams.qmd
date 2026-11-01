@@ -438,7 +438,7 @@ them by score.
 - A two-token text unit contributes no trigram.
 - Without a minimum count, PMI ranks unique word pairs first in this example.
 - Counts from 28 text units illustrate sparsity.
-  They do not estimate phrase occurrence in workforce writing.
+  They do not give an estimate of phrase occurrence in workforce writing.
 
 Report recurring phrases as observations from this example only.
 The result is a short phrase list with explicit limits from sparse counts.

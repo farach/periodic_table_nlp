@@ -164,7 +164,8 @@ spacy_info_table <- tibble(
 #| echo: false
 
 knitr::kable(
-  parser_score,
+  parser_score |>
+    mutate(value = as.character(value)),
   col.names = c("Measure", "Value"),
   caption = "Held-out parser scores bundled with the lesson",
   row.names = FALSE

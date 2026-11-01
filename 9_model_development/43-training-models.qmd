@@ -27,7 +27,7 @@ government. This lesson treats them as public domain text packaged by quanteda.
 
 This lesson shows how to:
 
-- explain when a labeled set is too small for model testing.
+- explain when a labeled set is too small for a test of a model.
 - use a larger teaching corpus after the labeling pilot.
 - distinguish a recipe, model specification, workflow, fit, and prediction.
 - compare candidate models without using the final test set.
@@ -618,7 +618,7 @@ sensitivity to repeated splits.
 
 ## What to remember
 
-- A pilot corpus can teach labeling without being large enough for testing.
+- A pilot corpus can teach labeling without being large enough for a test of a model.
 - A grouped test set with four rows cannot measure much.
 - A speech-held-out split keeps one address from leaking across both sides.
 - Grouped folds compare candidates without using the final test set.

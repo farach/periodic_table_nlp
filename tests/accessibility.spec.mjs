@@ -104,6 +104,116 @@ for (const path of pages) {
   });
 }
 
+test("malformed byte comparison is visible with all three results", async ({ page }) => {
+  await page.goto("/1_source_data_loading/01-bits-to-character-encoding.html");
+  const table = page.locator("table").filter({
+    has: page.locator("caption", { hasText: "One malformed byte sequence read three ways" })
+  });
+  await expect(table).toBeVisible();
+  const rows = table.locator("tbody tr");
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(1).locator("td").nth(1)).toHaveText("4");
+  await expect(rows.nth(2).locator("td").nth(1)).toHaveText("NA");
+  await expect(rows.nth(3).locator("td").nth(1)).toHaveText("Hi \uFFFD(");
+});
+
+test("geocoding service limits render as four list items", async ({ page }) => {
+  await page.goto("/6_entity_enrichment/30-geocoding.html");
+  await expect(page.locator("#geocoding-in-production ul > li")).toHaveCount(4);
+});
+
+test("whitespace comparison retains both rows and original line breaks", async ({ page }) => {
+  await page.goto("/8_documents/40-raw-text-cleaning.html");
+  const table = page.locator("table").filter({
+    has: page.locator("caption", { hasText: "Whitespace squishing removes the flyer line layout" })
+  });
+  const rows = table.locator("tbody tr");
+  await expect(rows).toHaveCount(2);
+  const before = rows.nth(0).locator("td").nth(1);
+  const after = rows.nth(1).locator("td").nth(1);
+  expect((await before.textContent()).match(/\n/g)).toHaveLength(5);
+  expect(await after.textContent()).not.toContain("\n");
+  await expect(before).toHaveCSS("white-space", "pre-line");
+});
+
+const captionedTable = (page, caption) =>
+  page.locator("table").filter({ has: page.locator("caption", { hasText: caption }) });
+
+const columnCells = (table, column) => table.locator(`tbody tr td:nth-child(${column})`);
+
+test("tokenizer tables show special tokens and decoded unknown text", async ({ page }) => {
+  await page.goto("/3_word_parsing/14-tokenization.html");
+  const vocabulary = captionedTable(page, "The first rows of the BPE vocabulary");
+  await expect(columnCells(vocabulary, 2).first()).toHaveText("<PAD>");
+  await expect(columnCells(vocabulary, 2).nth(1)).toHaveText("<UNK>");
+  await expect(columnCells(vocabulary, 2).nth(2)).toHaveText("<BOS>");
+  await expect(columnCells(vocabulary, 2).nth(3)).toHaveText("<EOS>");
+  const decoded = columnCells(captionedTable(page, "Round-trip results for the four texts"), 4);
+  await expect(decoded).toHaveCount(4);
+  await expect(decoded).toHaveText(Array(4).fill(/\S/));
+});
+
+test("padded spacing example keeps its internal spaces", async ({ page }) => {
+  await page.goto("/4_word_processing/21-normalization.html");
+  const raw = captionedTable(page, "Lowercasing and spacing changes").locator("tbody tr").nth(1).locator("td").nth(1);
+  expect(await raw.textContent()).toContain("No   prior   data");
+  await expect(raw).toHaveCSS("white-space", "pre-wrap");
+});
+
+test("stored counts print as whole numbers", async ({ page }) => {
+  await page.goto("/3_word_parsing/18-dependency-parsing.html");
+  await expect(columnCells(captionedTable(page, "Held-out parser scores bundled with the lesson"), 2))
+    .toHaveText(["4007", "2899", "0.7235", "2629", "0.6561"]);
+  await page.goto("/9_model_development/47-monitoring-models.html");
+  await expect(columnCells(captionedTable(page, "Model and corpus size for the monitoring replay"), 2))
+    .toHaveText(["1377", "335", "0.8209"]);
+});
+
+test("sentence boundary table keeps one row for each piece", async ({ page }) => {
+  await page.goto("/7_sentences_and_paragraphs/35-sentence-segmentation.html");
+  const found = await columnCells(
+    captionedTable(page, "Splitter counts compared with the five expected sentences"),
+    2
+  ).allTextContents();
+  const pieceCount = found.reduce((total, value) => total + Number(value), 0);
+  expect(pieceCount).toBeGreaterThan(0);
+  const boundaries = captionedTable(page, "Where each splitter puts the boundaries");
+  await expect(boundaries.locator("tbody tr")).toHaveCount(pieceCount);
+  await expect(columnCells(boundaries, 4)).toHaveText(Array(pieceCount).fill(/^(yes|no)$/));
+  const pieces = await columnCells(boundaries, 2).allTextContents();
+  expect(pieces.some((piece) => piece.includes("\n"))).toBe(true);
+  await expect(columnCells(boundaries, 2).first()).toHaveCSS("white-space", "pre-line");
+});
+
+test("duplicate tables keep the internal spaces of D03", async ({ page }) => {
+  await page.goto("/8_documents/39-deduplication.html");
+  for (const caption of ["Six documents prepared for duplicate comparison", "Exact hashes before normalization"]) {
+    const table = captionedTable(page, caption);
+    const row = table.locator("tbody tr").nth(2);
+    await expect(row.locator("td").first()).toHaveText("D03");
+    const textColumn = caption.startsWith("Six") ? 3 : 2;
+    const text = row.locator(`td:nth-child(${textColumn})`);
+    expect(await text.textContent()).toContain("THE employer   pays for certification   TRAINING.");
+    await expect(text).toHaveCSS("white-space", "pre-wrap");
+  }
+});
+
+test("generation tables show angle-bracket tokens and marker patterns", async ({ page }) => {
+  await page.goto("/13_natural_language_generation/63-next-token-prediction.html");
+  const tokens = columnCells(
+    captionedTable(page, "Highest-probability next tokens from the selected trigram"),
+    2
+  );
+  const tokenCount = await tokens.count();
+  expect(tokenCount).toBeGreaterThan(0);
+  await expect(tokens).toHaveText(Array(tokenCount).fill(/\S/));
+  await expect(tokens.filter({ hasText: /^<unk>$/ }).first()).toBeVisible();
+  await page.goto("/13_natural_language_generation/67-paraphrasing.html");
+  const invariants = captionedTable(page, "Constructed paraphrase probes and predeclared invariants");
+  await expect(invariants).toContainText("\\b(may|can|allowed|permitted)\\b");
+  await expect(invariants).toContainText("\\b(must|required|obliged|has to)\\b");
+});
+
 test("timeline figure retains its caption and accessible description", async ({ page }) => {
   await page.goto("/15_information_visualization/79-events-on-a-timeline.html");
   const figure = page.locator("#fig-event-timeline");
@@ -507,7 +617,8 @@ test("tile status survives forced colors and reduced motion", async ({
 
 test("accessibility page records pending manual review", async ({ page }) => {
   await page.goto("/accessibility.html");
-  await expect(
-    page.getByText(/Manual testing with current NVDA, JAWS, VoiceOver/)
-  ).toBeVisible();
+  const status = page.locator("#checks-that-still-need-people p").first();
+  await expect(status).toBeVisible();
+  await expect(status).toContainText(/Manual tests with current NVDA, JAWS, VoiceOver/);
+  await expect(status).toContainText("pending");
 });

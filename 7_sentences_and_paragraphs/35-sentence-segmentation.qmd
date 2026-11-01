@@ -202,6 +202,7 @@ splitter_scores <- split_results |>
 
 ```{r}
 #| echo: false
+#| html-table-processing: none
 
 knitr::kable(
   splitter_scores,
@@ -222,6 +223,8 @@ knitr::kable(
     mutate(exact_expected_sentence = if_else(exact_expected_sentence, "yes", "no")),
   col.names = c("Splitter", "Piece", "Piece number", "Exact expected sentence"),
   caption = "Where each splitter puts the boundaries",
+  format = "html",
+  table.attr = 'style="white-space: pre-line;"',
   row.names = FALSE
 )
 ```

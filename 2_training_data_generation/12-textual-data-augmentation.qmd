@@ -47,10 +47,10 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Start with one purpose
 
 The team wants more examples of explicit training offers.
-The examples will not describe real employers or estimate training-offer
-frequency. The next chunk loads helpers for files, tables, strings, CMap
-examples, and model-check payloads. It then reads the file into a tibble with
-declared column types.
+The examples will not describe real employers or give an estimate of
+training-offer frequency. The next chunk loads helpers for files, tables,
+strings, CMap examples, and model-check payloads. It then reads the file into
+a tibble with declared column types.
 
 ```{r}
 library(readr)
@@ -678,7 +678,7 @@ Label preservation still requires a check of meaning.
 
 Examine:
 
-1. whether the label and important details remain true.
+1. whether the label and important details remain correct.
 2. whether the wording is grammatical in the intended language.
 3. whether duplicates occur in both training and evaluation sets.
 4. whether templates make one class unnaturally easy to recognize.

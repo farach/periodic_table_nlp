@@ -20,7 +20,7 @@ features and this fixed penalty, does not consistently predict party correctly.
 
 This lesson shows how to:
 
-- separate candidate selection, final testing, and robustness checks.
+- separate candidate selection, the final test, and robustness checks.
 - compare every score with a deployable largest-class baseline.
 - read the spread across repeated train/test splits.
 - explain what paragraph, speech, and person splits measure.
@@ -175,7 +175,7 @@ model can train only on rows with a Democratic or Republican label, so it uses
 remaining rows come from other party labels. Each task also selects its own 500
 tokens from its own training data.
 
-## Selection, testing, and robustness do different jobs
+## Selection, the final test, and robustness do different jobs
 
 Lesson 43 compared candidate settings with five grouped folds from the training
 speeches. After fixing the candidate and penalty, it used the 14 untouched test
@@ -352,7 +352,7 @@ contribute beyond paragraph length alone.
 ```{r}
 #| label: fig-split-study
 #| fig-cap: "Accuracy over 10 replicates for the model and low-cost rules."
-#| fig-alt: "A dot-and-line chart has one panel per task. The era panel shows model accuracy above both the training-majority rule and the paragraph-length rule. This holds for all three split schemes: paragraph, speech, and president. The party panel shows model accuracy near or below the training-majority rule for all three split schemes."
+#| fig-alt: "A dot-and-line chart has two panels: one for the era task and one for the party task. In the era panel, model accuracy is above both the training-majority rule and the paragraph-length rule for all three split schemes: paragraph, speech, and president. The party panel shows model accuracy near or below the training-majority rule for all three split schemes."
 #| fig-width: 8
 #| fig-height: 4.8
 #| code-fold: true
@@ -481,7 +481,7 @@ split, the model averages `r round(party_speech$mean_accuracy, 4)` against
 
 Under the person split, accuracy
 is `r round(party_president$mean_accuracy, 4)` and mean balanced accuracy is
-`r round(party_president$mean_bal_accuracy, 4)`. Its replicate values range from
+`r round(party_president$mean_bal_accuracy, 4)`. The replicate balanced-accuracy values range from
 `r round(party_president_bal_range[[1]], 4)` to
 `r round(party_president_bal_range[[2]], 4)`. That range includes values below and above the theoretical
 two-class chance value of 0.5. The conclusion concerns this model: this penalty,
@@ -664,7 +664,7 @@ Before using judge scores, compare them with human ratings on a random sample
 from your task. Reverse the order of the answers in comparisons. Report
 agreement with a chance-corrected statistic such as Cohen's kappa. The guide
 [Using a language model in a reproducible analysis](../using-language-models.qmd)
-shows the same checking pattern for model labels.
+shows the same pattern of checks for model labels.
 
 ## What to remember
 
