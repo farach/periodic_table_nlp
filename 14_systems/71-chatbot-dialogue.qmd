@@ -881,6 +881,12 @@ reply_trace <- realizer_requests |>
 
 knitr::kable(
   reply_trace |>
+    mutate(
+      across(
+        c(output_tokens, ended_by_eos, hit_token_cap),
+        \(x) if_else(is.na(x), "not applicable", as.character(x))
+      )
+    ) |>
     select(
       conversation_id,
       turn_id,
@@ -983,7 +989,7 @@ automatic checks on model replies.
 
 ```{r}
 #| code-fold: true
-#| code-summary: "Show the reply screens and fixed fallback"
+#| code-summary: "Show the automatic reply checks and fixed fallback"
 
 allowed_fact_text <- function(action, program) {
   ids <- fact_rows_for_action(action, program)
@@ -1018,7 +1024,7 @@ screen_generated_reply <- function(reply, action, program, contact_channel, allo
     str_detect(reply, fixed(allowed_program_names, ignore_case = TRUE))
   ]
   allowed_program_ok <- case_when(
-    # A request_program reply may name either program, so this screen has
+    # A request_program reply may name either program, so this check has
     # nothing to rule out on those rows and passes them.
     action == "request_program" ~ TRUE,
     length(mentioned_programs) == 0L ~ TRUE,
@@ -1145,6 +1151,17 @@ knitr::kable(
         action == "request_program" & !is.na(program_names_ok),
         "not applicable",
         as.character(program_names_ok)
+      ),
+      across(
+        c(
+          numerals_ok,
+          program_names_ok,
+          action_slots_ok,
+          personal_details_ok,
+          promise_words_ok,
+          generation_completed
+        ),
+        \(x) if_else(is.na(x), "not applicable", as.character(x))
       )
     ) |>
     select(
@@ -1369,15 +1386,9 @@ stopifnot(
 )
 
 fallback_interpretation <- if (fallback_reply_count > 0L) {
-  paste(
-    "Fixed templates may be the safer default for this design.",
-    "Model wording requires success on every screen."
-  )
+  "Fixed templates may be the safer default for this design."
 } else {
-  paste(
-    "The workflow replaced no generated reply in this render.",
-    "Success on these screens remains only a preliminary condition for human checks."
-  )
+  "The workflow replaced no generated reply in this render."
 }
 ```
 

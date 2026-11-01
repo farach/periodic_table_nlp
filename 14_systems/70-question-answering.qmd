@@ -281,7 +281,8 @@ gold_overlap <- questions |>
 #| echo: false
 
 knitr::kable(
-  gold_overlap,
+  gold_overlap |>
+    mutate(gold_passage_id = coalesce(gold_passage_id, "not applicable")),
   col.names = c("Question", "Gold evidence", "Shared content words"),
   caption = "Content-word overlap between each question and its gold passage",
   row.names = FALSE
@@ -536,7 +537,14 @@ extractive_baseline <- questions |>
 #| echo: false
 
 knitr::kable(
-  extractive_baseline,
+  extractive_baseline |>
+    mutate(
+      contains_acceptable_answer = if_else(
+        is.na(contains_acceptable_answer),
+        "not applicable",
+        as.character(contains_acceptable_answer)
+      )
+    ),
   format = "html",
   escape = TRUE,
   col.names = c(
@@ -1086,7 +1094,7 @@ wrong item.
 
 ```{r}
 #| code-fold: true
-#| code-summary: "Show the citation and source-evidence screens"
+#| code-summary: "Show the citation and source-evidence checks"
 
 strip_citation_tokens <- function(text) {
   str_remove_all(text, "\\bH\\d{2}\\b")
