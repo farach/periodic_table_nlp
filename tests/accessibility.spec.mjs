@@ -104,6 +104,16 @@ for (const path of pages) {
   });
 }
 
+test("timeline figure retains its caption and accessible description", async ({ page }) => {
+  await page.goto("/15_information_visualization/79-events-on-a-timeline.html");
+  const figure = page.locator("#fig-event-timeline");
+  await expect(figure).toHaveCount(1);
+  await expect(figure.locator("figcaption")).toContainText("Timeline of eight events");
+  await expect(figure.locator("img")).toHaveAttribute("alt", /Hollow points and dashed bars show planned events/);
+  await expect(figure.locator("img")).toHaveAttribute("alt", /start date is unknown/);
+  await expect(page.locator("main")).not.toContainText("{#fig-event-timeline");
+});
+
 test("advanced lesson keeps its expected results and routes", async ({ page }) => {
   await page.goto("/");
   await page.locator("main a[href$='advanced/index.html']").first().click();

@@ -308,7 +308,7 @@ that the direction shows status.
 ```{r}
 #| label: fig-event-timeline
 #| fig-cap: "Timeline of eight events from a constructed Riverton log in 2026. Grey diamonds mark entry dates. The six-week pilot has no start date, so its row has no event mark."
-#| fig-alt: "Timeline with one row per event. Grey diamonds mark entry dates, and dotted lines connect notes to events. Spring outreach is a dashed planned bar from March 1 to May 31 2026, connected forward from a February 20 note. The March 2 orientation is a filled reported point, connected backward from a March 3 note. Registration closing on March 15 is a hollow planned point.\n\nThe 12-week course is a dashed planned bar from September 14 to December 6. The September 14 applicant check-in is a reported point, connected backward from a September 20 note. September work is a solid reported bar, connected backward from a November 1 note. The October 22 review meeting is a hollow planned point. The six-week pilot, noted on October 5, has no start date or event mark."
+#| fig-alt: "Timeline of eight events in 2026, with grey diamonds for entry dates. Hollow points and dashed bars show planned events. Filled points and solid bars show reported events. Dotted lines connect entry dates to event dates. Three bars show spring outreach, September work, and a 12-week course. The six-week pilot has no event mark because its start date is unknown."
 #| fig-width: 8
 #| fig-height: 4.6
 
@@ -382,7 +382,7 @@ timeline_plot <- ggplot(timeline_rows, aes(y = row_label)) +
     title = "An event's date is not the date of the note that mentions it",
     subtitle = str_c(
       "Constructed Riverton log, 2026. Grey diamonds mark entry dates. ",
-      "Dotted lines connect notes to ",
+      "<br>Dotted lines connect notes to ",
       lesson_key("planned", lesson_text_colours[["accent"]]),
       " and ",
       lesson_key("reported", lesson_text_colours[["contrast"]]),
