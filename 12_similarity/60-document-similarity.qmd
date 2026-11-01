@@ -5,26 +5,23 @@ description: "Learn how speech-level document similarity changes under raw count
 categories: [similarity, document similarity, inaugural addresses]
 ---
 
-A reading group wants one companion speech for a long weekend assignment. They
-ask for the nearest neighbour to a selected address.
+A reading group wants a companion speech similar to a selected address. A
+similarity method can compare word counts, rare-word weights, or features with
+common words removed. Each representation gives a different comparison.
 
-The request sounds simple until the group asks what "nearest" means. A method can
-compare word counts, rare-word weights, or a version with common words removed.
-
-**Document similarity** is a score that compares two documents after they have
-been turned into features. The score is only as meaningful as that representation
-for the question at hand.
+**Document similarity** is a score that compares the features of two documents.
+The score is meaningful only if those features address the research question.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- build speech-level document-feature matrices;
-- compute cosine similarity across 60 speeches;
-- list the most and least similar pairs under tf-idf;
-- show that nearest neighbours change when features change;
-- test an authorship pattern against shuffled labels; and
+- build speech-level document-feature matrices
+- compute cosine similarity across 60 speeches
+- list the most and least similar pairs under tf-idf
+- show that nearest neighbours change when features change
+- compare an authorship pattern with shuffled labels
 - notice when document length is part of the signal.
 :::
 
@@ -37,8 +34,8 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Build speech vectors
 
-**Tf-idf** stands for term frequency times inverse document frequency. It keeps
-words from each speech, then gives more weight to words that are less common
+**Tf-idf** stands for term frequency times inverse document frequency. It retains
+words from each speech. It gives more weight to words that are less common
 across the full set of speeches.
 
 ```{r}
@@ -192,7 +189,7 @@ stopifnot(
 ```
 
 The helper rebuilds each speech by joining only paragraphs with at least 25
-words, so the "speeches" below are retained-paragraph versions of the addresses.
+words. The "speeches" below therefore contain only retained paragraphs.
 The filter keeps nearly all words before 1900 and a smaller share from 1900 or
 later. The `president` field is the full name: 60 speeches come from 40 people,
 while four surnames each refer to two people.
@@ -203,7 +200,7 @@ Comparing every speech with every other speech gives 1,770 pairs, because
 ## Rank all speech pairs
 
 Cosine similarity ranges from 0 to 1 for these nonnegative vectors. Larger values
-mean the two speeches point in more similar vocabulary directions.
+mean the two speech vectors have more similar directions.
 
 ```{r}
 cosine_matrix <- function(speech_dfm) {
@@ -290,8 +287,9 @@ stopifnot(
 
 The strongest pair under this representation is the two Monroe speeches, with
 cosine similarity about 0.2903. Four of the five weakest rows include the short
-1793 Washington speech, which has 135 retained tokens. Shortness, not a reading
-of subject matter, puts that speech at the bottom of the ranking.
+1793 Washington speech, which has 135 retained tokens. The speech's short length
+explains its low ranking. The ranking does not establish a difference in subject
+matter.
 
 ```{r}
 tfidf_similarity_matrix <- cosine_matrix(tfidf_dfm)
@@ -331,14 +329,14 @@ stopifnot(
 ```
 
 Mean tf-idf similarity still correlates strongly with speech length. Tf-idf
-changes the representation, but it does not remove the length gradient from this
+changes the representation, but it does not remove the relationship with length from this
 corpus.
 
 ## Change the representation
 
-A nearest neighbour is the highest-scoring other document. The code below asks
-for the nearest neighbour of the 1793 Washington speech three ways: raw counts,
-tf-idf, and tf-idf after removing stopwords.
+A **nearest neighbour** is the highest-scoring other document. The code below
+compares raw counts, tf-idf, and tf-idf without stopwords for the 1793 Washington
+speech. **Stopwords** are common words that an analysis excludes.
 
 ```{r}
 nearest_for <- function(speech_dfm, target) {
@@ -401,9 +399,9 @@ stopifnot(
 ```
 
 The three answers differ. The raw-count neighbour for the shortest speech is the
-longest retained speech, and the score is about 0.8474. That column is dominated
-by shared high-frequency words and length, so it should not be read as a topical
-match.
+longest retained speech, and the score is about 0.8474. Shared high-frequency
+words and length dominate the raw-count comparison. Do not interpret the
+raw-count score as evidence of matching topics.
 ```{r}
 nearest_all <- function(speech_dfm) {
   similarity_matrix <- cosine_matrix(speech_dfm)
@@ -465,11 +463,11 @@ stopifnot(
 )
 ```
 
-The raw-count hub check does not make `1841-Harrison` a corpus-wide hub; it is
-the nearest neighbour for two speeches. The broader warning is still clear.
-Several speeches become nearest neighbours for many targets under raw counts,
-which is another sign that the column measures common-word mass more than a
-careful vocabulary match.
+The raw-count comparison does not show that `1841-Harrison` is a corpus-wide hub. A
+**hub** is the nearest neighbour for many other documents. `1841-Harrison` is
+the nearest neighbour for two speeches. Several other speeches are nearest
+neighbours for many targets under raw counts. This pattern also indicates that
+shared common words dominate the comparison, rather than distinctive vocabulary.
 
 ## Separate vocabulary signal from authorship signal
 
@@ -550,8 +548,9 @@ stopifnot(
 ```
 
 Under tf-idf, 19 of the 60 speeches have a nearest neighbour by the same person.
-The label-shuffle null says same-person pairs are more similar than chance in
-this corpus. That is evidence of repeated wording or style, not proof that the
+The null comparison uses randomly rearranged author labels. Same-person pairs
+are more similar than this chance comparison predicts in this corpus. The result
+is evidence of repeated wording or style, not proof that the
 speeches discuss the same subjects.
 
 ## What to remember
@@ -562,9 +561,6 @@ speeches discuss the same subjects.
   stopword removal.
 - Same-person neighbours can show authorship or style rather than subject matter.
 - Similarity functions return a ranking even when length or labels explain it.
-
-The reading group chooses a companion speech only after naming what kind of
-similarity it wants.
 
 ## Sources
 

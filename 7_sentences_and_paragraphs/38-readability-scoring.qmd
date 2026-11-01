@@ -1,18 +1,17 @@
 ---
 title: "Scoring readability formulas"
-subtitle: "Compute Flesch scores and measure the syllable shortcut"
+subtitle: "Readability scores and syllable-count error"
 description: "Learn how readability formulas use sentence, word, and syllable counts, and why their limits are severe."
 categories: [sentences and paragraphs, readability scoring, workforce research]
 ---
 
-Plain public help text is ready for review, but the coordinator still asks
-whether the job board is harder to read than the help articles. A single score
-would be convenient, but the score has to come from counted parts.
+The coordinator compares the job board with the help articles before
+publication. A readability score might help, but its interpretation depends on
+the underlying counts.
 
-**Readability formulas** estimate text difficulty from surface counts such as
-sentences, words, and syllables. A **syllable** is a spoken beat inside a word.
-The formulas in this lesson can be computed by hand, which makes their limits
-visible.
+**Readability formulas** calculate estimates of text difficulty from surface counts such as
+sentences, words, and syllables. A **syllable** is one unit of pronunciation
+within a word. Hand calculation makes the formulas' limits visible.
 
 ::: {.callout-note}
 The job board and help articles scored here are fictional teaching texts.
@@ -23,10 +22,10 @@ The job board and help articles scored here are fictional teaching texts.
 
 By the end of this lesson, you will be able to:
 
-- define the counts used by Flesch Reading Ease;
-- define the counts used by Flesch-Kincaid Grade Level;
-- write a small syllable-counting heuristic;
-- measure that heuristic against hand-counted job-board words; and
+- describe the counts used by Flesch Reading Ease.
+- describe the counts used by Flesch-Kincaid Grade Level.
+- write a small syllable-counting heuristic.
+- measure that heuristic against hand-counted job-board words.
 - explain why a readability score is not a reading level for a person.
 :::
 
@@ -37,13 +36,16 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Count syllables with a visible shortcut
+## Count syllables with an explicit rule
 
-This lesson reads local files, extracts HTML with rvest, tokenises text, and uses
-dplyr, tibble, purrr, and stringr for the count checks. The syllable counter
-below is only a shortcut: clean the word, drop a final silent `e` unless the word
-ends in consonant plus `le`, then count groups of vowel letters including `y`.
-In the code, `\(word)` is R shorthand for a small function applied to one word.
+The lesson reads local files and extracts HTML with rvest. It tokenises text
+and uses dplyr, tibble, purrr, and stringr for count checks. The counter is a
+**heuristic**, a rule for an approximate result.
+
+The rule converts words to lowercase and keeps only letters from a to z.
+It removes a final `e` unless the word ends in a consonant plus `le`. It then
+counts groups of vowel letters, including `y`. In the code, `\(word)` is R
+shorthand for a small function applied to one word.
 
 ```{r}
 library(readr)
@@ -199,10 +201,9 @@ stopifnot(
 
 On these 30 job-board words, the heuristic matches 21 of 30, overcounts 5 of 30,
 and undercounts 4 of 30. The hand counts sum to 78 syllables, while the heuristic
-sums to 79. That one-syllable difference is small here, but the error is still
-real and it enters the readability formulas directly. The failures show three
-common traps: adjacent vowels at a syllable break, final `es` endings, and `y`
-joining a vowel group as in `employer`.
+sums to 79. That one-syllable error enters the readability formulas directly.
+Failures occur with adjacent vowels across syllable boundaries, final `es`
+endings, and `y` within vowel groups such as `employer`.
 
 ## Compute the formulas directly
 
@@ -214,8 +215,8 @@ Flesch-Kincaid Grade Level uses this formula:
 
 `0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59`
 
-The code below uses those definitions. It does not call a readability package to
-hide the arithmetic.
+The code calculates both formulas directly rather than calling a readability
+package.
 
 ```{r}
 score_from_counts <- function(document, sentence_count, word_count, syllable_count) {
@@ -309,7 +310,7 @@ syllable_sensitivity <- bind_rows(
 knitr::kable(
   preprocessing_counts,
   col.names = c("Text set", "Blocks", "Sentence pieces", "Words"),
-  caption = "What is included before the readability formulas run",
+  caption = "Inputs for readability calculations",
   row.names = FALSE
 )
 
@@ -333,7 +334,7 @@ knitr::kable(
   syllable_sensitivity |>
     select(document, syllables, flesch_reading_ease, flesch_kincaid_grade),
   col.names = c("Document", "Syllables", "Flesch Reading Ease, rounded", "Flesch-Kincaid grade, rounded"),
-  caption = "Effect of applying the observed net syllable bias to the job-board score",
+  caption = "Effect of applying the observed net syllable-count error to the job-board score",
   row.names = FALSE
 )
 ```
@@ -367,39 +368,45 @@ stopifnot(
 
 The code scores only the 22 job-detail list items as job-board sentences. The 19
 headings, employer names, and location labels contain 44 words, but they are not
-running sentences. If all 41 HTML blocks are glued into one string, those labels
-run into the list items and the Flesch score rounds to 33. That is a preprocessing
-artefact, not a reading result.
+complete sentences. Combining all 41 HTML blocks into one string merges those
+labels with the list items. The resulting Flesch score rounds to 33. That
+score reflects a preprocessing artefact rather than reading difficulty.
 
 With the list items kept separate, the job-board detail sentences have 22
 sentences, 133 words, and 230 heuristic syllables. The help articles have 6
 sentences, 56 words, and 89 syllables. The rounded scores are 54 and 7 for the
-job details, and 63 and 7 for the help articles. On common Flesch bands, the
-collapsed score of 33 falls in the difficult range; treating short job-board
-sentences as college-level prose would be implausible. The split score is still
-driven by the syllable term, especially long nouns such as `certification` and
-`apprenticeship`.
+job details, and 63 and 7 for the help articles.
 
-Those values compare two teaching texts under one set of counting rules. The
-formulas were fitted decades ago for particular populations (e.g., US military personnel or schoolchildren) and specific tasks. They count
-surface features and know nothing about meaning, layout, stakes, or whether a
-reader already knows the subject. A readability formula is a surface heuristic, never a true comprehension model. In practice, calculating these formulas reliably requires heavily tested ecosystem tools like `quanteda.textstats` in R or `textstat` in Python rather than custom arithmetic.
+Common Flesch bands classify the collapsed score of 33 as difficult. That
+college-level interpretation is implausible for these short job-board
+sentences. Syllable counts still strongly affect the split score, particularly
+long nouns such as `certification` and `apprenticeship`.
 
-The 30-word audit found errors on nearly a
-third of tested words, and the net bias alone moves the job-detail Flesch score
-from 54 to 56. The help article sample is only 56 words. Whole-number scores are
-already more precision than the inputs deserve.
+These values compare two teaching texts under one set of counting rules.
+Researchers fitted the formulas decades ago for specific populations, such as
+US military personnel or schoolchildren, and specific tasks. The formulas use
+surface features without meaning, layout, consequences, or the reader's
+subject knowledge. They are heuristics rather than comprehension models.
+
+Production calculations require established, extensively evaluated tools, such
+as `quanteda.textstats` in R or `textstat` in Python, rather than custom
+arithmetic.
+
+The 30-word audit found errors on nearly a third of the examined words. The net
+syllable-count error alone changes the job-detail Flesch score from 54 to 56.
+The help article sample contains only 56 words. Even whole-number scores imply
+more precision than these inputs justify.
 
 ## What to remember
 
 - Readability formulas use sentence, word, and syllable counts.
-- Preprocessing can change the sentence and word counts before the formula runs.
+- Preprocessing can change the sentence and word counts before formula calculation.
 - The syllable shortcut matched 21 of 30 job-board words and missed 9.
 - Whole-number scores are still rough because the syllable input is rough.
 
-The help articles score a little easier than the job-detail sentences here, but
-the samples are small and the syllable counter is noisy. The numbers are a prompt
-to read the text, not a substitute for reading it.
+The help articles score slightly easier than the job-detail sentences. The
+samples are small, and the syllable counter makes errors. The scores indicate
+text for closer reading rather than replace that reading.
 
 ## Sources
 

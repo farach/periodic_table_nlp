@@ -1,26 +1,26 @@
 ---
-title: "Checking word trends over time"
-subtitle: "Normalize counts and test the peak"
-description: "Learn how to track word frequency across speeches while separating durable patterns from one-document spikes."
+title: "Examining word trends over time"
+subtitle: "Normalized counts and peak comparisons"
+description: "Learn how to compare word frequency across speeches and find peaks that depend on one short document."
 categories: [signals and discovery, trend detection, inaugural addresses]
 ---
 
-Nia is preparing a timeline for a classroom wall. She can fit four word paths on the chart, and every path has to be fair to speeches of different lengths.
+Nia prepares a timeline for a classroom wall. The chart has room for four word-frequency series. Each series must compare speeches of different lengths fairly.
 
-A raw count would reward long speeches. A rate per thousand alphabetic tokens
-gives each speech a comparable scale, but a clean-looking line can still be
-carried by one short document.
+Raw counts tend to be higher in longer speeches. Rates per thousand alphabetic
+tokens provide a comparable scale. However, one short document can still
+produce an unusually high rate.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- count selected words by speech year;
-- normalize word counts per thousand alphabetic tokens;
-- flag rates from very short speeches;
-- recompute each peak after removing its peak speech; and
-- compare one trajectory with a permutation null.
+- count selected words by speech year.
+- normalize word counts per thousand alphabetic tokens.
+- put a mark on rates from very short speeches.
+- recompute each peak after removing its peak speech.
+- compare a peak rate with a length-weighted random baseline.
 :::
 
 ```{r}
@@ -32,7 +32,7 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Count words by speech
 
-A **trend** is a pattern over time. Counting alone does not prove one. The first step is still useful: put every speech on the same rate scale so length is not the only driver.
+A **trend** is a pattern over time. Counts alone do not prove a trend. Comparable rates reduce the effect of speech length on the comparison.
 
 ```{r}
 library(dplyr)
@@ -134,11 +134,13 @@ knitr::kable(
 )
 ```
 
-These four words were chosen to illustrate the method. Searching hundreds of
-words and reporting only the lines that look dramatic would create a
-multiple-comparisons problem: the search itself would make an unusual-looking
-line easier to find. A real trend scan must record how many words were tested
-and adjust its evidence or confirm the result on new documents.
+The lesson uses four words to illustrate the method. A search across hundreds
+of words increases the chance of an unusual-looking series. Reporting only
+those series creates a **multiple-comparisons problem**: the search makes chance
+patterns easier to find.
+
+A trend analysis must record the number of words examined. It must account for
+the number of comparisons or confirm the result on new documents.
 
 ```{r}
 #| include: false
@@ -158,23 +160,24 @@ stopifnot(
 ```
 
 The denominator counts lowercase ASCII alphabetic tokens because the tokenizer
-filters everything else before measuring speech length. The table says how often
-each tracked word appears and where it was densest on that stated scale. Rates
-from speeches under 500 alphabetic tokens are flagged because one occurrence in
-such a document is at least 2 uses per thousand. The median speech here has about
-1,959 alphabetic tokens, so the cutoff catches the smallest denominators without
-removing most speeches.
+removes other tokens before measuring speech length. The table reports each
+word's count and highest rate on that scale.
+
+The analysis puts a mark on speeches with fewer than 500 alphabetic tokens. One
+occurrence in those speeches contributes at least 2 occurrences per thousand.
+The median speech has about 1,959 alphabetic tokens. The cutoff therefore
+marks the smallest denominators without excluding most speeches.
 
 ## Plot the trajectories
 
-A line chart earns its place here because the corpus spans 236 years. Each dot
+A line chart shows the sequence across the corpus's 236 years. Each dot
 is one speech, and each line connects speeches for one word. Open circles mark
 rates from speeches under 500 alphabetic tokens.
 
 ```{r}
 #| label: fig-word-trends
-#| fig-cap: "Uses per thousand alphabetic tokens for four selected words across 60 inaugural addresses."
-#| fig-alt: "Four small line charts, one per word, sharing a vertical scale: america, freedom, constitution, and children. Each panel draws its word in blue over faint grey lines for the other three words. America, freedom, and children reach their highest rates after 1990; constitution peaks in 1793. Rates from speeches under 500 alphabetic tokens are marked with open circles."
+#| fig-cap: "Occurrences per thousand alphabetic tokens for four selected words across 60 inaugural addresses."
+#| fig-alt: "Four small line charts, one per word, sharing a vertical scale: america, freedom, constitution, and children. Each panel draws its word in blue over faint grey lines for the other three words. America, freedom, and children reach their highest rates after 1990. Constitution peaks in 1793. Open circles mark rates from speeches under 500 alphabetic tokens."
 #| fig-height: 5
 #| code-fold: true
 #| code-summary: "Show the plotting code"
@@ -208,8 +211,8 @@ ggplot(plot_data, aes(x = year, y = per_thousand_alphabetic)) +
   labs(
     title = "Three of the four words reach their highest rate after 1990",
     subtitle = str_c(
-      "Uses per 1,000 alphabetic tokens in 60 inaugural addresses.<br>",
-      "Open circles mark speeches under 500 tokens; grey lines show the other words."
+      "Occurrences per 1,000 alphabetic tokens in 60 inaugural addresses.<br>",
+      "Open circles mark speeches under 500 tokens. Grey lines show the other words."
     ),
     x = "Speech year",
     y = NULL
@@ -237,13 +240,15 @@ stopifnot(
 )
 ```
 
-The chart shows word-rate paths, not causes. A rise can reflect changing word choice, changing subject matter, transcription conventions, speech length, or some mix of those. Counts do not split those explanations by themselves.
+The chart shows word rates rather than causes. A rate increase can reflect different word choices, subjects, transcription conventions, speech lengths, or a combination of those factors. Counts alone do not distinguish those explanations.
 
-## Test the peak and a null
+## Compare the peak with a null model
 
-The largest-contributor check has to use the statistic being reported. Here that statistic is the peak rate, so each word is checked after removing the speech that created its maximum per-thousand value.
+The largest-contributor check must use the reported statistic. Here that statistic is the peak rate. The analysis recomputes each word's rate after it excludes the speech with the maximum per-thousand value.
 
-A **permutation null** asks what peak appears after the word occurrences are randomly reassigned. The **p-value** is the fraction of those shuffled peaks that are at least as high as the observed peak.
+For this **random baseline**, each word occurrence is assigned to a speech at random. Each speech's probability is proportional to its number of alphabetic tokens. Assignments are independent, so a speech can receive more than one occurrence. The code makes 1,000 allocations and records the highest rate in each.
+
+The **p-value** adds 1 to the number of random peaks at least as high as the observed peak. It then divides that sum by the number of random peaks plus 1.
 
 ```{r}
 constitution_counts <- trend_counts |>
@@ -307,7 +312,7 @@ knitr::kable(
 knitr::kable(
   constitution_peak_null_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
-  caption = "Permutation null for the constitution peak rate",
+  caption = "Length-weighted random baseline for the constitution peak rate",
   row.names = FALSE
 )
 ```
@@ -325,27 +330,30 @@ stopifnot(
 )
 ```
 
-The headline problem is visible for `constitution`. Its maximum rate is 7.41
-per thousand alphabetic tokens in 1793, but that speech has only 135 alphabetic
-tokens. One occurrence creates the peak. After removing that peak speech, the
-next rate is 6.65 in 1861; with the denominator guard applied, the peak does not
-survive because the reported maximum came from an under-500-token document.
-Shuffling the 207 occurrences across fixed speech lengths gives a null mean of
-5.31, a 90% interval from 3.42 to 7.43, and p = 0.233. The observed 1793 peak is
-well within what this shuffle can produce.
+The problem is visible for `constitution`. Its maximum rate is 7.41 per
+thousand alphabetic tokens in 1793. That speech has only 135 alphabetic tokens,
+so one occurrence creates the peak.
 
-Trend methods always draw a line once the analyst picks words and dates. The null asks what peak would appear if the same number of word occurrences landed in speeches according to speech length, with time labels no longer carrying the pattern.
+After removal of that speech, the next rate is 6.65 in 1861. The original peak
+fails the denominator guard because its document contains fewer than 500
+tokens.
+
+Random allocation of the 207 occurrences across fixed speech lengths gives a
+null mean of 5.31. The 90% interval is 3.42 to 7.43, with p = 0.233. The
+observed 1793 peak is within the range that this allocation can produce.
+
+Trend methods produce a series for the chosen words and dates. The null allocates the same number of word occurrences across speeches in proportion to speech length. It measures the resulting peak without the observed time pattern.
 
 ## What to remember
 
 - Normalize word counts per thousand alphabetic tokens before comparing
   speeches.
-- Flag rates from very short documents; this lesson uses a 500-token cutoff.
+- Put a mark on rates from very short documents. This lesson uses a 500-token cutoff.
 - The four tracked words have different coverage across the 60 speeches.
-- `constitution` peaks in 1793 only because 1 occurrence sits in a 135-word speech.
+- The `constitution` peak in 1793 comes from 1 occurrence in a 135-word speech.
 - Word-rate change can mix word choice, subject matter, transcription, and length.
 
-Use trend charts to ask better reading questions, then test whether the pattern survives the obvious stress check.
+Use trend charts to find patterns for closer reading. Compare those patterns after excluding the largest contributor.
 
 ## Sources
 

@@ -5,17 +5,16 @@ description: "Learn how to draw safe inline annotations from spaCy offsets and w
 categories: [information visualization, annotated text, named entities]
 ---
 
-Sam is reviewing short job-board and flyer sentences. A table of entity rows is
-accurate, but it is hard to see which words were labeled without reading the
-same sentence twice.
+Sam examines short job-board and flyer sentences. A table records entity labels,
+but matching rows to words can require reading each sentence twice.
 
 **Annotated text visualization** draws labels on spans of text while leaving the
-source text unchanged. A **span** is a stretch of text located by character
-offsets. The display can help readers inspect labels quickly, but the offsets,
-escaping, and overlap rules have to be honest.
+source text unchanged. A **span** is a continuous portion of text located by
+character offsets. The display helps readers examine labels. Correct offsets,
+escaped text, and explicit overlap rules are necessary for accurate display.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The author created the fictional Riverton Workforce Lab, job board, and training flyer for teaching.
 :::
 
 ::: {.callout-tip}
@@ -23,11 +22,11 @@ The Riverton Workforce Lab, its job board, and its training flyer are fictional 
 
 This lesson shows how to:
 
-- use spaCy token offsets instead of searching for entity strings;
-- convert 0-based, end-exclusive offsets for R's `substr()`;
-- draw labels with htmltools tag objects that escape text;
-- keep annotation layers separate when spans overlap;
-- provide a captioned table with every span; and
+- use spaCy token offsets instead of searching for entity strings
+- convert 0-based, end-exclusive offsets for R's `substr()`
+- draw labels with htmltools tag objects that escape text
+- keep annotation layers separate when spans overlap
+- provide a captioned table with every span
 - record the spaCy and model versions beside the display.
 :::
 
@@ -164,13 +163,13 @@ stopifnot(
 )
 ```
 
-The model labels `HOUSE` as `ORG`. That wrong span stays visible. Lesson 27
-checks the named-entity output; this lesson only shows how to draw labels
+The model gives `HOUSE` the label `ORG`. That incorrect span stays visible.
+Lesson 27 examines the named-entity output. This lesson shows how to draw labels
 without losing the source positions.
 
 The entity tags use `B` for the first token in a span and `I` for later tokens
-inside the same span. In `s001`, the three tagged tokens start at character 5,
-7, and 8; together they make the span from 5 up to, but not including, 12.
+inside the same span. In `s001`, the three tagged tokens start at characters 5,
+7, and 8. Together they form the span from 5 to 12, with position 12 excluded.
 
 ```{r}
 s001_token_offsets <- parsed |>
@@ -246,10 +245,11 @@ stopifnot(
 )
 ```
 
-## Check code-point units with an accented name
+## Examine code-point units with an accented name
 
 Offsets need a counting rule. spaCy's Python strings count Unicode code points,
-and R's `substr()` here slices by character positions, not bytes. The sentence
+the numerical units that identify characters. R's `substr()` here uses
+character positions, not bytes. The sentence
 below includes accented characters so the byte count differs from the character
 count.
 
@@ -360,17 +360,18 @@ stopifnot(
 )
 ```
 
-Do not use byte offsets as character offsets. In this example, the byte offsets
-would take two extra characters (`Renée Díaz r`), and every later span in the
-sentence would slide to the right.
+Do not use byte offsets as character offsets. Here, byte offsets would select
+two extra characters (`Renée Díaz r`). Every later span would also shift right
+from its correct position.
 
 ## Draw one layer only when spans do not overlap
 
-The renderer below accepts one sentence and one layer of non-overlapping spans.
-It builds the line with htmltools tags, so source text is escaped by
-construction. The label appears as visible text inside each mark; the background
-color is only a backup cue. The colors and borders come from two classes in the
-site's stylesheet, so the code only names them.
+The renderer accepts one sentence and one layer of non-overlapping spans. It
+builds the line with htmltools tags, which escape source text. **Escaping**
+prevents the browser from interpreting source characters as HTML markup. Each
+mark contains a visible label. Background color provides only an additional
+cue. Two stylesheet classes supply colors and borders, so the code only names
+those classes.
 
 ```{r}
 has_layer_overlap <- function(spans) {
@@ -386,7 +387,7 @@ has_layer_overlap <- function(spans) {
 
 render_annotation_layer <- function(sentence_id, layer_name, spans, source_text) {
   if (has_layer_overlap(spans)) {
-    stop("This layer has overlapping spans; show it as a table.", call. = FALSE)
+    stop("This layer has overlapping spans. Show it as a table.", call. = FALSE)
   }
 
   ordered <- spans |>
@@ -491,10 +492,10 @@ depend on color or inline layout.
 
 ## Keep a table of every span
 
-Sam also wants to show a reviewer layer for a constructed nested example:
-`Riverton` can be a `GPE`, spaCy's label for a geopolitical place such as a
-town, inside `Riverton Skills Centre`, an organisation name. The two annotations
-are kept in separate layers so each line can be drawn without overlap.
+Sam also shows a constructed example with nested annotations. `Riverton` can
+receive `GPE`, spaCy's label for a geopolitical place such as a town. That name
+appears inside the organisation name `Riverton Skills Centre`. Separate layers
+keep the annotations from overlapping on either line.
 
 ```{r}
 review_sentence <- tibble(
@@ -533,7 +534,7 @@ knitr::kable(
     "End",
     "Text",
     "Label",
-    "Review status"
+    "Annotation source"
   ),
   caption = "Every span used in the inline annotated-text displays",
   row.names = FALSE
@@ -558,7 +559,7 @@ stopifnot(
 )
 ```
 
-Now each reviewer layer can be drawn on its own line.
+The renderer now draws each reviewer layer on a separate line.
 
 ```{r}
 review_lines <- review_spans |>
@@ -595,9 +596,8 @@ example showing why layers matter.
 
 ## Show overlap instead of forcing it inline
 
-If those two reviewer spans are put into one layer, they overlap. This lesson
-does not try to squeeze them into one inline row. It switches to the table view
-for that layer.
+The two reviewer spans overlap within one layer. The lesson displays that layer
+as a table instead of one inline row.
 
 ```{r}
 overlap_spans <- review_spans |>
@@ -627,10 +627,10 @@ knitr::kable(
     "End",
     "Text",
     "Label",
-    "Review status",
+    "Annotation source",
     "Display decision"
   ),
-  caption = "Overlapping spans are kept in a table instead of one inline layer",
+  caption = "The table retains overlapping spans instead of combining them in one inline layer",
   row.names = FALSE
 )
 ```
@@ -654,13 +654,13 @@ overlap_error <- tryCatch(
 )
 
 stopifnot(
-  identical(overlap_error, "This layer has overlapping spans; show it as a table.")
+  identical(overlap_error, "This layer has overlapping spans. Show it as a table.")
 )
 ```
 
-Nested spans can be drawn by some specialized tools. Crossing spans are harder
-because one tag cannot contain the other. For a first lesson, the safer rule is
-simple: draw one non-overlapping layer at a time and keep the complete table.
+Some specialized tools can draw nested spans. Crossing spans are harder because
+neither tag can contain the other. Draw one non-overlapping layer at a time.
+Keep the complete table.
 
 ## Escape source text by construction
 
@@ -725,7 +725,7 @@ knitr::kable(
     "End",
     "Text",
     "Label",
-    "Review status"
+    "Annotation source"
   ),
   caption = "Markup-like source text preserved as table text",
   row.names = FALSE
@@ -753,26 +753,27 @@ stopifnot(spacy_closed)
 ## What this display does not prove
 
 The highlights show where the model or reviewer layer placed labels. They do not
-prove that the labels are correct. The `HOUSE` example is deliberately left in
-place because it is a model-output error from the earlier NER lesson.
+prove that the labels are correct. The page retains `HOUSE` because it shows a
+model-output error from the earlier named-entity recognition lesson.
 
-The page also does not certify accessibility. The visible label text inside each
-mark keeps color from carrying the meaning alone, and the contrast is designed
-for the automated scan. Screen-reader behavior and forced-colors behavior still
-need manual review.
+The page does not certify accessibility. Visible label text means that color
+is not the only indication of meaning. The style targets the automated contrast
+scan. Screen-reader and forced-colors behavior still need manual checks.
 
 ## What to remember
 
 - An annotated text visualization draws labels on spans while keeping source
   text unchanged.
-- spaCy's `idx` gives 0-based token starts; R's `substr()` needs `start + 1`.
+- spaCy's `idx` gives 0-based token starts. R's `substr()` needs `start + 1`.
 - Slice spans from offsets instead of searching for joined entity strings.
 - Build inline HTML with tag objects so source text is escaped as text.
-- Put visible labels inside the marks; do not rely on color alone.
-- Draw one non-overlapping layer at a time and keep a captioned span table.
+- Put visible labels inside the marks.
+- Do not rely on color alone.
+- Draw one non-overlapping layer at a time.
+- Keep a captioned span table.
 
-Sam can now read the highlights and still trace every label back to a sentence
-ID, a layer, and an offset pair.
+Sam can read the highlights and find each label's sentence ID, layer, and
+offset pair.
 
 ## Sources
 

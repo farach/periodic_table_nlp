@@ -1,27 +1,27 @@
 ---
-title: "Looking inside words with a dictionary"
+title: "Examining word parts with a dictionary"
 subtitle: "Use hunspell analyses without mistaking them for contextual morphology"
 description: "Learn what an English spelling dictionary can and cannot say about stems, affixes, ambiguity, and context in workforce text."
 categories: [word parsing, morphology, workforce research]
 ---
 
-Twenty-eight reviewed sentences come from a job board page and a training
+Twenty-eight reviewed text units come from a job board page and a training
 flyer. The team wants to know whether `shifts` and `shift` should
 count as the same word when it summarizes the vocabulary.
 
 That question matters because a worker may search for training, while a job
 posting may say `shifts`, `certification`, or `certificate`. The team needs a
-way to look inside a word before it decides what to group.
+method for word-part analysis before it decides which forms to group.
 
-**Morphology** is the internal structure of words. A **stem** carries the core
+**Morphology** is the internal structure of words. A **stem** gives the main
 meaning, and **affixes** are added pieces such as plural `s` or past-tense `ed`.
 English marks a small amount of grammar this way, so English speakers often
 notice word parts only when a form looks odd.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. The dictionary output is real and comes from the
-local hunspell package.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching. The local hunspell package produces the
+dictionary output.
 :::
 
 ::: {.callout-tip}
@@ -29,20 +29,20 @@ local hunspell package.
 
 By the end of this lesson, you will be able to:
 
-- describe a stem and an affix in plain language;
-- read a dictionary-based word analysis;
-- distinguish a useful decomposition from a misleading one;
-- find unanalyzed and ambiguous word types in a small vocabulary; and
+- describe a stem and an affix in plain language.
+- read a dictionary-based word analysis.
+- distinguish a useful decomposition from a misleading one.
+- find unanalyzed and ambiguous word types in a small vocabulary.
 - explain why dictionary analysis differs from contextual morphology in
   sentences.
 :::
 
-This lesson takes a limited first step. It asks what an English spelling
-dictionary can say about isolated word forms. That is different from
-**contextual morphology**, where a tagger or morphologizer labels a token in a
-sentence with feature bundles such as `Number=Plur` or `Tense=Past`. This page
-covers dictionary morphology, not contextual morphological tagging; Lesson 18
-shows token-level feature bundles in its `feats` column.
+This lesson examines an English spelling dictionary's analysis of isolated
+word forms. **Contextual morphology** instead assigns grammatical feature
+bundles to tokens within sentences. A tagger or morphologizer produces
+features such as `Number=Plur` or `Tense=Past`.
+This page covers dictionary morphology, not contextual morphological tagging.
+Lesson 18 shows token-level features in its `feats` column.
 
 ```{r}
 #| include: false
@@ -53,10 +53,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Read the workforce sentences
 
-To read the sentences, the code brings in readr for files, dplyr and tibble for
-tables, purrr for repeated list checks, stringr for text checks, tokenizers for
-word splitting, and hunspell for dictionary analysis. It then reads the 28
-reviewed workforce sentences.
+The code loads readr for files and dplyr and tibble for tables.
+It also loads purrr for list operations and stringr for text checks.
+The tokenizers package splits words, and hunspell performs dictionary analysis.
+The code then reads the 28 reviewed workforce text units.
 
 ```{r}
 library(readr)
@@ -96,7 +96,7 @@ document_counts <- sentences |>
 
 knitr::kable(
   document_counts,
-  col.names = c("Document ID", "Sentences"),
+  col.names = c("Document ID", "Text units"),
   caption = "The 28 Riverton text units by source document",
   row.names = FALSE
 )
@@ -125,13 +125,13 @@ word behavior.
 
 ## Ask the dictionary for analyses
 
-`hunspell_analyze()` checks each word against an English spelling dictionary and
+`hunspell_analyze()` compares each word with an English spelling dictionary and
 its affix rules. The output is compact. `st:` gives a stem, and `fl:` gives a
 flag used by the dictionary's rule system. A flag is a code in the dictionary,
 not a reader-friendly grammar label.
 
 In the code, `\(value)` is R shorthand for a small function. Here it means that
-each returned vector is named `value` before it is pasted into one string.
+the function receives each vector as `value` and joins its elements into one string.
 
 ```{r}
 example_words <- c(
@@ -157,8 +157,8 @@ analysis_table <- tibble(
 
 knitr::kable(
   analysis_table,
-  col.names = c("Word", "Allowed analyses", "Returned stems"),
-  caption = "Five words analyzed by hunspell",
+  col.names = c("Word", "Dictionary analyses", "Returned stems"),
+  caption = "Hunspell analyses for five words",
   row.names = FALSE
 )
 ```
@@ -186,23 +186,26 @@ stopifnot(
 For `shifts`, the dictionary finds the stem `shift` and marks the plural form
 with flag `S`.
 
-The entry for `requires` gives a warning. Hunspell can produce an analysis that
-is internally legal and completely false. It allows `re-` in front of dictionary
-words, and `quire` happens to be a dictionary word. The two have nothing to do
-with each other: `require` came into English whole, from Old French `requerre`,
-from Latin `requirere`. The rule found a path, not a history.
+The entry for `requires` illustrates a misleading analysis.
+Hunspell can satisfy its internal rules while giving a false word analysis.
+Its rules permit `re-` before dictionary words, and the dictionary contains
+`quire`. That combination does not explain the origin of `require`.
+English adopted the whole word from Old French `requerre`, from Latin
+`requirere`. A valid dictionary operation is not necessarily a historical
+explanation.
 
 `certification` has two analyses. It can stand as `certification`, or it can be
 connected to `certificate` through another rule. The letters alone do not choose
 between those analyses.
 
-With `running`, the word is listed as its own dictionary entry, so the analyzer
-returns `running` and stops there. A common form can be stored directly.
+The dictionary lists `running` as a separate entry.
+The analyzer therefore returns `running` without further decomposition.
+The dictionary can store a common form directly.
 
-## Count what the dictionary can see
+## Count dictionary analyses
 
-The team next applies the same dictionary check to the vocabulary of the 28
-sentences. A **word type** is one distinct word form after lowercasing. If
+The team applies the dictionary check to the vocabulary of the 28 text units.
+A **word type** is one distinct word form after lowercasing. If
 `training` appears several times, it counts once in this vocabulary.
 
 ```{r}
@@ -248,8 +251,8 @@ knitr::kable(
   summary_counts,
   col.names = c(
     "Word types",
-    "Analyzed by dictionary",
-    "Not analyzed",
+    "Types with an analysis",
+    "Types without an analysis",
     "More than one dictionary analysis"
   ),
   caption = "Dictionary coverage for the Riverton vocabulary",
@@ -282,16 +285,16 @@ stopifnot(
 )
 ```
 
-The dictionary analyzes 91 of the 96 word types. Five receive no analysis: three
-numbers, the month `october`, and the place name `riverton`. Eight word types
-receive more than one analysis, which means the word form alone leaves more than
-one route through the dictionary.
+The dictionary gives analyses for 91 of the 96 word types.
+Five receive no analysis: three numbers, the month `october`, and the place
+name `riverton`. Eight word types have multiple analyses under the dictionary
+rules. Their spelling alone does not select one analysis.
 
-## Inspect the ambiguous cases
+## Examine the ambiguous cases
 
-Ambiguity is not a bug by itself. A single spelling can have several plausible
-paths through a dictionary. The next table shows the Riverton word types where
-hunspell returned more than one analysis.
+Ambiguity alone does not indicate a software error.
+A single spelling can have several plausible dictionary analyses.
+The next table shows Riverton word types with more than one hunspell analysis.
 
 ```{r}
 ambiguous_words <- vocabulary_summary |>
@@ -307,7 +310,7 @@ ambiguous_words <- vocabulary_summary |>
 
 knitr::kable(
   ambiguous_words,
-  col.names = c("Word", "Allowed analyses"),
+  col.names = c("Word", "Dictionary analyses"),
   caption = "Riverton word types with more than one dictionary analysis",
   row.names = FALSE
 )
@@ -327,43 +330,41 @@ stopifnot(
 )
 ```
 
-For the Lab, this table is useful because it slows the decision down. The
-dictionary has supplied possible word structures, not final labels. A person
-still has to decide whether the structure helps the question at hand.
+The table shows decisions that need checks.
+The dictionary supplies possible word structures, not final labels.
+A person must decide whether each analysis addresses the research question.
 
 ## Keep dictionary analysis separate from contextual morphology
 
-English puts some information inside word endings: `shifts` marks plural, and
-`provided` marks a form related to tense or aspect. It leaves much else to word
-order and nearby helper words. Languages that mark case, person, tense, and
-number on the word itself place more information inside a single token. A tool
-built around English spelling assumptions will miss much of that structure.
+English word endings express some grammatical information.
+For example, `shifts` marks plural, and `provided` has a form related to tense
+or aspect. Word order and nearby helper words express other information.
+Some languages mark case, person, tense, and number within one token.
+A tool based on English spelling assumptions will miss much of that structure.
 
-Hunspell is a spelling dictionary with affix rules. It is not a universal
-morphological analyzer. It can produce an analysis that is internally legal and
-completely false. Hunspell allows `re-` in front of dictionary words, and
-`quire` happens to be a dictionary word. The rule found a path, not a history.
+Hunspell is a spelling dictionary with affix rules, not a universal
+morphological analyzer. As the `requires` example shows, a result can satisfy
+dictionary rules yet misrepresent word structure.
 
-This lesson stays with spelling alone. In NLP, contextual morphology usually
-means assigning feature bundles such as `Number=Plur` or `Tense=Past` to a
-token in a sentence. Those features live in the `feats` column of a treebank
-and can be produced by a tagger or morphologizer. Lesson 18 displays them in
-parser output. This page does not produce those tags. It runs a spelling
-dictionary over an out-of-context list of word types, which is a different task
-with a different input and output.
+This lesson examines isolated spellings, not tokens within sentences.
+Contextual morphology usually assigns features such as `Number=Plur` or
+`Tense=Past` to sentence tokens. Taggers or morphologizers can produce these
+features, which a treebank stores in its `feats` column.
+Lesson 18 displays them in parser output. This page instead applies a spelling
+dictionary to a word-type list.
 
 ## What to remember
 
 - Morphology studies the parts inside words.
-- A stem carries the core meaning; affixes modify the form.
+- A stem gives the main meaning. Affixes modify the form.
 - Dictionary rules can produce useful analyses and misleading ones.
-- One word form can have more than one allowed analysis.
-- Hunspell checks spelling-style rules on isolated words, not contextual
-  morphology in sentences.
+- One word form can have several analyses under the dictionary rules.
+- Hunspell applies spelling-style rules to isolated words. It does not produce
+  contextual morphological features in sentences.
 
-The team can group `shifts` with `shift` for a plain vocabulary count, but every
-returned stem still needs human judgment about the text. Feature bundles in
-running sentences are a different task.
+The team can group `shifts` with `shift` for a vocabulary count.
+Every returned stem still requires human judgment about the text.
+Contextual grammatical feature assignment is a separate task.
 
 ## Sources
 

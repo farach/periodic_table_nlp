@@ -5,16 +5,16 @@ description: "Learn why capital letters create false abbreviation hits and how p
 categories: [phrases and entities, abbreviations, workforce research]
 ---
 
-Short forms only help the Riverton Workforce Lab if they can be tied back to
-their long forms. A tempting shortcut is to look for all-capital tokens, then
-ask whether any of them are real abbreviations.
+The Riverton Workforce Lab needs links between short forms and their long
+forms. One simple rule finds all-capital tokens as possible abbreviations.
 
-The flyer immediately tests that shortcut. Its headings are printed in capitals,
-so a rule that treats capitals as an abbreviation signal may confuse design with
-meaning.
+The flyer shows a limitation of that rule.
+Its capitalized headings reflect formatting, not necessarily abbreviated
+meanings.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching.
 :::
 
 ::: {.callout-tip}
@@ -22,10 +22,10 @@ The Riverton Workforce Lab, its job board, and its training flyer are fictional 
 
 In this lesson, you will practice how to:
 
-- find all-capital tokens with a regular expression;
-- hand-check capitalised heading hits;
-- test what a dictionary-and-length guard removes;
-- find `Long Form (SHORT)` definitions; and
+- find all-capital tokens with a regular expression.
+- examine capitalised heading matches.
+- measure what a dictionary-and-length guard removes.
+- find `Long Form (SHORT)` definitions.
 - separate real data from constructed examples.
 :::
 
@@ -38,10 +38,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Find all-capital tokens
 
-The setup chunk reads the sentence file, expands regex matches, and checks words
-against hunspell. stringr regular expressions use the ICU engine, but the
-`[A-Z]` range below is still an ASCII capital-letter rule; it will not match a
-token such as `ÉCOLE`.
+The setup reads the text file, expands regex matches, and compares words with
+hunspell's dictionary. The stringr package uses the ICU regex engine.
+The `[A-Z]` range nevertheless covers only ASCII capitals.
+It will not match a token such as `ÉCOLE`.
 
 ```{r}
 library(readr)
@@ -111,19 +111,21 @@ stopifnot(
 )
 ```
 
-An **abbreviation** is any shortened written form, including `Dr.` and
-`approx.`. An **initialism** is built from initial letters and read letter by
-letter, like `NLP`. An **acronym** is built from initial letters and read as a
-word, like `NATO`. This rule finds none of those categories directly; it finds
-runs of two or more ASCII capital letters, a different thing that sometimes
-overlaps. Here it finds 7 tokens, all from the two flyer headings `RIVERTON
-SKILLS OPEN HOUSE` and `DATA SUPPORT CERTIFICATE`. The Riverton text contains no
-genuine short-form abbreviation in those headings.
+An **abbreviation** is a shortened written form, such as `Dr.` or `approx.`.
+An **initialism** uses initial letters pronounced separately, as in `NLP`.
+An **acronym** uses initial letters pronounced as a word, as in `NATO`.
+This rule detects none of those categories directly.
+It finds sequences of two or more ASCII capitals, which sometimes correspond
+to abbreviations.
+
+Here it finds 7 tokens from `RIVERTON SKILLS OPEN HOUSE` and
+`DATA SUPPORT CERTIFICATE`. Neither heading contains a genuine short-form
+abbreviation.
 
 ## Score and guard the capital rule
 
-The lesson author hand-checked every all-capital hit in the Riverton text and
-found no true short-form abbreviations. The guard below keeps only tokens that
+The lesson author examined every all-capital hit in the Riverton text and
+found no short-form abbreviations. The guard below keeps only tokens that
 are five characters or shorter and absent from the dictionary.
 
 ```{r}
@@ -173,7 +175,7 @@ guard_failure_examples <- tibble(token = c("UNESCO", "IT")) |>
 knitr::kable(
   capital_score,
   col.names = c("Rule", "Candidates kept", "Hand-rejected hits", "True abbreviations found"),
-  caption = "Hand review of the capital-letter abbreviation rule before and after a guard",
+  caption = "Human checks of the capital-letter abbreviation rule before and after a filter",
   row.names = FALSE
 )
 
@@ -208,19 +210,20 @@ stopifnot(
 )
 ```
 
-The guard keeps zero candidates. In this file that means it removes 7
-hand-rejected heading words and finds 0 true abbreviations. A filter that removes
-every hit is not evidence of a good filter: six tokens are dictionary words, four
-are longer than five characters, and `RIVERTON` is removed only by the length
-limit. The same guard rejects `UNESCO` on length and `IT` because `it` is a
-dictionary word. The dictionary result also depends on the hunspell dictionary
-available at run time.
+The guard keeps zero candidates. It removes 7 hand-rejected heading words and
+finds 0 abbreviations. Removing every match does not establish a good
+filter. Six tokens are dictionary words, and four exceed five characters.
+Only the length limit removes `RIVERTON`.
 
-## Look for parenthetical definitions
+The guard also rejects `UNESCO` because of its length.
+It rejects `IT` because the dictionary contains `it`.
+Results depend on the hunspell dictionary available at execution time.
 
-The Riverton text has no true `Long Form (SHORT)` examples, so this section uses
-a tiny author-created passage. It is constructed only to show how the pattern
-works.
+## Find parenthetical definitions
+
+The Riverton text has no `Long Form (SHORT)` examples.
+This section uses a short author-created passage solely to demonstrate the
+pattern.
 
 In the code, `\(match_table, current_sentence_id)` is R shorthand for a small
 function that handles one sentence's match table and ID.
@@ -319,27 +322,31 @@ stopifnot(
 )
 ```
 
-The parenthetical pattern finds zero definitions in the Riverton text. It finds
-`Natural Language Processing (NLP)` and `Data Support Certificate (DSC)` in the
-constructed passage, which contains only positive cases. That run cannot show
-how often the pattern fires where it should not, or what it misses. The pattern
-only checks shapes: capitalised words followed by a bracketed run of capitals.
-It does not check that the short-form letters come from the long form, so
-`Riverton Skills Centre (NLP)` also matches. The Schwartz and Hearst algorithm
-listed under Sources checks those letter links and allows lowercase long forms;
-this rule is much smaller.
+The parenthetical pattern finds zero Riverton definitions.
+It finds `Natural Language Processing (NLP)` and
+`Data Support Certificate (DSC)` in the constructed passage.
+That passage contains only positive cases.
+The result cannot measure false matches or missed definitions.
+
+The pattern matches capitalised words followed by parenthesized capitals.
+It does not compare the short-form letters with the long form.
+Thus `Riverton Skills Centre (NLP)` also matches.
+The Schwartz and Hearst algorithm listed under Sources examines those letter
+links and accepts lowercase long forms. This lesson's rule performs fewer
+checks.
 
 ## What to remember
 
 - All-capital text is only a rough short-form signal.
-- The 7 capital-letter hits in the Riverton headings contain 0 true abbreviations.
-- A guard that keeps 0 of 7 hits has not proved that it protects true abbreviations.
+- The 7 capital-letter hits in the Riverton headings contain 0 abbreviations.
+- Keeping 0 of 7 matches does not establish that the guard preserves abbreviations.
 - The parenthetical rule finds 2 constructed positive cases and 0 Riverton definitions.
-- Shape-only parenthetical rules need a letter-link check before they can be trusted.
+- Parenthetical shape rules need an additional check of short-form letters
+  against the long form.
 
-Reject the all-capital shortcut for these flyer headings. For future text, keep
-candidate short forms visible until a rule has been tested on both true examples
-and counter-examples.
+Reject the all-capital rule for these flyer headings.
+For future text, retain candidate short forms during rule evaluation.
+Evaluate both examples and counter-examples before accepting the rule.
 
 ## Sources
 

@@ -1,36 +1,37 @@
 ---
 title: "Sorting messages by purpose"
-subtitle: "Train a multi-class intent classifier and question the labels"
+subtitle: "Intent prediction and label design"
 description: "Learn how intent classification routes messages and why the label schema controls what the system can do."
 categories: [classification, intent classification, workforce research]
 ---
 
-Luis is assigned the shared inbox while the front desk is closed. One message
-asks for a password reset, another asks whether a class accepts GED applicants,
-and a third reports a suspicious recruiter.
+Luis manages the shared inbox while the front desk is closed. One message asks
+for a password reset. Another asks whether a class accepts GED applicants. A
+third reports a suspicious recruiter.
 
 Routing the message is useful only if the label matches a real next step. A
-worker can reset access, check application status, answer eligibility questions,
-record a problem, or call someone back. Anything outside those actions strains
-the label set.
+worker can reset access, read application status, answer eligibility questions,
+record a problem, or return a call. The label set does not describe actions
+outside that list.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+teaching materials.
 :::
 
-A dataset written by the same person who writes the classifier cannot measure
-whether the method works. This lesson uses the invented inbox to show mechanics;
-it does not estimate how an intake system would perform with real residents.
+A dataset written by the classifier's author cannot establish whether the
+method works generally. This lesson demonstrates calculations with the invented
+inbox. It does not give an estimate of intake-system performance for real residents.
 
 ::: {.callout-tip}
 ## What you will learn
 
 By the end of this lesson, you will be able to:
 
-- define intent classification in plain language;
-- fit a small multi-class text model;
-- inspect multi-class probability output;
-- identify messages that strain one-label routing; and
+- explain intent classification in plain language.
+- fit a small multi-class text model.
+- examine multi-class probability output.
+- find messages that need more than one routing label.
 - explain why coarser taxonomies can make accuracy look better.
 :::
 
@@ -43,11 +44,13 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the intent labels
 
-An **intent** is what the sender wants the system to do. In this fixture each
-message has exactly one recorded intent, even when a person might see more than
-one. readr opens the file, dplyr and tidyr reshape results, purrr selects
-probability columns, stringr checks simple rules, and tidymodels with textrecipes
-and glmnet fits the model.
+An **intent** is what the sender wants the system to do. Each message in this
+fixed teaching dataset has exactly one recorded intent, even when a person
+might find several.
+
+readr reads the file, while dplyr and tidyr reshape results. purrr selects
+probability columns, and stringr evaluates simple rules. tidymodels,
+textrecipes, and glmnet fit the model.
 
 ```{r}
 library(readr)
@@ -112,15 +115,15 @@ stopifnot(
 )
 ```
 
-The label schema is already a decision about what the Lab can act on. If no one
-can process a distinction, adding that distinction to the label list creates
-extra disagreement rather than better service.
+The label schema states the distinctions that the Lab can use. If staff cannot
+act on a distinction, adding its label creates disagreement without improving
+service.
 
 ## Fit a multi-class model
 
 **Multi-class classification** chooses one label from more than two possible
-labels. The seed before this fit is 5002. The model is fitted so the reader can
-see the mechanics of a multi-class prediction.
+labels. The seed before this fit is 5002. The model demonstrates the
+calculations for a multi-class prediction.
 
 ```{r}
 intent_recipe <- recipe(intent ~ text, data = inbox) |>
@@ -178,7 +181,7 @@ knitr::kable(
   col.names = c(
     "Message",
     "Ask eligibility",
-    "Check status",
+    "Read application status",
     "Report problem",
     "Request callback",
     "Reset access"
@@ -223,22 +226,21 @@ stopifnot(
 )
 ```
 
-The fitted model has five classes. For each message it returns five
-probabilities, one for each class, and each row's probabilities sum to 1. Those
-predictions are made on the same 60 rows the model was fitted to, so the table
-above shows output shape and nothing about how well the model works. No
-performance score is reported here. The messages were written by the same person
-who built the classifier, there are only 60 of them, and any score computed from
-them would measure this fixture rather than the method. A real number would
-require messages the author did not write, labels supplied by people who did not
-build the model, and a holdout set kept away from fitting.
+The fitted model has five classes. It returns five probabilities per message,
+one per class, with a row sum of 1. The model predicts the same 60 rows it uses
+for fitting. The table therefore demonstrates output structure rather than
+performance. This lesson reports no performance score.
 
-## Find labels that strain the taxonomy
+The classifier's author also wrote all 60 messages. A score on those messages
+would describe this fixture rather than the method. Independent evaluation
+requires messages from other authors and labels from reviewers who did not
+build the model. It also requires a holdout set excluded from fitting.
 
-The hard part is often the label schema, not the model. A **taxonomy** is the
-allowed list of labels and the rules for choosing among them. If the taxonomy
-does not match the downstream work, the classifier can be accurate and still
-route badly.
+## Find gaps in the taxonomy
+
+A **taxonomy** specifies the labels and the rules for choosing them. Label
+design can be harder than model fitting. If the taxonomy does not match the
+work, accurate label predictions can still send messages to the wrong service.
 
 ```{r}
 boundary_messages <- inbox |>
@@ -300,35 +302,36 @@ stopifnot(
 ```
 
 Messages M034 and M055 genuinely fit two actions. A staff member may both record
-a problem and answer whether the offer is safe. If the Lab has a separate fraud
-review queue, these two messages should probably go there. If it does not, the
-taxonomy forces the worker to choose the nearest available bucket and record the
-loss.
+a problem and answer whether the offer is safe. If the Lab has a separate queue for fraud
+checks, these two messages should probably go there. If it does not, the
+worker must choose the nearest available label and record the information that
+the label omits.
 
-M044 fits none of the main service questions by itself; it is a call preference
-clipped away from the reason for the call. A good intake design would ask for the
-missing purpose before routing. Lesson 11, "Working with several annotators,"
-shows why multiple reviewers should inspect these boundary cases before a label
-becomes a reference answer.
+M044 fits none of the main service questions by itself. It gives a call
+preference without the reason for the call. An intake system needs the missing
+purpose before it can route the message. Lesson 11, "Working with several
+annotators," explains why multiple reviewers should examine boundary cases
+before choosing reference labels.
 
-An `other` label absorbs what the designer did not anticipate. It is useful as a
-safety valve, but it also hides new work unless someone reads the contents.
+An `other` label covers messages that the designer did not anticipate. Staff
+must examine those messages to find new service needs.
 
-## Coarser labels can flatter a system
+## Broader labels can increase measured accuracy
 
-If several intents are folded into broader queues, the same guesses can receive a
-higher score. The classifier did not get smarter; the scoring rule became easier.
-This lesson does not compute that score because a hand-fitted rule on these same
-60 messages would only create another resubstitution number. The design point is
-enough: measured accuracy can rise when the taxonomy gets coarser without the
-system getting better. That may be acceptable if the broad queue is all the
-organization can act on. It is misleading if the report implies better
-understanding.
+Combining intents into broader queues can increase the score for unchanged
+predictions. The scoring task becomes easier without better classification.
+This lesson does not compute that score. A rule fitted to these same 60
+messages would provide another resubstitution result, a score calculated on its
+training examples.
+
+Broader categories may be appropriate when the organization cannot act on finer
+distinctions. A report must not present the resulting increase in accuracy as
+better understanding.
 
 ## What to remember
 
 - Intent classification routes text by what the sender wants.
-- The allowed intent list must match actions the system can take.
+- The intent list must match actions the system can take.
 - Probability output shows the shape of a multi-class prediction, not its quality.
 - Boundary cases need human adjudication and clearer instructions.
 - Coarser categories can raise measured accuracy by making the task easier.

@@ -1,31 +1,31 @@
 ---
 title: "Explaining models"
-subtitle: "Inspect the words a fitted text model learned to weight"
+subtitle: "Examine the words a fitted text model learned to weight"
 description: "Learn how to read linear model coefficients and why a plausible explanation can still belong to a weak model."
 categories: [model development, explanation, text classification]
 ---
 
-A reviewer asks why the model called a paragraph modern. The answer cannot be
-"because the computer said so." She needs to see which words pulled the score.
+A reviewer asks why the model gave a paragraph the label `1900 or later`. She needs to
+examine the words that affected its score.
 
-That request is reasonable. It is also dangerous if the score has not been
-checked. A weak model can still hand back a tidy list of words that looks like an
-explanation.
+A plausible explanation does not establish model quality. Even a weak model
+can produce an apparently convincing coefficient table.
 
-This lesson fits the same kind of text model twice. Grouped folds in lesson 43
-put ridge logistic regression with penalty `0.01` in the leading group, and the
-final test supported keeping it. The era model therefore has useful evaluation
-evidence. The party model, with these features and this fixed penalty, does not.
+This lesson fits the same model family for two tasks. Grouped folds in lesson
+43 placed ridge logistic regression with penalty `0.01` among the leading
+candidates. The final test provided separate evaluation evidence. The era
+design has useful evaluation evidence, but the party design with these features
+and this penalty does not.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- extract coefficients from a fitted workflow;
-- read positive and negative coefficients in plain language;
-- inspect terms weighted by an era classifier;
-- mask terms from a weak political classifier; and
+- extract coefficients from a fitted workflow.
+- read positive and negative coefficients in plain language.
+- examine terms weighted by an era classifier.
+- mask terms from a weak political classifier.
 - keep explanation separate from evidence that a model is right.
 :::
 
@@ -39,18 +39,19 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Fit the era model for inspection
 
 A **coefficient** is a learned weight. In this linear model, a positive
-coefficient pushes a paragraph toward the second class, `1900 or later`. A
-negative coefficient pushes it toward the first class, `before 1900`. The size of
-the coefficient shows the fitted weight after the recipe has created tf-idf
-columns. This direction depends on the outcome order: the shared corpus helper
-fixes `before 1900` first and `1900 or later` second, which is the target class
-for this binary glmnet fit.
+coefficient increases the prediction score for the second class, `1900 or later`.
+A negative coefficient increases the score for the first class, `before 1900`.
+Coefficient size describes the fitted weight on a tf-idf feature.
+
+This direction depends on outcome order. The shared corpus helper places
+`before 1900` first and `1900 or later` second. The second class is the target
+of this binary glmnet fit.
 
 Ranking coefficients by raw magnitude does not prove exactly what the model
 relied on. The features are correlated, and ridge regression spreads weight
 across related words. A different penalty could change the ranking. Read the
-list as terms this fitted model weighted heavily, not as a stable dictionary of
-historical meaning.
+list as heavily weighted terms in this fitted model, not as fixed meanings for
+historical periods.
 
 glmnet standardizes predictors while fitting but returns coefficients on the
 original tf-idf scale. A rare term with little spread can therefore receive a
@@ -58,19 +59,18 @@ larger raw coefficient than a common term with the same standardized effect.
 Multiplying each coefficient by its feature standard deviation would produce a
 different ranking.
 
-There is a second gap worth naming before any table appears. The model examined
-below is fitted on every paragraph in the corpus, because an explanation is
-usually wanted for the model a team would actually ship, and that model is
-trained on everything available. It therefore has no score. The 0.8457
-repeated-holdout mean reported in the evaluation lesson belongs to models
-fitted on three quarters of the speeches and tested on the rest. Those are
-different fits. Nothing on this page measures how well the model explained here
-performs, and the coefficients would look broadly similar whether it performed
-well or not.
+The model below uses every paragraph in the corpus. Teams often want
+explanations for the final model they deploy after training on all available
+data. This full-corpus fit therefore has no evaluation score.
+
+The evaluation lesson's 0.8457 repeated-holdout mean describes different fits.
+Those models used three quarters of the speeches for training and the rest for
+evaluation. This page does not measure the performance of the full-corpus
+model. Similar-looking coefficients could occur in either a strong or weak fit.
 
 The folds selected the model family and penalty before this refit. Refitting on
 all rows changes the exact coefficients, so the table explains the refitted
-model rather than reproducing the coefficients from any one assessment fold.
+model rather than reproducing the coefficients from any one fold.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -125,7 +125,7 @@ knitr::kable(
   checked_coefficients |>
     select(word, estimate, direction) |>
     mutate(estimate = round(estimate, 2)),
-  col.names = c("Term", "Coefficient", "Pushes toward"),
+  col.names = c("Term", "Coefficient", "Class with increased score"),
   caption = "Selected large era-model coefficients",
   row.names = FALSE
 )
@@ -148,16 +148,17 @@ stopifnot(
 )
 ```
 
-The fitted era model has `r nrow(era_coefficients)` terms, including the
-intercept. The listed words push toward `before 1900` in this fit. They are
+The fitted era model has `r nrow(era_coefficients)` terms. This count includes the
+intercept, the constant term. The listed words increase the score for
+`before 1900` in this fit. They are
 formal-register signals in this corpus, not summaries of what any period was
 about.
 
 ## Read both directions
 
-The largest positive coefficients push toward `1900 or later`; the largest
-negative coefficients push toward `before 1900`. This table is a map of the
-model's fitted weights, not a dictionary of what the words mean.
+The largest positive coefficients increase the score for `1900 or later`.
+The largest negative coefficients increase the score for `before 1900`.
+This table describes fitted weights rather than word meanings.
 
 ```{r}
 era_extremes <- bind_rows(
@@ -181,7 +182,7 @@ sensitive_terms <- c("slavery", "slave", "race", "war")
 
 knitr::kable(
   era_extremes,
-  col.names = c("Term", "Pushes toward", "Coefficient"),
+  col.names = c("Term", "Class with increased score", "Coefficient"),
   caption = "Strongest positive and negative coefficients in the era model",
   row.names = FALSE
 )
@@ -199,17 +200,17 @@ stopifnot(
 )
 ```
 
-For a paragraph with the same other terms, a larger tf-idf value on a positive
-term increases the model's pull toward `1900 or later`. A larger value on a
-negative term increases the pull toward `before 1900`. The model is linear, so it
-adds these pushes together.
+With all other features unchanged, a larger tf-idf value on a positive term
+increases the score for `1900 or later`. A larger value on a negative term
+increases the score for `before 1900`. The linear model adds these weighted
+contributions.
 
 ## Explain the weak model too
 
-The evaluation study found that the party model did not beat the deployable
-largest-class rule at the paragraph or speech split, and its balanced accuracy
-sat near chance. Still, the same extraction code produces coefficients. That is
-the trap: explanation output can be neat even when the model is not useful.
+The party model did not improve on the deployable largest-class rule at the
+paragraph or speech split. Its balanced accuracy was near chance. The same
+extraction code still produces coefficients. A clear coefficient table
+therefore does not establish that a model is useful.
 
 ```{r}
 study <- read_csv(
@@ -275,7 +276,7 @@ party_president <- party_summary |>
 
 knitr::kable(
   party_extremes,
-  col.names = c("Masked term", "Pushes toward", "Coefficient"),
+  col.names = c("Masked term", "Class with increased score", "Coefficient"),
   caption = "Large coefficients from the party model that did not pass evaluation",
   row.names = FALSE
 )
@@ -301,20 +302,21 @@ stopifnot(
 )
 ```
 
-The party terms are withheld deliberately. The model scores
+The lesson deliberately withholds party terms. The model scores
 `r round(party_speech$mean_accuracy, 4)` at the speech split against a deployable
-baseline of `r round(party_speech$mean_train_majority, 4)`, and its person-split
-balanced accuracy is `r round(party_president$mean_bal_accuracy, 4)`. Showing the
-words would give a screenshottable political story from a model that did not earn
-one. Masking costs nothing because the teaching point is the table's shape: the
-output looks convincing regardless of whether the model works.
+baseline of `r round(party_speech$mean_train_majority, 4)`. Its person-split
+balanced accuracy is `r round(party_president$mean_bal_accuracy, 4)`.
+
+Displaying the terms could encourage political interpretations that the model's
+evaluation does not justify. Masking preserves the teaching point. The table
+can look convincing even when the model performs poorly.
 
 ## What to remember
 
-- A coefficient is a learned push toward one class or another.
+- A coefficient is a learned weight that affects the score for a class.
 - Coefficients show fitted weights after preprocessing, not proof of causation.
 - A coefficient is not proof that the model is right.
-- The era explanation matters because the era model beat cheap baselines.
+- The era explanation matters because the era model performed better than simple baselines.
 - The party explanation is a warning because this model did not learn party.
 
 If the score fails, the explanation should make you more cautious, not more

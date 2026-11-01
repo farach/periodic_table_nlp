@@ -1,25 +1,26 @@
 ---
 title: "Keeping dialogue state outside the model"
-subtitle: "Track slots in R, choose actions by policy, and use generation only for wording"
-description: "Learn how a small task-oriented chatbot carries state across turns without storing raw messages or trusting the model for routing."
+subtitle: "Separate R state and policy from generated wording"
+description: "Learn how a small task-oriented chatbot retains state across turns without storing raw messages or trusting the model for routing."
 categories: [systems, chatbot dialogue, dialogue state]
 ---
 
-Ines is sketching a scripted assistant for the Riverton Skills Centre desk. The
-assistant needs to remember that a person asked about the Data Support
-Certificate, notice when they switch to the forklift course, and refuse requests
-that try to skip staff review.
+Ines designs a scripted assistant for the Riverton Skills Centre desk. The
+assistant must retain a user's request about the Data Support Certificate. It
+must recognize a later change to the forklift course. It must also refuse
+requests to bypass staff checks.
 
-A **task-oriented chatbot** carries a conversation toward a defined job. It
-keeps a **dialogue state**, a small record of filled **slots** such as program
-and contact channel; a **policy** chooses the next action from that record; and
-**realization** turns the action into words. This page keeps state and policy in
-R. The local language model writes only request, confirm, and inform replies
-from approved facts.
+A **task-oriented chatbot** uses conversation to complete a particular task. It
+keeps a **dialogue state**, a small record of values. **Slots** are fields such
+as program and contact channel. A **policy** chooses the next action from that
+record. **Realization** expresses the action in words.
+
+This page keeps state and policy in R. The local language model writes only
+request, confirm, and inform replies from approved facts.
 
 ::: {.callout-note}
 The Riverton Skills Centre conversations below are invented for this lesson.
-They are scripted probes, not real messages from residents or staff.
+They are scripted examples, not real messages from residents or staff.
 :::
 
 ::: {.callout-tip}
@@ -27,11 +28,11 @@ They are scripted probes, not real messages from residents or staff.
 
 This lesson shows how to:
 
-- define a frame, slots, and a dialogue policy in R;
-- update state across turns from scripted user text;
-- handle a context-dependent question and a slot overwrite;
-- keep user utterances out of model prompts;
-- use fixed text for refusal, hand-off, and abstention; and
+- define a frame, slots, and a dialogue policy in R
+- update state across turns from scripted user text
+- handle a context-dependent question and a slot overwrite
+- exclude user utterances from model prompts
+- use fixed text for refusal, hand-off, and abstention
 - retain slots, actions, and flags without storing raw messages.
 :::
 
@@ -45,8 +46,8 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Load the handbook and local realizer
 
 The chatbot answers only from selected handbook rows keyed by passage ID. Lesson
-70 used retrieval to find passages. Here the policy selects rows by state, so
-retrieval is not repeated.
+70 used retrieval to find passages. Here the policy selects rows by state
+instead of executing retrieval again.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -191,7 +192,7 @@ knitr::kable(
 knitr::kable(
   policy_table,
   col.names = c("Policy condition", "Action", "Reply source"),
-  caption = "Policy actions are chosen in R before any generated wording",
+  caption = "R selects policy actions before wording generation",
   row.names = FALSE
 )
 ```
@@ -213,16 +214,17 @@ stopifnot(
 ```
 
 These policy rows describe the exact branches in the code below. Other
-off-topic questions fall through to the enrollment path in this small script; a
-real system would need a topic table built from the handbook's `topic` column
-before deciding when to abstain.
+off-topic questions follow the enrollment path in this small script. A real
+system would need a topic table from the handbook's `topic` column before
+deciding when to abstain.
 
-## Write scripted conversations before running them
+## Write scripted conversations before execution
 
-The user turns are scripted probes written by the page author. The expected
-state and action are also written before the loop runs, so every mismatch can be
-shown. These rows test context, overwrite, a missed paraphrase, injection,
-paraphrased injection, and an unanswerable question.
+The page author wrote the scripted user turns and expected states and actions
+before loop execution. The page shows every mismatch. The examples examine
+context, overwrite, a missed paraphrase, injection, paraphrased injection, and an
+unanswerable question. **Prompt injection** attempts to replace system
+instructions with instructions from user or source text.
 
 ```{r}
 scripted_turns <- tribble(
@@ -294,10 +296,10 @@ stopifnot(
 
 ## Update state in R
 
-These rules are intentionally small. The paraphrase "spreadsheet career track"
-is missed, so the policy asks a clarifying question rather than guessing a
-program. The injection screen catches the first hostile wording; the policy also
-refuses the paraphrased version because it requests guaranteed approval.
+These rules are intentionally small. They miss the paraphrase "spreadsheet
+career track", so the policy asks for clarification rather than guessing a
+program. The automatic injection check detects the first hostile wording. The policy
+also refuses the paraphrased version because it requests guaranteed approval.
 
 ```{r}
 new_state <- function() {
@@ -504,7 +506,7 @@ stopifnot(
 ```
 
 These rules handle only a few visible phrasings. They do not handle negation in
-general; lesson 23 covers that problem more directly.
+general. Lesson 23 covers that problem more directly.
 
 ```{r}
 #| include: false
@@ -514,23 +516,25 @@ stopifnot(
 )
 ```
 
-The second hostile turn does not match the small injection screen. It still
+The second hostile turn does not match the small automatic injection check. It still
 leaves state unchanged and makes no model call because the policy treats
 approval and guarantee requests as staff-only actions.
-That staff-approval pattern is written for this probe's wording. The broader
-defense is structural: there is no approve action, and user text is not part of
-any realizer prompt.
+The author wrote that staff-approval pattern for this example's wording. The
+broader defense is structural. The policy has no approve action, and no realizer
+prompt contains user text.
 
 ## Compare transcript prompts with state prompts
 
-Chat models receive a serialized token sequence. A naive design would keep
-adding prior turns to that sequence. This lesson prints one whole-transcript
-prompt for inspection and counts it for every turn, but generated replies use
-only state, action, and allowed facts.
-The role markers name each message as `system`, `user`, or `assistant`.
-`<|im_start|>assistant` is the point where the model begins continuing the
-assistant message. The system message is an instruction message inside the same
-token sequence, not a security boundary.
+Chat models receive a serialized token sequence: messages arranged into one
+sequence for processing. A naive design appends earlier turns to that sequence.
+This lesson prints one whole-transcript prompt for inspection and counts its
+tokens for every turn. Generated replies use only state, action, and selected
+facts.
+
+The role markers identify each message as `system`, `user`, or `assistant`.
+`<|im_start|>assistant` marks where the model continues the assistant message.
+The system message contains instructions within the same token sequence. It is
+not a security boundary.
 
 ```{r}
 #| code-fold: true
@@ -602,7 +606,7 @@ program_alias_pattern <- function(program) {
 fixed_reply <- function(action, program = "unknown", contact_channel = "unknown") {
   case_when(
     action == "refuse" ~
-      "I cannot approve seats or change staff review. A staff member must handle that request.",
+      "I cannot approve seats or replace staff checks. A staff member must examine that request.",
     action == "hand_off" ~
       "I will route this to a staff member. This scripted lesson stores no contact details.",
     action == "abstain_hand_off" ~
@@ -613,11 +617,11 @@ fixed_reply <- function(action, program = "unknown", contact_channel = "unknown"
       "Should staff contact you by phone or by email?",
     action == "confirm" ~
       paste0(
-        "I have noted the ", program_display(program),
+        "I recorded the ", program_display(program),
         ", with contact by ", contact_channel, "."
       ),
     action == "inform" ~
-      "The handbook fact needs staff review before I reply.",
+      "A staff member must examine the handbook fact before I reply.",
     TRUE ~ NA_character_
   )
 }
@@ -719,9 +723,9 @@ stopifnot(
 
 The first block shows a naive prompt through C1 turn 4. It serializes the user
 turns into the chat template. The second block shows the realizer prompt for C1
-turn 3, which contains action, slots, and keyed facts rather than the user's
-words. The prompt also carries one action-meaning line so the model does not
-have to infer an internal code such as `request_contact`.
+turn 3. That prompt contains action, slots, and facts identified by ID, not the
+user's words. It also explains the action, so the model need not infer the
+meaning of an internal code such as `request_contact`.
 
 ### Naive transcript prompt through C1 turn 4
 
@@ -812,22 +816,24 @@ stopifnot(
 )
 ```
 
-The hard model limit comes from `config.json`: 32,768 positions. The 512-token
-design budget is lower because a classroom render should not spend the full
-window. The user-turn transcript count grows from
+The model limit comes from `config.json`: 32,768 positions. The classroom render
+uses a lower design limit of 512 tokens. The user-turn transcript count increases from
 `r min(realizer_requests$naive_tokens[realizer_requests$conversation_id == "C1"])`
 to `r max(realizer_requests$naive_tokens[realizer_requests$conversation_id == "C1"])`
-tokens across C1 even though it omits assistant replies. The state prompt is
-larger in these short chats, but its size depends on the action and fact rows,
-not on the number of previous turns; if a transcript window dropped old turns,
-C1's program choice would be gone unless it lived in the state.
+tokens across C1, although it omits assistant replies.
 
-## Realize only the allowed actions
+The state prompt is larger in these short chats. Its size depends on the action
+and fact rows, not the number of previous turns. Removing old transcript turns
+would lose C1's program choice unless the state retained that choice.
 
-Refuse, hand-off, and abstain replies are fixed text. The model is called only
-for request, confirm, and inform actions. No realizer prompt contains a complete
-user utterance longer than or equal to the longest slot value, and each realizer
-prompt is rebuilt only from the state record, action, and keyed handbook rows.
+## Generate wording for request, confirm, and inform actions
+
+Refuse, hand-off, and abstain replies use fixed text. The workflow calls the
+model only for request, confirm, and inform actions. Each realizer prompt uses
+only the state record, action, and handbook rows identified by ID.
+
+No realizer prompt contains a complete user utterance whose length equals or
+exceeds the longest slot value.
 
 ```{r}
 model_generations <- realizer_requests |>
@@ -875,6 +881,12 @@ reply_trace <- realizer_requests |>
 
 knitr::kable(
   reply_trace |>
+    mutate(
+      across(
+        c(output_tokens, ended_by_eos, hit_token_cap),
+        \(x) if_else(is.na(x), "not applicable", as.character(x))
+      )
+    ) |>
     select(
       conversation_id,
       turn_id,
@@ -956,23 +968,28 @@ step. This lesson passes a repetition penalty of 1.05, which overrides the
 checkpoint's generation-config value of 1.1. Exact replies may vary across CPU
 settings, and the page does not depend on exact generated wording.
 
-## Screen generated replies and use a fixed fallback
+## Do automatic checks of generated replies and use a fixed fallback
 
-Screens check only generated replies. They look for numerals or program names
-not present in allowed facts, missing action-specific slot values, requests
-for personal details (`age`, `birth`, `address`, `phone number`, child-name
-phrases, and `specific needs`), promise words (`guarantee`, `guaranteed`,
-`approved`, `promise`, `scheduled`, `reach out`, `will follow up`, and `will be
-accepted`), and bracketed placeholders. Several of these patterns, for example
-`will follow up`, `reach out`, `scheduled`, and bracketed placeholders, were
-written after reading earlier replies from this model, so they fit those replies
-and are not a general detector. A
-flagged generated reply is replaced by a fixed fallback. Fixed refusal and
-hand-off text is not a model screen result.
+Automatic checks examine only generated replies. They search for:
+
+- numerals or program names absent from selected facts
+- missing action-specific slot values
+- personal-detail requests containing `age`, `birth`, `address`, `phone number`,
+  child-name phrases, or `specific needs`
+- promise words: `guarantee`, `guaranteed`, `approved`, `promise`, `scheduled`,
+  `reach out`, `will follow up`, or `will be accepted`
+- bracketed placeholders
+
+The author wrote some patterns after reading earlier model replies. Examples
+include `will follow up`, `reach out`, `scheduled`, and bracketed placeholders.
+These patterns match those replies, not every possible failure. The workflow
+replaces each generated reply that has the label `held for human review` with
+fixed fallback text. Fixed refusal and hand-off text is not a result of the
+automatic checks on model replies.
 
 ```{r}
 #| code-fold: true
-#| code-summary: "Show the reply screens and fixed fallback"
+#| code-summary: "Show the automatic reply checks and fixed fallback"
 
 allowed_fact_text <- function(action, program) {
   ids <- fact_rows_for_action(action, program)
@@ -1007,7 +1024,7 @@ screen_generated_reply <- function(reply, action, program, contact_channel, allo
     str_detect(reply, fixed(allowed_program_names, ignore_case = TRUE))
   ]
   allowed_program_ok <- case_when(
-    # A request_program reply may name either program, so this screen has
+    # A request_program reply may name either program, so this check has
     # nothing to rule out on those rows and passes them.
     action == "request_program" ~ TRUE,
     length(mentioned_programs) == 0L ~ TRUE,
@@ -1134,6 +1151,17 @@ knitr::kable(
         action == "request_program" & !is.na(program_names_ok),
         "not applicable",
         as.character(program_names_ok)
+      ),
+      across(
+        c(
+          numerals_ok,
+          program_names_ok,
+          action_slots_ok,
+          personal_details_ok,
+          promise_words_ok,
+          generation_completed
+        ),
+        \(x) if_else(is.na(x), "not applicable", as.character(x))
       )
     ) |>
     select(
@@ -1166,13 +1194,13 @@ knitr::kable(
     "Action-slot screen",
     "Personal-detail screen",
     "Promise-word screen",
-    "Screens that fired",
+    "Failed screen checks",
     "EOS before token cap",
     "Reply screen",
-    "Human review",
+    "Human checks",
     "Reply shown after fallback rule"
   ),
-  caption = "Reply screens and fixed fallback for generated wording",
+  caption = "Automatic reply checks and fixed fallback for generated wording",
   row.names = FALSE
 )
 ```
@@ -1201,10 +1229,10 @@ stopifnot(
 )
 ```
 
-The labeled control replies below test the screens without depending on model
-output. The table shows seven controls: a correct action-slots row, a
-wrong-program row, two incomplete action-slots rows, a request-program row, a
-personal-detail request, and a promise-word reply.
+The control replies below examine the automatic checks without depending on model output.
+The table contains seven controls. These include a correct action-slots row, a
+wrong-program row, and two incomplete action-slots rows. The remaining controls
+cover a request-program row, a personal-detail request, and a promise-word reply.
 
 ```{r}
 screen_controls <- tibble(
@@ -1289,7 +1317,7 @@ knitr::kable(
     "Promise words",
     "Screen label"
   ),
-  caption = "Labeled control replies for deterministic screen checks",
+  caption = "Control replies with labels from deterministic automatic checks",
   row.names = FALSE
 )
 ```
@@ -1358,15 +1386,9 @@ stopifnot(
 )
 
 fallback_interpretation <- if (fallback_reply_count > 0L) {
-  paste(
-    "This is a warning about the design: fixed templates may be the safer",
-    "default, and model wording belongs only after every screen passes."
-  )
+  "Fixed templates may be the safer default for this design."
 } else {
-  paste(
-    "No generated reply was replaced in this render, but passing these screens",
-    "would still be only a preliminary condition for review."
-  )
+  "The workflow replaced no generated reply in this render."
 }
 ```
 
@@ -1400,32 +1422,38 @@ stopifnot(
 )
 ```
 
-Replies that pass every screen can still add claims the handbook does not
-support, or speak to staff instead of the user, which is why a person must
-review them.
+Replies that pass every automatic check can still add claims without source evidence or address
+staff instead of the user. A person must therefore examine these replies.
 
-The label "not flagged by screen" is conservative. It does not mean the reply is
+The label `not flagged by screen` is conservative. It does not mean the reply is
 approved. In this render, the reply table has
 `r dialogue_screen_summary$turns[dialogue_screen_summary$reply_source == "Qwen realization" & dialogue_screen_summary$screen_label == "held for human review"]`
-generated turns held for review, while the fixed-text refusal, hand-off, and
-abstention turns have `not applicable` screen status. The generated-reply
-screens held `r screen_hold_summary$numerals` rows for numerals,
-`r screen_hold_summary$program_names` for program names,
-`r screen_hold_summary$action_slots` for action slots,
+generated turns with the label `held for human review`. Fixed-text refusal,
+hand-off, and abstention turns have `not applicable` automatic-check status.
+
+Automatic generated-reply
+checks sent `r screen_hold_summary$numerals` rows to human review for numerals
+and `r screen_hold_summary$program_names` for program names.
+They also sent `r screen_hold_summary$action_slots` rows for action slots,
 `r screen_hold_summary$personal_details` for personal details, and
-`r screen_hold_summary$promise_words` for promise words. In this render,
-`r fallback_reply_count` of `r generated_reply_count` generated replies were
-replaced by the fixed fallback: `r fallback_screen_count` because a screen held
-the reply and `r fallback_stop_count` because the reply hit the token cap or did
-not end with EOS after passing the screens. `r fallback_interpretation` Passing
-every screen is necessary, not sufficient. Human review still stays pending.
+`r screen_hold_summary$promise_words` for promise words.
+
+In this render, the workflow replaced `r fallback_reply_count` of
+`r generated_reply_count` generated replies with fixed fallback text. Automatic checks
+required replacement for `r fallback_screen_count` replies. A stopping condition
+required replacement for `r fallback_stop_count` replies after successful automatic checks.
+Those replies reached the token limit or did not end with an end-of-sequence
+token, or EOS.
+
+`r fallback_interpretation` Success on every automatic check is necessary, not sufficient.
+Human checks remain pending.
 
 ## Retain less text
 
 The retained record stores only conversation ID, turn ID, slots, action, and
-flags. It drops raw user turns after extraction. A real service would need its
-own legal and operational review; this page shows a minimization habit, not a
-compliance claim.
+flags. It excludes raw user turns after extraction. A real service would need
+its own legal and operational checks. This page demonstrates data minimization,
+not legal compliance.
 
 ```{r}
 retained_record <- screened_replies |>
@@ -1458,7 +1486,7 @@ knitr::kable(
     "Injection screen",
     "Staff-only request",
     "Reply screen",
-    "Human review"
+    "Human checks"
   ),
   caption = "Retained record with slots, actions, and flags only",
   row.names = FALSE
@@ -1478,21 +1506,21 @@ stopifnot(
 )
 ```
 
-No chat widget appears here. Lesson 75 covers interfaces; this lesson is about
+No chat widget appears here. Lesson 75 covers interfaces. This lesson is about
 the state, policy, prompts, and records behind a task-oriented dialogue.
 
 ## Why routing stays outside the model
 
 System prompts are useful formatting instructions, but they are not security
 controls. In this lesson, refusal, hand-off, and abstention happen in R before a
-model call. User text is never sent to the realizer prompt, so a hostile user
-turn cannot rewrite those prompts.
+model call. The workflow excludes user text from realizer prompts. A hostile
+user turn therefore cannot rewrite those prompts.
 
 The scripted tests do not measure real-world accuracy or safety. The same author
-wrote the scripts, rules, and expected states. Their value is narrower: each row
-checks whether this small design still carries state, handles an overwrite,
-asks a clarifying question on a missed paraphrase, and refuses staff-only
-requests without a model call.
+wrote the scripts, rules, and expected states. Each row examines specific
+behavior in this small design. The behaviors include state retention,
+overwriting, and clarification after a missed paraphrase. They also include
+refusal of staff-only requests without a model call.
 
 ## What to remember
 
@@ -1501,11 +1529,11 @@ requests without a model call.
   elsewhere.
 - Safety and routing decisions belong in code, not only in prompt wording.
 - Fixed text is safer than generation for refusal, hand-off, and abstention.
-- Scripted tests expose expected behaviors; they are not population accuracy.
+- Scripted tests expose expected behaviors. They do not measure population accuracy.
 - Retaining slots and flags can avoid storing raw messages.
 
-Ines keeps the model in the smallest job it needs: wording allowed replies after
-R has decided what the assistant may do.
+Ines restricts the model to wording permitted replies after R selects the
+assistant's permitted action.
 
 ## Sources
 

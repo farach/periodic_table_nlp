@@ -1,30 +1,30 @@
 ---
 title: "Monitoring models"
-subtitle: "Watch a deployed text model after the first score"
-description: "Learn how to check model performance across time slices and why changing labels can make an old score misleading."
+subtitle: "Monitoring after initial evaluation"
+description: "Learn how to measure model performance across time slices and why different labels can make an old score misleading."
 categories: [model development, monitoring, model drift]
 ---
 
-A dashboard turns green on launch day. The model passed its test, the API is
-ready, and a queue of paragraphs can finally be scored.
+A model passes its initial evaluation, and its API is ready to score paragraphs.
 
-Three months later, the queue is different. The words are familiar, the file
-format still works, and the old test score is still printed in the deployment
-record. None of that proves the model is doing the same job.
+Three months later, the incoming paragraphs differ. Their words and file format
+remain familiar, and the deployment record still contains the original score.
+Those facts do not establish unchanged performance.
 
-Monitoring asks what changed after deployment. It can watch the text arriving,
-and when checked labels arrive, it can watch the score.
+Monitoring examines differences after deployment. It can compare incoming text
+with training text. When the team makes sure the labels are correct, monitoring can also measure
+prediction performance.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- score a fitted text model across time slices;
-- read held-out slice scores without treating them as a new train/test study;
-- check input drift when labels are late or missing;
-- define concept drift in plain language;
-- explain why a fixed party text model needs fresh evidence; and
+- score a fitted text model across time slices.
+- read held-out slice scores without treating them as a new train/test study.
+- measure input drift when labels are late or missing.
+- explain concept drift in plain language.
+- explain why a fixed party text model needs fresh evidence.
 - name what monitoring can and cannot see.
 :::
 
@@ -108,7 +108,9 @@ era_length_summary <- paragraphs |>
 knitr::kable(
   tibble(
     item = c("paragraphs", "held-out paragraphs", "held-out accuracy"),
-    value = c(nrow(paragraphs), nrow(era_testing), round(held_out_accuracy, 4))
+    value = as.character(
+      c(nrow(paragraphs), nrow(era_testing), round(held_out_accuracy, 4))
+    )
   ),
   col.names = c("Item", "Value"),
   caption = "Model and corpus size for the monitoring replay",
@@ -135,11 +137,10 @@ training side.
 
 ## Score held-out time slices
 
-A **monitoring slice** is a subset watched on its own, such as a month, region,
-source, or time period. Here the slices are half-centuries. This is already a
-trap, because the label `era` is derived from the year. A time slice contains
-almost only one label, so its score is one-class recall rather than overall
-performance.
+A **monitoring slice** is a subset assessed separately, such as a month, region,
+source, or time period. This lesson uses historical periods. However, the `era`
+label comes from year, so time-based slices also separate labels. A slice with
+one label measures that class's recall rather than overall performance.
 
 ```{r}
 period_breaks <- c(1780, 1849, 1899, 1949, 1999, 2030)
@@ -248,24 +249,24 @@ stopifnot(
 The lowest held-out slice is
 `r as.character(lowest_slice$period)`, with `r lowest_slice$held_out_paragraphs`
 paragraphs and accuracy `r round(lowest_slice$accuracy, 3)`. It is not the slice
-around 1900. The deeper problem is the same in every nonempty row: each slice has
-one class. The table is a warning about circular monitoring, not a clean accuracy
-report.
+around 1900. Every nonempty slice contains one class. The table therefore
+demonstrates circular monitoring, where the monitoring groups depend on the
+variable used to assign the label. It is not a general accuracy report.
 
-The `2000-2025` row is empty because all speeches from that period landed in
-training under seed `4301`. Grouped splitting keeps whole speeches together, so
+The `2000-2025` row is empty because all speeches from that period entered the
+training set under seed `4301`. Grouped splitting keeps whole speeches together, so
 a period can have no held-out examples even when the full corpus contains them.
 
 ## Watch input drift without waiting for labels
 
-Labels often arrive late, and sometimes they never arrive. One thing a team can
-watch without labels is whether the incoming text is moving away from the text
-the model saw during fitting. The code below uses the 500 model features as the
-training vocabulary, then asks what share of non-stopword tokens in each period
-falls outside that vocabulary. It also reports median paragraph length. This is
-a retrospective teaching check over the full corpus, so most rows helped choose
-the vocabulary and bias the result toward familiar terms. Live monitoring should
-score only later, unseen text.
+Labels often arrive late or remain unavailable. A team can still compare
+incoming text with the text used for model fitting. The code treats the 500
+model features as the training vocabulary. It measures the share of
+non-stopword tokens outside that vocabulary and reports median paragraph length.
+
+This retrospective teaching check uses the full corpus. Most rows helped
+select the vocabulary, so the results favour familiar terms. Live monitoring
+should assess only later, unseen text.
 
 ```{r}
 training_vocabulary <- tidy(extract_fit_parsnip(era_fitted)) |>
@@ -348,7 +349,7 @@ stopifnot(
 
 drift_alt_text <- paste0(
   "Two line charts by period, both starting at zero. Median words per paragraph ",
-  "fall from ", max(drift_table$median_words), " in the earliest period to ",
+  "decrease from ", max(drift_table$median_words), " in the earliest period to ",
   min(drift_table$median_words), " in the latest. The share of non-stopword ",
   "tokens outside the 500 training features stays between ",
   scales::percent(min(drift_table$absent_share), accuracy = 1), " and ",
@@ -364,32 +365,33 @@ stopifnot(
 The stop-word list now matches `step_stopwords()` in the fitted recipe: the
 Snowball English list supplied by the stopwords package.
 
-The explicit regex is not the fitted recipe's `step_tokenize()` tokenizer. It
-keeps this lesson reproducible across ICU versions, but the resulting
-`absent_share` is an approximation of feature coverage and can include
+The explicit regular expression differs from the fitted recipe's
+`step_tokenize()` tokenizer. It makes this lesson reproducible across ICU
+versions. However, `absent_share` approximates feature coverage and can reflect
 tokenization differences as well as vocabulary drift.
 
-The vocabulary drift measure is close to flat partly by construction. It counts
-tokens outside a fixed 500-token vocabulary, and about half of the non-stopword
-tokens fall outside that short list. The share ranges from
+The vocabulary measure varies little partly because it uses a fixed 500-token
+list. About half of the non-stopword tokens are outside that list. The share ranges from
 `r round(min(drift_table$absent_share), 3)` to
 `r round(max(drift_table$absent_share), 3)` across
 `r max(paragraphs$year) - min(paragraphs$year)` years. These historical shares
-mix training and held-out rows and are not an out-of-sample drift estimate.
+combine training and held-out rows. They are not an out-of-sample drift estimate.
 
-Median paragraph length is the clearer signal. It falls from
+Median paragraph length varies more clearly. It decreases from
 `r max(drift_table$median_words)` words in the earliest period to
-`r min(drift_table$median_words)` in the latest. The same variable carried part
-of the era result in the evaluation lesson: before-1900 paragraphs have median
-length `r era_length_summary$median_words[era_length_summary$era == "before 1900"]`,
-while later paragraphs have median length
-`r era_length_summary$median_words[era_length_summary$era == "1900 or later"]`.
-A team watching only the vocabulary check would have missed that shift.
+`r min(drift_table$median_words)` in the latest. Paragraph length also
+contributed to the era result in the evaluation lesson.
 
-Neither check requires labels, which is why they can run while a team waits for
-review samples. Neither one tells you the model is still correct. They tell you
-whether the incoming text still looks like the text the model was fitted to, and
-a model can be badly wrong on inputs that look perfectly familiar.
+Before-1900 paragraphs have median length
+`r era_length_summary$median_words[era_length_summary$era == "before 1900"]`.
+Later paragraphs have median length
+`r era_length_summary$median_words[era_length_summary$era == "1900 or later"]`.
+A vocabulary-only check would miss that difference.
+
+Neither check requires labels, so both can execute before samples with reference labels arrive.
+Neither establishes that the model remains correct. They compare incoming text
+with the model's training text. A model can still make serious errors on
+familiar-looking input.
 
 ```{r}
 #| label: fig-input-drift
@@ -445,8 +447,8 @@ ggplot(drift_plot, aes(x = period, y = value, group = measure)) +
   facet_wrap(vars(measure), scales = "free_y", ncol = 1) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.3))) +
   labs(
-    title = "Paragraph length drifts far more than vocabulary coverage",
-    subtitle = "Two label-free input checks for each period of the inaugural corpus; both panels start at zero",
+    title = "Paragraph length varies more than vocabulary coverage",
+    subtitle = "Two label-free input checks for each period of the inaugural corpus. Both panels start at zero.",
     x = "Period",
     y = NULL
   ) +
@@ -476,9 +478,10 @@ stopifnot(
 )
 ```
 
-The length pattern is much stronger than the absent-token pattern here. In a live
-system, either could trigger review. Neither says the model is wrong by itself.
-It says the input no longer looks the same in a way a person should inspect.
+The length pattern varies more than the absent-token share here. Either
+difference could require a check in a live system. Neither difference alone
+proves that the model is wrong. Each shows an input difference for
+a person to examine.
 
 ## Watch labels as well as words
 
@@ -525,7 +528,7 @@ knitr::kable(
     democratic_range |>
       transmute(label = "Democratic", first_year, last_year, paragraphs)
   ),
-  col.names = c("Label scope", "First year", "Last year", "Paragraphs"),
+  col.names = c("Labels included", "First year", "Last year", "Paragraphs"),
   caption = "Long time spans in the party labels",
   row.names = FALSE
 )
@@ -548,19 +551,20 @@ stopifnot(
 )
 ```
 
-Monitoring can see the input distribution moving. With checked labels, it can
-see a score fall. It cannot see confident errors on questions nobody checks.
-That blind spot is why monitoring needs sampled review, not only dashboards.
+Monitoring can detect differences in input distributions. It can also detect
+lower scores when the team makes sure reference labels are correct. It cannot
+find confident errors on questions that nobody examines. Monitoring therefore
+needs people to examine a sample of predictions. It also needs dashboards.
 
 ## What to remember
 
-- Monitoring starts after a model is packaged or put into routine use.
+- Monitoring starts after a team packages a model or starts to operate it routinely.
 - Slice scores can show where performance changes.
 - A slice score is not the same as a new held-out evaluation.
-- Concept drift can affect words, labels, or the relationship between them.
-- Monitoring cannot find errors in rows that no one checks.
+- Concept drift means the relationship between inputs and labels changes over time.
+- Monitoring cannot find errors in rows that no one examines.
 
-A green dashboard is a prompt to keep looking, not a permanent certificate.
+Continue to examine model results even when a dashboard has no alerts.
 
 ## Sources
 

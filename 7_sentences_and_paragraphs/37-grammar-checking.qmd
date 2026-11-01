@@ -1,21 +1,20 @@
 ---
-title: "Checking small grammar rules"
+title: "Small grammar checks"
 subtitle: "Score three checks and keep the limits visible"
-description: "Learn how small grammar checks can find planted errors and why they are not a full grammar checker."
+description: "Learn how small grammar checks can find inserted errors and why they are not a full grammar checker."
 categories: [sentences and paragraphs, grammar checking, workforce research]
 ---
 
-Correctly spelled sentences can still make a public summary sound broken, which
-is why the coordinator hesitates. Real words are not enough when the words do not
-fit together.
+The coordinator cannot approve a public summary from spelling alone. Correctly
+spelled words can still form ungrammatical sentences.
 
-Spelling asks whether a word exists. **Grammar** asks whether the words fit
-together in a sentence. This lesson builds three small checks and scores them on
-sentences where the planted errors are known.
+A spelling check compares words with accepted spellings. **Grammar** concerns
+how words combine in sentences. This lesson builds three small checks for
+sentences with deliberately inserted errors.
 
-This project does not install a grammar checker, so the lesson builds three
-small checks by hand and treats them as a demonstration. Offline means the check
-runs from local files, without sending text to a web service.
+This project does not install a grammar checker. The three custom checks
+demonstrate selected rules rather than provide a complete checker. An offline
+check uses local files without sending text to a web service.
 
 ::: {.callout-note}
 The Riverton sentences and marked grammar examples are invented for this lesson.
@@ -26,10 +25,10 @@ The Riverton sentences and marked grammar examples are invented for this lesson.
 
 By the end of this lesson, you will be able to:
 
-- explain the difference between spelling and grammar checks;
-- use UDPipe dependency output to compare a subject and a verb;
-- find doubled words with a stringr pattern;
-- test a simple `a` and `an` rule; and
+- explain the difference between spelling and grammar checks.
+- use UDPipe dependency output to compare a subject and a verb.
+- find doubled words with a stringr pattern.
+- compare a simple `a` and `an` rule with expected answers.
 - explain why a demonstration check is not a working grammar checker.
 :::
 
@@ -42,10 +41,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Make a marked test set
 
-The setup reads the Riverton CSV, prepares words with tokenizers and purrr, runs
-two pattern checks with stringr, and sends sentences to a local udpipe dependency
-parser. dplyr and tibble organise the results. A **dependency parser** labels how
-words relate to one another, such as which noun is the subject of a verb.
+readr reads the Riverton CSV. tokenizers and purrr prepare words, stringr does
+two pattern checks, and a local udpipe parser processes sentences. dplyr and
+tibble organize the results. A **dependency parser** gives labels to grammatical
+relationships, such as the relation between a verb and its subject.
 
 ```{r}
 library(readr)
@@ -119,7 +118,7 @@ marked_sentences <- tibble(
 knitr::kable(
   marked_sentences,
   col.names = c("Example ID", "Sentence", "Planted check", "Has planted error"),
-  caption = "Author-marked sentences before running the checks",
+  caption = "Author-marked sentences before the checks",
   row.names = FALSE
 )
 ```
@@ -142,14 +141,14 @@ stopifnot(
 )
 ```
 
-Seven of the 14 test sentences are marked as correct, and seven contain exactly
-one planted error. These examples describe only themselves. A checker that works
-on them has not solved grammar checking.
+The author marks seven of the 14 test sentences as correct. The other seven
+each contain one inserted error. Success on these examples does not establish
+general grammar-checking performance.
 
-## Run the three checks
+## Do the three checks
 
 The subject-verb check uses the UDPipe parser's `feats` column, which can contain
-values such as `Number=Sing` or `Number=Plur`. It looks for an `nsubj` relation,
+values such as `Number=Sing` or `Number=Plur`. It searches for an `nsubj` relation,
 short for nominal subject, pointing to a verb. In the code, `\(tokens)` is R
 shorthand for a small function applied to one sentence's tokens.
 
@@ -297,28 +296,32 @@ stopifnot(
 ```
 
 The checks and expected answers share an author, so the score is a teaching
-check rather than an accuracy estimate. A true positive is a planted error that a
-check flags. A false positive is a correct sentence that a check flags. A false
-negative is a planted error that a check misses. A true negative is a correct
-sentence it leaves alone.
+check rather than an accuracy estimate. A true positive is an inserted error that a
+check puts a mark on. A false positive is a correct sentence that a check puts a
+mark on. A false negative is an inserted error that a check misses. A true
+negative is a correct sentence with no mark from the check.
 
-The subject-verb number check catches all three planted number errors in this
-small set. The doubled-word check catches both repeated-word examples. The
-article check catches the two planted `a` mistakes, but it also flags two correct
-sentences: `an hour` and `A university`. That rule uses the first letter, while
-English article choice depends on sound. `Hour` begins with a silent h, so it
-sounds like a vowel. `University` begins with a y sound, so it sounds like a
-consonant. The rule reads letters and cannot hear either word.
+The subject-verb number check finds all three inserted number errors in this
+small set. The doubled-word check finds both repeated-word examples. The
+article check finds the two inserted `a` mistakes but also puts a mark on the
+correct phrases `an hour` and `A university`.
 
-A real grammar checker uses thousands of rules, a trained model, or both. These
-three checks are a demonstration of the idea. The UDPipe model was trained here
-on 500 sentences and is deliberately weak, so every subject-verb result inherits
-its mistakes. The article check is wrong by design so the failure is visible.
+That rule uses the first letter, while English article choice depends on
+sound. `Hour` begins with a vowel sound because its h is silent.
+`University` begins with a consonant y sound. The rule uses letters without
+pronunciation information.
+
+A complete grammar checker uses thousands of rules, a trained model, or both.
+These three checks demonstrate selected rules. The project trains its deliberately weak
+UDPipe model on 500 sentences. Model errors can affect every subject-verb
+result. The article rule deliberately ignores pronunciation so the lesson can
+demonstrate the resulting errors.
 
 ## Try the Riverton sentences
 
-The same three checks can be run over the 28 Riverton sentences. The output is a
-screening list, not a proof that every unflagged sentence is correct.
+The code applies the same three checks to the 28 Riverton sentences. The
+output selects sentences for a person to examine. It does not prove that
+sentences without a mark are correct.
 
 ```{r}
 riverton_vertical <- sentences$text |>
@@ -401,32 +404,34 @@ stopifnot(
 )
 ```
 
-The three checks flag no Riverton sentence. The subject-verb check found only
-four subject-and-verb pairs in all 28 sentences, because it needs the tagger to
-mark a number feature on the verb and English verbs rarely carry one. On the
-other 24 sentences the check could not fire. A zero mostly measures coverage, not
+No check puts a mark on a Riverton sentence. The subject-verb check finds only
+four subject-and-verb pairs in all 28 sentences. It requires a number feature
+on the verb, which English verbs rarely have. It cannot evaluate the other
+24 sentences. Zero flags therefore mainly reflect limited coverage, not
 correctness.
 
 ## Grammar checking in production
 
-The three custom checks above demonstrate the concept, but real offline grammar checking requires a mature system. In the NLP ecosystem, open-source tools like LanguageTool are standard. Production grammar systems distinguish between:
+The three custom checks demonstrate the concept rather than provide a complete
+offline grammar checker. Established open-source tools such as LanguageTool
+provide broader functionality. Production systems distinguish these issues:
 
-- **Detection vs. correction**: Highlighting a possible error (detection) is much safer than automatically rewriting the text (correction), especially when the engine's coverage is low.
-- **Normative context and auditability**: What counts as "correct" grammar depends on the intended style (e.g., formal business English vs. informal messaging). Rule-based systems provide an auditable explanation for why text was flagged, whereas deep learning models can suggest fluent corrections but often struggle to explain their normative reasoning.
-- **Rule/model/error-type comparison**: Rule-based engines are highly precise for local stylistic and typographical errors (like doubled words or wrong articles). Neural models are generally used for catching semantic confusion where the grammar technically parses but the meaning is broken.
+- **Detection vs. correction**: Marking a possible error is safer than automatically rewriting text, particularly when the detector covers few error types.
+- **Normative context and auditability**: Grammar conventions depend on the intended style, such as formal business English or informal messages. Rule-based systems can explain each flag through a named rule. Deep learning models can suggest fluent corrections but often cannot explain the convention behind each suggestion.
+- **Rule/model/error-type comparison**: Rule-based engines can precisely detect local style and typing errors, such as doubled words or wrong articles. Neural models generally address semantic confusion in sentences whose grammatical structure appears valid.
 
 ## What to remember
 
-- Spelling checks words; grammar checks how words fit together.
-- UDPipe's `feats` and `nsubj` labels can support a small subject-verb check.
+- Spelling checks examine words. Grammar checks examine word relationships.
+- A small subject-verb check can use UDPipe's `feats` and `nsubj` labels.
 - A doubled-word pattern is simple and useful for one common typo.
-- The article-letter rule falsely flags `an hour` and `A university`.
+- The article-letter rule falsely puts a mark on `an hour` and `A university`.
 - These three checks are demonstrations, not an offline grammar checker for R.
 - No Riverton flags here means low coverage, not clean grammar.
 
-The three checks can produce a review queue. They cannot approve public text on
-their own, especially when the most technical check fires on only four Riverton
-sentences.
+The three checks can select sentences for a person to examine. They cannot
+approve public text independently. The subject-verb check covers only four
+Riverton sentences.
 
 ## Sources
 

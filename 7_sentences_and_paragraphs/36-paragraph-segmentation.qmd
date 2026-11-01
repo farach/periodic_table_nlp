@@ -1,18 +1,18 @@
 ---
 title: "Finding paragraph boundaries"
 subtitle: "Keep layout units before text conversion removes them"
-description: "Learn how blank lines and HTML block elements define paragraphs in different file formats."
+description: "Learn how blank lines and HTML block elements mark paragraphs in different file formats."
 categories: [sentences and paragraphs, paragraph segmentation, workforce research]
 ---
 
-Help articles and job-board HTML reach the coordinator as readable text, yet
-their paragraph breaks live in different places. Comparing them requires keeping
-those boundaries before cleanup erases them.
+Help articles and job-board HTML store paragraph boundaries differently. The
+coordinator needs to preserve those boundaries before text cleanup removes
+them.
 
 In a plain-text help article, a blank line can mark a new paragraph. HTML gives
-the team block elements it can use as paragraph boundaries. The standard's own
-definition of a paragraph is looser than a `<p>` element, so this is a working
-rule for the lesson rather than the specification's answer.
+the team block elements for paragraph boundaries. The HTML standard does not
+restrict its paragraph definition to `<p>` elements. This lesson therefore
+uses a working rule rather than the specification's full definition.
 
 ::: {.callout-note}
 The help articles and job board are local fictional fixtures.
@@ -23,11 +23,11 @@ The help articles and job board are local fictional fixtures.
 
 By the end of this lesson, you will be able to:
 
-- define a paragraph as a layout unit;
-- split plain text on blank lines;
-- collect paragraph-like blocks from HTML with rvest;
-- compare paragraph counts across file formats; and
-- explain why block boundaries should be captured before tag removal.
+- explain a paragraph as a layout unit.
+- split plain text on blank lines.
+- collect paragraph-like blocks from HTML with rvest.
+- compare paragraph counts across file formats.
+- explain why extraction must preserve block boundaries before tag removal.
 :::
 
 ```{r}
@@ -39,9 +39,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Split plain text on blank lines
 
-This section reads files with readr, repeats file work with purrr, splits text
-with stringr, expands list columns with tidyr, shapes tables with dplyr and
-tibble, and asks rvest for HTML. A **paragraph** is a block of text grouped by
+readr reads files, while purrr applies the same operations across files.
+stringr splits text, and tidyr expands list columns. dplyr and tibble prepare
+tables, and rvest reads HTML. A **paragraph** is a block of text grouped by
 layout. It may contain one sentence or several.
 
 ```{r}
@@ -120,9 +120,9 @@ stopifnot(
 )
 ```
 
-None of these help files contains a blank line, so the rule has nothing to split
-on and returns each file whole. That is a fair result but an empty demonstration.
-The HTML section below is where the rule has to make a choice.
+None of these help files contains a blank line. The rule therefore returns
+each complete file without demonstrating a split. The HTML example requires
+an explicit choice of boundary rule.
 
 ## Take blocks from HTML
 
@@ -187,9 +187,9 @@ from those list items.
 
 ## Show what tag removal loses
 
-A common conversion step removes tags and keeps only the visible words. That can
-be useful for word counts, but it is too late for paragraph segmentation if the
-block marks are gone.
+A common conversion removes tags and retains visible words. This operation
+can help word counting, but it also removes the markers needed for paragraph
+segmentation.
 
 ```{r}
 html_source <- read_file("data/workforce/job-board.html")
@@ -239,17 +239,17 @@ stopifnot(
 ```
 
 Tag removal alone leaves 14 blank-line chunks because the source file still has
-line breaks and indentation. Those chunks are not paragraphs; they are source
-layout around titles, job cards, and lists. `str_squish()` removes the remaining
+line breaks and indentation. Those chunks reflect source layout around
+titles, job cards, and lists rather than paragraphs. `str_squish()` removes the remaining
 blank-line boundaries and leaves one long text string. For this file, paragraph
-structure has to be captured before whitespace cleanup.
+segmentation must preserve structure before whitespace cleanup.
 
 ## What to remember
 
 - A paragraph is a layout block, so the right rule depends on the file format.
 - These help files have no blank lines, so the blank-line rule cannot show much.
-- The chosen HTML selector captures 41 block-like units, including headings and
-  list items.
+- The chosen HTML selector captures 41 block-like units. Those units contain
+  headings and list items.
 - Squishing whitespace after tag removal collapses the text to one unit.
 
 The help files and the job-board HTML need different boundary rules. Here the

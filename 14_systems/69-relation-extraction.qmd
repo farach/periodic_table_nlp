@@ -5,21 +5,21 @@ description: "Learn how a small dependency-pattern extractor turns linked Rivert
 categories: [systems, relation extraction, workforce research]
 ---
 
-Tomas has a stack of short notices and one question: which organisation offers
-which credential, and which credential does a job require? A word search gives
-him fragments. It finds `required`, but it cannot tell whether the sentence
-says a licence is required, preferred, or not required.
+Tomas reads short notices to find organisations that offer credentials and
+jobs that require credentials. A word search finds `required`. It cannot
+distinguish a required licence from a preferred or unnecessary licence.
 
-**Relation extraction** finds a statement that two entities stand in a named,
-directed relationship. The output is a triple such as `ORG-0002 offers
-CRD-0002`, plus a status and a pointer back to the sentence that said it.
+**Relation extraction** finds a named, directed relationship between two
+entities. The output is a triple such as `ORG-0002 offers
+CRD-0002`. Each triple also includes a status and a reference to its evidence
+sentence.
 
 This lesson keeps the example small. It links mentions with the Riverton alias
-table, inspects the parser links, and compares the extractor with a co-occurrence
-baseline that only knows two mentions shared a sentence.
+table and examines the parser links. It compares the extractor with a co-occurrence
+baseline. That baseline records only whether two mentions share a sentence.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The author created the fictional Riverton Workforce Lab, job board, and training flyer for teaching.
 :::
 
 ::: {.callout-tip}
@@ -27,11 +27,11 @@ The Riverton Workforce Lab, its job board, and its training flyer are fictional 
 
 By the end of this lesson, you will be able to:
 
-- define a relation schema before extracting triples;
-- keep entity IDs, direction, status, and offsets with each triple;
-- explain why two linked mentions in one sentence are not automatically related;
-- mark negated and hedged statements separately from asserted ones;
-- compare pair detection with triple extraction without mixing their units; and
+- define a relation schema before extracting triples
+- keep entity IDs, direction, status, and offsets with each triple
+- explain why two linked mentions in one sentence are not automatically related
+- distinguish negated and uncertain statements from asserted statements
+- compare pair detection with triple extraction without mixing their units
 - say why a same-author reference is only a demonstration.
 :::
 
@@ -44,9 +44,8 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Define the relation schema
 
-A **schema** says which relation types the extractor is allowed to produce. It
-also says which entity type can appear on each side. This matters because
-direction is part of the claim: an organisation offers a credential; the
+A **schema** specifies the permitted relation types and the entity type on each
+side. Direction is part of the claim. An organisation offers a credential. The
 credential does not offer the organisation.
 
 ```{r}
@@ -96,15 +95,15 @@ stopifnot(
 ```
 
 The schema is small on purpose. It does not try to extract every fact in a job
-notice. It only checks two relations that later lessons can put into a knowledge
+notice. It specifies only two relations that later lessons can put into a knowledge
 base.
 
 ## Read the source records and aliases
 
 The 28 Riverton sentences are the verbatim source records used in earlier
 lessons. The alias table supplies IDs for organisations, places, and credentials.
-The extractor uses those IDs for arguments; named entity recognition is not used
-to choose the arguments.
+The extractor uses those IDs for arguments, the entities on each side of a
+relation. It does not use named entity recognition to choose the arguments.
 
 ```{r}
 sentences <- read_csv(
@@ -199,18 +198,18 @@ The table includes two rows for the alias `Riverton`, which is an ambiguity the
 lesson leaves unresolved. For relation arguments, the examples below use
 organisation and credential aliases that link to one ID.
 
-## Inspect the 28 verbatim sentences once
+## Examine the 28 verbatim sentences once
 
 The job-board and flyer lines are useful for inspection, but they do not contain
 two distinct linked entity mentions in one sentence. The table below is the only
 place this lesson prints all 28 source sentences. It shows why none of these lines can
 produce complete relation triples.
 
-The matcher behind the table looks for every alias in each sentence. It tries
-longer aliases first, so `Riverton Skills Centre` is claimed as one organisation
-before `Riverton` alone can match inside it, and it records the first and last
-character of every match. An alias shared by two IDs is kept and marked
-ambiguous rather than resolved by guessing.
+The matcher searches each sentence for every alias. It tries longer aliases
+first. Thus, it matches `Riverton Skills Centre` as one organisation before
+`Riverton` alone can match within that name. It records the first and last
+character of every match. It retains aliases shared by two IDs as ambiguous
+rather than guessing an identity.
 
 ```{r}
 #| code-fold: true
@@ -386,19 +385,20 @@ stopifnot(
 )
 ```
 
-The important negative result is concrete: these 28 lines do not give the
-extractor complete entity pairs. A page or posting could supply a missing
-employer, but that would be a page-structure assumption, not sentence evidence;
-this lesson does not use that assumption. The polarity and modality columns are
-read by hand so the table can flag lines worth inspecting.
+These 28 lines do not supply complete entity pairs to the extractor. A page or
+posting could name a missing employer. That would require a page-structure
+assumption, not sentence evidence. This lesson makes no such assumption.
+
+The author reads polarity and modality manually to select lines for
+inspection. **Polarity** distinguishes assertion from negation. **Modality**
+records meanings such as preference or uncertainty.
 
 ## Write a same-author reference before extraction
 
-The next examples are extractor test sentences. They are constructed to test
-the parser patterns and are not claims about the Riverton handbook or knowledge
-base. The reference below is written before the extractor runs. The same author
-wrote the sentences, the reference, and the rules, so the score is only a
-demonstration.
+The next examples are constructed test sentences for examining parser patterns.
+They make no claims about the Riverton handbook or knowledge base. The author
+wrote the reference before extractor execution. The same author wrote the
+sentences, reference, and rules. The score is therefore only a demonstration.
 
 ```{r}
 constructed_sentences <- tribble(
@@ -442,7 +442,7 @@ knitr::kable(
 knitr::kable(
   reference_triples,
   col.names = c("Sentence ID", "Relation", "Subject ID", "Object ID", "Status"),
-  caption = "Same-author reference triples written before the extractor runs",
+  caption = "Same-author reference triples written before extractor execution",
   row.names = FALSE
 )
 ```
@@ -464,14 +464,15 @@ stopifnot(
 
 The reference has no row for the bus sentence or the job-ad counting sentence.
 Both contain more than one linked mention, but neither states one of the schema
-relations between those mentions. The test-sentence IDs skip some numbers; no
-test sentence was removed after the extractor ran.
+relations between those mentions. The test-sentence IDs skip some numbers. The
+author removed no test sentence after extraction.
 
 ## Parse and align mentions to tokens
 
-spaCy supplies dependency links. The code aligns each alias-table mention to the
-tokens covered by its character offsets, then chooses the token whose head points
-outside the mention as the mention head.
+spaCy supplies dependency links, which connect tokens by grammatical role. The
+code matches each alias-table mention to tokens within its character offsets.
+It selects the token whose head points outside the mention as the **mention
+head**.
 
 ```{r}
 pipeline <- use_project_spacy()
@@ -573,16 +574,18 @@ The offsets are one-based character positions in the unmodified sentence text.
 That lets the triple point back to the exact evidence instead of to a rebuilt
 token string.
 
-In the head-relation column, `nsubj` marks an active subject, `dobj` a direct
-object, `nsubjpass` a passive subject, `pobj` an object of a preposition, and
-`conj` a coordinated item. Lesson 18 introduces dependency parses.
+In the head-relation column, `nsubj` marks an active subject and `dobj` marks a
+direct object. `nsubjpass` marks a passive subject. `pobj` marks an object of a
+preposition, and `conj` marks a coordinated item. Lesson 18 introduces dependency
+parses.
 
 ## Extract directed triples
 
-The extractor looks for `offer` and `require` triggers. It handles active
-subjects, passive agents, coordinated objects, `not` on a verb, `No` on an
-argument, `no longer` under an adverb, and hedging from `may`. The reported
-requirement is a visible miss for this small pattern set.
+The extractor searches for `offer` and `require` as relation indicators. It
+handles active subjects, passive agents, and coordinated objects. Negation
+patterns include `not` on a verb, `No` on an argument, and `no longer` under an
+adverb. It also recognizes uncertainty from `may`. This small pattern set misses
+the reported requirement.
 
 ```{r}
 #| code-fold: true
@@ -824,15 +827,15 @@ stopifnot(
 ```
 
 The negation check is deliberately broader than "look for `not` under the verb."
-It catches `no longer` through the adverb and `No Forklift Operator Licence`
+It finds `no longer` through the adverb and `No Forklift Operator Licence`
 through the determiner on the credential argument.
 
 ## Compare pairs separately from triples
 
 The co-occurrence baseline pairs every two distinct linked mentions in a
 constructed sentence. It does not assign a relation type or direction, so those
-fields are not applicable. The extractor is scored twice: once for entity-pair
-detection and once for labelled triples.
+fields are not applicable. The lesson scores the extractor twice: once for
+entity-pair detection and once for labelled triples.
 
 ```{r}
 #| code-fold: true
@@ -976,11 +979,11 @@ stopifnot(
 
 The pair table and triple table answer different questions. Co-occurrence can
 ask whether the right two IDs appeared together. It cannot answer which relation
-holds, which way the arrow points, or whether the sentence denied the claim.
+is correct, which way the arrow points, or whether the sentence denied the claim.
 The reported-verb test sentence is also visible as a false negative for this
 small dependency-pattern extractor.
 
-## Where modern systems fit
+## Modern relation-extraction systems
 
 Current relation-extraction papers often use large language models, prompts, or
 trained classifiers. Those systems still need the same schema, argument spans,
@@ -988,12 +991,13 @@ status policy, and evidence checks. Published comparisons disagree by domain and
 scoring method, so this page does not make a performance claim about them.
 
 Many current pipelines ask a language model to return each triple as JSON that
-must match a schema. A schema guarantee checks the format, not the content: a
-reply can parse perfectly and still name the wrong entity or drop a negation.
-Asking for the answer before any reasoning can also lower accuracy, so a
-schema that includes a reasoning field should put it first. Keep this page's
-evidence offsets and status column, and score the output against a reference
-written before the model runs. The guide
+must match a schema. A schema guarantee restricts format, not content. A reply
+can parse correctly but name the wrong entity or omit a negation.
+
+Requesting the answer before reasoning can also lower accuracy. If a schema
+includes a reasoning field, place that field first. Keep this page's evidence
+offsets and status column. Score output against a reference written before model
+execution. The guide
 [Using a language model in a reproducible analysis](../using-language-models.qmd)
 covers the rest of the record-keeping.
 
@@ -1006,8 +1010,8 @@ covers the rest of the record-keeping.
 - This same-author score is a demonstration, not a benchmark.
 - Every triple needs sentence, document, and offset evidence.
 
-The safe habit is to treat candidate pairs as leads for review and schema
-triples as claims that need sentence evidence.
+Treat candidate pairs as items to examine. Treat schema triples as claims that
+require sentence evidence.
 
 ## Sources
 

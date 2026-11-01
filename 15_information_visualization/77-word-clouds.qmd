@@ -1,15 +1,14 @@
 ---
 title: "Reading a word cloud carefully"
 subtitle: "Compare the picture with the count table that made it"
-description: "Learn how word clouds encode word counts, why the layout can mislead, and how to check the same words in a sorted bar chart and table."
+description: "Learn how word clouds represent counts and why layout can mislead. Compare the same words in a sorted bar chart and table."
 categories: [information visualization, word clouds, inaugural addresses]
 ---
 
-Twenty-two words can fill Iris's slide about the inaugural addresses. The table
-behind the picture matters more than the shape of the picture itself.
-
-The tempting part is also the risk. A large word can mean a high count, a long
-spelling, or a lucky position in the packing algorithm.
+Iris displays twenty-two words from inaugural addresses. The count table
+provides evidence that the arrangement alone does not. A word can occupy a
+large area because of its count, spelling length, or placement by the layout
+algorithm.
 
 **Word clouds** draw words from a count table with larger type for larger
 counts. They are useful for a quick look at a vocabulary. They are weak for
@@ -20,11 +19,12 @@ exact comparisons, rank order, meaning, and change over time.
 
 This lesson shows how to:
 
-- build one corpus-wide word-count table from inaugural paragraphs;
-- use a named stop-word list and check what it removes;
-- draw a sorted bar chart and a word cloud from the same counts;
-- read size, position, and colour in a cloud honestly;
-- test the word-length trap with real words from the data; and
+- build one corpus-wide word-count table from inaugural paragraphs
+- use a named stop-word list
+- examine which words the list removes
+- draw a sorted bar chart and a word cloud from the same counts
+- distinguish count information from layout choices
+- examine word-length effects with words from the data
 - give the cloud a two-part text alternative.
 :::
 
@@ -37,11 +37,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Build one count table
 
-The corpus helper returns one row per paragraph. This lesson asks one
-corpus-wide question: after a stated cleanup, which words occur most often
-across all inaugural paragraphs? Pooling every paragraph gives long speeches
-more weight than short ones, so the result is a preview of the vocabulary, not
-a claim about importance.
+The corpus helper returns one row per paragraph. After the stated
+preprocessing, which words occur most often across all inaugural paragraphs?
+Combining all paragraph counts gives long speeches more weight than short
+ones. The result describes vocabulary frequency, not importance.
 
 The figures use the site's shared style, `theme_lesson()`, from
 `R/lesson-figures.R`. That keeps the plotting code below focused on the choices
@@ -111,8 +110,8 @@ bar_alt_text <- paste0(
 
 cloud_alt_seed_7701 <- paste(
   "Word cloud of the same 22 words from the count table.",
-  "The largest words are government, used 585 times, and people, used 561 times;",
-  "the positions of the words are not data.",
+  "The largest words are government, with 585 occurrences, and people, with 561 occurrences.",
+  "Word positions do not represent data.",
   "The count table above is the long text alternative."
 )
 
@@ -141,24 +140,24 @@ stopifnot(
 ```
 
 The onix list removes `states` but keeps `united`, so a phrase such as
-`United States` can leave `united` standing alone. A different stop-word list
+`United States` can leave only `united`. A different stop-word list
 would produce a different table.
 
-`unnest_tokens()` lowercases the paragraphs and splits punctuation away from
-words, except an apostrophe inside a word. The `^[a-z]+$` filter then keeps
-only tokens made entirely of letters, so it drops whole tokens such as
-`america's`; in this corpus it drops `r nrow(dropped_by_letters_filter)`
-tokens. After that filter, `so` survives
+`unnest_tokens()` converts paragraphs to lowercase and separates punctuation
+from words, except an apostrophe within a word. The `^[a-z]+$` filter retains
+only tokens made entirely of letters. It therefore removes whole tokens such
+as `america's`. In this corpus, it removes `r nrow(dropped_by_letters_filter)`
+tokens. After that filter, `so` remains
 `r inaugural_word_counts$count[inaugural_word_counts$word == "so"]` times
 because onix does not list it as a stop word.
 
 ## Show the counts before the cloud
 
-A sorted bar chart puts the same words on a common scale. People compare
-positions along a common scale more accurately than areas, so the chart is the
-check Iris should read before the cloud. Cleveland and McGill placed area below
-position in their hypothesized ranking of graphical perception tasks; they did
-not test word clouds themselves.
+A sorted bar chart places the same words on a common scale. People compare
+positions on a common scale more accurately than areas. Iris should examine the
+chart before the cloud. Cleveland and McGill placed area below position in
+their hypothesized ranking of graphical perception tasks. They did not examine
+word clouds themselves.
 
 Each bar carries its count as a label, so the chart needs no numeric axis. The
 one highlighted bar is the stop-word decision the reader should notice.
@@ -199,8 +198,8 @@ bar_plot <- ggplot(bar_data, aes(x = count, y = reorder(word, count))) +
   ) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.32))) +
   labs(
-    title = "Two words lead the count by a wide margin",
-    subtitle = "Uses in 1,377 inaugural paragraphs after removing onix stop words",
+    title = "Two words have substantially higher counts",
+    subtitle = "Occurrences in 1,377 inaugural paragraphs after removing onix stop words",
     x = NULL,
     y = NULL
   ) +
@@ -247,11 +246,11 @@ between words.
 
 ## Draw the same counts as a cloud
 
-The cloud below uses `geom_text_wordcloud()` with one colour and no rotation.
-`scale_size_area()` sets the type size so that the area of each letter grows in
-step with the count: a word used four times as often gets letters twice as
-tall. The scale does nothing about word length, so a long word with a modest
-count can still cover more of the slide than a short word used more often.
+The cloud uses `geom_text_wordcloud()` with one colour and no rotation.
+`scale_size_area()` sets each letter's area proportional to the count. A word
+that occurs four times as often has letters twice as tall. The scale does not
+adjust for word length. A long word with a lower count can therefore cover more
+area than a short word with a higher count.
 
 ```{r}
 #| label: fig-word-cloud-seed-one
@@ -280,7 +279,7 @@ draw_cloud <- function(seed) {
 cloud_plot_seed_7701 <- draw_cloud(seed = 7701) +
   labs(
     title = "The first word drawn takes the centre",
-    subtitle = "Type size follows the count. Position, neighbours, and colour carry no meaning."
+    subtitle = "Type size represents count. Position, neighbours, and colour do not represent data."
   )
 
 cloud_plot_seed_7701
@@ -312,17 +311,15 @@ stopifnot(
 )
 ```
 
-The word in the middle is the first row drawn, not the topic of the speeches.
-The table is sorted by count, so `government` is drawn first. If the table were
-alphabetical, a different word could start in the centre. The packing also
-depends on the seed, the drawing device, and the fonts, so the page makes no
-claim about where any word should sit.
+The central word comes from the first rendered row, not a topic analysis. The
+renderer draws `government` first because the table has count order. An
+alphabetical table could place another word in the centre. Layout also depends
+on the seed, drawing device, and fonts. The page claims no fixed word positions.
 
-`area_corr`, an option in ggwordcloud, makes a different trade. It resizes
-labels so each word's whole text box follows the count, which removes the
-length bias but gives short words taller type. Felix, Franconeri, and Bertini
-later found that people judged values more accurately from bar length than
-from font size.
+The ggwordcloud option `area_corr` scales each word's entire text box to its
+count. This removes the word-length effect but gives short words taller type.
+Felix, Franconeri, and Bertini later found that people judged values more
+accurately from bar length than font size.
 
 The short part of the text alternative is the cloud's alt text:
 "`r cloud_alt_seed_7701`" The long part is the sorted count table above, which
@@ -336,14 +333,14 @@ counts are unchanged.
 ```{r}
 #| label: fig-word-cloud-seed-two
 #| fig-cap: "The same 22 count-table words drawn again with layout seed 7702."
-#| fig-alt: "Second word cloud with the same words and counts as the first cloud but a different layout seed. Government is still used 585 times and people 561 times; every change in position is a layout artefact."
+#| fig-alt: "The second word cloud has the same words and counts but a different layout seed. Government has 585 occurrences and people 561 occurrences. Every position difference results from layout."
 #| fig-width: 7
 #| fig-height: 4.4
 #| dev: png
 
 cloud_plot_seed_7702 <- draw_cloud(seed = 7702) +
   labs(
-    title = "A new seed moves every word; the counts stay the same",
+    title = "A new seed changes positions, not counts",
     subtitle = "Same 22 words and counts as the previous cloud, layout seed 7702"
   )
 
@@ -366,10 +363,9 @@ stopifnot(
 )
 ```
 
-If the two pictures feel different, that feeling is the warning. The counts did
-not change.
+The pictures can create different impressions despite identical counts.
 
-## Check preprocessing sensitivity
+## Examine preprocessing sensitivity
 
 Stop-word lists are editorial choices. The table below recomputes the top ten
 words under three named choices: onix only, snowball only, and all three
@@ -434,15 +430,15 @@ stopifnot(
 ```
 
 With snowball only, common words such as `will`, `us`, and `states` remain.
-With onix, `states` is removed while `united` remains. A cloud without this
-preprocessing note would look more objective than it is.
+Onix removes `states` but retains `united`. A cloud without this preprocessing
+note would conceal those choices.
 
-## Check the word-length trap
+## Examine the word-length effect
 
 The next table compares real words from the count table. The rough space score
-is `letters * sqrt(count)`. It is not a model of perception; it only shows why
-a long word can take more horizontal room even when its count is lower.
-Alexander and coauthors tested word-length effects in word clouds directly.
+is `letters * sqrt(count)`. It is not a model of perception. It illustrates why
+a longer word can occupy more horizontal space despite a lower count.
+Alexander and coauthors examined word-length effects in word clouds directly.
 
 ```{r}
 length_pairs <- inaugural_word_counts |>
@@ -493,21 +489,21 @@ ask readers to compare close counts from font size.
 ## What this cloud does not show
 
 The cloud does not show word order, phrases, relationships, distinctiveness,
-change over time, or importance. It also hides that `united` and `states` were
-once part of a phrase before tokenizing and the stop-word list split them.
+change over time, or importance. It also omits phrase context. Tokenization and
+stop-word removal separate `united` from `states` in the original phrase.
 
-Use a cloud as a doorway to the table, not as the table's replacement.
+Use a cloud to introduce the count table, not to replace it.
 
 ## What to remember
 
-- A word cloud starts from a count table; keep that table visible.
+- A word cloud starts from a count table. Keep that table visible.
 - The onix stop-word list removes `states` but keeps `united` in this corpus.
 - The bar chart and both clouds here use the same 22 counts.
-- Placement, neighbours, the centre, and colour in a cloud carry no meaning.
-- Long words can look stronger than shorter words with similar counts.
+- Placement, neighbours, the centre, and colour do not represent data here.
+- Long words can appear larger than shorter words with similar counts.
 - The sorted counts are the long text alternative for the cloud.
 
-Iris keeps the cloud, but the slide title points to the count table: "Common
+Iris keeps the cloud, but the slide title describes the count table: "Common
 words after one stated cleanup."
 
 ## Sources

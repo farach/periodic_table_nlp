@@ -1,30 +1,31 @@
 ---
 title: "Reading words in context"
 subtitle: "Compare one word vector with one token occurrence vector"
-description: "Learn how spaCy returns a context-sensitive token representation and why two uses of the same word can have different vectors."
+description: "Learn how spaCy returns a context-sensitive token representation and why two occurrences of the same word can have different vectors."
 categories: [similarity, contextual embeddings, spaCy]
 ---
 
-A student underlines `bank` twice in one sentence. The first `bank` raises
-interest rates; the second sits beside a river.
+A student underlines two occurrences of `bank` in a short text. The first names a
+financial institution. The second names land beside a river.
 
 The spelling is identical. The surrounding words make the two occurrences
 different.
 
-A **contextualized word representation** gives a vector to a token occurrence
-rather than to a word type. The same word can therefore receive two different
-vectors in the same document.
+A **contextualized word representation** assigns a vector to each token
+occurrence, an individual instance of a word or punctuation mark. A **word type**
+groups occurrences with the same spelling. A contextual model can assign
+different vectors to occurrences of the same word within a document.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- start the pinned local spaCy pipeline through the project helper;
-- confirm that the small pipeline has no static word-vector table;
-- read the token tensor produced for one sentence;
-- compare token occurrence vectors with an all-pair baseline;
-- check same-sense controls; and
+- start the fixed local spaCy pipeline through the project helper
+- confirm that the small pipeline has no static word-vector table
+- read the token tensor produced for one text
+- compare token occurrence vectors with an all-pair baseline
+- examine same-sense controls
 - separate contextual encoding from word-sense identification.
 :::
 
@@ -37,8 +38,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the local spaCy pipeline
 
-spaCy is a Python library. This project reaches it through `R/use-spacy.R`, which
-pins the Python environment and prevents downloads during rendering.
+spaCy is a Python library. This project uses it through `R/use-spacy.R`. The
+helper selects a fixed Python environment and prevents downloads during
+rendering.
 
 ```{r}
 library(reticulate)
@@ -88,12 +90,12 @@ stopifnot(
 ```
 
 The zero-row vector table matters. This small pipeline does not store one
-reusable vector for every word. It still produces an internal tensor for the
-tokens it reads.
+reusable vector for every word. It still produces an internal tensor, or array
+of numbers, for the tokens it processes.
 
 ## Extract token occurrence vectors
 
-A **tensor** is an array of numbers. For this sentence, spaCy returns one row per
+A **tensor** is an array of numbers. For this text, spaCy returns one row per
 token and 96 columns per token.
 
 ```{r}
@@ -128,7 +130,7 @@ token_table <- tibble(
 knitr::kable(
   token_table,
   col.names = c("Position", "Token", "Role in this lesson"),
-  caption = "Tokens in the sentence and the positions compared below",
+  caption = "Tokens in the text and the positions compared below",
   row.names = FALSE
 )
 ```
@@ -201,7 +203,7 @@ knitr::kable(
   all_pair_summary |>
     mutate(cosine = round(cosine, 4)),
   col.names = c("All-pair baseline", "Cosine"),
-  caption = "Cosine similarities across all 105 token pairs in the example sentence",
+  caption = "Cosine similarities across all 105 token pairs in the example text",
   row.names = FALSE
 )
 
@@ -232,15 +234,14 @@ stopifnot(
 )
 ```
 
-The `bank` pair is higher than an arbitrary token pair from the same sentence:
-it sits around the 91st percentile of the all-pair baseline. That supports a
-modest claim. The encoder gives different vectors to occurrences, and the two
-`bank` rows are still closer than most random token pairs in this short text.
+The `bank` pair scores around the 91st percentile of the all-pair baseline for
+the same text. The encoder assigns different vectors to individual occurrences.
+The two `bank` rows remain closer than most token pairs in this short text.
 
-## Check same-sense controls
+## Examine same-sense controls
 
 The stronger claim would be that the distance isolates word sense. The controls
-below test that claim by changing sense and grammatical role separately.
+below examine that claim through separate changes to sense and grammatical role.
 
 ```{r}
 tensor_for_text <- function(text) {
@@ -320,26 +321,27 @@ stopifnot(
 )
 ```
 
-The reversal is the lesson. Same financial sense in different grammatical roles
-scores about 0.3447, almost the same as different senses in different roles at
-about 0.3466. Same financial sense in the same role scores about 0.9422. In these
-four probes, the grammatical-role contrast is at least as large as the
-dictionary-sense contrast. This is an illustration, not a word-sense evaluation:
-there is no benchmark or independent sense labeling here.
+The same financial sense in different grammatical roles scores about 0.3447.
+Different senses in different roles score almost the same, about 0.3466. The same
+financial sense in the same role scores about 0.9422. In these
+four examples, the grammatical-role contrast is at least as large as the
+dictionary-sense contrast. These examples illustrate the representation, not a
+word-sense evaluation. There is no benchmark or independent sense labeling here.
 
 ## Contrast with one vector per word
 
-The word2vec lesson trains one vector for each kept word type. A
+The word2vec lesson uses a saved model with one trained vector for each retained
+word type. A
 one-vector-per-word model cannot give river `bank` and finance `bank` two rows in
 the same sentence. A contextual pipeline can.
 
-That does not mean the vector knows which dictionary sense is meant. The
-`en_core_web_sm` tok2vec layer, short for token-to-vector, is the part of the
-pipeline that turns each token into numbers, and it is a shared encoder trained
-for tagging, parsing, and named-entity recognition. It has no word-sense
-objective, so it carries the information useful for those tasks. A representation
-that changes with context is not the same thing as a model that knows which sense
-you meant. This is a small pipeline's encoder, not a large language model.
+Different vectors do not show that the model finds the intended dictionary sense.
+The `en_core_web_sm` tok2vec layer, short for token-to-vector, converts each token
+into numbers. The tagger, parser, and named-entity recognizer use this shared
+encoder. Training targets those tasks, not word-sense identification.
+
+A representation can change with context without finding the intended word
+sense. This encoder belongs to a small pipeline, not a large language model.
 
 ```{r}
 final_checks <- tibble(
@@ -383,14 +385,11 @@ stopifnot(
 
 - A contextualized representation gives one vector to each token occurrence.
 - The pinned small spaCy pipeline has 0 rows in its static vector table.
-- The sentence produces a 15 by 96 tensor.
+- The example text produces a 15 by 96 tensor.
 - The two `bank` occurrence vectors score about 0.3466, above most token pairs in
-  that sentence.
-- In these four probes, grammatical role matters at least as much as the
-  dictionary-sense contrast; that is not a word-sense benchmark.
-
-The student keeps both underlines and adds a note: same spelling, different
-occurrence vectors, not a sense label.
+  that text.
+- In these four examples, grammatical role matters at least as much as the
+  dictionary-sense contrast. These examples are not a word-sense benchmark.
 
 ## Sources
 

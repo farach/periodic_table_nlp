@@ -175,8 +175,10 @@ Rscript tests/test-nlg-runtime.R
 npm ci
 npx playwright install chromium
 Rscript scripts/check-prose.R
+Rscript tests/test-repetition-disclosure.R
 Rscript scripts/check-repetition.R
 Rscript tests/test-system-evaluation.R
+Rscript tests/test-vocabulary-bpe.R
 quarto render
 Rscript scripts/check-lessons.R
 Rscript tests/test-periodic-table.R
@@ -209,4 +211,7 @@ Package versions are recorded in `renv.lock`, `requirements-spacy.txt`, and
 `data/nlg-model-files.csv`. The source documents and configuration are tracked;
 generated site files, model weights, and local environments are not. CI uploads
 the exact rendered `_site` artifact for inspection but does not deploy it.
+After a successful render, the remaining page tests run even if an earlier
+page test fails. CI retains the rendered artifact from those failed runs for
+diagnosis. An uploaded artifact does not mean the checks passed.
 Deployment to the canonical host is managed outside this repository.

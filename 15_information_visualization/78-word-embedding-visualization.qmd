@@ -1,31 +1,30 @@
 ---
-title: "Projecting word vectors onto a map"
+title: "Projecting word vectors into two dimensions"
 subtitle: "Measure what the picture keeps and what it loses"
 description: "Learn how PCA and t-SNE draw word embeddings in two dimensions while preserving only part of the original neighbourhoods."
 categories: [information visualization, word embeddings, dimensionality reduction]
 ---
 
-Theo wants to show a small word-vector model on one slide. A scatterplot feels
-like a map, and maps invite stories.
-
-This picture needs a warning label. Each word begins as 50 numbers. A
-two-dimensional drawing can keep some nearby neighbours and lose others.
+Theo wants to show a small word-vector model on one slide. Each word begins as
+50 numbers. A two-dimensional plot can preserve some nearest neighbours and
+omit others from the nearest-neighbour list.
 
 **Word embedding visualization** draws word vectors as points by projecting many
-numeric dimensions into two. The plot is a question to check, not a finding
-about topics, clusters, or meaning.
+numeric dimensions into two. The plot requires a check. It does not
+establish topics, clusters, or meaning.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- verify the pinned inaugural word2vec model before loading it;
+- compare the fixed inaugural word2vec model with its recorded fingerprint before loading it
 - scale each word vector to length 1 so straight-line distance ranks
-  neighbours the same way as cosine similarity;
-- choose a stated set of frequent words to plot;
-- mark, in the plot itself, which nearest neighbours a projection keeps;
-- compare PCA with t-SNE, and two t-SNE seeds, by neighbour preservation; and
+  neighbours the same way as cosine similarity
+- choose a stated set of frequent words to plot
+- mark which nearest neighbours a projection preserves
+- compare PCA and t-SNE through neighbour preservation
+- compare two t-SNE seeds through neighbour preservation
 - avoid reading clusters, gaps, sizes, and axis directions as evidence.
 :::
 
@@ -36,13 +35,14 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Load and verify the pinned model
+## Examine the saved model's fingerprint
 
-The model comes from lesson 61. It is deliberately small: the metadata records
-134,419 cleaned training tokens and a 50-dimensional skip-gram word2vec fit. In
-lesson 61, even the easy pair `freedom / liberty` landed below the median of all
-pairwise similarities, so this lesson measures whether the picture keeps the
-model's neighbours. It does not claim the model learned reliable meaning.
+The saved model comes from lesson 61. The metadata records 134,419 cleaned
+training tokens and a 50-dimensional skip-gram word2vec fit. In lesson 61, even
+the clearly related pair `freedom / liberty` scored below the median of all
+pairwise similarities. This lesson measures whether the plot preserves the
+model's neighbours. It does not show that the model finds meaningful
+word relationships.
 
 ```{r}
 library(dplyr)
@@ -122,12 +122,13 @@ stopifnot(
 )
 ```
 
-The fingerprint check fails closed if the binary changes. Rendering does not
+The fingerprint check stops processing if the binary differs from the recorded
+version. Rendering does not
 train, download, or update a model.
 
 ## Choose the plotted words
 
-The full saved vocabulary has 2,709 rows, including the trainer's `</s>` marker.
+The full saved vocabulary has 2,709 rows. These include the trainer's `</s>` marker.
 This page plots the 300 most frequent training words that also have vectors.
 Changing the subset can change the projection.
 
@@ -184,25 +185,27 @@ stopifnot(
 
 The 300 plotted words range from
 `r format(min(selected_words$cleaned_paragraph_count), big.mark = ",")` to
-`r format(max(selected_words$cleaned_paragraph_count), big.mark = ",")` uses.
-The count column is an approximate training count rebuilt from the cleaned
-paragraphs with tidytext's tokenizer, not a byte-for-byte count from word2vec's
-internal splitter.
+`r format(max(selected_words$cleaned_paragraph_count), big.mark = ",")` occurrences.
+The count column approximates training counts from cleaned paragraphs with
+tidytext's tokenizer. It is not a byte-for-byte count from word2vec's internal
+splitter.
 
-Dividing each vector by its length, a step called L2 normalization, makes every
-row length equal to 1. On rows of length 1, straight-line (Euclidean) distance
-ranks neighbours the same way as cosine similarity, the measure used in lesson
-61. The neighbour lists below are computed that way in all 50 dimensions, and
-the same kind of distance is then measured in each two-dimensional drawing.
+**L2 normalization** divides each vector by its length, giving every row length
+1. For these normalized rows, straight-line, or Euclidean, distance and cosine
+similarity give the same neighbour ranking. Lesson 61 used cosine similarity.
+The code computes neighbour lists in all 50 dimensions. It then measures
+Euclidean distance in each two-dimensional plot.
 
 ## Decide what counts as a kept neighbour
 
-A plot of words is only useful if nearby points were nearby in the model. For
-each word, the code below finds its 10 nearest neighbours among the 300 plotted
-words, measured in all 50 dimensions, and later its 10 nearest points in a
-two-dimensional drawing. A neighbour is **kept** when it is also among the
-word's 10 nearest points in the drawing. A neighbour that is not kept may sit
-just outside that top ten or far away; the count does not say which.
+A word plot needs nearby points to reflect nearby model vectors. For each word,
+the code finds its 10 nearest neighbours among the 300 plotted words in all 50
+dimensions. It then finds the word's 10 nearest points in the two-dimensional
+plot.
+
+A neighbour is **kept** when it remains among the word's 10 nearest points in
+the plot. An omitted neighbour may be just outside the first ten or far away.
+The preservation count does not distinguish those cases.
 
 ```{r}
 nearest_by_similarity <- function(matrix, k = 10L) {
@@ -244,13 +247,15 @@ stopifnot(
 )
 ```
 
-The eight words in `label_words` get their own panel in each figure below. They
-are landmarks for matching the two figures by eye, not cluster names.
+Each of the eight words in `label_words` has a separate panel in each figure.
+These **reference words** help readers compare the figures. They are not
+cluster names.
 
 ## Project with PCA
 
 **PCA**, short for principal component analysis, finds the directions along
-which the normalized vectors spread out most. The plot uses the first two.
+which normalized vectors have the greatest variation. The plot uses the first
+two directions.
 
 ```{r}
 pca_fit <- prcomp(normalized_embeddings, center = TRUE, scale. = FALSE)
@@ -282,13 +287,13 @@ stopifnot(
 )
 ```
 
-The first two components hold
+The first two components contain
 `r sprintf("%.1f%%", 100 * sum(pca_variance[1:2]))` of the variance in the
 normalized vectors. The rest is invisible in this plot.
 
-The function below turns a set of two-dimensional coordinates into one panel
-per landmark word. In each panel, every 50-dimensional neighbour of the landmark is
-marked as kept or not kept, and the panel title counts how many were kept.
+The function converts two-dimensional coordinates into one panel per reference
+word. Each panel distinguishes preserved and omitted 50-dimensional neighbours.
+The panel title gives the preserved count.
 
 ```{r}
 anchor_panels <- function(points, neighbours_2d) {
@@ -372,11 +377,11 @@ draw_projection <- function(panels) {
 }
 
 key_subtitle <- str_c(
-  "Each panel shows one landmark word (dark triangle) and its 10 nearest ",
-  "neighbours<br>among the 300 words, measured in all 50 dimensions. ",
+  "Each panel shows a reference word (dark triangle) and its 10 nearest ",
+  "neighbours<br>among the 300 words in 50 dimensions. ",
   lesson_key("Filled squares", lesson_text_colours[["accent"]]),
-  " are still among<br>its 10 nearest points here; ",
-  lesson_key("hollow squares", lesson_text_colours[["contrast"]]),
+  " remain among<br>its 10 nearest points here. ",
+  lesson_key("Hollow squares", lesson_text_colours[["contrast"]]),
   " are not."
 )
 
@@ -390,13 +395,13 @@ pca_kept <- pca_panels |>
   distinct(anchor_word, kept_count)
 
 pca_alt_text <- str_c(
-  "Eight-panel PCA plot, one panel per landmark word. Each panel shows the 300 ",
-  "projected words as faint dots, the landmark as a dark triangle, and its 10 ",
-  "nearest neighbours in the 50-dimensional vectors as squares, filled when they ",
-  "stay among its 10 nearest points in the plot and hollow when they do not. ",
+  "Eight-panel PCA plot, one panel per reference word. Each panel shows 300 ",
+  "projected words as faint dots and the reference word as a dark triangle. Its 10 ",
+  "nearest 50-dimensional neighbours appear as squares. Filled squares remain ",
+  "among its 10 nearest points in the plot. Hollow squares do not. ",
   "The number kept ranges from ",
   min(pca_kept$kept_count), " to ", max(pca_kept$kept_count),
-  " of 10 across the eight landmarks."
+  " of 10 across the eight reference words."
 )
 
 stopifnot(
@@ -418,14 +423,14 @@ stopifnot(
 
 ```{r}
 #| label: fig-word-pca
-#| fig-cap: "PCA projection of 300 word vectors, one panel per landmark word. Squares mark the landmark's 10 nearest neighbours among the 300 words, measured in all 50 dimensions."
+#| fig-cap: "PCA projection of 300 word vectors, one panel per reference word. Squares mark its 10 nearest neighbours among the 300 words in all 50 dimensions."
 #| fig-alt: !expr pca_alt_text
 #| fig-width: 8
 #| fig-height: 5.4
 
 pca_plot <- draw_projection(pca_panels) +
   labs(
-    title = "PCA keeps few of each landmark's 10 nearest neighbours",
+    title = "PCA preserves few of each reference word's 10 nearest neighbours",
     subtitle = key_subtitle
   )
 
@@ -444,21 +449,22 @@ stopifnot(
 )
 ```
 
-PCA axes can flip sign across software builds, so the code fixes the signs with
-named words before plotting. The plot has no axis labels because left, right,
-up, and down mean nothing here; only nearness inside a panel matters. Each
-panel title reports how many of the landmark's 10 nearest neighbours stayed among
-its 10 nearest points in the drawing.
+PCA axis signs can differ across software builds. The code fixes signs with
+named words before plotting. The plot omits axis labels because direction has
+no meaning here. Only distances within a panel matter. Each panel title counts
+how many of the reference word's 10 nearest neighbours remain among its 10
+nearest plotted points.
 
 ## Project with t-SNE
 
-**t-SNE** is a stochastic method that tries to keep local neighbours together in
-the drawing. It can also create groups and gaps that are not stable evidence.
-Here, perplexity 30 sets roughly how many neighbours each point considers; it
-is unrelated to the language-model perplexity in lessons 63 and 64. Theta 0.5
-trades a little accuracy for speed, and 750 iterations is the number of
-optimization updates. The run also uses seed 7801, no initial PCA step, no
-extra normalization, and one thread.
+**t-SNE** uses randomness while attempting to preserve local neighbours in the
+plot. It can create groups and gaps that vary across executions. Perplexity 30
+sets roughly how many neighbours each point considers. This parameter is
+unrelated to language-model perplexity in lessons 63 and 64.
+
+Theta 0.5 increases speed at some cost to accuracy. The 750 iterations specify
+the number of optimization updates. This execution also uses seed 7801, no
+initial PCA step, no extra normalization, and one thread.
 
 ```{r}
 run_tsne <- function(seed) {
@@ -492,11 +498,11 @@ tsne_kept <- tsne_panels |>
   distinct(anchor_word, kept_count)
 
 tsne_alt_text <- str_c(
-  "Eight-panel t-SNE plot using seed 7801, one panel per landmark word, drawn ",
-  "the same way as the PCA figure. The number of 50-dimensional neighbours kept ",
-  "among the landmark's 10 nearest points ranges from ",
+  "Eight-panel t-SNE plot using seed 7801, one panel per reference word. Symbols match ",
+  "the PCA figure. The number of preserved 50-dimensional neighbours ",
+  "among each reference word's 10 nearest points ranges from ",
   min(tsne_kept$kept_count), " to ", max(tsne_kept$kept_count),
-  " of 10 across the eight landmarks. The preservation table below gives the ",
+  " of 10 across the eight reference words. The preservation table gives the ",
   "average over all 300 words."
 )
 
@@ -542,17 +548,18 @@ stopifnot(
 )
 ```
 
-The panels hold the same landmarks as the PCA figure, so the two pictures can
-be compared by eye. The counts in the panel titles are the evidence; the shapes
-of the groups are not.
+The panels contain the same reference words as the PCA figure for visual
+comparison. The panel-title counts provide evidence of neighbour preservation.
+The group shapes do not.
 
 ## Measure neighbour preservation
 
-A **10-nearest-neighbour preservation** score averages the panel-title count
-over every plotted word, not just the eight landmarks, and divides by 10.
+A **10-nearest-neighbour preservation** score averages the preserved count over
+every plotted word, not only the eight reference words. It divides that average
+by 10.
 Chance is 10 divided by 299, or
 `r sprintf("%.1f%%", 100 * 10 / (nrow(normalized_embeddings) - 1))`. A second
-t-SNE run with seed 7802 shows how much of the picture depends on the seed.
+t-SNE execution with seed 7802 shows how the picture depends on the seed.
 
 ```{r}
 neighbour_overlap <- function(first, second) {
@@ -629,11 +636,11 @@ keeps about `r display_preservation[2]`, and the second seed keeps about
 `r display_preservation[4]` of neighbours. That is well above chance, but it is
 not perfect stability.
 
-## Inspect labelled words as rows
+## Examine labelled words as rows
 
-The table below is the text alternative for the landmark panels. It lists
-neighbours from the full vector space and from the two plotted projections, so
-no one has to infer them from point positions.
+The table provides a text alternative for the reference-word panels. It lists
+neighbours from the full vector space and both plotted projections. Readers
+need not infer neighbours from point positions.
 
 ```{r}
 neighbour_table <- tibble(word = label_words) |>
@@ -650,12 +657,12 @@ neighbour_table <- tibble(word = label_words) |>
 knitr::kable(
   neighbour_table,
   col.names = c(
-    "Landmark word",
+    "Reference word",
     "Nearest in 50 dimensions",
     "Nearest in PCA plot",
     "Nearest in t-SNE plot"
   ),
-  caption = "Five nearest neighbours of each landmark word, in the model and in the two projections",
+  caption = "Five nearest neighbours of each reference word, in the model and both projections",
   row.names = FALSE
 )
 ```
@@ -682,19 +689,21 @@ The t-SNE plot does not give meaningful cluster sizes, gap sizes, group
 positions, or axis directions. PCA directions are mathematical summaries, but
 their signs can flip, and this plot still leaves most of the variance out.
 
-The preservation scores describe how faithfully the projection draws this small
-model, not how faithfully the model captures meaning. Small-corpus embeddings
-can change their neighbour lists when trained again, which is why this model is
-pinned. The same t-SNE seed can also draw a different layout on another
-computer, because low-level numerical details can differ, so every count on
-this page is computed during the render.
+The preservation scores measure how the projection represents this small
+model's neighbours, not how well the model represents meaning. Training
+small-corpus embeddings again can produce different neighbour lists. The lesson
+therefore uses a fixed saved model.
+
+Low-level numerical differences can produce different t-SNE layouts across
+computers, even with the same seed. The page computes every reported count
+during rendering.
 
 ## What to remember
 
 - Each plotted point began as a 50-number word vector.
-- Rows were scaled to length 1 before PCA and t-SNE, so distance in the
-  50-dimensional space ranks neighbours the same way as cosine similarity; a
-  projection can still change that order.
+- The code scales rows to length 1 before PCA and t-SNE.
+  In that 50-dimensional space, distance and cosine similarity give the same neighbour ranking.
+  A projection can still change that order.
 - PCA's first two components explain about
   `r sprintf("%.1f%%", 100 * sum(pca_variance[1:2]))` of the variance here.
 - Mark kept and lost neighbours in the plot instead of trusting how groups look.

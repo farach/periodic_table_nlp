@@ -1,30 +1,30 @@
 ---
-title: "Writing a report from checked claims"
+title: "Writing a report from evidence"
 subtitle: "Choose evidence before generating sentences"
-description: "Learn how to turn verified results into a short report while keeping every factual sentence tied to its source."
+description: "Learn how to write a short report from results with recorded evidence. Keep the source reference for every factual sentence."
 categories: [natural language generation, report writing, data to text]
 ---
 
-Nia has finished the next-token study. The archive team wants a short report,
+Nia finished the next-token study. The archive team wants a short report,
 not a folder of CSV files and not a guess about why one model scored better.
 
 **Report writing** is a natural language generation application. A
-**data-to-text** workflow chooses supported content, orders the claims, turns
-them into sentences, and checks the result against its sources. The sentences
-can be produced by templates or drafted by a language model. Neither method
-makes a claim true.
+**data-to-text** workflow selects content with source evidence and orders the claims. It
+converts the claims into sentences and compares the result with its sources.
+Templates or a language model can produce the sentences. Neither method makes a
+claim correct.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- define a report's audience, purpose, and exclusions;
-- keep one evidence row for each reported value;
-- separate content selection, document planning, and sentence realization;
-- generate a deterministic report with `glue`;
-- reject fluent claims that the evidence does not support; and
-- keep factual checks separate from human prose review.
+- state a report's audience, purpose, and exclusions
+- keep one evidence row for each reported value
+- separate content selection, document planning, and sentence realization
+- generate a deterministic report with `glue`
+- reject fluent claims without evidence
+- keep factual checks separate from human prose checks.
 :::
 
 ```{r}
@@ -36,22 +36,22 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Start with the reporting decision
 
-The audience is the archive team. They need to decide whether the
+The audience is the archive team. The team must decide whether the
 validation-selected trigram improves on the unigram baseline on the test
-speeches. They do not need a claim about how people write, why one context
-length won, or how another corpus would behave.
+speeches. The report need not explain how people write or why one context
+length performs best. It also need not predict results for another corpus.
 
-That brief limits the report before any sentence is generated:
+The brief limits the report before sentence generation:
 
-- include the validation choice and untouched-test comparison;
-- state the tokenizer, corpus, and unknown-token limit; and
+- include the validation choice and untouched-test comparison
+- state the tokenizer, corpus, and unknown-token limit
 - exclude causes, transfer claims, and claims about factual writing quality.
 
 ## Build an evidence ledger
 
-An **evidence ledger** gives each usable result an ID. The report can then name
-which records support each sentence instead of attaching a source only after
-the prose is written.
+An **evidence ledger** is a table that gives each usable result an ID. Each
+report sentence can refer to source records. This approach establishes sources
+before writing, rather than adding them afterward.
 
 ```{r}
 library(dplyr)
@@ -134,7 +134,7 @@ evidence_ledger <- tribble(
   ~evidence_id, ~source_artifact, ~split, ~measure, ~value, ~unit, ~limit,
   "E1", "next-token-validation.csv", "validation", "trigram perplexity",
   validation_trigram$perplexity, "perplexity",
-  "trigram with interpolation strength 100; minimum across 13 candidates",
+  "trigram with interpolation strength 100, minimum across 13 candidates",
   "E2", "next-token-test.csv", "test", "uniform perplexity",
   test_uniform$perplexity, "perplexity",
   "2,500 equally likely vocabulary items",
@@ -150,15 +150,15 @@ evidence_ledger <- tribble(
   "E6", "next-token-test-by-speech.csv", "test", "speech-level wins",
   paired_test$trigram_wins, "speeches",
   "paired against the unigram on the same test speeches",
-  "E7", "next-token-test.csv", "test", "targets mapped to <unk>",
+  "E7", "next-token-test.csv", "test", "targets mapped to `<unk>`",
   test_trigram$oov_target_share, "share",
-  "the original unseen token is not identified",
+  "the original unseen token is not recovered",
   "E8", "data-raw/build-next-token-study.R", "study", "token rule",
   NA_real_, "setup",
-  "lowercase ASCII alphabetic tokens; training-only vocabulary",
+  "lowercase ASCII alphabetic tokens, training-only vocabulary",
   "E9", "R/inaugural-corpus.R", "study", "corpus grain",
   NA_real_, "setup",
-  "reconstructed inaugural paragraphs; paragraph-bounded contexts"
+  "reconstructed inaugural paragraphs, paragraph-bounded contexts"
 )
 ```
 
@@ -217,8 +217,8 @@ stopifnot(
 )
 ```
 
-The IDs carry more than numbers. They also record the split, unit, role, and
-limit. E1 cannot support a final test claim. E2 through E4 are comparable
+The records contain more than numbers. Each records the split, measure, unit, and
+limit. E1 contains no final test results. E2 through E4 are comparable
 because they use the same test rows, tokenizer, and vocabulary.
 
 ## Decide which claims belong
@@ -308,7 +308,7 @@ candidate_claims <- tribble(
 knitr::kable(
   candidate_claims,
   col.names = c("Claim ID", "Candidate sentence", "Evidence IDs", "Decision", "Reason"),
-  caption = "Candidate claims are checked before document planning",
+  caption = "The workflow examines candidate claims before document planning",
   row.names = FALSE
 )
 ```
@@ -344,7 +344,7 @@ no test of understanding and no written-report outcome.
 ## Plan the document before writing it
 
 **Document planning** sets the order and purpose of the sentences.
-**Realization** turns the checked values into wording. The plan below starts
+**Realization** turns values with recorded evidence into wording. The plan below starts
 with the decision, gives the untouched-test result, and ends with the limit.
 
 ```{r}
@@ -360,28 +360,28 @@ report_sentences <- report_plan |>
   mutate(
     text = case_when(
       sentence_id == "S1" ~ glue(
-        "A trigram with interpolation strength 100 was selected because it had ",
+        "The study selected a trigram with interpolation strength 100. It had ",
         "the lowest validation perplexity ",
         "({round(validation_trigram$perplexity, 1)})."
       ),
       sentence_id == "S2" ~ glue(
         "On {paired_test$test_speeches} untouched test speeches, ",
-        "its perplexity was ",
-        "{round(test_trigram$perplexity, 1)}, compared with ",
-        "{round(test_unigram$perplexity, 1)} for the unigram baseline, ",
-        "a reduction of {sprintf('%.1f%%', 100 * perplexity_reduction)}; ",
-        "it had lower perplexity in {paired_test$trigram_wins} of ",
+        "trigram perplexity was ",
+        "{round(test_trigram$perplexity, 1)} versus ",
+        "{round(test_unigram$perplexity, 1)} for the unigram baseline. ",
+        "This was a reduction of {sprintf('%.1f%%', 100 * perplexity_reduction)}. ",
+        "The trigram had lower perplexity in {paired_test$trigram_wins} of ",
         "{paired_test$test_speeches} speeches."
       ),
       sentence_id == "S3" ~ glue(
-        "Its highest-probability token matched ",
+        "The trigram's highest-probability token matched ",
         "{sprintf('%.1f%%', 100 * test_trigram$top_1_accuracy)} ",
         "of test rows."
       ),
       sentence_id == "S4" ~ glue(
         "These results describe lowercase alphabetic tokens from reconstructed ",
-        "inaugural paragraphs; {sprintf('%.1f%%', 100 * test_trigram$oov_target_share)} ",
-        "of test targets were mapped to an unknown-token bucket."
+        "inaugural paragraphs. Vocabulary mapping places {sprintf('%.1f%%', 100 * test_trigram$oov_target_share)} ",
+        "of test targets in an unknown-token category."
       )
     )
   )
@@ -398,7 +398,7 @@ report_text <- str_c(
 knitr::kable(
   report_sentences |>
     select(sentence_id, role, claim_ids, evidence_ids, text),
-  col.names = c("Sentence", "Role", "Claim IDs", "Evidence IDs", "Generated text"),
+  col.names = c("Report unit", "Role", "Claim IDs", "Evidence IDs", "Generated text"),
   caption = "Every factual report sentence retains its claim and evidence IDs",
   row.names = FALSE
 )
@@ -493,7 +493,7 @@ automated_checks <- c(
   "claim and evidence IDs resolve" =
     claim_and_evidence_ids_resolve,
   "numbers match evidence" = numbers_match_evidence,
-  "unsupported claims excluded" = unsupported_claims_excluded
+  "claims without evidence excluded" = unsupported_claims_excluded
 )
 
 stopifnot(
@@ -503,13 +503,12 @@ stopifnot(
 )
 ```
 
-The trace table stays with the report draft. If a value changes, the sentence
-can be found by claim or evidence ID rather than by searching for a number
-copied into a paragraph.
+The trace table stays with the report draft. If a value changes, use the claim
+or evidence ID to find the corresponding sentence.
 
-## Render the checked report
+## Render the report from evidence
 
-This chunk writes the four planned sentences as report prose. The generation
+This chunk writes the four planned report units as prose. The generation
 is deterministic: the same evidence and templates produce the same text.
 
 ```{r}
@@ -528,21 +527,21 @@ cat(
 
 expected_report <- str_c(
   paste0(
-    "A trigram with interpolation strength 100 was selected because it had the ",
+    "The study selected a trigram with interpolation strength 100. It had the ",
     "lowest validation perplexity (133.3)."
   ),
   paste0(
-    "On 13 untouched test speeches, its perplexity was 145.3, compared with ",
-    "240.7 for the unigram baseline, a reduction of 39.6%; it had lower ",
+    "On 13 untouched test speeches, trigram perplexity was 145.3 versus ",
+    "240.7 for the unigram baseline. This was a reduction of 39.6%. The trigram had lower ",
     "perplexity in 13 of 13 speeches."
   ),
   paste0(
-    "Its highest-probability token matched 19.2% of test rows."
+    "The trigram's highest-probability token matched 19.2% of test rows."
   ),
   paste0(
     "These results describe lowercase alphabetic tokens from reconstructed ",
-    "inaugural paragraphs; 11.7% of test targets were mapped to an ",
-    "unknown-token bucket."
+    "inaugural paragraphs. Vocabulary mapping places 11.7% of test targets in an ",
+    "unknown-token category."
   ),
   sep = "\n\n"
 )
@@ -552,18 +551,18 @@ stopifnot(
 )
 ```
 
-## Check facts and prose separately
+## Examine facts and prose separately
 
-The automated checks can verify known numbers, claim and evidence IDs, and
-prohibited claims. They cannot decide whether the report is clear enough for the
+The automated checks compare known numbers and IDs with the evidence ledger.
+They also search for prohibited claims. They cannot decide whether the report is clear enough for the
 archive team or whether that team should act on it.
 
 ```{r}
 review_status <- tibble(
   review = c(
     names(automated_checks),
-    "human factual review",
-    "human prose review"
+    "human factual checks",
+    "human prose checks"
   ),
   status = c(
     unname(if_else(automated_checks, "passed", "failed")),
@@ -578,7 +577,7 @@ review_status <- tibble(
 
 knitr::kable(
   review_status,
-  col.names = c("Review gate", "Status"),
+  col.names = c("Check stage", "Status"),
   caption = "Automated checks do not substitute for human approval",
   row.names = FALSE
 )
@@ -601,31 +600,30 @@ stopifnot(
 )
 ```
 
-The factual reviewer follows each sentence back to the source records and checks
-that the wording does not add a cause, population, or claim of transfer. The
-prose reviewer checks order, clarity, tone, and usefulness for the named
-audience. Passing one review says nothing about the other.
+For a factual check, a reader compares each sentence with the source records.
+The reader looks for added causes, populations, or claims that results apply
+elsewhere. For a prose check, a reader examines order, clarity, tone, and usefulness
+for the named audience. Approval in one check does not establish approval in the other.
 
-## Where a language model fits
+## Use a language model for draft wording
 
-A language model can draft alternate wording after the evidence ledger and
-report plan are fixed. Save the prompt, model, version, and output if the draft
-is used. Reject any new number, entity, cause, citation, or evidence ID that is
-not in the ledger, then run factual and human review again.
+A language model can draft alternate wording after the author finalizes the
+evidence ledger and report plan. If you use the draft, save the prompt, model,
+version, and output. Reject any number, entity, cause, citation, or evidence ID
+absent from the ledger. Do the factual and prose checks again.
 
 This lesson does not call a live model. Credentials, model updates, and
-stochastic output would make the rendered page hard to reproduce. More
-important, a plausible continuation would still not supply evidence for its own
-claims.
+random output would make the rendered page hard to reproduce. A plausible
+continuation would still not supply evidence for its own claims.
 
 ## What to remember
 
-- Define the audience and decision before generating prose.
-- Select supported claims before arranging sentences.
-- Keep evidence IDs, units, splits, and limits attached.
-- Templates improve reproducibility; they do not establish truth.
+- State the audience and decision before generating prose.
+- Select claims with source evidence before arranging sentences.
+- Keep evidence IDs, units, splits, and limits with each claim.
+- Templates improve reproducibility. They do not establish truth.
 - A language model may draft wording, but new claims require evidence.
-- Automated factual checks and human prose review answer different questions.
+- Automated factual checks and human prose checks answer different questions.
 
 ## Sources
 

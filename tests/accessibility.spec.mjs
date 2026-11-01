@@ -2,6 +2,7 @@ import { readdirSync } from "node:fs";
 import { join, posix } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { inspectText } from "../scripts/check-plain-language.mjs";
 
 const siteDir = "_site";
 
@@ -36,9 +37,226 @@ const pages = [
 ];
 const totalTasks = 81;
 
+test("Map and Beyond are available in desktop and mobile navigation", async ({ page }) => {
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const header = page.locator("#quarto-header");
+    if (width < 992) await header.getByRole("button", { name: "Toggle navigation" }).click();
+    await header.getByRole("link", { name: "Beyond the periodic table", exact: true }).click();
+    await expect(page.locator("h1")).toHaveText("Beyond the periodic table");
+    if (width < 992) await header.getByRole("button", { name: "Toggle navigation" }).click();
+    await header.getByRole("link", { name: "Map", exact: true }).click();
+    await expect(page.locator("#nlp-task-map")).toBeVisible();
+  }
+});
+
+test("six sidebar stages retain every lesson in task order", async ({ page }) => {
+  await page.goto("/advanced/index.html");
+  const stages = [
+    ["1. Source and training data", 1, 13],
+    ["2. Language structure", 14, 42],
+    ["3. Models and analysis", 43, 62],
+    ["4. Language generation", 63, 68],
+    ["5. Language systems", 69, 74],
+    ["6. Visualization", 75, 81]
+  ];
+  for (const [name, first, last] of stages) {
+    const group = page.locator("#quarto-sidebar li.sidebar-item-section").filter({
+      has: page.getByText(name, { exact: true })
+    });
+    await expect(group).toHaveCount(1);
+    const numbers = await group.locator("a[href]").evaluateAll((links) => links
+      .map((link) => link.getAttribute("href").match(/\/(\d{2})-[^/]+\.html$/)?.[1])
+      .filter(Boolean).map(Number));
+    expect(numbers).toEqual(Array.from({ length: last - first + 1 }, (_, index) => first + index));
+    const lessonLinks = group.locator('a[href$=".html"]');
+    if (!(await lessonLinks.first().isVisible())) {
+      await group.getByText(name, { exact: true }).click();
+    }
+    await expect(lessonLinks.first()).toBeVisible();
+    await expect(lessonLinks.last()).toBeVisible();
+    const visibleNumbers = await lessonLinks.evaluateAll((links) => links.map((link) =>
+      Number(link.innerText.trim().match(/^(\d+)\.\s+/)?.[1])));
+    expect(visibleNumbers).toEqual(numbers);
+  }
+});
+
+for (const path of pages) {
+  test(`Rendered authored-prose limits: ${path}`, async ({ page }) => {
+    const response = await page.goto(path);
+    expect(response.status()).toBe(200);
+    const parts = await page.locator("main p, main li, main figcaption, main caption, main h1, main h2, main h3, main h4, main h5, main h6").evaluateAll((elements) => elements.flatMap((element) => {
+      if (element.closest("pre") || (element.closest("table") && element.tagName !== "CAPTION")) return [];
+      const copy = element.cloneNode(true);
+      for (const nested of copy.querySelectorAll("ul, ol, p, pre, table, .anchorjs-link")) nested.remove();
+      for (const unit of copy.querySelectorAll("code, .math")) unit.replaceWith(" CODE ");
+      if (element.closest("#sources")) {
+        for (const title of copy.querySelectorAll("a")) title.replaceWith(" TITLE ");
+      }
+      return [{ kind: /^H[1-6]$/.test(element.tagName) ? "label" : "paragraph", text: copy.textContent.trim() }];
+    }));
+    for (const text of await page.locator("main img[alt]").evaluateAll((images) => images.map((image) => image.alt))) {
+      parts.push({ kind: "paragraph", text });
+    }
+    const findings = parts.flatMap(({ text, kind }) => inspectText(text, kind).map((finding) => `${path}: ${finding}`));
+    expect(findings, findings.join("\n")).toEqual([]);
+  });
+}
+
+test("malformed byte comparison is visible with all three results", async ({ page }) => {
+  await page.goto("/1_source_data_loading/01-bits-to-character-encoding.html");
+  const table = page.locator("table").filter({
+    has: page.locator("caption", { hasText: "One malformed byte sequence read three ways" })
+  });
+  await expect(table).toBeVisible();
+  const rows = table.locator("tbody tr");
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(1).locator("td").nth(1)).toHaveText("4");
+  await expect(rows.nth(2).locator("td").nth(1)).toHaveText("NA");
+  await expect(rows.nth(3).locator("td").nth(1)).toHaveText("Hi \uFFFD(");
+});
+
+test("geocoding service limits render as four list items", async ({ page }) => {
+  await page.goto("/6_entity_enrichment/30-geocoding.html");
+  await expect(page.locator("#geocoding-in-production ul > li")).toHaveCount(4);
+});
+
+test("whitespace comparison retains both rows and original line breaks", async ({ page }) => {
+  await page.goto("/8_documents/40-raw-text-cleaning.html");
+  const table = page.locator("table").filter({
+    has: page.locator("caption", { hasText: "Whitespace squishing removes the flyer line layout" })
+  });
+  const rows = table.locator("tbody tr");
+  await expect(rows).toHaveCount(2);
+  const before = rows.nth(0).locator("td").nth(1);
+  const after = rows.nth(1).locator("td").nth(1);
+  expect((await before.textContent()).match(/\n/g)).toHaveLength(5);
+  expect(await after.textContent()).not.toContain("\n");
+  await expect(before).toHaveCSS("white-space", "pre-line");
+});
+
+const captionedTable = (page, caption) =>
+  page.locator("table").filter({ has: page.locator("caption", { hasText: caption }) });
+
+const columnCells = (table, column) => table.locator(`tbody tr td:nth-child(${column})`);
+
+test("HTML-cleaning comparison keeps undecoded entity text", async ({ page }) => {
+  await page.goto("/8_documents/40-raw-text-cleaning.html");
+  const table = captionedTable(page, "Entity handling after two HTML-cleaning approaches");
+  await expect(columnCells(table, 2)).toHaveText([
+    "Training &amp; tools&nbsp;provided.",
+    "Training & tools provided."
+  ]);
+});
+
+test("whitespace-sensitive tables retain padding and top captions", async ({ page }) => {
+  const tables = [
+    ["/4_word_processing/21-normalization.html", "Lowercasing and spacing changes"],
+    ["/7_sentences_and_paragraphs/35-sentence-segmentation.html", "Where each splitter puts the boundaries"],
+    ["/8_documents/39-deduplication.html", "Six documents prepared for duplicate comparison"],
+    ["/8_documents/39-deduplication.html", "Exact hashes before normalization"],
+    ["/8_documents/40-raw-text-cleaning.html", "Whitespace squishing removes the flyer line layout"]
+  ];
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [path, caption] of tables) {
+      await page.goto(path);
+      const table = captionedTable(page, caption);
+      await expect(table.locator("caption")).toHaveCSS("caption-side", "top");
+      const padding = await table.locator("tbody td").first().evaluate((cell) =>
+        parseFloat(getComputedStyle(cell).paddingInlineStart));
+      expect(padding, `${path}: cells need space between columns`).toBeGreaterThanOrEqual(4);
+    }
+  }
+});
+
+test("tokenizer tables show special tokens and decoded unknown text", async ({ page }) => {
+  await page.goto("/3_word_parsing/14-tokenization.html");
+  const vocabulary = captionedTable(page, "The first rows of the BPE vocabulary");
+  await expect(columnCells(vocabulary, 2).first()).toHaveText("<PAD>");
+  await expect(columnCells(vocabulary, 2).nth(1)).toHaveText("<UNK>");
+  await expect(columnCells(vocabulary, 2).nth(2)).toHaveText("<BOS>");
+  await expect(columnCells(vocabulary, 2).nth(3)).toHaveText("<EOS>");
+  const decoded = columnCells(captionedTable(page, "Round-trip results for the four texts"), 4);
+  await expect(decoded).toHaveCount(4);
+  await expect(decoded).toHaveText(Array(4).fill(/\S/));
+});
+
+test("padded spacing example keeps its internal spaces", async ({ page }) => {
+  await page.goto("/4_word_processing/21-normalization.html");
+  const raw = captionedTable(page, "Lowercasing and spacing changes").locator("tbody tr").nth(1).locator("td").nth(1);
+  expect(await raw.textContent()).toContain("No   prior   data");
+  await expect(raw).toHaveCSS("white-space", "pre-wrap");
+});
+
+test("stored counts print as whole numbers", async ({ page }) => {
+  await page.goto("/3_word_parsing/18-dependency-parsing.html");
+  await expect(columnCells(captionedTable(page, "Held-out parser scores bundled with the lesson"), 2))
+    .toHaveText(["4007", "2899", "0.7235", "2629", "0.6561"]);
+  await page.goto("/9_model_development/47-monitoring-models.html");
+  await expect(columnCells(captionedTable(page, "Model and corpus size for the monitoring replay"), 2))
+    .toHaveText(["1377", "335", "0.8209"]);
+});
+
+test("sentence boundary table keeps one row for each piece", async ({ page }) => {
+  await page.goto("/7_sentences_and_paragraphs/35-sentence-segmentation.html");
+  const found = await columnCells(
+    captionedTable(page, "Splitter counts compared with the five expected sentences"),
+    2
+  ).allTextContents();
+  const pieceCount = found.reduce((total, value) => total + Number(value), 0);
+  expect(pieceCount).toBeGreaterThan(0);
+  const boundaries = captionedTable(page, "Where each splitter puts the boundaries");
+  await expect(boundaries.locator("tbody tr")).toHaveCount(pieceCount);
+  await expect(columnCells(boundaries, 4)).toHaveText(Array(pieceCount).fill(/^\s*(yes|no)\s*$/));
+  const pieces = await columnCells(boundaries, 2).allTextContents();
+  expect(pieces.some((piece) => piece.includes("\n"))).toBe(true);
+  await expect(columnCells(boundaries, 2).first()).toHaveCSS("white-space", "pre-line");
+});
+
+test("duplicate tables keep the internal spaces of D03", async ({ page }) => {
+  await page.goto("/8_documents/39-deduplication.html");
+  for (const caption of ["Six documents prepared for duplicate comparison", "Exact hashes before normalization"]) {
+    const table = captionedTable(page, caption);
+    const row = table.locator("tbody tr").nth(2);
+    await expect(row.locator("td").first()).toHaveText("D03");
+    const textColumn = caption.startsWith("Six") ? 3 : 2;
+    const text = row.locator(`td:nth-child(${textColumn})`);
+    expect(await text.textContent()).toContain("THE employer   pays for certification   TRAINING.");
+    await expect(text).toHaveCSS("white-space", "pre-wrap");
+  }
+});
+
+test("generation tables show angle-bracket tokens and marker patterns", async ({ page }) => {
+  await page.goto("/13_natural_language_generation/63-next-token-prediction.html");
+  const tokens = columnCells(
+    captionedTable(page, "Highest-probability next tokens from the selected trigram"),
+    2
+  );
+  const tokenCount = await tokens.count();
+  expect(tokenCount).toBeGreaterThan(0);
+  await expect(tokens).toHaveText(Array(tokenCount).fill(/\S/));
+  await expect(tokens.filter({ hasText: /^<unk>$/ }).first()).toBeVisible();
+  await page.goto("/13_natural_language_generation/67-paraphrasing.html");
+  const invariants = captionedTable(page, "Constructed paraphrase probes and predeclared invariants");
+  await expect(invariants).toContainText("\\b(may|can|allowed|permitted)\\b");
+  await expect(invariants).toContainText("\\b(must|required|obliged|has to)\\b");
+});
+
+test("timeline figure retains its caption and accessible description", async ({ page }) => {
+  await page.goto("/15_information_visualization/79-events-on-a-timeline.html");
+  const figure = page.locator("#fig-event-timeline");
+  await expect(figure).toHaveCount(1);
+  await expect(figure.locator("figcaption")).toContainText("Timeline of eight events");
+  await expect(figure.locator("img")).toHaveAttribute("alt", /Hollow points and dashed bars show planned events/);
+  await expect(figure.locator("img")).toHaveAttribute("alt", /start date is unknown/);
+  await expect(page.locator("main")).not.toContainText("{#fig-event-timeline");
+});
+
 test("advanced lesson keeps its expected results and routes", async ({ page }) => {
   await page.goto("/");
-  await page.locator("main a[href$='advanced/index.html']").click();
+  await page.locator("main a[href$='advanced/index.html']").first().click();
   await expect(page.locator("h1")).toHaveText("Beyond the periodic table");
   for (const name of ["LangChain", "LangGraph", "LangSmith", "vitals"]) {
     await expect(page.locator("main")).toContainText(name);
@@ -429,7 +647,8 @@ test("tile status survives forced colors and reduced motion", async ({
 
 test("accessibility page records pending manual review", async ({ page }) => {
   await page.goto("/accessibility.html");
-  await expect(
-    page.getByText(/Manual testing with current NVDA, JAWS, VoiceOver/)
-  ).toBeVisible();
+  const status = page.locator("#checks-that-still-need-people p").first();
+  await expect(status).toBeVisible();
+  await expect(status).toContainText(/Manual tests with current NVDA, JAWS, VoiceOver/);
+  await expect(status).toContainText("pending");
 });

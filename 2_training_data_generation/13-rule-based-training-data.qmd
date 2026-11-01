@@ -8,17 +8,17 @@ categories: [training data, weak supervision, workforce research]
 Five fictional sentence variants remain marked as synthetic. For the rule
 test, the Riverton Workforce Lab returns to its 28 reviewed fictional text
 units. Several phrases appear repeatedly: `training`, `required`, `shift`,
-and `skill`. The team turns those patterns into rules, then checks whether
+and `skill`. The team writes rules from those patterns, then examines whether
 familiar words preserve distinctions a worker may use when comparing notices.
 
 **Rule-based training data** uses written conditions to assign labels.
 These proposed labels are often called **weak labels** because a rule is an
 imperfect source of supervision. The team will measure where its rules label,
-abstain, conflict, and disagree with human review.
+abstain, conflict, and disagree with human judgments.
 
 ::: {.callout-note}
-The sentences and team are fictional. The rules were designed after inspecting
-this teaching dataset, so results on these rows are not an independent
+The sentences and team are fictional. The author designed the rules after
+examining this teaching dataset. Results on these rows are not an independent
 performance estimate.
 :::
 
@@ -27,12 +27,12 @@ performance estimate.
 
 By the end of this lesson, you will be able to:
 
-- express labeling rules as text patterns;
-- keep each rule's vote and avoid hiding conflicts;
-- calculate coverage, conflict, and abstention;
-- report each rule's own coverage and error;
-- compare usable weak labels with reference labels; and
-- stress-test rules on cases they were not designed to fit.
+- express labeling rules as text patterns.
+- preserve individual votes and conflicts.
+- calculate coverage, conflict, and abstention.
+- report each rule's own coverage and error.
+- compare usable weak labels with reference labels.
+- run rule checks on cases outside their design examples.
 :::
 
 ```{r}
@@ -44,12 +44,12 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Write rules that can abstain
 
-Each rule searches for words tied to one codebook category. A rule returns
-`TRUE` when it votes for its category and `FALSE` otherwise. The next chunk
-loads package helpers for files, tables, reshaping, repeated rule checks,
-strings, and agreement, then reads the file with declared column types. Inside
-the chunk, `map()` makes one TRUE/FALSE list per rule and `as_tibble()` turns
-that list into columns.
+Each rule searches for words associated with one codebook category.
+A rule returns `TRUE` when it votes for its category and `FALSE` otherwise.
+The next chunk loads file, table, reshaping, repetition, string, and agreement
+helpers. It then reads the file with declared column types.
+`map()` makes one TRUE/FALSE list per rule.
+`as_tibble()` converts those lists into columns.
 
 ```{r}
 library(readr)
@@ -135,8 +135,8 @@ early would hide why a label was proposed.
 
 A row can receive:
 
-- one vote, which produces a usable weak label;
-- no votes, which produces an abstention; or
+- one vote, which produces a usable weak label.
+- no votes, which produces an abstention.
 - several votes, which produces a conflict.
 
 ```{r}
@@ -200,7 +200,7 @@ knitr::kable(
     "Rule votes",
     "Weak-label result"
   ),
-  caption = "The five sentences that abstain or conflict",
+  caption = "Five text units with no rule vote or conflicting votes",
   row.names = FALSE
 )
 ```
@@ -271,7 +271,7 @@ stopifnot(
 Coverage alone does not measure correctness. A rule can label every row and be
 wrong every time.
 
-## Compare usable labels with human review
+## Compare usable labels with human judgments
 
 The 23 rows with one rule vote include two errors. We can summarize that
 comparison with foundryR.
@@ -298,7 +298,7 @@ rule_agreement <- foundryR::foundry_agreement(
 
 knitr::kable(
   rule_agreement,
-  col.names = c("Measure", "Value", "Compared sentences"),
+  col.names = c("Measure", "Value", "Compared text units"),
   caption = "In-sample agreement for usable weak labels",
   row.names = FALSE
 )
@@ -319,8 +319,8 @@ stopifnot(
 )
 ```
 
-The rule labels 21 of the 23 usable rows the same way as the reference
-annotation. It incorrectly labels `RIVERTON SKILLS OPEN HOUSE` as `skill` and
+The rules label 21 of the 23 usable rows the same way as the reference
+annotation. They incorrectly label `RIVERTON SKILLS OPEN HOUSE` as `skill` and
 `DATA SUPPORT CERTIFICATE` as `training`. The trigger words are present, but
 the headings alone do not make either claim.
 
@@ -379,15 +379,16 @@ stopifnot(
 )
 ```
 
-These are in-sample results. The rules were written after reading the
-sentences, so they may encode the examples rather than the broader concept.
+These are in-sample results. The author wrote the rules after reading the
+sentences. The rules may therefore encode those examples rather than the
+broader concept.
 
-## Look at each rule on its own
+## Examine each rule separately
 
-The 21-of-23 figure is a pooled number, and pooled numbers hide which rule is
-carrying the work. Each rule has its own coverage and its own error, and the
-error looks different depending on whether the rule fired alone or alongside
-another.
+The 21-of-23 figure for all rules conceals differences between individual rules.
+Each rule has separate coverage and error counts.
+Errors can differ between rows with one matching rule and rows with several
+matching rules.
 
 ```{r}
 reference_labels <- workforce_sentences$reference_label
@@ -437,10 +438,10 @@ knitr::kable(
     ),
   col.names = c(
     "Rule",
-    "Rows it fired on",
-    "Fired alone",
-    "Alone and correct",
-    "Precision when alone"
+    "Matching rows",
+    "Rows matching only this rule",
+    "Correct labels when only this rule matched",
+    "Precision when only this rule matched"
   ),
   caption = "Each rule's coverage and error, separated",
   row.names = FALSE
@@ -478,22 +479,21 @@ stopifnot(
 )
 ```
 
-The pooled figure of 21 out of 23 becomes four different stories. The
-`requirement` and `schedule` rules were right every time they spoke alone. The
-`training` rule missed once in eight. The `skill` rule, which fired on only three
-rows, was wrong on one of them, and a precision of two thirds on three rows is a
-number to treat as a warning rather than an estimate.
+The `requirement` and `schedule` rules correctly labeled every row where each
+was the only matching rule. The `training` rule made one error in eight such
+rows. The `skill` rule matched only three rows and made one error.
+Precision of two thirds on three rows indicates a problem, not established
+performance on new data.
 
-A rule that fires rarely is where in-sample results are least trustworthy. There
-is no way to distinguish a rule that is genuinely reliable from one that has not
-yet met the case that breaks it.
+In-sample results with few matches provide little evidence of performance on
+new data. Such results cannot show whether absent cases would cause errors.
 
-## Separate conflicting rules from correlated support
+## Separate conflicts from correlated same-label votes
 
-Rules can fire on the same row because they conflict or because they repeat the
-same evidence. Those cases have different consequences. The example below
-contains opposing-label conflicts. It does not estimate correlation or show
-confidence inflation.
+Several rules can match one row with conflicting labels or repeated evidence.
+Those cases have different consequences. The following example contains
+opposing-label conflicts. It does not give an estimate of correlation or
+demonstrate confidence inflation.
 
 ```{r}
 vote_matrix <- as.matrix(rule_votes[rule_labels])
@@ -521,8 +521,8 @@ rule_pairs <- expand.grid(
 
 knitr::kable(
   rule_pairs,
-  col.names = c("Rule", "Other rule", "Rows where both fired"),
-  caption = "How often each pair of rules spoke about the same row",
+  col.names = c("Rule", "Other rule", "Rows matching both rules"),
+  caption = "Rows with matches from each rule pair",
   row.names = FALSE
 )
 ```
@@ -553,26 +553,27 @@ stopifnot(
 )
 ```
 
-Only two pairs ever overlap here, and both overlaps are the conflicts already
-seen. `s013` triggers `training` and `requirement` because a certificate is a
-credential and a credential looks like training. `s020` triggers `requirement`
-and `schedule` because a required shift is both a demand and a time.
+Only two rule pairs match the same row, producing the two observed conflicts.
+In `s013`, `certificate` matches the training pattern and `preferred` matches
+the requirement pattern. In `s020`, the required shift matches both requirement
+and schedule patterns.
 
-These are conflict overlaps, not duplicate supporting votes. Correlated support
-would require two rules that tend to cast the same label because they reuse the
-same signal, such as two training rules built from nearly identical keyword
-lists. A label model can estimate rule accuracy and dependence under stronger
-data and modeling assumptions, but this table does not supply that evidence.
+These overlaps are conflicts, not duplicate votes for one label.
+Correlated same-label votes occur when two rules tend to propose one label from
+shared evidence. Two training rules with nearly identical keyword lists would
+provide an example. A label model can give estimates of rule accuracy and
+dependence under stronger data and modeling assumptions. This table does not
+supply that evidence.
 
-This lesson does not fit such a model: four rules, 28 rows, and two conflicting
-overlaps do not contain enough information to estimate accuracies and
-correlations. The scope here stops at measuring where the rules agree, where
-they collide, and where they say nothing.
+This lesson does not fit a label model.
+Four rules, 28 rows, and two conflicting overlaps provide insufficient
+information for accuracy and correlation estimates. The lesson measures rule
+agreement, conflict, and abstention only.
 
-### What a conflict policy would cost
+### Examine a conflict policy
 
-A team that needs a label for every row usually writes a priority order. Here is
-one, and here is the price it charges.
+A team that needs a label for every row usually writes a priority order.
+The following example applies one such order.
 
 ```{r}
 priority_order <- c(
@@ -628,7 +629,7 @@ knitr::kable(
 knitr::kable(
   abstain_outcomes,
   col.names = c("Sentence ID", "Reference label"),
-  caption = "What the three silent rows actually were",
+  caption = "Reference labels for the three rows with no rule vote",
   row.names = FALSE
 )
 ```
@@ -652,28 +653,27 @@ stopifnot(
 )
 ```
 
-The policy gets both conflicts right, and that is close to meaningless as
-evidence. The order was chosen by someone who had read the codebook rule saying
-timing takes precedence, and it was applied to two rows. Two successes chosen
-after the fact do not establish that the order generalizes.
+The policy resolves both conflicts correctly, but this provides little
+performance evidence. The author chose the order after reading the codebook's
+timing-priority rule. Evaluation used only two rows.
+Those two successes do not establish performance on new data.
 
-The three rows where every rule abstained are more informative. All three carry
-the reference label `other`, which is the one category no rule was written for.
-The abstentions are correct behavior expressed badly: the rules have nothing to
-say, and a fifth rule for `other` would be worse, since `other` is defined by
-the absence of the other four rather than by any words of its own.
+All three rows with complete abstention have the reference label `other`.
+No rule targets that category, so abstention is appropriate.
+A separate keyword rule for `other` would be less appropriate.
+The codebook assigns `other` in the absence of the four other categories, not
+by particular words.
 
-Every one of the 28 rows now has an account. Twenty-one usable and correct, two
-usable and wrong, two in conflict and resolved by a stated policy, and three
-abstentions whose true label was outside the rule set. Nothing is left in a
-category called "the rest".
+The accounting includes all 28 rows.
+Twenty-one usable labels match the reference, and two differ.
+A stated policy resolves two conflicts. Three abstentions have reference
+labels outside the rule set. No rows remain unreported.
 
-## Try cases the rules did not shape
+## Examine cases outside the rule-design examples
 
-Before applying the rules to another batch, the team writes four fictional
-adversarial unit tests. Their expected labels were chosen to expose known
-shortcuts after the rules were written. They are not an independent evaluation
-sample.
+Before another batch, the team writes four fictional adversarial unit tests.
+The team chooses expected labels after rule design to expose known rule
+limitations. These cases are not an independent evaluation sample.
 
 ```{r}
 stress_cases <- tibble(
@@ -770,36 +770,36 @@ and negation.
 
 ## Keep weak labels weak
 
-When rules scale:
+When applying rules to more data:
 
-1. version every pattern and codebook;
-2. preserve each rule vote and abstention;
-3. measure coverage and conflict by source, language, and group;
-4. reserve independently reviewed data for evaluation;
-5. sample apparent successes for human audit;
-6. test negation, polysemy, and unseen wording; and
+1. version every pattern and codebook.
+2. preserve each rule vote and abstention.
+3. measure coverage and conflict by source, language, and group.
+4. reserve independently reviewed data for evaluation.
+5. select a sample of apparent successes for human audit.
+6. run checks for negation, polysemy, and unseen wording.
 7. compare conclusions with and without weak labels.
 
 Rules can provide useful training signals. They do not create facts, repair a
-biased source, or remove the need for people who understand the domain.
+source's systematic errors, or remove the need for people who understand the domain.
 
 ## What to remember
 
 - A weak label is a rule's proposal, not ground truth.
-- Rules should be allowed to abstain and expose conflicts.
+- Rules should permit abstention and show conflicts.
 - Coverage, conflict, and agreement answer different questions.
-- Report each rule separately; a pooled score hides the weak one.
+- Report each rule separately. A score for all rules hides weaker rules.
 - Rules that share trigger words are not independent votes.
 - In-sample success can reflect rules written around the examples.
-- Designed challenge cases expose known shortcuts; independent evaluation asks
-  whether they generalize.
+- Designed challenge cases expose known limitations.
+- Independent evaluation measures rule performance on new data.
 
-The investigation ends with the questions that opened it: what does each
-fictional notice explicitly say about training, schedules, requirements, and
-skills? The Lab can trace an answer through source capture, OCR review, a
-codebook version, individual labels, synthetic status, and rule votes. None of
-that makes the notices representative or the rules ready for new data. It
-makes the limits and unresolved cases inspectable.
+The investigation asks what each fictional notice explicitly states about
+training, schedules, requirements, and skills. The Lab can trace each answer
+through the source, OCR checks, codebook, individual labels, synthetic status,
+and rule votes. Those records do not make the notices representative or
+establish rule performance on new data. They make limits and unresolved cases
+available for inspection.
 
 ## Sources
 

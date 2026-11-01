@@ -1,27 +1,27 @@
 ---
-title: "Scoring customer feeling"
+title: "Scoring sentiment in customer comments"
 subtitle: "Compare a word list with labels from the domain"
 description: "Learn why sentiment scores from word lists and trained labels can disagree, especially with short feedback."
 categories: [classification, sentiment analysis, emotion analysis]
 ---
 
 At the end of the week, Nia receives five customer comments and one blank rating
-cell. The dashboard wants a quick mood score, but the comments are too short to
-hide the weak spots.
+cell. The dashboard needs a quick sentiment score, but short comments can
+reveal gaps in the scoring method.
 
 One row thanks the service. Another says a parcel arrived late. A third says the
-sender could not reset a password. The same column holds praise, complaint, and
-language the English word list will miss.
+sender could not reset a password. The same column contains praise, complaint,
+and language the English word list will miss.
 
 ::: {.callout-tip}
 ## What you will learn
 
 By the end of this lesson, you will be able to:
 
-- score comments with the Bing sentiment lexicon;
-- count how many comments receive no lexicon match;
-- identify context failures such as negation and domain wording;
-- contrast a lexicon score with labels from the same domain; and
+- score comments with the Bing sentiment lexicon.
+- count how many comments receive no lexicon match.
+- find context failures such as negation and domain wording.
+- contrast a lexicon score with labels from the same domain.
 - explain why a word score is not a claim about a person's inner state.
 :::
 
@@ -37,11 +37,13 @@ stopifnot(identical(getOption("warn"), 2L))
 The feedback file is fictional. It was written for teaching and contains no real
 customers, parcels, accounts, or service records.
 
-readr opens the CSV, dplyr and tibble shape the rows, tidyr handles missing
-cells, purrr repeats scoring, stringr checks words, tidytext supplies the
-lexicon, ggplot2 gives a small plot, and quanteda supplies the bundled inaugural
-corpus through the shared helper. The file keeps the blank rating as a string
-first because the project does not let `read_csv()` guess missing values.
+readr reads the CSV, dplyr and tibble prepare rows, and tidyr handles missing
+cells. purrr applies scoring across rows, stringr matches words, and tidytext
+supplies the lexicon. ggplot2 draws a small plot. quanteda supplies the bundled
+inaugural corpus through the shared helper.
+
+The file initially preserves the blank rating as a string. The project does
+not let `read_csv()` infer missing values.
 
 ```{r}
 library(readr)
@@ -181,16 +183,16 @@ all. Treat those as inspectable examples, not as a rate. The English lexicon
 misses the Spanish praise in row 1005. It also gives the late parcel complaint no
 negative word.
 
-## Measure lexicon silence on a larger corpus
+## Measure missing lexicon matches on a larger corpus
 
-To ask how often the lexicon has nothing to say, use a larger text source. The
+A larger source can show how often the lexicon finds no matching words. The
 shared inaugural helper returns 1,377 public-domain paragraphs after a 25-word
-minimum-length filter. That filter matters because longer documents have more
-chances to contain a word from any lexicon. The same Bing word list is applied to
-each paragraph, and the code counts paragraphs with no positive or negative
-match. This is also a domain-mismatch example: a product-review lexicon is being
-applied to political oratory, so any score must be read as a warning sign, not as
-validated sentiment.
+minimum-length filter. Longer documents have more opportunities to contain a
+lexicon word. The code applies the same Bing list to each paragraph and counts
+paragraphs without positive or negative matches.
+
+This also demonstrates a domain mismatch. A product-review lexicon does not
+provide validated sentiment scores for political speeches.
 
 ```{r}
 source("R/inaugural-corpus.R")
@@ -262,7 +264,7 @@ knitr::kable(
     "Share with no Bing match",
     "Median words"
   ),
-  caption = "Bing lexicon silence falls as paragraph length rises",
+  caption = "The share of paragraphs without Bing matches decreases as paragraph length increases",
   row.names = FALSE
 )
 ```
@@ -284,21 +286,24 @@ stopifnot(
 ```
 
 On the larger corpus, 41 of 1,377 paragraphs have no Bing match, a share of
-0.0298 after the 25-word filter. The median paragraph has 6 matched words. The
-length table gives the more honest finding: 7.48 percent of 25-49 word
-paragraphs have no match, 1.61 percent of 50-99 word paragraphs have no match,
-and none of the 439 paragraphs with at least 100 words lack a match. That
-shows the direction expected from document length. It does not estimate the
-feedback result: those comments are shorter than every paragraph measured here
-and come from another domain. The `1-24 words` bin is empty because the shared
-corpus helper keeps paragraphs of at least 25 words.
+0.0298 after the 25-word filter. The median paragraph has 6 matched words.
+
+Among 25-49 word paragraphs, 7.48 percent have no match. Among 50-99 word
+paragraphs, 1.61 percent have no match. None of the 439 paragraphs with at least
+100 words lacks a match.
+
+Match coverage increases with document length, as expected. These results do
+not give an estimate of coverage for the shorter feedback comments from another domain.
+The `1-24 words` bin is empty because the helper retains paragraphs of at least
+25 words.
 
 ## Read the failures before trusting the score
 
-The lexicon sees words, not the situation around them. Negation means a word such
-as `helpful` can be flipped by nearby `not`. Domain wording means a plain
-customer-service problem, such as a password reset, may carry no sentiment word.
-Sarcasm is harder still because the same surface words can be sincere or barbed.
+The lexicon scores words without their context. Negation can reverse the
+meaning of `helpful` when `not` appears nearby. A customer-service problem,
+such as a password reset, may contain no sentiment word. Sarcasm also
+complicates interpretation because identical words can express sincere praise
+or criticism.
 
 ```{r}
 failure_cases <- lexicon_scores |>
@@ -349,7 +354,7 @@ knitr::kable(
 knitr::kable(
   negation_examples,
   col.names = c("Phrase", "Matched sentiment words", "Lexicon score"),
-  caption = "A bag-of-words lexicon does not flip the score for negation",
+  caption = "A bag-of-words lexicon does not change the score for negation",
   row.names = FALSE
 )
 ```
@@ -367,25 +372,24 @@ stopifnot(
 )
 ```
 
-Row 1003 is an account-access sentence with no matched sentiment word. The
-separate `not helpful` example shows a real negation failure: it scores the same
-as `helpful` because `helpful` is positive and `not` has no flipping rule here.
-Row 1001 shows the opposite risk: `thank` is positive, but a word list cannot
-tell from the word alone whether thanks are warm, routine, or sarcastic.
+Row 1003 concerns account access and contains no matched sentiment word. The
+separate `not helpful` example receives the same score as `helpful`. The rule
+counts positive `helpful` without reversing its score for `not`. Row 1001 shows
+another limit. The positive word `thank` alone does not distinguish sincere,
+routine, or sarcastic thanks.
 
 ## Train on labels from the setting
 
-A trained approach starts with labels from the setting that matters. Here the
-rating field supplies three tiny labels for demonstration: ratings of 5 become
-`satisfied`, rating 2 becomes `frustrated`, and rating 4 is left out because it
-is mild. The seed before this deterministic fit is 4901.
+A trained approach starts with labels from the relevant setting. This
+demonstration derives labels from three ratings. Ratings of 5 become
+`satisfied`, and rating 2 becomes `frustrated`. The mild rating of 4 is
+excluded. The seed before this deterministic fit is 4901.
 
-The score is an equal-prior, Laplace-smoothed multinomial naive Bayes
+The score uses an equal-prior, Laplace-smoothed multinomial naive Bayes
 calculation. Adding one to every word count prevents an unseen word from making
-a class probability zero. “Equal-prior” means the calculation gives the two
-labels equal starting weight instead of using the two-to-one training-row
-imbalance; a deployed naive Bayes classifier would make that prior choice
-explicit.
+a class probability zero. Equal priors give the two labels the same initial
+weight rather than use the two-to-one imbalance in training rows. A deployed
+classifier must state that prior choice.
 
 ```{r}
 set.seed(4901)
@@ -526,15 +530,19 @@ stopifnot(
 )
 ```
 
-This trained scorer learns from only three labelled rows, so it is a mechanics
-example rather than an evaluation. Rows 1001, 1004, and 1005 are fitting rows,
-and reporting success on them would be resubstitution. Row 1002 was excluded
-because its mild rating has no reference label in this two-class scheme. The
-scorer still returns `frustrated`, but that is inspection output with no
-right-or-wrong answer, not a held-out evaluation. A larger trained model can use
-context if the training labels record the domain you care about. Its cost is
-that labels must be collected, checked, and kept in step with the way people
-write.
+This scorer uses only three labelled rows, so it demonstrates calculations
+rather than evaluation. Rows 1001, 1004, and 1005 are fitting rows. Reporting
+performance on those rows would be resubstitution, meaning evaluation on
+training examples.
+
+Row 1002 is excluded because its mild rating has no reference label in this
+two-class scheme. The scorer still returns `frustrated`, but no reference
+answer exists for scoring that prediction. This is inspection output rather
+than held-out evaluation.
+
+A larger trained model can use context when its training labels represent the
+relevant domain. The team must collect those labels. It must make sure the
+labels are correct. It must also update them as language changes.
 
 ## Emotion needs stronger evidence
 
@@ -603,7 +611,7 @@ ggplot(
   ) +
   scale_x_continuous(expand = expansion(mult = c(0, 0.35))) +
   labs(
-    title = "Five comments collapse onto two lexicon scores",
+    title = "Five comments receive only two lexicon scores",
     subtitle = "Bing lexicon score for each fictional feedback comment",
     x = NULL,
     y = NULL
@@ -622,16 +630,16 @@ stopifnot(
 ```
 
 A positive-word count is not an emotion. Self-reported emotion and observed
-emotion can differ, and neither appears in this file. A score such as 0.62 would
-be a number about words or a model output, not a claim about a person's inner
-state.
+emotion can differ, and neither appears in this file. A score such as 0.62
+describes words or model output. It does not establish a person's internal
+emotional state.
 
 ## What to remember
 
 - A sentiment lexicon counts words it recognizes.
 - On the 25-word-filtered inaugural corpus, 41 of 1,377 paragraphs have no Bing
-  match, and silence falls as paragraph length rises.
-- Negation, language, domain wording, and sarcasm can break a word-count score.
+  match. Missing matches become less common as paragraph length increases.
+- Negation, language, domain wording, and sarcasm can cause incorrect word-count scores.
 - A trained approach needs labels from the setting it will serve.
 - Emotion claims require evidence beyond positive and negative words.
 
@@ -639,6 +647,6 @@ state.
 
 - [tidytext sentiment lexicons](https://juliasilge.github.io/tidytext/reference/sentiments.html)
 - [Bing Liu opinion lexicon](https://www.cs.uic.edu/~liub/FBS/sentiment-analysis.html),
-  created for product-review sentiment research by Minqing Hu and Bing Liu; the
+  created for product-review sentiment research by Minqing Hu and Bing Liu. The
   source page requests citation and states research-use terms.
 - [tidytext text mining book](https://www.tidytextmining.com/sentiment.html)

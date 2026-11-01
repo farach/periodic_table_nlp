@@ -37,7 +37,8 @@ This project checks for visible writing habits and residue instead.
 
 1. Run `Rscript scripts/check-prose.R` for machine residue and common style
    patterns.
-2. Run `Rscript scripts/check-repetition.R`. It checks exact repeated sentences
+2. Run `Rscript tests/test-repetition-disclosure.R` for the disclosure exception.
+   Run `Rscript scripts/check-repetition.R`. It checks exact repeated sentences
    and repeated four-word openings; it does not detect a repeated paragraph
    shape or argument.
 3. Read the lesson aloud and remove stiff phrasing, repeated structures, and
@@ -292,9 +293,13 @@ For the saved-output evaluation guide, run
 `Rscript tests/test-system-evaluation.R` before rendering.
 It checks the predeclared results, sparse inputs, invalid annotations,
 fingerprints, and all three decision branches.
-Use short sentences and define technical terms near first use.
-Apply ASD-STE100 writing rules where they fit the explanation.
-Do not claim formal controlled-language certification.
+Use no more than 20 words per instruction and 25 words per description.
+Keep paragraphs to six sentences or fewer. Define technical terms near their
+first occurrence. Follow the controlled-language section of
+`EDITORIAL_GUIDE.md`, with contextual vocabulary review.
+Run `npm run test:prose` before rendering and `npm run test:a11y` afterwards.
+Record per-page findings and unresolved vocabulary in `reviews/`.
+Do not claim formal controlled-language certification from these checks.
 
 - Show the reader the code that does the work, not the code that formats the
   page. A table is built in the visible chunk and printed from an
@@ -351,6 +356,16 @@ Do not claim formal controlled-language certification.
 - Pass an explicit temporary `model_path` to `tokenizers.bpe::bpe()`. Count
   unknown pieces from `bpe_encode(type = "ids")`; the `subwords` display
   reconstructs surface text and can hide unknown IDs.
+- BPE training can resolve equal-frequency merges differently even with
+  `threads = 1L`. Compute piece counts in prose from the fitted model. Assert
+  per-row ID/subword alignment, valid vocabulary IDs, decoded source text, and
+  the intended unknown-token results instead of one incidental piece count.
+  Run `Rscript tests/test-vocabulary-bpe.R` before rendering. It replays a real
+  69-piece fit of the unchanged job-only corpus, then trains a fresh model.
+  The small text-format fixture in `tests/fixtures/vocabulary-69.bpe` was
+  generated locally from the fictional teaching data and preserved byte for
+  byte. The test verifies its fingerprint. It is not a pretrained external
+  model or a model used by the published lesson.
 - Keep `data/openlibrary-nlp-search.json` as a dated fixture. Rendering must not
   contact Open Library or any other live service.
 - The R `tesseract` package does not install the native OCR engine or language

@@ -37,7 +37,8 @@ lesson_files <- unlist(
 # Guide pages follow the same code style as lessons.
 lesson_files <- c(
   lesson_files, "using-language-models.qmd", "advanced/evaluating-systems.qmd",
-  "R/system-evaluation.R", "tests/test-system-evaluation.R"
+  "R/system-evaluation.R", "tests/test-system-evaluation.R",
+  "tests/test-vocabulary-bpe.R"
 )
 
 stopifnot(

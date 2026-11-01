@@ -1,13 +1,13 @@
 ---
 title: "Geocoding place names"
 subtitle: "Join text mentions to an offline gazetteer"
-description: "Learn how a gazetteer turns place names into coordinates while preserving ambiguous and not-found results."
+description: "Learn how a gazetteer links place names to coordinates while preserving ambiguous and not-found results."
 categories: [entity enrichment, geocoding, workforce research]
 ---
 
-On the flyer transcript, `RIVERTON SKILLS OPEN HOUSE` looks ready for a map
-until `Riverton` matches two places in the reference table. The coordinator
-needs the tie to stay visible.
+The flyer transcript contains `RIVERTON SKILLS OPEN HOUSE`, but `Riverton`
+matches two places in the reference table. The coordinator needs both
+possibilities to remain visible.
 
 A map needs coordinates, not only a place name. The team can join a mention to a
 small reference file, then keep the unresolved cases visible.
@@ -21,10 +21,10 @@ The places, lab, and flyer here belong to an invented Riverton setting.
 
 By the end of this lesson, you will be able to:
 
-- define geocoding and gazetteers in plain language;
-- join place mentions to latitude and longitude;
-- detect duplicate place-name matches;
-- return a miss when a place is absent; and
+- explain geocoding and gazetteers in plain language.
+- join place mentions to latitude and longitude.
+- detect duplicate place-name matches.
+- return a miss when a place is absent.
 - explain why context matters in geocoding.
 :::
 
@@ -37,12 +37,14 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the offline reference files
 
-Geocoding means turning a place name in text into coordinates: a latitude and
-longitude a map can plot. CSV files supply the examples, dplyr and tibble handle
-the tables, and digest checks the gazetteer fingerprint. A **gazetteer** is a
-list of place names with location information attached. Gazetteers may be public,
-open-licence, or commercial reference datasets. This one is invented and local so
-the lesson can run offline.
+**Geocoding** links a place name in text to coordinates, the latitude and
+longitude that locate a point on a map. CSV files supply examples, while dplyr
+and tibble prepare tables. digest calculates a file fingerprint, a code that
+the lesson compares with the expected fingerprint.
+
+A **gazetteer** lists place names and their locations. Gazetteers may be public,
+open-licence, or commercial reference datasets. This invented local gazetteer
+lets the lesson execute offline.
 
 ```{r}
 library(readr)
@@ -128,19 +130,19 @@ stopifnot(
 )
 ```
 
-The reference table has nine rows. The duplicate `Riverton` rows are deliberate:
-one sits in Marrow County, Calder, and one sits in Tidewater. The `parent` column
-names the larger place that contains a row. The coordinates are arbitrary teaching
-points, not the locations of real sites.
+The reference table has nine rows. The duplicate `Riverton` rows are deliberate.
+One is in Marrow County, Calder, and one is in Tidewater. The `parent` column
+names the larger place that contains each location. The coordinates are
+arbitrary teaching points, not the locations of real sites.
 
-`Riverton Skills Centre` is typed as a building here. In the entity-linking
-lesson, the same words name an organisation. That is not a data-cleaning lesson
-to hide; the same string can denote a place and an organisation, which is the
-ORG-versus-place ambiguity that named-entity lessons have to handle.
+This table classifies `Riverton Skills Centre` as a building. The
+entity-linking lesson uses the same name for an organisation. The same string
+can denote either a place or an organisation. Named-entity systems must account
+for this ORG-versus-place ambiguity.
 
 ## Join mentions to the gazetteer
 
-The team starts with five hand-identified place mentions. One comes from the
+The team starts with five manually selected place mentions. One comes from the
 Riverton flyer text. Four are constructed checks written in the same setting so
 we can see resolved, ambiguous, and not-found cases together.
 
@@ -200,13 +202,13 @@ stopifnot(
 ```
 
 The `relationship` argument tells dplyr that one mention may match several rows.
-That fan-out is the ambiguity this lesson is about, so the code declares it. The
+The code explicitly permits these multiple matches to preserve ambiguity. The
 join returns seven rows from five mentions because `Riverton` matches twice.
 `West Calder` receives no coordinates because it is not in the gazetteer.
 
 ## Name the unresolved states
 
-A geocoder should not pretend that every mention is solved. The next table gives
+A geocoder must report unresolved mentions. The next table gives
 each mention a status.
 
 ```{r}
@@ -269,10 +271,10 @@ counts describe only the five mentions in this lesson.
 
 ## Add context when the name is not enough
 
-The name `Riverton` alone cannot choose between the two rows. No county appears
-in the flyer, so the context below is supplied by the analyst to show the
-mechanism. In a pipeline that value would need to come from a document header, a
-posting address, or a stated scope for the collection.
+The name `Riverton` alone does not distinguish the two rows. The flyer gives
+no county, so the analyst supplies the context below to demonstrate the rule.
+A pipeline needs that value from a document header, posting address, or stated
+collection limits.
 
 ```{r}
 riverton_candidates <- geocoded_rows |>
@@ -319,17 +321,21 @@ stopifnot(
 
 The context row shows a decision rule, not evidence from the flyer. Without the
 parent region, a prior belief, or surrounding text, the two `Riverton` rows remain
-tied.
+equally possible.
 
 ## Geocoding in production
 
-The local exact-match join in this lesson shows the mechanism of geocoding, but production systems rely on specialized geocoding APIs (such as OpenStreetMap/Nominatim) or packages (like `tidygeocoder` in R or `geopy` in Python) rather than raw string joins.
+This local exact-match join demonstrates geocoding. Production systems use
+specialized APIs, such as OpenStreetMap/Nominatim, rather than raw string joins.
+Packages such as `tidygeocoder` in R or `geopy` in Python provide interfaces
+to those services.
 
-When using a live service, several boundaries and limits apply:
-- **Match precision**: APIs can perform fuzzy matching, returning a confidence score. A low score requires uncertain-result inspection.
+Live services have several limits:
+
+- **Match precision**: APIs can use fuzzy matching to compare similar names rather than require identical strings. Examine geocoding results with low confidence scores.
 - **Service boundaries**: Rate limits and Terms of Service often dictate how many requests you can make.
-- **Caching**: Storing results locally prevents redundant network calls and speeds up repeated processing.
-- **Privacy and re-identification**: Sending text containing personal locations to an external API can leak private data. Self-hosted geocoders (like a local Nominatim instance) keep sensitive text entirely on your own infrastructure.
+- **Caching**: Locally stored results prevent redundant network calls and reduce processing time.
+- **Privacy and re-identification**: Text sent to an external API can reveal personal locations. A self-hosted geocoder, such as a local Nominatim instance, keeps that text on your infrastructure.
 
 ## What to remember
 
@@ -338,7 +344,7 @@ When using a live service, several boundaries and limits apply:
 - Joining by name can return more than one coordinate pair.
 - A miss should stay a miss rather than becoming a guess.
 - Context such as a parent region can reduce the candidate list.
-- `ambiguous` and `not found` are first-class geocoding answers.
+- `ambiguous` and `not found` are valid geocoding results.
 
 This teaching gazetteer can map `Riverton Skills Centre` and `Bellhaven`. The
 word `Riverton` still has two candidate locations, and `West Calder` has none.

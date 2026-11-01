@@ -1,35 +1,36 @@
 ---
 title: "Mapping place mentions"
-subtitle: "Review state-name matches before drawing them"
-description: "Learn how naive place-name matches can mislead a map, and how reviewed readings keep non-place meanings visible."
+subtitle: "Examine state-name matches before drawing them"
+description: "Learn why place-name matches require checks before mapping. Keep non-place meanings visible in check records."
 categories: [information visualization, maps, place names]
 ---
 
 `Washington` is the first problem in this map. In presidential speeches it can
-mean a person, a city, the federal government, or the state. The review below
-has to decide which readings are present.
+mean a person, a city, the federal government, or the state. The author must find
+which readings are present.
 
 Ben still wants a map from the speeches, but the name match is only the first
 step.
 
-**Locations on a map** means more than finding a name. The reader has to decide
-whether the name really refers to a place, what place it means, what unit is
-being counted, and whether the basemap can honestly show it.
+Mapping **locations** requires more than finding a name. The reader must find
+whether the name refers to a place. If so, the reader must find which place it names.
+The counting unit and the basemap's coverage also require explicit decisions.
 
 This lesson uses U.S. inaugural-address paragraphs and the state names bundled
-with R. The review rules and labels below are the author's judgement after
-reading the matches in this corpus. They are not an independent geoparser.
+with R. The check rules and labels below are the author's judgement after
+reading the matches in this corpus. They are not an independent geoparser, a
+system that finds and resolves place names.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- match U.S. state names with case-sensitive, whole-word rules;
-- compare naive matches with reviewed readings;
-- keep person, river, event, government, and pre-statehood readings off the map;
-- count speeches with at least one reviewed state reading;
-- draw symbols with area scaling instead of a choropleth; and
+- match U.S. state names with case-sensitive, whole-word rules
+- compare naive matches with examined readings
+- exclude person, river, event, government, and pre-statehood readings from the map
+- count speeches with at least one examined state reading
+- draw symbols with area scaling instead of a choropleth
 - state a basemap's coverage and projection limits.
 :::
 
@@ -40,12 +41,12 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Match state names before reviewing them
+## Match state names before examining them
 
 The source data is the shared inaugural-address paragraph table used in earlier
-lessons. A paragraph and speech ID travel with every match. The matcher sorts
-state names from longest to shortest so `West Virginia` would be selected before
-`Virginia` when both could overlap.
+lessons. Every match retains a paragraph ID and speech ID. The matcher sorts
+state names from longest to shortest. It therefore selects `West Virginia`
+before `Virginia` when those matches overlap.
 
 ```{r}
 library(dplyr)
@@ -154,7 +155,7 @@ naive_state_counts <- state_matches |>
 knitr::kable(
   naive_state_counts,
   col.names = c("Matched name", "Naive matches", "Speeches with a match"),
-  caption = "Naive case-sensitive state-name matches before review",
+  caption = "Naive case-sensitive state-name matches before checks",
   row.names = FALSE
 )
 ```
@@ -201,17 +202,17 @@ stopifnot(
 )
 ```
 
-The naive table counts strings. It does not know whether `Washington` is a
-person, the city, or the state. That is the next step.
+The naive table counts strings. It does not distinguish `Washington` as a
+person, city, or state. The next step resolves those meanings.
 
-## Review what each match means
+## Examine what each match means
 
-The categories below were written after reading the 67 matches. Any residue that
-the rules do not explain is assigned to `uncertain`, not to the map.
+The author wrote these categories after reading the 67 matches. The rules give
+unresolved matches the category `uncertain` and exclude them from the map.
 
-Each review key combines the paragraph ID, the matched name, and the 1-based
-character start returned for that paragraph, so a label stays with its sentence
-when rows are reordered.
+Each match key combines paragraph ID, matched name, and the 1-based character
+start within the paragraph. This key preserves the label's sentence association
+after row reordering.
 
 ```{r}
 category_table <- tribble(
@@ -324,15 +325,15 @@ category_counts <- category_table |>
 
 knitr::kable(
   label_preview,
-  col.names = c("Match key", "Reviewed category"),
-  caption = "First keyed review-label decisions",
+  col.names = c("Match key", "Category after checks"),
+  caption = "First keyed label decisions after checks",
   row.names = FALSE
 )
 
 knitr::kable(
   category_counts,
-  col.names = c("Review category", "How this lesson uses the category", "Matches"),
-  caption = "Author-written review categories for state-name matches",
+  col.names = c("Category after checks", "How this lesson uses the category", "Matches"),
+  caption = "Author-written categories for state-name matches",
   row.names = FALSE
 )
 ```
@@ -376,13 +377,13 @@ stopifnot(
 )
 ```
 
-The category table is a disclosure, not a score. These labels were shaped by
-this corpus. A new collection would need a new review.
+The category table discloses the author's choices, not a score. The author developed
+these labels from this corpus. A new collection needs new checks.
 
-## Compare naive and reviewed readings
+## Compare naive and examined readings
 
-The table below keeps the naive counts beside the reviewed counts. The reviewed
-unit is speeches with at least one state reading for a state. Repeated mentions
+The table below keeps the naive counts beside the counts after checks. The
+unit after checks is speeches with at least one state reading for a state. Repeated mentions
 inside one speech do not add more weight.
 
 ```{r}
@@ -423,16 +424,16 @@ knitr::kable(
   naive_review_comparison,
   col.names = c(
     "Matched name", "Naive matches", "Naive speeches",
-    "Reviewed state speeches"
+    "Speeches with examined state readings"
   ),
-  caption = "Naive matches compared with reviewed state readings",
+  caption = "Naive matches compared with examined state readings",
   row.names = FALSE
 )
 
 knitr::kable(
   river_summary,
-  col.names = c("Matched name", "Matches", "Speeches", "Reviewed category"),
-  caption = "River readings checked before mapping",
+  col.names = c("Matched name", "Matches", "Speeches", "Category after checks"),
+  caption = "River readings examined before mapping",
   row.names = FALSE
 )
 ```
@@ -457,11 +458,11 @@ stopifnot(
 )
 ```
 
-The code finds `Washington` in 17 speeches and the review counts none as
-Washington State. It also finds `Mississippi`, `Ohio`, and `Missouri` as river
-readings. Those names stay in the review tables and stay off the map.
+The code finds `Washington` in 17 speeches. None of those matches means
+Washington State. The code also finds `Mississippi`, `Ohio`, and `Missouri` as river
+readings. Those names remain in the check tables but not on the map.
 
-The full review table is long because every non-state reading remains visible.
+The full check table is long because every non-state reading remains visible.
 
 ```{r}
 review_table <- review_matches |>
@@ -486,9 +487,9 @@ knitr::kable(
   review_table,
   col.names = c(
     "Paragraph ID", "Character start", "Matched name", "Speech ID", "Year",
-    "President", "Reviewed category", "Mapped as state", "Reading context"
+    "President", "Category after checks", "Mapped as state", "Reading context"
   ),
-  caption = "All reviewed state-name matches with author-written categories",
+  caption = "All examined state-name matches with author-written categories",
   row.names = FALSE,
   format = "html",
   escape = TRUE
@@ -506,7 +507,7 @@ stopifnot(
 )
 ```
 
-## Draw the reviewed state counts
+## Draw the state counts after checks
 
 The basemap comes from `ggplot2::map_data("state")`, which uses the `maps`
 package state database. That database covers the 48 contiguous states and the
@@ -536,10 +537,10 @@ knitr::kable(
     select(state, reviewed_state_speeches, longitude, latitude) |>
     arrange(desc(reviewed_state_speeches), state),
   col.names = c(
-    "State", "Speeches with reviewed state reading",
+    "State", "Speeches with examined state reading",
     "Approximate center longitude", "Approximate center latitude"
   ),
-  caption = "Long description for the reviewed state-count map",
+  caption = "Long description for the state-count map after checks",
   row.names = FALSE
 )
 ```
@@ -549,12 +550,12 @@ knitr::kable(
 
 map_alt_text <- sprintf(
   paste(
-    "Lower-48 U.S. map with a labelled, proportional circle for each of seven",
-    "states with a reviewed state reading. Virginia appears in 3 speeches;",
-    "North Carolina and Pennsylvania appear in 2 each; California, Iowa,",
-    "Louisiana, and Nebraska appear in 1 each. A note on Washington State says",
-    "that its %d name matches in %d speeches were all reviewed as other readings,",
-    "so it has no circle."
+    "Lower-48 U.S. map with labelled proportional circles for seven",
+    "states with examined state readings. Virginia appears in 3 speeches.",
+    "North Carolina and Pennsylvania appear in 2 each. California, Iowa,",
+    "Louisiana, and Nebraska appear in 1 each. A Washington State note records",
+    "%d name matches in %d speeches, all with other examined meanings.",
+    "Washington therefore has no circle."
   ),
   washington_summary$matches,
   washington_summary$speeches
@@ -575,20 +576,20 @@ stopifnot(
 )
 ```
 
-The coordinates are approximate state centers. A symbol at a center is a count
-marker, not the place where a speech event happened. A choropleth shades whole
-areas by value; this map uses circles instead because the values are small
-counts of speeches, not rates or attention. Pre-statehood references such as the
-Republic of Texas were not counted as state readings.
+The coordinates approximate state centers. A symbol represents a count, not the
+location of an event in a speech. A **choropleth** shades whole areas by value.
+This map instead uses circles for small speech counts, not rates or measures
+of attention. The author excludes pre-statehood references such as the
+Republic of Texas from state counts.
 
-Each circle carries its state name and count as a label, so the map needs no
-size legend. `ggrepel` places those labels so they do not collide, and its seed
-keeps the placement the same on every render. Washington gets a note instead
-of a circle, because the review is the reason it is missing.
+Each circle has a state-name and count label, so the map needs no size legend.
+`ggrepel` separates labels to avoid overlap. Its seed makes placement
+reproducible across renders. A note explains why the map excludes Washington
+from the circles.
 
 ```{r}
 #| label: fig-state-reading-map
-#| fig-cap: "Reviewed state readings in inaugural speeches on a lower-48 basemap; seven states remain after review."
+#| fig-cap: "State readings in inaugural speeches on a lower-48 basemap. Seven states remain after the author's checks."
 #| fig-alt: !expr map_alt_text
 #| fig-width: 8
 #| fig-height: 5
@@ -655,13 +656,13 @@ ggplot() +
   scale_size_area(max_size = 11, guide = "none") +
   coord_fixed(ratio = fixed_ratio, clip = "off") +
   labs(
-    title = "After review, only seven states remain on the map",
+    title = "After checks, only seven states remain on the map",
     subtitle = str_c(
-      "Speeches with at least one reviewed reading of each state; ",
-      "circle area shows the count"
+      "Speeches with at least one examined reading of each state. ",
+      "Circle area shows the count."
     ),
     caption = str_c(
-      "Circles sit at approximate state centres from datasets::state.center. ",
+      "Circles mark approximate state centres from datasets::state.center. ",
       "Alaska and Hawaii are not on this basemap."
     )
   ) +
@@ -686,39 +687,40 @@ stopifnot(
 )
 ```
 
-The coordinate ratio is `1 / cos(mean latitude in radians)`, which is
-`r round(fixed_ratio, 2)` in this render. One degree of latitude is drawn about
-`r round(fixed_ratio, 2)` times as long as one degree of longitude, because a
-degree of longitude covers less ground away from the equator. Near the middle of
-the country, a mile east-west and a mile north-south then look about the same
-length. This does not preserve area. The circle areas encode the speech counts;
-exact values belong in the table.
+The coordinate ratio is `1 / cos(mean latitude in radians)`, or
+`r round(fixed_ratio, 2)` in this render. The plot draws one degree of latitude
+about `r round(fixed_ratio, 2)` times as long as one degree of longitude. A
+degree of longitude covers less distance farther from the equator.
 
-## Where this fits
+Near the country's middle, a mile east-west and a mile north-south therefore
+appear approximately equal in length. This ratio does not preserve area.
+Circle areas represent speech counts. The table gives exact values.
 
-Lesson 30 shows how a gazetteer can turn a place name into coordinates. This
+## Relation to the earlier mapping lesson
+
+Lesson 30 uses a **gazetteer**, a place-name reference, to obtain coordinates. This
 page begins earlier. It asks whether a matched name should become a place record
 at all. Names can refer to people, laws, rivers, cities, events, governments, or
 places from an earlier political period.
 
-The lower-48 map also has coverage limits. If a reviewed state reading pointed
+The lower-48 map also has coverage limits. If an examined state reading referred
 to Alaska or Hawaii, this page would keep it in the table and not draw it on
 this basemap.
 
 ## What to remember
 
 - A state-name match is not automatically a state reference.
-- Review labels shaped after reading the matches must be disclosed.
+- Disclose the labels developed after reading the matches.
 - Count speeches, not repeated mentions, when the unit is speeches.
-- Rivers, people, events, and pre-statehood references stay off the reviewed
+- Rivers, people, events, and pre-statehood references stay off the final
   map.
-- `scale_size_area()` maps values to circle area; the table carries exact
+- `scale_size_area()` maps values to circle area. The table gives exact
   counts.
 - A lower-48 basemap cannot show every U.S. state.
 
-Ben can map seven reviewed states, but only after most naive matches have been
-kept out of the symbol layer. The table is part of the map because it shows what
-the picture refused to draw.
+Ben maps seven examined states after excluding most naive matches from the
+symbol layer. The table remains part of the map's explanation because it
+records those exclusions.
 
 ## Sources
 

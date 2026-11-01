@@ -1,30 +1,30 @@
 ---
 title: "Training word vectors"
-subtitle: "Check whether neighbours carry information"
-description: "Learn how distributed word representations are trained from local context and why a small corpus can make neighbour lists look better than they are."
+subtitle: "Examine whether word neighbours indicate meaningful similarity"
+description: "Learn how models train distributed word representations from local context. Examine why neighbour lists from a small corpus can be misleading."
 categories: [similarity, word embeddings, inaugural addresses]
 ---
 
 A curator wants to tag a speech archive without reading every paragraph. She
-asks which words sit near `freedom`, `union`, and `peace` in the language of the
+asks which words have similar vectors to `freedom`, `union`, and `peace` in the
 collection.
 
-A table of neighbours appears quickly. It looks meaningful, but every
-word-vector model can return a nearest neighbour for any word it kept.
+A table of neighbours can appear meaningful. However, a word-vector model can
+return a nearest neighbour for any word it retains.
 
 A **distributed word representation** is one numeric vector per word, learned
-from the words that appear near it. This lesson loads one saved local model, then
-checks whether an easy related pair separates from arbitrary pairs.
+from nearby words. This lesson loads one saved local model. It compares a
+clearly related pair with arbitrary pairs.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- read a pinned word2vec skip-gram model;
-- inspect the preprocessing and training settings stored with it;
-- explain why the fitted model is saved rather than trained during render;
-- compare an expected related pair with random pairs; and
+- read a saved word2vec skip-gram model with a fixed version
+- examine the preprocessing and training settings stored with the model
+- explain why the page loads a saved fitted model instead of training during rendering
+- compare an expected related pair with random pairs
 - summarize the full distribution of cosine similarities.
 :::
 
@@ -38,9 +38,9 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Load one saved word2vec model
 
 Word2vec comes from work by Mikolov and colleagues on learning word vectors from
-nearby words. The **skip-gram** version uses the current word to predict words in
-its window. The R package splits input on whitespace, so the training strings
-should already be lowercased with punctuation and numbers removed.
+nearby words. The **skip-gram** version uses the current word to predict nearby
+words within a specified window. The R package splits input on whitespace.
+Before training, convert text to lowercase. Remove punctuation and numbers.
 
 ```{r}
 library(dplyr)
@@ -155,20 +155,19 @@ stopifnot(
 
 The metadata records 1,377 training documents, 134,419 cleaned tokens, 2,709
 vocabulary rows, and 3,667,986 unique word pairs. It also records one punctuation
-row, the trainer's `</s>` marker. Punctuation was removed before training, so
-forms such as `peace.` and `peace,` do not compete with `peace`.
+row, the trainer's `</s>` marker. Preprocessing removed punctuation before training, so
+forms such as `peace.` and `peace,` do not become separate entries from `peace`.
 
-The same training code with the same seed and `threads = 1L` produced neighbour
-lists in a different order on each fit. The similarity values moved only slightly,
-about 0.03 here, but the ranking changed. This page loads one saved fit, and the
-metadata records its SHA-256 fingerprint. A result you cannot reproduce is a
-result you cannot check; pinning the artefact is the normal fix when exact words
-will be printed.
+Repeated fits used the same training code, seed, and `threads = 1L`. Each fit
+produced neighbour lists in a different order. Similarity values changed by
+about 0.03 here, but the ranking changed. This page loads one saved fit. The
+metadata records its SHA-256 fingerprint, which identifies the file contents.
+Keeping a fixed model file lets readers reproduce the exact printed neighbours.
 
-## Print neighbours, then distrust the glow
+## Print and assess neighbours
 
 A nearest-neighbour list returns the words with highest cosine similarity to a
-query word. Cosine similarity compares vector direction; larger values mean
+query word. Cosine similarity compares vector direction. Larger values mean
 closer under the trained representation.
 
 ```{r}
@@ -226,17 +225,17 @@ stopifnot(
 )
 ```
 
-Some neighbours look plausible. That is not enough. A neighbour list always
-returns something, and a fluent label can make a weak signal feel stronger than
-it is. Pinning the file makes the printed words checkable; it does not make the
-small model trustworthy by itself.
+Some neighbours look plausible, but a neighbour list always returns results.
+Readable labels can make weak similarity evidence seem convincing. Keeping a
+fixed file makes the printed words reproducible. It does not show that the
+small model consistently gives related words higher scores than unrelated words.
 
 ## Compare a related pair with random pairs
 
-The useful question is not whether the top neighbour list looks nice. The useful
-question is whether a pair chosen to be easy, `freedom / liberty`, clearly
-separates from arbitrary pairs. Using an easy pair is conservative: if this pair
-barely separates, harder related pairs should not be trusted without more data.
+The test compares `freedom / liberty`, a clearly related pair, with arbitrary
+pairs. This choice provides an easy test for the model. If the pair barely
+differs from arbitrary pairs, harder related pairs require more data before
+readers can trust the results.
 
 ```{r}
 cosine_between_words <- function(first, second) {
@@ -300,10 +299,10 @@ stopifnot(
 )
 ```
 
-The random-pair distribution reaches into the same range as `freedom / liberty`.
+The random-pair distribution overlaps the score for `freedom / liberty`.
 In this saved fit the pair scores about 0.772, while random pairs average about
-0.752. The model can still be useful for prompting inspection, but a high cosine
-score is not enough by itself.
+0.752. The model can still suggest words to examine, but a high cosine score
+alone does not establish meaningful similarity.
 
 ## Show the similarity distribution
 
@@ -352,14 +351,14 @@ stopifnot(
 )
 ```
 
-`freedom / liberty` sits at the `r round(freedom_liberty_percentile * 100)`th
-percentile of the full pairwise distribution in this saved model. The pair was
-chosen to be easy, yet it lands below the median pair.
+`freedom / liberty` is at the `r round(freedom_liberty_percentile * 100)`th
+percentile of the full pairwise distribution in this saved model. The clearly
+related pair has a score below the median for all pairs.
 
 ```{r}
 #| label: fig-word2vec-cosines
 #| fig-cap: "Pairwise cosine similarities among words kept by the pinned local word2vec model."
-#| fig-alt: !expr sprintf("A histogram of cosine similarities concentrated toward high positive values. A dashed line for freedom and liberty at %.2f falls left of the median rather than near the far right edge.", freedom_liberty_cosine)
+#| fig-alt: !expr sprintf("A histogram shows cosine similarities concentrated toward high positive values. A dashed line marks freedom and liberty at %.2f. The line is left of the median, not near the right edge.", freedom_liberty_cosine)
 #| fig-height: 4.2
 #| code-fold: true
 #| code-summary: "Show the plotting code"
@@ -395,7 +394,7 @@ ggplot(plot_similarities, aes(x = cosine_similarity)) +
   ) +
   scale_y_continuous(labels = scales::label_comma()) +
   labs(
-    title = "Many arbitrary word pairs sit above an easy related pair",
+    title = "Many arbitrary word pairs score above a clearly related pair",
     subtitle = "Cosine similarity for every pair of words kept by the pinned word2vec model",
     x = "Cosine similarity",
     y = "Word pairs"
@@ -413,8 +412,8 @@ stopifnot(
 )
 ```
 
-Published embeddings are trained on billions of tokens. Large training text gives
-the model many more contexts for separating near neighbours from accidental
+Published embeddings use billions of training tokens. A larger training corpus
+provides more contexts for distinguishing meaningful neighbours from accidental
 neighbours.
 
 ## What to remember
@@ -422,14 +421,13 @@ neighbours.
 - A word2vec model gives one vector to each kept word.
 - The pinned model used skip-gram, 50 dimensions, window 5, 5 iterations,
   minimum count 5, and one thread.
-- The word2vec package expects text that is already cleaned before whitespace
-  splitting.
-- Neighbour lists need a pinned artefact when exact words are printed.
-- In this saved fit, even `freedom / liberty` lands below the median of all
+- The word2vec package expects cleaned text before splitting on whitespace.
+- Reproducing exact neighbour lists requires a fixed model file.
+- In this saved fit, even `freedom / liberty` scores below the median of all
   pairwise similarities.
 
-The curator keeps the neighbour table as a prompt for reading, not as evidence
-that the archive has revealed its themes.
+The curator uses the neighbour table to select passages for reading. The table
+does not establish the archive's themes.
 
 ## Sources
 

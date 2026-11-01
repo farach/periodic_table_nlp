@@ -1,24 +1,24 @@
 ---
 title: "Finding distinctive words and phrases"
 subtitle: "Compare tf-idf with tagged phrase keywords"
-description: "Learn how keyword extraction can surface distinctive words and tagged phrases while keeping importance claims separate."
+description: "Learn how keyword extraction finds distinctive words and tagged phrases without establishing their importance."
 categories: [signals and discovery, keyword extraction, inaugural addresses]
 ---
 
 Mara has a folder of 60 inaugural addresses and a blank label card for a small library display. The card has room for a few words, so a full reading is too much for the first pass.
 
-A word list feels tempting. If the list rewards the wrong thing, though, the label may feature a rare name or odd phrase rather than a useful clue about the speech.
+A word list could help. However, the scoring rule may favour a rare name or unusual phrase rather than a useful description of the speech.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- define tf-idf in plain language;
-- compute distinctive words for speeches;
-- run a tagged phrase keyword method with UDPipe;
-- compare word and phrase outputs on the same word form; and
-- test whether the observed overlap is larger than a random baseline.
+- explain tf-idf in plain language.
+- compute distinctive words for speeches.
+- execute a tagged phrase keyword method with UDPipe.
+- compare word and phrase outputs on the same word form.
+- find whether the observed overlap exceeds a random baseline.
 :::
 
 ```{r}
@@ -30,7 +30,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the speeches
 
-The helper returns one row per paragraph. A paragraph here is a block of at least 25 words. The corpus has 1,377 paragraphs from 60 speeches by 40 presidents. quanteda records only a surname for each speech, and four surnames cover two people each, so counting surnames would give 36 and merge John Adams with John Quincy Adams. The shared helper builds a full name to avoid that.
+The helper returns one row per paragraph. Here a paragraph is a block of at least 25 words. The corpus has 1,377 paragraphs from 60 speeches by 40 presidents.
+
+quanteda records only a surname for each speech. Four surnames each occur for two people, so counting surnames would give 36. That count would merge John Adams with John Quincy Adams. The shared helper creates a full name to distinguish those people.
 
 ```{r}
 library(dplyr)
@@ -86,11 +88,11 @@ stopifnot(
 )
 ```
 
-The next sections use three speeches as inspection cases: 1789-Washington, 1865-Lincoln, and 2021-Biden. The code still computes tf-idf against all 60 speeches, because a word can be distinctive only relative to a comparison set.
+The next sections examine three speeches: 1789-Washington, 1865-Lincoln, and 2021-Biden. The code still computes tf-idf against all 60 speeches because distinctiveness depends on the comparison set.
 
 ## Score distinctive words with tf-idf
 
-**Tf-idf** combines two quantities. Term frequency is a word's share of tokens in one speech. Inverse document frequency is the log of all documents divided by the number of documents containing that word, so words found in many speeches are downweighted. A high score means the word is common in one speech and uncommon in the corpus.
+**Tf-idf** combines two quantities. Term frequency is a word's share of tokens in one speech. Inverse document frequency uses the ratio of all documents to documents that contain the word. It takes the logarithm of that ratio. Words that appear in many speeches therefore receive less weight. A word has a high score when it is common in one speech and uncommon in the corpus.
 
 ```{r}
 speech_words <- paragraphs |>
@@ -144,11 +146,11 @@ stopifnot(
 )
 ```
 
-The 2021 list includes `augustine`, `block`, `demonization`, and `distrusting`, each counted once. That is the warning built into the score. A once-only word can rank high when it is rare across the comparison set.
+The 2021 list includes `augustine`, `block`, `demonization`, and `distrusting`, each counted once. A once-only word can rank high when it is rare across the comparison set. A high score therefore does not establish importance.
 
 ## Score tagged phrases with RAKE
 
-The second approach starts with the UDPipe tagger from the part-of-speech lesson. A **lemma** is a dictionary form such as `answer` for `answered`. **RAKE**, short for Rapid Automatic Keyword Extraction, looks for runs of relevant lemmas. Here relevant means adjectives, common nouns, and proper nouns after stopwords are removed. This linguistic rule can return phrases such as `actual expenditure` or `capitol dome`.
+The second method uses the UDPipe tagger from the part-of-speech lesson. A **lemma** is a dictionary form such as `answer` for `answered`. **RAKE**, short for Rapid Automatic Keyword Extraction, finds sequences of relevant lemmas. Here the relevant lemmas are adjectives, common nouns, and proper nouns after stopword removal. This linguistic rule can return phrases such as `actual expenditure` or `capitol dome`.
 
 ```{r}
 tagger <- udpipe_load_model("data/treebank/en_ewt-500-tagger.udpipe")
@@ -242,13 +244,15 @@ stopifnot(
 )
 ```
 
-RAKE favors phrases made from tagged content words. The table also shows a tagger error: `auspiciously commence` appears because UDPipe labels `auspiciously` as an adjective and `commence` as a noun. The list is a prompt for inspection, not a final label.
+RAKE favours phrases that contain tagged content words. The table also shows a tagger error. UDPipe gives `auspiciously` an adjective label and `commence` a noun label, so `auspiciously commence` appears in the list. The list requires inspection before anyone chooses a final label.
 
 ## Put both methods on the same word form
 
-The two methods ask different questions. Tf-idf scores individual words across speeches. RAKE scores tagged word runs inside a speech. Before comparing them, the word forms also have to match. Raw surface forms such as `offenses`, `wills`, and `answered` do not match RAKE lemmas such as `offense`, `will`, and `answer`.
+The two methods answer different questions. Tf-idf scores individual words across speeches. RAKE scores tagged word sequences within a speech. A comparison also requires matching word forms. Raw forms such as `offenses`, `wills`, and `answered` differ from RAKE lemmas such as `offense`, `will`, and `answer`.
 
-A **permutation null** is a benchmark made by shuffling the part of the data that carries the claim. The **p-value** is the share of shuffled results at least as large as the observed result.
+The last comparison in this section uses a **frequency-weighted random baseline**. For each speech, the code draws two random lists of 20 lemmas and counts the shared words. A lemma that occurs more often in the speech is more likely to be drawn. The mean count across speeches is one random result, and the code makes 500 of them.
+
+The **p-value** adds 1 to the number of random results at least as large as the observed result. It then divides that sum by 501, the number of random results plus 1.
 
 ```{r}
 comparison <- tfidf_top |>
@@ -373,7 +377,7 @@ knitr::kable(
 knitr::kable(
   overlap_null_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
-  caption = "Permutation null for normalized top-20 overlap",
+  caption = "Frequency-weighted random baseline for normalized top-20 overlap",
   row.names = FALSE
 )
 ```
@@ -398,19 +402,21 @@ stopifnot(
 )
 ```
 
-At a depth of 20 items, raw forms share 1.80 words on average. Lemmas share 2.27. The raw number understated agreement because it counted `offenses` and `offense` as different strings. A random frequency-weighted pair of depth-20 lists from the same speech averaged 1.62 shared words, with 90% of shuffles between 1.38 and 1.85. The observed normalized overlap is above that null (p = 0.002), but it is still small in practical terms.
+With 20 items per list, raw forms share 1.80 words on average. Lemmas share 2.27. The raw count understated agreement because it treated `offenses` and `offense` as different strings.
 
-Keyword extractors always return a list. The check above removes one source of accidental disagreement, then asks what overlap appears when the same speech's word frequencies are kept but the two lists are random. That comparison is the difference between a plausible reading lead and a bare algorithmic output.
+Random frequency-weighted pairs of depth-20 lists from the same speech averaged 1.62 shared words. The central 90% of the 500 random results ranged from 1.38 to 1.85. No random result reached the observed 2.27, so p = 1/501, which rounds to 0.002. That is the smallest p-value possible with 500 random results. The observed normalized overlap exceeds that baseline, but the practical overlap remains small.
+
+Keyword extractors always return a list. The comparison above removes disagreement caused by different word forms. It then measures overlap between random lists that preserve the speech's word-frequency weights. This comparison adds evidence about the list beyond the algorithm's output alone.
 
 ## What to remember
 
 - Tf-idf scores words that are distinctive within a comparison set.
 - A high tf-idf score is not proof that a word is central to a speech.
 - RAKE uses tagged lemma sequences, so its phrase candidates still need reading.
-- Across all 60 speeches, raw top-20 overlap is 1.80 words on average; lemma overlap is 2.27.
-- The normalized overlap beats the frequency-weighted random baseline, but the methods still mostly point to different words.
+- Across all 60 speeches, raw top-20 overlap is 1.80 words on average. Lemma overlap is 2.27.
+- Normalized overlap exceeds the frequency-weighted random baseline, but the methods still select mostly different words.
 
-Treat keyword lists as leads. A label card, index, or exhibit note still needs a person to decide which leads matter.
+Use keyword lists to select text for closer reading. A person must still choose the words for a label card, index, or exhibit note.
 
 ## Sources
 

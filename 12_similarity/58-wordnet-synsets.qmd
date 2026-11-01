@@ -1,30 +1,30 @@
 ---
 title: "Reading WordNet synsets"
-subtitle: "Treat word meaning as a set, not a spelling"
-description: "Learn how WordNet groups words into synsets, why one word can cover many senses, and where a curated lexical resource helps or fails."
+subtitle: "Distinguish a word's spelling from its meanings"
+description: "Learn how WordNet groups words into synsets and records multiple senses. Examine the functions and limits of a curated lexical resource."
 categories: [similarity, WordNet, word senses]
 ---
 
-A museum cataloguer labels a drawer `bank` and then hesitates. The drawer might
-hold river photographs, money records, or a toy building with a coin slot.
+The label `bank` could describe river photographs, money records, or a toy
+building with a coin slot. The spelling alone does not show the intended
+meaning.
 
-The label is a single string. The meaning depends on the sense attached to it.
-
-A **synset** is a set of words that share one sense. WordNet is a hand-built
-lexical database that records those sets and links them to broader meanings such
-as **hypernyms**, the "is-a" parents in a hierarchy.
+A **synset** is a set of words that share one sense. WordNet is a manually
+compiled lexical database of words and meanings. It records synsets and links
+them to broader meanings called **hypernyms**. A hypernym names a broader
+category in an "is-a" hierarchy.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- define a synset in plain language;
-- count senses for a word string;
-- compare a sense count with a simple chance baseline;
-- list synonyms inside one synset;
-- walk hypernym links up an is-a hierarchy; and
-- name what WordNet can and cannot support.
+- explain a synset in plain language
+- count senses for a word string
+- compare a sense count with a simple chance baseline
+- list synonyms inside one synset
+- follow hypernym links to broader categories
+- name the functions and limits of WordNet.
 :::
 
 ```{r}
@@ -36,9 +36,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the WordNet extract
 
-The lesson reads four local CSV files made from Open English WordNet 2024. No
+The lesson reads four local lexical CSV files made from Open English WordNet 2024. No
 code downloads WordNet while the page renders. The metadata file records the
-source, licence, and SHA-256 fingerprints.
+source, licence, and SHA-256 fingerprints, which identify file contents.
 
 ```{r}
 library(readr)
@@ -138,8 +138,9 @@ stopifnot(
 )
 ```
 
-This slice covers 38 lemmas, not all of English. It is enough to show how a
-lexical database separates spelling from meaning.
+This extract covers 38 lemmas, not all of English. A **lemma** is the dictionary
+form of a word. The extract shows how a lexical database separates spelling from
+meaning.
 
 ## Read the senses of one word
 
@@ -214,14 +215,14 @@ stopifnot(
 )
 ```
 
-A word string is not a unit of meaning. If a search, model, or count treats every
-`bank` as the same thing, it has made a simplifying choice. The null table adds a
-second caution: this extract was built from ambiguous teaching examples, so 18
-senses for `bank` is not unusual inside this small file.
+A word string is not a unit of meaning. Treating every `bank` occurrence as the
+same meaning simplifies a search, model, or count. The null table compares the
+sense count with counts for randomly selected lemmas. The extract contains
+ambiguous teaching examples, so 18 senses for `bank` is not unusual within this
+small file.
 
-Any lexical method will return an answer for a known word. The safer habit is to
-ask what answer appears after the target word is compared with other words drawn
-from the same source.
+Any lexical method will return an answer for a known word. Compare the target
+word with other words from the same source before interpreting the answer.
 
 ## Look inside a synset
 
@@ -263,13 +264,13 @@ stopifnot(
 ```
 
 Synonymy here is local to one sense. `bank` and `banking company` share the
-finance sense; `river bank` belongs elsewhere.
+finance sense. `river bank` has a different sense.
 
-## Walk an is-a chain
+## Follow an is-a hierarchy
 
-A hypernym says that one meaning is a kind of another meaning. In this extract,
-the professor-position sense of `chair` walks upward through a position synset,
-then through a work synset, then to `activity`.
+A hypernym names a broader category for a meaning. In this extract, the
+professor-position sense of `chair` links to a position synset, then a work
+synset, then `activity`.
 
 ```{r}
 first_hypernym <- function(synset) {
@@ -358,7 +359,7 @@ hypernym_path <- tibble(
 knitr::kable(
   hypernym_path,
   col.names = c("Level", "Synset ID", "Members", "Definition"),
-  caption = "A four-step hypernym path from chair to activity",
+  caption = "A four-level hypernym path from chair to activity",
   row.names = FALSE
 )
 ```
@@ -377,28 +378,28 @@ stopifnot(
 )
 ```
 
-The walk assumes this extract contains the chosen `chair` sense and three
-hypernym links above it. The functions stop when that assumption is false, so a
-missing lemma cannot produce a half-empty path that looks valid.
+The lookup assumes this extract contains the chosen `chair` sense and three
+successive hypernym links. The functions stop when that assumption is false. A
+missing lemma therefore cannot produce an incomplete path that appears valid.
 
-The hierarchy is useful for broadening a search. A reader looking for occupations
-might want `chair`, `office`, and `job` to meet at a broader node. The same
-hierarchy can be too coarse for a task that needs the academic rank, the
-furniture sense, or a named committee role.
+The hierarchy is useful for broadening a search. A search for occupations might
+group `chair`, `office`, and `job` under a broader category. The hierarchy can be
+too general when a task requires academic rank, the furniture sense, or a named
+committee role.
 
-## Keep the limits attached
+## State the limits
 
-WordNet is a curated snapshot with a version and a licence. It is not a direct
+WordNet is a curated resource with a version and a licence. It is not a direct
 measurement of English. It covers much common vocabulary, while domain terms,
-slang, new coinages, and local uses can be missing.
+slang, new coinages, and local meanings can be missing.
 
-Sense inventories also draw boundaries. A fine split that helps one annotation
-task can be too fine for another, so a WordNet sense should be treated as a
-chosen inventory entry rather than a final answer about meaning.
+Sense inventories distinguish meanings at a chosen level of detail. A
+distinction that helps one annotation task can be too detailed for another.
+Treat a WordNet sense as an inventory entry, not a definitive account of meaning.
 
-WordNet is still good for teaching the difference between words and meanings,
-expanding a controlled search, checking whether two labels share a listed sense,
-and building small rule-based features where coverage can be inspected.
+WordNet can help teach the difference between words and meanings or expand a
+controlled search. It can find labels that share a listed sense. Users can also
+build small rule-based features from WordNet when they can examine vocabulary coverage.
 
 ```{r}
 limit_check <- tibble(
@@ -417,7 +418,7 @@ limit_check <- tibble(
 knitr::kable(
   limit_check,
   col.names = c("Check", "Value"),
-  caption = "Provenance fields carried with the WordNet extract",
+  caption = "Provenance fields stored with the WordNet extract",
   row.names = FALSE
 )
 ```
@@ -436,13 +437,10 @@ stopifnot(
 
 - A synset is a set of words sharing one sense.
 - `bank` has 18 senses in this extract, so one spelling is not one meaning.
-- A simple null check keeps the sense count from sounding stronger than it is.
+- A null check compares the sense count with counts for other lemmas in this extract.
 - Hypernym links make an is-a hierarchy that can broaden a search.
-- WordNet is useful when a curated inventory is acceptable and limited coverage
-  can be inspected.
-
-The cataloguer keeps the `bank` drawer only after adding sense labels to the
-folders inside it.
+- WordNet is useful when a curated inventory is acceptable and users can examine
+  its limited coverage.
 
 ## Sources
 

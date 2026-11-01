@@ -1,34 +1,35 @@
 ---
 title: "Creating a small text app"
-subtitle: "Wrap a keyword-in-context search without embedding a dead form"
-description: "Learn how a Shiny app separates its visible controls from server logic and how to test the text search without running the app on the lesson page."
+subtitle: "Present a keyword-in-context app without inactive controls on the lesson page"
+description: "Learn how a Shiny app separates controls from server logic. Examine text search without starting the app on the lesson page."
 categories: [information visualization, Shiny, interactive apps]
 ---
 
-Leila helps a local history class inspect inaugural speeches. The class wants a
-search box: type a word, see the nearby words, and decide whether the passages
-are worth reading.
+Leila helps a local history class examine inaugural speeches. The class wants a
+search box that displays words near a match. Those results help readers decide
+which passages to examine.
 
-That request calls for **interactive app creation**: building a small interface
-so another person can use an NLP function without writing R code. In Shiny, the
+**Interactive app creation** provides an interface for using an NLP function
+without writing R code. In Shiny, the
 **UI** is the page people see. The **server** is the R function that reads the
 input and computes the output.
 
-This lesson builds the app object and tests its server logic during render. It
-does not run the app inside this static page. A printed text box here would look
-interactive, but there would be no Shiny process behind it.
+This lesson builds the app object and examines its server logic during
+rendering. It does not start the app inside this static page. A printed text
+box would appear interactive but have no Shiny process to respond.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- define a small Shiny UI, server function, and app object;
-- wrap a keyword-in-context search from quanteda;
-- trim and validate text input on the server;
-- test Shiny server logic with `testServer()`;
-- show UI HTML as text without putting live controls on the page; and
-- state what is and is not checked by a server-only test.
+- define a small Shiny UI, server function, and app object
+- provide a keyword-in-context search from quanteda
+- trim text input on the server
+- validate text input on the server
+- examine Shiny server logic with `testServer()`
+- show UI HTML as text without placing live controls on the page
+- state the limits of a server-only test
 :::
 
 ```{r}
@@ -38,12 +39,12 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Build the search job first
+## Build the search function first
 
 The app will search paragraphs from the inaugural-address corpus bundled with
 quanteda. A **keyword-in-context** display, or **KWIC**, puts the matched word in
 the middle and a few nearby words on each side. Lesson 25 introduced KWIC as an
-inspection tool; here it is the function placed behind an app.
+inspection tool. Here an app provides access to that function.
 
 ```{r}
 library(dplyr)
@@ -127,11 +128,11 @@ The important choice is `valuetype = "fixed"`. Without it, quanteda treats the
 pattern as glob syntax by default. In this app, a typed asterisk is a literal
 asterisk, not a request to match every token.
 
-## Define the app without running it
+## Define the app without starting it
 
 The UI has one visible label, one text input, a short status line, and a table
-for matches. The server trims the typed word before `req()` sees it, then uses
-`validate(need())` for invalid input that deserves a visible message.
+for matches. The server trims the typed word before `req()` receives it. It then
+uses `validate(need())` to display a message for invalid input.
 
 ```{r}
 max_word_chars <- 30L
@@ -142,7 +143,7 @@ ui <- fluidPage(
   lang = "en",
   h2("Inaugural KWIC explorer"),
   p(
-    "Type one word, then press Enter. Hyphenated words are allowed; spaces are not."
+    "Type one word. Press Enter. You can use hyphenated words but not spaces."
   ),
   textInput(
     inputId = "word",
@@ -180,12 +181,12 @@ server <- function(input, output, session) {
     } else {
       shown <- min(nrow(rows), max_rows_shown)
       paste0(
-        "Found ",
+        "Matches: ",
         nrow(rows),
         if_else(nrow(rows) == 1L, " line", " lines"),
         " for '",
         word,
-        "'; showing the first ",
+        "'. Displayed lines: ",
         shown,
         "."
       )
@@ -232,27 +233,28 @@ stopifnot(
 )
 ```
 
-`reactive()` wraps the KWIC calculation so both outputs can use the same current
-rows after the input changes. `%||%` turns a missing input into empty text.
-`req()` stops without a displayed message until a word exists, and
-`validate(need())` stops with a message the reader can see when the word breaks
-the app's rules. `renderText()` and `renderTable()` turn R values into page text
-and a table.
+`reactive()` manages the KWIC calculation so both outputs use the same current
+rows after input changes. `%||%` converts a missing input to empty text.
+`req()` stops without a displayed message until a word exists.
+`validate(need())` stops with a visible message when input violates the app's
+rules. `renderText()` and `renderTable()` convert R values to page text and a
+table.
 
-`fluidPage()` builds the app page, and `h2()` and `p()` write a heading and a
-paragraph inside it. Its `title` names the browser tab, and
-`lang = "en"` tells screen readers that the page is in English. When Shiny
-serves the app, it puts the title in the page head and the language on the
-`<html>` element, so neither appears in the printed body HTML. `shinyApp()`
-bundles the UI and server so Shiny can serve them together.
+`fluidPage()` builds the app page. `h2()` and `p()` add a heading and a paragraph.
+The `title` argument names the browser tab. `lang = "en"` identifies English for
+screen readers.
 
-`updateOn = "blur"` makes the search run only when the reader presses Enter or
-leaves the box, so results are not re-announced on every keystroke; `testServer()`
-cannot check that browser behavior.
+When Shiny serves the app, it places the title in the page head. It places the
+language on the `<html>` element. Neither appears in the printed body HTML.
+`shinyApp()` combines the UI and server for Shiny to serve together.
 
-Typed text goes only through `renderText()` and `renderTable()`, not through raw
-HTML, so markup-like input is treated as text. The length and spacing limits
-live on the server because browser-side checks can be bypassed.
+With `updateOn = "blur"`, search executes only when the reader presses Enter or
+leaves the box. Results therefore do not receive a new announcement after
+every keystroke. `testServer()` cannot examine that browser behavior.
+
+Typed text passes only through `renderText()` and `renderTable()`, not through
+raw HTML. These functions treat markup-like input as text. The server enforces
+length and spacing limits because users can bypass browser-side checks.
 
 The server keeps the typed word only in the current Shiny session's memory. It
 writes nothing to disk, prints nothing, logs nothing, and uses no cache. That
@@ -262,8 +264,8 @@ example app does not store or log the user's word.
 
 ## Show the UI as text
 
-The lesson page must not contain a live Shiny form. The UI HTML is printed as
-plain console output, so the browser shows text, not a working input.
+The lesson page must not contain a live Shiny form. The chunk prints UI HTML as
+plain console output. The browser therefore shows text, not a working input.
 
 ```{r}
 ui_html <- paste(as.character(ui), collapse = "\n")
@@ -285,20 +287,20 @@ stopifnot(
 )
 ```
 
-The text output lets a reader inspect the generated label and input. In the
-printed HTML, the label's `for="word"` matches the input's `id="word"`; that
-link is how a screen reader names the box, and the placeholder `liberty` is
-only a hint. It is not an invitation to type in this page.
+The text output lets a reader examine the generated label and input. In the
+printed HTML, the label's `for="word"` matches the input's `id="word"`. That
+link supplies the box's name to a screen reader. The placeholder `liberty` is
+only a hint. This page does not accept typed input.
 
-## Test server behavior
+## Examine server behavior
 
-`testServer()` runs the server function without starting a browser.
-`session$setInputs()` plays the part of a person typing into the box, and the
-test can then read the outputs the server produced.
+`testServer()` executes the server function without starting a browser.
+`session$setInputs()` simulates typed input. The test can then read the server's
+outputs.
 
-The helper below runs one fresh test session for one typed value and records
-what came back. `tryCatch()` keeps a stop, such as a failed `need()` check, as a
-result instead of an error that would halt the page.
+The helper starts a new test session for each typed value and records the
+result. `tryCatch()` records a stop, such as a failed `need()` check, instead of
+halting the page with an error.
 
 ```{r}
 run_server_case <- function(typed_text) {
@@ -367,7 +369,7 @@ stopifnot(
   identical(case_results$case, server_cases$case),
   identical(
     result_for("known word"),
-    "Found 118 lines for 'liberty'; showing the first 8."
+    "Matches: 118 lines for 'liberty'. Displayed lines: 8."
   ),
   identical(result_for("known word", "rows"), 118L),
   identical(result_for("empty text", "condition_class"), "shiny.silent.error"),
@@ -391,9 +393,8 @@ stopifnot(
 )
 ```
 
-The recorded server cases below are printed with an escaping HTML table. That
-matters for hostile-looking input: markup characters should be shown as text,
-not read as page markup.
+The HTML table escapes recorded server results, so the browser displays markup
+characters as text. It does not interpret hostile-looking input as page markup.
 
 A condition row means the server stopped instead of returning output. `req()`
 stops with an empty message, while `validate(need())` stops with the message
@@ -458,21 +459,26 @@ stopifnot(
 )
 ```
 
-## What this page cannot test
+## Limits of server tests
 
 Server tests do not exercise layout, browser JavaScript, focus order, keyboard
-use, or screen-reader output. They also cannot check the live-region behavior
-Shiny adds in a running browser. A real app needs a browser test and manual
-accessibility review before anyone treats it as ready for public use.
+operation, or screen-reader output. They cannot examine Shiny's live-region
+announcements in a browser. An app for public users requires browser tests and manual
+accessibility checks.
 
-To try the app locally, run the code chunks in "Build the search job first" and
-"Define the app without running it" from the project root, then run
-`shiny::runApp(app)`. The app will run only while that R session is serving it.
+To start the app locally:
+
+1. Open an R session at the project root.
+2. Execute the chunks in "Build the search function first".
+3. Execute the chunks in "Define the app without starting it".
+4. Execute `shiny::runApp(app)`.
+
+The app remains available only while that R session serves it.
 
 ## What question does this app answer?
 
-The app helps a reader inspect context lines. It does not say a word is
-important, estimate a topic, or deploy a model. KWIC counts depend on the token
+The app helps a reader examine context lines. It does not say a word is
+important, calculate a topic estimate, or deploy a model. KWIC counts depend on the token
 rules, punctuation handling, and case policy. Here the unit is the token stream
 created from reconstructed paragraphs, and matching is fixed and
 case-insensitive.
@@ -486,10 +492,10 @@ case-insensitive.
 - Use server-side `need()` checks for invalid values such as spaces or too many
   characters.
 - Fixed matching keeps `*` and `(` from becoming pattern syntax.
-- `testServer()` checks server logic, not the browser experience.
+- `testServer()` examines server logic, not the browser experience.
 
-The static lesson page shows how the app is built and checked; the running app
-belongs in a local R session.
+The static lesson page demonstrates app construction and server tests. Start
+the interactive app in a local R session.
 
 ## Sources
 

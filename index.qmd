@@ -45,8 +45,8 @@ availability_sentence <- if (nrow(planned) == 0L) {
 } else {
   sprintf(
     paste(
-      "%d of the %d lessons are written. The rest are planned, and their",
-      "tiles stay visible so you can see what is coming."
+      "%d of the %d lessons are written. The rest are planned.",
+      "Their tiles remain visible until the lessons are available."
     ),
     nrow(available),
     nrow(task_map)
@@ -54,37 +54,37 @@ availability_sentence <- if (nrow(planned) == 0L) {
 }
 ```
 
-Computers work with human language constantly and mostly out of sight: a search
-box, a spam filter, a translation, a reply that arrives too fast to have been
-typed. The field that studies how they do it is called natural language
-processing, usually shortened to **NLP**. It covers dozens of connected tasks,
-from reading a file without corrupting it to generating a paragraph. Each tile
-below is one of them.
+**Natural language processing (NLP)** is the study of how computers process
+human language. These lessons explain text tasks through R examples.
+Select a tile to read a lesson.
 
 ## The tasks {#periodic-table-heading}
 
-Related tasks share a column, and the columns run roughly from getting text in,
-on the left, through cutting it into usable pieces, to models, generation,
-systems, and visual explanation. The arrangement is editorial: position tells
-you what a task is filed near and nothing else about it. Laying the field out
-at once means a lesson can be found by where it sits rather than by remembering
-its name. `r availability_sentence`
+Related tasks share a column. The six stages cover source data, language
+structure, models, generation, systems, and visualization.
+Position groups related subjects. It does not rank methods or prescribe a
+workflow. `r availability_sentence`
 
 ::: {.callout-tip}
 ## Start here
 
-For a course, read in number order because the R code builds on earlier
-lessons. For a specific problem, open any available lesson; each page introduces
-its own NLP idea and points out the assumptions it needs. If a language model
-will do part of the work, read the guide
-[Using a language model in a reproducible analysis](using-language-models.qmd).
-It shows how to record the model and check its labels against a sample that a
-person reviewed.
+For a course, read in number order. Later examples use R concepts from earlier
+lessons. For a specific problem, open the relevant lesson. Each page explains
+its NLP concept and assumptions.
 
-To compare a complete system, start with
+For model-assisted analysis, read
+[Using a language model in a reproducible analysis](using-language-models.qmd).
+The guide explains model records and compares model labels with a sample
+examined by a person.
+
+For whole-system evaluation, read
 [Beyond the periodic table](advanced/index.qmd).
-Its first lesson uses R to compare two versions and check a release rule.
+Its first lesson compares two versions in R and applies a release rule.
 :::
+
+**Beyond individual tasks:**
+[Beyond the periodic table](advanced/index.qmd) explains systems, tools, and
+evaluation.
 
 ```{r}
 #| echo: false
@@ -356,21 +356,21 @@ cat(
   '</div></div>',
   '<nav class="available-routes" aria-label="Ways into the map">',
   '<p class="route-item">',
-  '<strong>Reading it as a course.</strong> ',
+  '<strong>Read as a course.</strong> ',
   '<a href="1_source_data_loading/01-bits-to-character-encoding.html">',
-  'Start at task 1</a> and work forward. ',
-  'Each lesson assumes the R introduced before it, so the code builds.',
+  'Start at task 1</a>. Then read the lessons in number order. ',
+  'Each lesson uses R concepts from earlier lessons.',
   '</p>',
   '<p class="route-item">',
-  '<strong>Solving one problem.</strong> ',
-  'Open the stage that matches what is in front of you: ',
+  '<strong>Solve one problem.</strong> ',
+  'Select the stage for your task: ',
   route_html,
-  '. Every lesson states the idea it needs, so you can start in the middle.',
+  '. Each lesson explains its NLP concept and assumptions.',
   '</p>',
   '<p class="route-item">',
-  '<strong>Looking one thing up.</strong> ',
-  'Find the task by where it sits in the map and read that page on its own. ',
-  'Each one names its limits and what it cannot tell you.',
+  '<strong>Find one task.</strong> ',
+  'Find the task in the map. Read its lesson. ',
+  'Each lesson states its limits and what its results do not show.',
   '</p>',
   '</nav>',
   sep = ""
@@ -381,106 +381,98 @@ cat(
 ## What this map is
 
 This is a teaching aid, not a scientific taxonomy or a complete account of the
-field. It mixes tasks, methods, objectives, resources, services, applications,
-and work done across a model's life. Each tile names its item type so those
-differences stay visible. Some inherited group names are broad or imperfect,
-and where that happens the lesson says so.
+field. A **taxonomy** is a system of classification.
+The map includes tasks, methods, objectives, resources, services,
+applications, and work throughout a model's life. Each tile names its item
+type. Some inherited group names describe different types of work.
+The relevant lessons explain these limits.
 :::
 
 ## Why these lessons exist
 
-Your director asks how many of last quarter's 40,000 customer comments are
-complaints, because next quarter's support budget depends on the answer. You
-hand the comments to an AI assistant. It answers in seconds: 22 percent.
+Suppose your director asks how many of last quarter's 40,000 customer comments
+are complaints. Next quarter's support budget depends on the answer.
+An AI assistant reports 22 percent. You still need evidence that the estimate
+is useful for this decision.
 
-The number might be right. The question is how anyone would know.
+First, give the meaning of a complaint. Decide whether the category includes a blunt
+question, a partly critical compliment, or a report of a broken link.
+Every model run applies a definition to all 40,000 comments, even if nobody
+chose that definition explicitly. A more capable model cannot decide what you
+intended to measure.
 
-Start with the word. Before anything can be counted, someone has to say what a
-complaint is. Is a blunt question a complaint? A compliment with one sharp
-clause? A report of a broken link? Some answer gets applied to all 40,000
-comments, in every run, whether or not a person chose it. A more
-capable model does not settle this, because the difficulty is not what the
-model can do. It is what you meant.
+Next, examine the uncertainty in "about 22 percent." You can compare automatic
+answers with a sample of the same material that a person examined.
+The conclusions depend on the sampling method and the rules for people who give labels.
+Some methods calculate error estimates from agreement among automatic labellers.
+Those estimates depend on assumptions about how the errors relate.
+A person might need to examine examples to evaluate those assumptions.
 
-Then the margin around it. "About 22 percent" needs the "about" to come from
-somewhere. One way to investigate how often an automatic answer is wrong is to
-compare it with a hand-checked sample drawn from the same material. What that comparison
-supports depends on how the sample was drawn and what the checking rules mean.
-Some methods instead estimate error from agreement among automatic labellers,
-but those estimates depend on assumptions about how their errors relate.
-Checking those assumptions can still require hand-reviewed examples.
+Also examine the input text. Each result describes the version of the text that
+the software received. Transfers between systems can damage characters.
+A comma can split a row. Text extraction can read a scanned digit as a letter.
 
-Underneath both is the text itself. Every number about a body of writing is
-really a number about the version of that writing which arrived. Characters get
-mangled between systems. Rows split at a stray comma. A scanned page reads a
-digit as a letter. Sometimes that raises an error. Often it does not, and the
-answer changes while continuing to look reasonable. Lessons 1, 3 and 7 each
-produce one of these failures on purpose, so you can see what one looks like
-from the inside.
+These failures do not always produce an error message. The answer can change
+and still look reasonable. Lessons 1, 3 and 7 deliberately produce these
+failures so that you can examine them.
 
-Whatever a tool absorbs, something is left over. Here what is left over is
-deciding what to measure, on which material, and when to disbelieve the result.
-That part has not moved, because it is where the tool gets its instructions and
-where its output is accepted or rejected.
+You must still decide what to measure, which material to use, and when to
+reject a result. These decisions give a tool its instructions.
+You also use these decisions to accept or reject its output.
 
-You can still buy the work. Labelled data is for sale, annotation vendors are
-easy to hire, and a model will label almost anything you give it, while
-refusing a few things. Each of those arrives with a number describing how much
-its labels agree. Reading that number and knowing what it conceals are
-different skills, and in my experience the second comes from having produced
-such a number yourself, on your own untidy text, and having watched it flatter
-you.
+You can buy data with labels or hire an annotation service. A model can also
+give labels to many kinds of text, although it can refuse some requests.
+These services can report agreement scores for their labels.
+An agreement score does not explain every limit of those labels.
+Calculating scores on your own text helps you understand their limits.
 
-None of this says you must do the work by hand. A tool may be useful for
-drafting, summarising, or exploring unfamiliar text while still needing checks
-that match the decision. What the parts named here describe is not a fixed
-capability gap but the shape of a measurement: the definition, the comparison,
-and the text that actually arrived. The useful amount of checking depends on
-your text and on the cost of a wrong answer; this page cannot set it for you.
+You do not have to do all the work by hand. Tools can help with drafts,
+summaries, and unfamiliar text. The checks must match the decision.
+Examine the definition, the comparison, and the received text.
+The necessary checks depend on your text and the cost of a wrong answer.
+This page cannot choose them for you.
 
 The guide [Using a language model in a reproducible analysis](using-language-models.qmd)
-works through that shape on a constructed collection. It records a local model
-as an instrument, checks its labels against a random sample reviewed by a
-person, and corrects an estimate for the errors that sample reveals.
+applies these checks to a constructed collection. It records a local model
+as a measurement instrument. It compares model labels with a random sample
+examined by a person. It then corrects an estimate for the errors found in
+that sample.
 
-The first thirteen lessons cover getting text out of files, web pages, and scans
-without damaging it, then building labels you can defend. Lessons 14 through 42
-follow the text through tokens and vocabularies, word forms and grammar links,
-phrases and entities, sentence and paragraph boundaries, and whole-document
-cleaning, comparison, metadata, and language identification. Together they show
-where each transformation helps and what information it can lose.
+Lessons 1 through 13 cover text collection from files, web pages, and scans,
+then the creation of labels. Lessons 14 through 42 cover words, grammar,
+phrases, entities, sentences, paragraphs, and documents. These lessons explain
+what each transformation helps you do and what information it can remove.
 
-Lessons 43 through 68 train, test, and explain models, then use them to
-classify, discover, compare, and generate text, keeping a baseline or a stated
-limit beside each result. Lessons 69 through 74 combine those parts into small
-systems: a relation extractor, a knowledge base filled from announcements, a
-question answerer that cites a handbook, a scripted enrollment conversation, a
-search index, and a document review with a recall estimate. Lessons 75 through
-81 show results to people through an app, annotated text, charts, maps, and
-graphs, and ask what each picture can honestly claim.
+Lessons 43 through 68 cover models for classification, discovery, comparison,
+and text generation. Each result has a baseline or a stated limit.
+Lessons 69 through 74 combine tasks into small systems. Examples include
+relation extraction, a knowledge base, question answering, dialogue, search,
+and document review with a recall estimate.
+Lessons 75 through 81 present results through an app, annotated text, charts,
+maps, and graphs. They explain the conclusions each display permits.
 
 ## About this site
 
 **Available** means a lesson source exists and its project-recorded automated
 checks passed. Those `passed` values are project assertions, not independent
-certification. Manual accessibility and final human sign-off remain pending,
-and the separate review fields are kept in `data/lesson_reviews.csv`. Practice
-in this field moves quickly, so where a lesson describes current methods rather
-than settled ground, it says so and gives a date. The rules a lesson has to meet
-before it appears here are written down in
+certification. Manual accessibility tests and final human approval remain pending.
+The separate status fields are in `data/lesson_reviews.csv`.
+
+Methods in this field change quickly. A lesson states which claims can change
+over time and gives a date. The publishing rules are in
 [CONTRIBUTING.md](https://github.com/farach/periodic_table_nlp/blob/main/CONTRIBUTING.md)
 and
 [RESEARCH_STANDARDS.md](https://github.com/farach/periodic_table_nlp/blob/main/RESEARCH_STANDARDS.md).
 
-This repository builds and checks the source but does not deploy it. The
+This repository builds the source and does automated checks, but does not deploy it. The
 canonical published location is
 [workforcefutures.net/learn/nlp/](https://workforcefutures.net/learn/nlp/).
-A successful repository build establishes a rendered artifact, not that the
-canonical host is current or that pending manual reviews have passed.
+A successful build produces a rendered site. It does not prove that the
+published site is current or that pending manual checks passed.
 
 The task names and groupings are adapted from Rob van Zoest's
 [Periodic Table of NLP Tasks](https://www.innerdoc.com/periodic-table-of-nlp-tasks/).
-That page states no licence and invites reuse. The task names themselves are
-standard terms in the field; the grouping, wording, interface, and lessons here
-are separate work, and any error in them belongs to this project. If the
-original author prefers different terms, this site will follow them.
+That page states no licence and invites reuse. The task names are standard
+terms in the field. This project's grouping, wording, interface, and lessons
+are separate work. This project is responsible for errors in that work.
+If the original author prefers different terms, this site will use them.

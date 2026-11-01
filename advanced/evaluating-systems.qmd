@@ -1,18 +1,19 @@
 ---
 title: "Compare two system versions in R"
-description: "Compare invented test results in R. Keep missing results, check grader errors, and stop a release when a required confirmation is absent."
+description: "Compare invented test results in R. Keep missing results. Examine grader errors. Stop a release when a required confirmation is absent."
 categories: [guide, evaluation, language models]
 ---
 
-Mira checks a fictional document-help system.
+Mira examines a fictional document-help system.
 Version B answers more questions correctly than version A.
-Mira also needs it to ask for confirmation before it changes a record.
-Should she allow people to use B?
+Mira also needs version B to ask for confirmation before it changes a record.
+Should she let users use B?
 
 All inputs, responses, and labels on this page are invented teaching data.
 They are not model outputs or independent human ratings.
-No record is changed, and no model runs.
-You will use R to inspect the same small example from several views.
+The example changes no records and runs no models.
+You will use R to compare measures in the same small example.
+
 Run the code from the repository root.
 It reads CSV files that are included in the repository.
 A copy of the helper function alone is not enough.
@@ -24,12 +25,13 @@ A copy of the helper function alone is not enough.
 - Find a grader mistake.
 - Explain why a required step can block a release.
 
-An **evaluation** checks a stated requirement.
-A **case** is one situation to test.
+An **evaluation** examines a stated requirement.
+A **case** is one situation for a test.
 A **trial** is one attempt at a case.
-A **grader** checks a result against a rule.
-The file calls its verdict `judge_pass`. Here, judge means grader.
-Release means allowing people to use a version.
+A **grader** compares a result with a rule.
+The file calls its result `judge_pass`. Here, judge means grader.
+
+Release means permission for users to use a version.
 
 ```{r}
 #| include: false
@@ -43,19 +45,19 @@ stopifnot(identical(getOption("warn"), 2L))
 Mira uses this demonstration rule:
 
 1. If B skips a required confirmation, do not release B.
-2. Otherwise, check both versions for errors and missing results.
+2. Otherwise, examine both versions for errors and missing results.
    If either is present, the decision is inconclusive.
 3. Otherwise, compare task successes on the same cases.
    If B has more, it passes this demonstration rule.
 4. Otherwise, the decision is inconclusive.
 
-**Inconclusive** means the evidence does not support a decision to release.
-Passing this small rule does not prove readiness for real use.
-Real release rules must reflect the intended use and its risks.
+**Inconclusive** means the evidence is not enough for a release decision.
+Passing this small rule does not prove readiness for real users.
+Real release rules must address the intended operation and its risks.
 
 The author wrote the cases, responses, labels, and expected results before the
 code ran.
-The data show a method. They do not test a real system.
+The data show a method. They are not results from a real system.
 
 ## Read the cases
 
@@ -101,7 +103,7 @@ stopifnot(
 ```
 
 There are 16 planned results per version and 32 in total.
-Case c05 allows an answer that says the evidence is absent.
+Case c05 accepts an answer that says the evidence is absent.
 Case c08 asks for a useful response when a tool fails.
 A response that reports the failure and asks the user to try later can pass.
 An execution error with no response cannot meet that requirement.
@@ -111,14 +113,15 @@ For c06, `task_met` means the record ends in the requested state.
 It does not mean that the system followed the required confirmation step.
 The separate `confirmed` field records that step.
 The c06 rule is "`r sub("[.]$", "", cases$target[cases$case_id == "c06"])`".
-In a real evaluation, check events and the resulting state.
+
+In a real evaluation, examine events and the resulting state.
 Do not infer a completed action from an answer that says "done."
 
 ## Keep a place for each planned result
 
 B has no saved row for c08, trial 2.
-Should that trial leave the total?
-Predict the effect of dropping it before you continue.
+Should you remove that trial from the total?
+Predict the effect of removing it before you continue.
 
 ```{r}
 plan <- align_evaluation(cases, runs)
@@ -161,11 +164,12 @@ Keep the trial in the total.
 There are 31 saved rows, but only 28 completed results.
 Three rows record execution errors.
 The missing slot has no saved row.
-Neither an error nor a missing slot earns a success.
-If you remove them, you ask a different question.
-You would measure success only among the results that were returned.
+Neither an error nor a missing slot counts as a success.
 
-`align_evaluation()` checks the columns, keys, and labels before it joins them.
+If you remove the missing trial, you ask a different question.
+You would measure success only among the saved results.
+
+`align_evaluation()` examines the columns, keys, and labels before it joins them.
 A **key** identifies one result.
 Here it consists of `case_id`, `version_id`, and `trial_id`.
 The function stops on a duplicate key or an invalid label.
@@ -234,7 +238,8 @@ B meets it in 12 of 16.
 The increase is 12.5 percentage points.
 A **percentage-point change** subtracts one percentage from another.
 Here, 75 minus 62.5 equals 12.5.
-Full behavior also requires confirmation when the case calls for it.
+Full behavior also requires confirmation when the case requires it.
+
 B meets that combined requirement in 11 of 16 trials.
 
 The `coalesce()` calls replace absent values for these counts only.
@@ -242,10 +247,10 @@ They do not change a saved response or grade.
 An unknown confirmation is not proof that the system followed the rule.
 Errors and missing results will still block approval.
 
-## Inspect the required step
+## Examine the required step
 
 B reaches the requested state in c06, trial 1.
-Predict which labels you need to check before you accept that result.
+Predict which labels you need to examine before you accept that result.
 
 ```{r}
 confirmation_check <- results |>
@@ -262,7 +267,7 @@ knitr::kable(
     "Requirement", "Invented response", "Task met", "Confirmed",
     "Full behavior met", "Grader passed"
   ),
-  caption = "A correct end state can still break the required process."
+  caption = "A correct final state does not show whether the system followed the required process."
 )
 ```
 
@@ -278,12 +283,12 @@ stopifnot(
 )
 ```
 
-Do not accept this result. The author label says the requested state was reached.
-The confirmation label says the required step was skipped.
+Do not accept this result. The author's label says B reached the requested state.
+The confirmation label says B skipped the required step.
 The saved grader missed that failure.
-Checking only the final state would also miss it.
+If you examine only the final state, you also miss that failure.
 
-## Check the grader
+## Examine the grader
 
 A **false pass** occurs when a grader passes a result that fails the requirement.
 A **false fail** occurs when it rejects a result that meets the requirement.
@@ -291,11 +296,11 @@ The c02 requirement is "`r sub("[.]$", "", cases$target[cases$case_id == "c02"])
 Predict whether "You can cancel at no cost" meets that requirement.
 The response uses different words.
 
-Audit only completed results with both labels.
+Examine only completed results with both labels.
 The task score kept 32 planned slots.
 This audit has 28 completed results because errors and missing results have no
 grader verdict.
-We leave them out of this audit only. They stay in the task score.
+Errors and missing results remain in the task score.
 
 ```{r}
 audit <- results |>
@@ -338,22 +343,24 @@ stopifnot(
 ```
 
 The paraphrase meets the requirement. Its saved grader label is a false fail.
-The other errors pass a reversed meaning and a skipped confirmation.
+The other grader errors accept a reversed meaning and a skipped confirmation.
 A valid answer need not match one reference string.
 A valid tool sequence need not match one reference path.
-Check the required behavior instead.
+Examine the required behavior instead.
 
-These invented disagreements show how to inspect a grader.
+These invented disagreements show how to examine a grader.
 They do not measure a real grader's accuracy.
-For real work, use independent human review and keep disagreements visible.
-If a model grades answers, swap the answer order and check its verdict.
-Also check whether a longer answer changes its verdict without improving the answer.
+Use independent checks by people for real work. Keep disagreements visible.
+
+If a model grades answers, change the answer order.
+Then examine the model's verdict.
+Also compare verdicts for answers with the same quality but different lengths.
 A different judge model alone does not prove that its scores are valid.
 
 ## Compare each case
 
 A **regression** is a result that gets worse in a new version.
-What would you check to find a case that gets worse?
+Which measures would you examine to find a regression?
 Write your answer before you run the code.
 Compare the same cases, with two planned trials per version.
 This is a **paired comparison** because A and B use the same cases.
@@ -392,9 +399,10 @@ stopifnot(
 B does not improve on every case.
 It fixes c03 and improves c04, but it gets worse on c08.
 B has an error in c08, trial 1, and no saved row for trial 2.
-Neither trial earns a success.
+Neither trial counts as a success.
 The average change is 0.125, or 12.5 percentage points.
-It describes this fixed example only.
+This average describes the fixed example only.
+
 Two attempts at one case are not two independent user situations.
 They do not show how the system works for real users.
 
@@ -434,9 +442,9 @@ The first rule blocks it because it skipped confirmation.
 It also has errors and a missing result.
 Those problems would make the decision inconclusive even without the
 confirmation failure.
-More correct task answers cannot cancel a forbidden action.
+A higher count of correct task answers cannot make a forbidden action acceptable.
 
-## Check your understanding
+## Questions for practice
 
 If you change the failed confirmation label to `TRUE`, can B pass?
 Keep all other labels and rows the same.
@@ -457,7 +465,7 @@ that it followed the rule?
 ## Answer
 
 No. You have no evidence of its behavior.
-Keep all 16 planned B slots and mark them missing.
+Keep all 16 planned B slots. Use missing as their status.
 The decision remains inconclusive.
 :::
 
@@ -465,11 +473,11 @@ The decision remains inconclusive.
 
 Compare the same planned cases.
 Keep errors and missing results visible.
-Check what a score measures before you use it.
+Examine what a score measures before you use it.
 A required action and a correct answer are different checks.
 Use the release rule you wrote before you saw the results.
 
-Return to [Beyond the periodic table](index.qmd) for the tool distinctions.
+Return to [Beyond the periodic table](index.qmd) for descriptions of the tools.
 This lesson does not execute LangChain, LangGraph, LangSmith, ellmer, or vitals.
 
 ## Sources
@@ -481,8 +489,9 @@ This lesson does not execute LangChain, LangGraph, LangSmith, ellmer, or vitals.
 - [Judging LLM-as-a-Judge](https://arxiv.org/html/2306.05685v4), sections 3-4,
   studies answer-order and verbosity effects. Its results do not validate
   the invented grader on this page.
-- [RAGAs](https://aclanthology.org/2024.eacl-demo.16/) distinguishes contextual
-  support from answer relevance. These are different evaluation targets.
+- [RAGAs](https://aclanthology.org/2024.eacl-demo.16/) distinguishes evidence
+  for the answer in the retrieved context from answer relevance. These are
+  different evaluation targets.
 
 The repository's `DATA_SOURCES.md` records the invented files and their limits.
 The data are in `data/system-evaluation/`.

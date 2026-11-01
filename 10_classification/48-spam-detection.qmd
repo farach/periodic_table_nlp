@@ -1,6 +1,6 @@
 ---
-title: "Catching scam messages"
-subtitle: "Read a spam rule, train a small filter, and choose which mistake costs more"
+title: "Detecting scam messages"
+subtitle: "Compare spam rules, models, and error costs"
 description: "Learn how spam detection turns text into decisions while keeping false alarms and missed scams separate."
 categories: [classification, spam detection, workforce research]
 ---
@@ -14,24 +14,24 @@ little, a scam can reach someone who is looking for work. A spam filter is a
 text classifier, a tool that assigns a label to a piece of writing.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The Riverton Workforce Lab, its job board, and its training flyer are fictional
+teaching materials.
 :::
 
-A dataset written by the same person who writes the classifier cannot measure
-whether the method works. This invented inbox checks that the code runs and
-makes the trade-off visible; it does not estimate performance for real spam
-filters.
+A dataset written by the classifier's author cannot establish whether the
+method works generally. This invented inbox demonstrates code behavior and
+competing error costs. It does not give an estimate of performance for real spam filters.
 
 ::: {.callout-tip}
 ## What you will learn
 
 By the end of this lesson, you will be able to:
 
-- read a transparent spam rule;
-- train a small text classifier;
-- compare the rule and model where they disagree;
-- read a confusion matrix; and
-- explain how a decision threshold trades false alarms against missed scams.
+- read a transparent spam rule.
+- train a small text classifier.
+- compare the rule and model where they disagree.
+- read a confusion matrix.
+- explain how a threshold can reduce missed scams but increase false alarms.
 :::
 
 ```{r}
@@ -43,11 +43,13 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the invented inbox
 
-The inbox file was generated once by `data-raw/build-riverton-inbox.R` and then
-committed. The lesson reads that file; it does not write examples while the page
-renders. readr opens the CSV files, dplyr and tidyr shape tables, stringr reads
-patterns, ggplot2 draws the chart, tidymodels fits the classifier, textrecipes
-turns words into features, glmnet fits the model, and digest checks the file.
+`data-raw/build-riverton-inbox.R` generated the inbox file once, before the
+project committed it. This lesson reads that file and does not generate
+examples during rendering.
+
+readr reads CSV files, while dplyr and tidyr prepare tables. stringr matches
+patterns, and ggplot2 draws the chart. tidymodels, textrecipes, and glmnet
+prepare features and fit the classifier. digest compares the file fingerprint with its expected value.
 
 ```{r}
 library(readr)
@@ -138,11 +140,12 @@ The file has 60 invented messages: 44 genuine messages and 16 job scams. Those
 counts describe the fixture only. They do not say how much scam traffic reaches
 a workforce office.
 
-Hand-written fixtures can fail before any model runs. The classes may separate
-on grammar rather than on the intended idea. A **superficial feature** is a cue
-such as punctuation or pronoun use that can predict a label without reading the
-substance of the message. The check below tests a bad shortcut: mark a message as
-spam when it has no first-person pronoun and does not end with a question mark.
+Author-written fixtures can contain unintended patterns before any model executes.
+Classes may differ in grammar rather than the intended concept. A
+**superficial feature**, such as punctuation or the presence of pronouns, can
+predict a label without representing message meaning. The check below marks a
+message as spam if it lacks both a first-person pronoun and a final question
+mark.
 
 ```{r}
 first_person_pattern <- regex(
@@ -223,14 +226,14 @@ stopifnot(
 
 This shortcut scores 0.6667 accuracy and 0.3125 scam recall. That weak result is
 the point. When you write examples yourself, the two classes can separate on a
-pattern you did not mean to teach. The first check on any hand-built dataset is
-whether a stupid feature already solves it.
+pattern you did not mean to teach. First find whether an unintended
+surface feature already predicts the labels.
 
-One shortcut is not the whole audit, so the next chunk sweeps several. For each
-feature it tries both orientations, marking a message as a scam when the feature
-is present and again when it is absent, and keeps whichever scores better. That
-is deliberately generous to the shortcut, because the question is whether any
-cheap cue could substitute for reading.
+One shortcut does not complete the audit, so the next chunk evaluates several.
+For each feature, it predicts spam once when the feature is present and once
+when it is absent. It keeps the orientation with higher accuracy. This
+deliberately favours the shortcut to reveal whether a simple cue can substitute
+for message meaning.
 
 ```{r}
 superficial_features <- inbox |>
@@ -346,24 +349,25 @@ stopifnot(
 ```
 
 No cue improves accuracy much beyond always predicting `genuine`. Exclamation
-marks improve accuracy by two messages, but catch only 2 of 16 scams. The digit
+marks improve accuracy by two messages, but find only 2 of 16 scams. The digit
 cue exactly matches the 0.7333 majority baseline. Message length exposes another
 fixture artifact: 13 of 16 scams, but also 22 of 44 genuine messages, are longer
-than the median. That cue catches many scams while producing too many false
-alarms to classify well. These are diagnostics of how the hand-written file was
-made, not evidence that any cue will transfer. The way to find out is to test
-text that did not shape the examples or the rule.
+than the median. That cue finds many scams while producing too many false
+alarms to classify well.
 
-The build script for this file recomputes the orientation-preserving sweep before
-writing the CSV and refuses to write if any single feature reaches 0.80 accuracy
-or 0.95 scam recall.
+These results describe the author-written file rather than establish transfer
+to other text. Transfer requires evaluation on text that did not influence the
+examples or rules.
+
+The build script recomputes the orientation-preserving comparison before writing the CSV.
+It refuses to write the file if any single feature reaches 0.80 accuracy or 0.95 scam recall.
 
 ## Start with a rule a person can read
 
 A rule-based spam filter searches for known warning signs. This one marks a
 message when it mentions fees, gift cards, crypto payments, bank details,
-guaranteed placement, deposits, or similar language. The rule is easy to inspect,
-which also means it is easy for a scammer to route around.
+guaranteed placement, deposits, or similar language. The rule is easy to examine,
+which also means it is easy for a scammer to evade.
 
 ```{r}
 spam_terms <- c(
@@ -440,13 +444,14 @@ The rule marks 14 of the 16 invented scams and also blocks two genuine messages.
 It misses two scams. In this fixture, the easy cases are the ones that say
 `fee`, `deposit`, or `crypto` plainly.
 
-The word list was written after reading these messages. Eleven of its 18 terms
-match exactly one message, so the full 60-row table is a lookup table scored on
-the same rows that shaped it. The two blocked genuine messages were written with
-scam vocabulary on purpose to show that a readable rule can fail on reports about
-scams. The comparison below applies both methods to the same 19 rows, but that
-does not make the rule out-of-sample: its terms were chosen after reading all 60
-messages, including those 19.
+The author wrote the word list after reading these messages. Eleven of its 18
+terms match exactly one message. The full 60-row score therefore evaluates a
+lookup rule on the same rows that informed it.
+
+The two blocked genuine messages deliberately contain scam vocabulary to
+demonstrate failure on reports about scams. The comparison below applies both
+methods to the same 19 rows. The rule is still in-sample because its terms came
+from all 60 messages, which include the 19 comparison rows.
 
 ## Train a small filter
 
@@ -562,7 +567,7 @@ knitr::kable(
   test_comparison |>
     mutate(accuracy = round(accuracy, 4)),
   col.names = c("Method", "Correct", "Rows", "Accuracy", "Evidence status"),
-  caption = "The model is compared with its same-split majority baseline",
+  caption = "Model and same-split majority baseline",
   row.names = FALSE
 )
 ```
@@ -609,18 +614,20 @@ stopifnot(
 )
 ```
 
-On the same 19 rows, the rule labels 3 of the 5 invented scams as spam and blocks
-one genuine message. Its 0.8421 accuracy is in-sample because the terms were
-written after reading all 60 messages. The model also catches 3 scams, but blocks
-three genuine messages. Its out-of-sample accuracy is 0.7368, exactly the
-always-genuine baseline on this split. The rule and model therefore cannot be
-ranked as held-out competitors. The table does show why a score needs a baseline:
-without one, a fitted model can look informative while matching a trivial rule.
+On the same 19 rows, the rule gives the spam label to 3 of the 5 invented scams and blocks
+one genuine message. Its 0.8421 accuracy is in-sample because all 60 messages
+informed its terms. The model also finds 3 scams but blocks three genuine
+messages.
+
+Its out-of-sample accuracy is 0.7368, exactly the always-genuine baseline on
+this split. The rule and model are therefore not comparable as held-out
+competitors. Without the baseline, the model's score could appear useful
+despite matching a trivial rule.
 
 ## Look at the disagreements
 
 The rule and the model do not mark the same messages. Disagreements are useful
-because a person can inspect a short list and ask which tool failed in a way that
+because a person can examine a short list and ask which tool failed in a way that
 matters.
 
 ```{r}
@@ -671,20 +678,20 @@ stopifnot(
 
 The message about documents reaching the office looks genuine to the recorded
 label but receives a high model score. The message about a bank password is
-genuine because it reports a suspicious listing, yet the rule catches the word
+genuine because it reports a suspicious listing, yet the rule matches the word
 `bank`. The two callback and eligibility messages show the model's own false
 alarms. Those are different kinds of errors.
 
 ## Move the cut point
 
 The model produces a score between 0 and 1. The cut point turns that score into a
-decision. A lower cut point catches more possible scams and risks blocking more
+decision. A lower cut point finds more possible scams and risks blocking more
 genuine messages. A higher cut point does the reverse.
 
-This curve uses the same 19 rows as the model table. Choosing a cut point from
-the curve and then reporting its errors on these rows would spend the test set
-twice. A deployed threshold should be chosen on separate calibration data before
-the final test.
+This curve uses the same 19 rows as the model table. Selecting a threshold from
+the curve and reporting its errors on those rows would reuse the test set for
+selection. Choose a deployed threshold on separate calibration data before the
+final test.
 
 ```{r}
 threshold_table <- tibble(threshold = seq(0.05, 0.95, by = 0.05)) |>
@@ -711,7 +718,7 @@ knitr::kable(
     "Spam score cut point",
     "Genuine messages blocked",
     "Scams missed",
-    "Messages sent to spam review"
+    "Messages selected for spam checks"
   ),
   caption = "Threshold trade-off on the invented test split",
   row.names = FALSE
@@ -731,7 +738,7 @@ stopifnot(
 ```{r}
 #| label: fig-spam-threshold
 #| fig-cap: "The spam cut point shifts false alarms first, then missed scams, on the invented test split."
-#| fig-alt: "Line chart with thresholds from 0.05 to 0.95. Genuine messages blocked drops from four to two. Scams missed rises from one to three."
+#| fig-alt: "Line chart with thresholds from 0.05 to 0.95. The number of blocked genuine messages decreases from four to two. The number of missed scams increases from one to three."
 #| fig-height: 4.2
 #| code-fold: true
 #| code-summary: "Show the plotting code"
@@ -785,7 +792,7 @@ ggplot(threshold_plot, aes(x = threshold, y = messages, colour = error_type)) +
   ) +
   scale_y_continuous(breaks = 0:4, limits = c(0, 4)) +
   labs(
-    title = "Raising the cut point trades false alarms for missed scams",
+    title = "A higher cut point reduces false alarms but increases missed scams",
     subtitle = "Errors on the 19 invented test messages at each spam-score cut point",
     x = "Spam score cut point",
     y = "Messages"
@@ -803,24 +810,25 @@ stopifnot(
 )
 ```
 
-For this invented split, thresholds from 0.30 through 0.85 have the same error
-counts: three genuine messages blocked and two scams missed. Only the low and
-high ends move the counts. That is a number about this fixture, not about the
-world. A company inbox might prefer to block anything suspicious. A workforce
-inbox serving jobseekers may need a review queue because deleting a genuine
-posting can cost someone an opportunity, while letting a scam through can cost
-money or personal information.
+For this invented split, thresholds from 0.30 through 0.85 produce the same
+errors: three blocked genuine messages and two missed scams. Only lower and
+higher thresholds affect the counts. These results describe the fixture, not
+real inboxes.
+
+A company inbox might prefer to block suspicious messages. A workforce inbox
+may instead require staff to examine messages because deleting a genuine posting can remove an
+opportunity. A missed scam can cost money or expose personal information.
 
 Real spam also adapts. A static test set cannot measure what happens after
-senders learn the filter's habits and change their wording.
+senders learn the filter's rules and change their wording.
 
 ## What to remember
 
 - Spam detection is text classification with unequal errors.
-- A readable rule helps inspection, but it is brittle.
+- A readable rule assists inspection but can fail when wording differs.
 - A trained model still needs a human-chosen threshold.
 - Every score needs a baseline and a named test set.
-- The Riverton inbox proves only that the lesson code runs on an invented file.
+- The Riverton inbox proves only that the lesson code executes on an invented file.
 
 ## Sources
 

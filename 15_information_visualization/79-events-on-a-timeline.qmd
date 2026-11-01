@@ -8,17 +8,17 @@ categories: [information visualization, timelines, temporal parsing]
 `The pilot lasted six weeks` looks ready for a timeline until Nadia asks when
 the six weeks began. Other entries report a day, a month, or a season.
 
-**Events on a timeline** means placing event records on a time scale only as
-precisely as the text allows. A day can be a point. A month, season, or course
+Placing **events on a timeline** means using a time scale at the precision
+the text provides. A day can be a point. A month, season, or course
 length needs an interval. A duration with no start date stays off the time
 scale.
 
-This lesson uses a small constructed log so the dates can be checked by eye. It
+This lesson uses a small constructed log so readers can examine the dates. It
 builds on [the temporal parsing lesson](../6_entity_enrichment/31-temporal-parsing.qmd),
 which explains reference dates for phrases such as "next Friday."
 
 ::: {.callout-note}
-The Riverton program log in this lesson is a constructed teaching example about an invented service desk; the entries and normalized dates were written by this lesson's author.
+The Riverton program log is a constructed teaching example about an invented service desk. The lesson's author wrote the entries and normalized dates.
 :::
 
 ::: {.callout-tip}
@@ -26,11 +26,11 @@ The Riverton program log in this lesson is a constructed teaching example about 
 
 This lesson shows how to:
 
-- keep the date of a note separate from the date of the event it mentions;
-- resolve relative dates from each note's own date;
-- draw seasons, months, and course lengths as intervals;
-- mark planned and reported events without relying on colour alone;
-- show an undated event without guessing its position; and
+- distinguish a note's date from the date of its event
+- resolve relative dates from each note's own date
+- draw seasons, months, and course lengths as intervals
+- mark planned and reported events without relying on colour alone
+- show an undated event without guessing its position
 - compare the order of the notes with the order of the events.
 :::
 
@@ -43,10 +43,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Build a small event log
 
-An **entry date** is the date the note was written. It is the anchor for
-relative language, not automatically the date of the event. The `entry_id`
-stays with every row so each mark on the timeline can be traced back to its
-source sentence.
+An **entry date** is the date of the note. It provides the reference for
+relative language, not necessarily the event date. Every row retains its
+`entry_id`, so readers can find the source sentence for each timeline mark.
 
 ```{r}
 library(dplyr)
@@ -104,14 +103,14 @@ stopifnot(
 
 The second entry has two events and two dates. The orientation belongs to March
 2. The registration closing belongs to March 15. Reading only the nearest date
-would fail on many real sentences, so here the attachment is recorded by hand.
+would fail on many real sentences. Here, the author records each date's event
+association manually.
 
-## Normalize only what the text supports
+## Normalize only dates with source evidence
 
-The table of events below names each event's trigger, its time expression, and
-the rule used to compute its dates. The season rule is a local convention: this
-page uses Northern Hemisphere meteorological seasons, so spring runs from March
-1 through May 31.
+The event table names each event indicator, time expression, and date-calculation
+rule. The season rule is a local convention. This page uses Northern Hemisphere
+meteorological seasons, so spring extends from March 1 through May 31.
 
 ```{r}
 season_bounds <- tribble(
@@ -284,31 +283,32 @@ stopifnot(
 Seven events receive dates. One duration does not. The `start` and `end`
 columns make the difference visible: a day has the same start and end. The
 spring and September intervals cover only the season or month named in the
-entry; only the 12-week course interval is a known duration.
+entry. Only the 12-week course interval is a known duration.
 
-The "pilot lasted six weeks" row gives a length but no position. Nadia keeps it
-in the table, and the timeline gives it a row with no mark rather than a
-guessed one.
+The "pilot lasted six weeks" row gives a duration but no start date. Nadia
+keeps that event in the table. The timeline gives it a row without an event
+mark instead of guessing its position.
 
 ## Draw the notes and the events together
 
-The timeline below gives every event its own row, sorted by when the event
-happened, with the undated pilot last. Each row shows two dates. The grey
-diamond is the day the note was written, and the dotted line leads from it to
-the event the note describes. Days are points; seasons, months, and the course
-length are bars.
+The timeline gives every event a row in event-date order, with the undated pilot
+last. Rows distinguish entry dates from event dates. A grey diamond marks the
+note's date. A dotted line connects that diamond to the described event. Points
+represent days. Bars represent seasons, months, and the course duration.
 
-Status has two cues so it does not depend on colour: planned events are hollow
-points or dashed bars, and reported events are filled points or solid bars.
-In this constructed log, every reported event comes before its note and every
-planned event after it, so the dotted lines of reported events point back in time
-and those of planned events point forward. Real notes can report ongoing work or
-record a plan after the fact, so direction is a check to run, not a rule.
+Status does not depend on colour alone. Hollow points or dashed bars represent
+planned events. Filled points or solid bars represent reported events.
+
+In this constructed log, every reported event precedes its note, and every
+planned event follows its note. Dotted lines therefore point backward for
+reported events and forward for planned events. Real notes can describe ongoing
+work or record a plan after an event. Examine line direction. Do not assume
+that the direction shows status.
 
 ```{r}
 #| label: fig-event-timeline
-#| fig-cap: "Timeline of eight events from a constructed Riverton log in 2026. Grey diamonds mark each note's entry date; the six-week pilot has no start date, so it has a row but no mark."
-#| fig-alt: "Timeline with one row per event. Grey diamonds mark the dates the notes were written, and dotted lines lead to the events they describe. Spring outreach is a dashed planned bar from March 1 to May 31 2026, reached forward from a February 20 note. The orientation on March 2 is a filled reported point reached back from a March 3 note, and registration closing on March 15 is a hollow planned point. The 12-week course is a dashed planned bar from September 14 to December 6. The applicant check-in on September 14 is a reported point reached back from a September 20 note. September work is a solid reported bar reached back from a November 1 note. The review meeting on October 22 is a hollow planned point. The six-week pilot, noted on October 5, has no start date and no event mark."
+#| fig-cap: "Timeline of eight events from a constructed Riverton log in 2026. Grey diamonds mark entry dates. The six-week pilot has no start date, so its row has no event mark."
+#| fig-alt: "Timeline of eight events in 2026, with grey diamonds for entry dates. Hollow points and dashed bars show planned events. Filled points and solid bars show reported events. Dotted lines connect entry dates to event dates. Three bars show spring outreach, September work, and a 12-week course. The six-week pilot has no event mark because its start date is unknown."
 #| fig-width: 8
 #| fig-height: 4.6
 
@@ -381,8 +381,8 @@ timeline_plot <- ggplot(timeline_rows, aes(y = row_label)) +
   labs(
     title = "An event's date is not the date of the note that mentions it",
     subtitle = str_c(
-      "Constructed Riverton log, 2026. Grey diamonds are entry dates; ",
-      "dotted lines lead to ",
+      "Constructed Riverton log, 2026. Grey diamonds mark entry dates. ",
+      "<br>Dotted lines connect notes to ",
       lesson_key("planned", lesson_text_colours[["accent"]]),
       " and ",
       lesson_key("reported", lesson_text_colours[["contrast"]]),
@@ -426,11 +426,10 @@ stopifnot(
 )
 ```
 
-The rows follow event order, but each label also names its source entry, which
-shows the order of the notes. The November report is entry `R07`, yet its
-September work sits above the October review meeting, and its dotted line runs
-back from November. That difference is why a timeline should not treat the
-order of the notes as time.
+Rows follow event order. Each label also names its source entry, preserving the
+order of the notes. The November report is entry `R07`, but its September work
+appears above the October review meeting. Its dotted line connects backward
+from November. Note order therefore differs from event order.
 
 The event table is the long description for the figure. It gives the exact
 dates, status, and entry ID for each mark.
@@ -479,20 +478,20 @@ does not train or evaluate a temporal parser, and the constructed
 normalizations are not independent labels.
 
 A real-text case shows why the table matters. In the inaugural corpus,
-Lincoln's 1865 phrase "four years ago" can be anchored only to a speech year if
-the source records no month or day. The output should keep that year-level
-granularity rather than inventing a day.
+Lincoln's 1865 phrase "four years ago" has only a speech-year reference if the
+source records no month or day. The output should retain that year-level
+precision rather than inventing a day.
 
 ## What to remember
 
-- The entry date anchors relative phrases, but it is not the event date.
+- The entry date supplies the reference for relative phrases, not the event date.
 - A season or month is an interval under a stated convention.
-- A day-level event can be a point; a coarser event should not be.
+- A day-level event can be a point. A less precise event should not be a point.
 - Planned and reported events need a cue besides colour.
 - A duration without a start date gets a row but no mark.
 
-Nadia's timeline is useful because it refuses one false mark. The six-week pilot
-is still visible, but it stays off the time scale until a start date appears.
+Nadia's timeline retains the six-week pilot without inventing a date. The pilot
+remains in the table but off the time scale until a start date is available.
 
 ## Sources
 

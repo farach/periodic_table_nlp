@@ -57,6 +57,9 @@ jobs:
 
       - uses: r-lib/actions/setup-renv@v2
 
+      - name: Test vocabulary BPE fit invariants
+        run: Rscript tests/test-vocabulary-bpe.R
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -100,8 +103,13 @@ jobs:
       - name: Check writing
         run: Rscript scripts/check-prose.R
 
+      - name: Check plain-language limits and scanner tests
+        run: npm run test:prose
+
       - name: Check repetition across lessons
-        run: Rscript scripts/check-repetition.R
+        run: |
+          Rscript tests/test-repetition-disclosure.R
+          Rscript scripts/check-repetition.R
 
       - name: Check R code style
         run: Rscript scripts/check-r-style.R
@@ -116,21 +124,26 @@ jobs:
         run: Rscript tests/test-system-evaluation.R
 
       - name: Render site
+        id: render_site
         run: quarto render
 
       - name: Check lessons
         run: Rscript scripts/check-lessons.R
 
       - name: Test periodic table
+        if: ${{ !cancelled() && steps.render_site.outcome == 'success' }}
         run: Rscript tests/test-periodic-table.R
 
       - name: Test workforce data
+        if: ${{ !cancelled() && steps.render_site.outcome == 'success' }}
         run: Rscript tests/test-workforce-data.R
 
       - name: Test accessibility
+        if: ${{ !cancelled() && steps.render_site.outcome == 'success' }}
         run: npm run test:a11y
 
       - name: Upload exact rendered site
+        if: ${{ !cancelled() && steps.render_site.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: quarto-site-${{ github.sha }}

@@ -1,28 +1,27 @@
 ---
 title: "Measuring distance between texts"
 subtitle: "Compare string distance with vector distance"
-description: "Learn how string and vector distances answer different similarity questions, and why raw-count Euclidean distance tracks document length."
+description: "Learn how string and vector distances answer different similarity questions, and why raw-count Euclidean distance depends on document length."
 categories: [similarity, distance measures, inaugural addresses]
 ---
 
-A library volunteer receives two boxes of index cards. One box has typed names
-with small spelling errors, and the other has paragraphs from speeches.
+Matching a mistyped name requires a different comparison from matching the
+vocabulary of two paragraphs. Both tasks measure similarity, but they compare
+different features.
 
-The word "similar" is doing two jobs. Matching a mistyped name is not the same
-task as comparing the vocabulary of two paragraphs.
-
-A **distance measure** turns a comparison into a number. Small distance means
-close. The hard part is choosing a distance that matches the question.
+A **distance measure** expresses a comparison as a number. A smaller distance
+indicates greater similarity under that measure. Choose a distance measure that
+matches the question.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- compare edit distance and Jaro-Winkler distance for names;
-- build paragraph vectors from word counts;
-- compare cosine, Euclidean, and Jaccard distance;
-- test whether a distance mostly tracks text length; and
+- compare edit distance and Jaro-Winkler distance for names
+- build paragraph vectors from word counts
+- compare cosine, Euclidean, and Jaccard distance
+- measure how strongly a distance reflects text length
 - explain why the same data can give different rankings.
 :::
 
@@ -36,8 +35,9 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Compare strings directly
 
 **String distance** compares characters. Levenshtein distance counts edits:
-insertions, deletions, and substitutions. Jaro-Winkler distance gives extra
-credit to strings that share an early prefix, which often helps with names.
+insertions, deletions, and substitutions. Jaro-Winkler distance assigns greater
+similarity to strings with a shared prefix, or beginning. This adjustment often
+helps with names.
 
 ```{r}
 library(dplyr)
@@ -94,9 +94,9 @@ stopifnot(
 )
 ```
 
-For `Stevenson`, Levenshtein picks `Stephenson` because it needs fewer edits.
-Jaro-Winkler picks `Steven` because the shared opening is strong. A name-matching
-project has to choose the error pattern it cares about.
+For `Stevenson`, Levenshtein selects `Stephenson` because the match requires fewer
+edits. Jaro-Winkler selects `Steven` because of the shared prefix. Choose the
+distance measure that reflects the spelling errors relevant to the project.
 
 ## Build paragraph vectors
 
@@ -188,8 +188,8 @@ becomes a point in a high-dimensional space.
 ## Compare three vector distances
 
 Euclidean distance measures straight-line distance between count vectors. Cosine
-distance compares direction, so multiplying a paragraph vector by the same
-constant leaves its cosine direction unchanged. Jaccard distance uses word
+distance compares direction. Multiplying every element of a paragraph vector
+by the same positive constant leaves its direction unchanged. Jaccard distance uses word
 presence and ignores repeated counts.
 
 ```{r}
@@ -260,12 +260,12 @@ stopifnot(
 )
 ```
 
-The Euclidean correlation with length difference is 0.951, a strong warning that
-raw-count distance is mostly measuring paragraph size. The cosine correlation is
+The Euclidean correlation with length difference is 0.951, indicating that
+raw-count distance mostly measures paragraph size. The cosine correlation is
 negative, -0.268, because longer paragraphs share many ordinary words with other
-long paragraphs. That matters for this corpus: nineteenth-century paragraphs are
-longer than later paragraphs, so a length-shaped method can echo the era pattern
-seen in the corpus lessons.
+long paragraphs. In this corpus, nineteenth-century paragraphs are longer than
+later paragraphs. A method sensitive to length can therefore reproduce the era
+pattern seen in the corpus lessons.
 
 ```{r}
 same_speech_observed <- pair_distances |>
@@ -311,15 +311,16 @@ stopifnot(
 )
 ```
 
-A distance formula will fill a matrix for any paragraphs it receives. The
-permutation check asks whether paragraphs from the same speech are closer than a
-label shuffle would produce. Here they are, but the raw-count Euclidean result is
-still dominated by length.
+A distance formula will calculate values for any paragraphs it receives. The
+permutation check compares same-speech paragraph distances with distances after
+randomly rearranging speech labels. Paragraphs from the same speech are closer
+under cosine distance. However, length still dominates raw-count Euclidean
+distance.
 
 ```{r}
 #| label: fig-length-distance
 #| fig-cap: "Length difference and distance for a deterministic sample of paragraph pairs."
-#| fig-alt: "Three scatter plots side by side, one per distance measure, each with its own vertical scale. Euclidean distance rises sharply with length difference, while cosine and Jaccard show much weaker patterns."
+#| fig-alt: "Three scatter plots appear side by side, one per distance measure. Each has its own vertical scale. Euclidean distance increases sharply with length difference. Cosine and Jaccard show much weaker patterns."
 #| fig-height: 3.8
 #| code-fold: true
 #| code-summary: "Show the plotting code"
@@ -346,8 +347,8 @@ ggplot(plot_pairs, aes(x = length_difference, y = value)) +
   geom_point(alpha = 0.15, size = 0.7, colour = lesson_colours[["accent"]]) +
   facet_wrap(vars(distance), scales = "free_y") +
   labs(
-    title = "Raw Euclidean distance mostly follows length",
-    subtitle = "3,000 sampled paragraph pairs; each panel has its own vertical scale",
+    title = "Raw Euclidean distance mostly reflects length",
+    subtitle = "3,000 randomly selected paragraph pairs. Each panel has its own vertical scale.",
     x = "Difference in paragraph length, in tokens",
     y = "Distance"
   ) +
@@ -365,9 +366,9 @@ stopifnot(
 )
 ```
 
-The plot turns the correlation into a visible warning. A long paragraph and a
-short paragraph can look far apart under raw-count Euclidean distance even when
-they come from the same speech.
+The plot shows the relationship between length difference and distance. A long
+paragraph and a short paragraph can have a large raw-count Euclidean distance
+even when both come from the same speech.
 
 ## What to remember
 
@@ -378,9 +379,6 @@ they come from the same speech.
   difference.
 - Cosine distance compares direction, which reduces the length problem for raw
   counts.
-
-The volunteer keeps two labels on the boxes: spelling repair for names,
-representation choice for paragraphs.
 
 ## Sources
 

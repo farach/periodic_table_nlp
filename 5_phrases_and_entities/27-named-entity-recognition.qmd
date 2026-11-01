@@ -1,7 +1,7 @@
 ---
-title: "Checking named entities against domain text"
-subtitle: "See what a trained NER model gets right and wrong"
-description: "Learn how spaCy labels named entities in the Riverton sentences and why invented local names are hard."
+title: "Examining named entities against domain text"
+subtitle: "Examine correct and incorrect NER outputs"
+description: "Learn how spaCy labels named entities in Riverton text and why fictional local names can produce errors."
 categories: [phrases and entities, named entity recognition, workforce research]
 ---
 
@@ -9,12 +9,12 @@ Names in the Riverton job-board and flyer text need labels, not just highlights.
 The coordinator wants to know whether a span names an organisation, a date, a
 time, a quantity, or something else.
 
-A trained named-entity model can supply those labels quickly. The question is
-whether its labels survive contact with local names that did not appear in its
-training examples.
+A trained named-entity model can supply those labels quickly.
+The team examines its labels for local names absent from the training examples.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching.
 :::
 
 ::: {.callout-tip}
@@ -22,11 +22,11 @@ The Riverton Workforce Lab, its job board, and its training flyer are fictional 
 
 By the end of this lesson, you will be able to:
 
-- define named entity recognition in plain language;
-- run spaCy's small English pipeline through spacyr;
-- read spaCy entity labels such as PERSON, ORG, DATE, TIME, QUANTITY, and GPE;
-- hand-check entity spans from the 28 Riverton sentences; and
-- explain why local invented names need domain review.
+- describe named entity recognition in plain language.
+- run spaCy's small English pipeline through spacyr.
+- read spaCy entity labels such as PERSON, ORG, DATE, TIME, QUANTITY, and GPE.
+- examine entity spans from the 28 Riverton text units.
+- explain why fictional local names need checks in context.
 :::
 
 ```{r}
@@ -177,23 +177,28 @@ stopifnot(
 )
 ```
 
-The check sentence exposes the main lesson. spaCy labels `Riverton Skills Centre`
-as `PERSON`, which is wrong in this passage; it names the provider, so the hand
-check treats it as `ORG`. A facility reading would point toward `FAC`. The
-invented name explains the domain mismatch, but it does not make the output
-correct. A title-case version of the all-capital heading becomes one `PERSON`
-span, a small reminder that surface form can change the model output.
+spaCy incorrectly labels `Riverton Skills Centre` as `PERSON` in the check
+sentence. The name refers to the provider, so the hand-assigned label is
+`ORG`. A facility interpretation would instead suggest `FAC`.
+The fictional name explains the domain mismatch but does not make the output
+correct. The title-case heading produces one `PERSON` span.
+This shows that surface form can change model output.
 
 ## Read the labels
 
-These type names come from OntoNotes, one annotation project's category list.
-They are conventions, not natural divisions of the world. `PERSON` means a
-person. `ORG` covers organisations such as companies, agencies, and
-institutions. `DATE` covers dates and periods such as months or years. `TIME`
-marks a time of day or similar expression. `QUANTITY` marks an amount with a
-unit. `GPE` covers a geopolitical place such as a city, state, or country. The
-same word can be a `GPE` in `Riverton raised the training budget` and part of an
-`ORG` in `Riverton Skills Centre`, so the sentence matters.
+These type names come from the OntoNotes annotation project.
+The categories follow that project's conventions.
+
+- `PERSON` means a person.
+- `ORG` covers organisations such as companies, agencies, and institutions.
+- `DATE` covers dates and periods such as months or years.
+- `TIME` marks a time of day or similar expression.
+- `QUANTITY` marks an amount with a unit.
+- `GPE` covers geopolitical places such as cities, states, and countries.
+
+Context affects the label.
+In `Riverton raised the training budget`, `Riverton` can be a `GPE`.
+In `Riverton Skills Centre`, it can be part of an `ORG`.
 
 ```{r}
 entity_type_counts <- entities |>
@@ -206,7 +211,7 @@ entity_type_counts <- entities |>
 knitr::kable(
   entity_type_counts,
   col.names = c("Entity type", "Entities"),
-  caption = "Entity types returned for the 28 Riverton sentences",
+  caption = "Entity types returned for the 28 Riverton text units",
   row.names = FALSE
 )
 ```
@@ -223,17 +228,19 @@ stopifnot(
 )
 ```
 
-The model finds 10 entity spans in the 28 sentences. Six are `DATE`, two are
-`TIME`, one is `ORG`, and one is `QUANTITY`. It returns nothing for `RIVERTON`
-in the all-capital heading. That is defensible: here `RIVERTON` is part of an
-event name rather than a reference to the town. The mistake in that sentence is
-`HOUSE`: the model takes one word out of a four-word event heading and calls it
-an organisation, so the span and the type are wrong.
+The model finds 10 entity spans in the 28 text units.
+Six are `DATE`, two are `TIME`, one is `ORG`, and one is `QUANTITY`.
+It returns no separate entity for `RIVERTON` in the all-capital heading.
+That is defensible because `RIVERTON` belongs to the event name rather than
+referring to the town.
 
-## Hand-check the Riverton entities
+The error concerns `HOUSE`. The model selects one word from a four-word event
+heading and labels it as an organisation. Both the span and type are wrong.
 
-The table below marks the model's returned spans by hand. The hand labels are
-teaching judgments for these 28 sentences, not a public benchmark.
+## Examine the Riverton entities
+
+The table gives hand-assigned labels for the returned spans.
+These teaching judgments cover 28 text units, not a public benchmark.
 
 ```{r}
 entity_answers <- tibble(
@@ -269,7 +276,7 @@ entity_score <- entity_judgments |>
 knitr::kable(
   entity_judgments,
   col.names = c("Sentence ID", "Entity", "Predicted type", "Expected span", "Expected type", "Note", "Correct"),
-  caption = "Hand check of all spaCy entity spans returned from the 28 sentences",
+  caption = "Hand check of all spaCy entity spans returned from the 28 text units",
   row.names = FALSE
 )
 
@@ -295,28 +302,31 @@ stopifnot(
 )
 ```
 
-Nine of the ten returned spans hold up, but that is not an evaluation. Eight of
-the correct spans are dates, durations, or times of day, and one is a weight.
-The only returned organisation-like case is the one the model gets wrong. A
-single figure hides that mix, and the check says nothing about names the model
-missed.
+Nine of the ten returned spans match the hand judgments.
+This is not a general model evaluation.
+Eight correct spans are dates, durations, or times of day.
+The ninth is a weight. The only organisation-like output is wrong.
+
+A single score conceals those differences between types.
+The check also says nothing about names that the model misses.
 
 ## Keep domain mismatch visible
 
-spaCy `en_core_web_sm` 3.8.0 is a released production pipeline. The local
-Riverton names are invented for this lesson, so the model cannot rely on having
-seen them in training. It has to generalise from surface cues, word shape, and
-surrounding words. That is domain mismatch, not proof that the pipeline is weak.
+spaCy `en_core_web_sm` 3.8.0 is a released production pipeline.
+The author invented the Riverton names for this lesson.
+The model cannot assume those names occur in its training data.
+It must generalise from surface cues, word shape, and context.
+This illustrates domain mismatch, not proof of generally weak performance.
 
 ## What to remember
 
 - NER labels spans under an annotation scheme such as OntoNotes.
-- The spaCy run returned 10 entity spans from the 28 Riverton sentences.
+- The spaCy run returned 10 entity spans from the 28 Riverton text units.
 - Ten returned spans are too few, and too uneven by type, to evaluate a model.
-- Local invented names need direct review because domain mismatch can change outputs.
+- Examine fictional local names directly because domain mismatch can change outputs.
 
-For Riverton work, keep NER in the triage step: collect candidates, inspect the
-local names, and report the model version beside the examples.
+For Riverton work, use NER to collect candidates.
+Examine the local names. Report the model version beside the examples.
 
 ## Sources
 

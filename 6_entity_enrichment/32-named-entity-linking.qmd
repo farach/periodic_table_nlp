@@ -1,13 +1,13 @@
 ---
 title: "Linking named entities"
-subtitle: "Turn mentions into stable identifiers"
+subtitle: "Link mentions to stable identifiers"
 description: "Learn how alias tables generate entity candidates and why resolution and NIL handling remain separate decisions."
 categories: [entity enrichment, entity linking, workforce research]
 ---
 
-Credential counts get messy when one notice says `forklift certification` and a
-reference list says `Forklift Operator Licence`. The coordinator still wants to
-know whether the notices point to the same credential.
+A notice says `forklift certification`, while a reference list says
+`Forklift Operator Licence`. The coordinator needs to know whether those
+names refer to the same credential before counting credentials.
 
 **Named entity linking** connects a mention in text to a stable identifier in a
 reference list. The identifier matters because spellings can change while the
@@ -22,10 +22,10 @@ The Riverton organisations, places, and credentials here are invented for the le
 
 By the end of this lesson, you will be able to:
 
-- explain why an entity identifier matters;
-- join mention strings to an alias table;
-- count mentions with zero, one, or several candidates;
-- show how one credential can have multiple aliases; and
+- explain why an entity identifier matters.
+- join mention strings to an alias table.
+- count mentions with zero, one, or several candidates.
+- show how one credential can have multiple aliases.
 - state the limit of alias matching.
 :::
 
@@ -38,12 +38,13 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load entities and aliases
 
-Three CSV files provide the reference list, aliases, and sentence examples. The
-chunk checks the alias-file fingerprint, then uses dplyr and tibble for the
-joins and tables. An **entity** is a thing the reference list knows about, such
-as an organisation, place, or credential. The **canonical name** is the reference
-list's main name for that entity. An **alias** is a surface form that may appear
-in text.
+Three CSV files provide the reference list, aliases, and sentence examples.
+The chunk compares the alias-file fingerprint, a value used to detect text
+changes, with its expected value. dplyr and tibble create joins and tables.
+
+An **entity** is an item in the reference list, such as an organisation, place,
+or credential. The **canonical name** is the reference list's main name for that
+entity. An **alias** is an alternative name that may appear in text.
 
 ```{r}
 library(readr)
@@ -138,10 +139,11 @@ stopifnot(
 )
 ```
 
-The alias table contains two rows for `Riverton`. That deliberate duplicate makes
-`Riverton` an ambiguity case for this lesson. It also contains the exact strings
-used below, including `forklift certification` and `Forklift Operator Licence`,
-so the singleton candidates are a property of this small teaching table.
+The alias table deliberately contains two rows for `Riverton` to create an
+ambiguous case. It also contains the exact strings `forklift certification`
+and `Forklift Operator Licence`. A **singleton candidate** means that only
+one record matches. The singleton results below reflect this small teaching
+table, not general linking accuracy.
 
 `Riverton Skills Centre` is an organisation in this entity list. In the geocoding
 lesson, the same name is a building. The difference is a normal entity-linking
@@ -149,8 +151,8 @@ problem: one name can point to an institution, a site, or both.
 
 ## Prepare mention candidates
 
-Two mention candidates come from the Riverton sentences. Three are constructed
-checks that exercise the credential and miss cases.
+Two mention candidates come from the Riverton sentences. Three constructed
+checks cover credential matches and missing matches.
 
 ```{r}
 real_mentions <- bind_rows(
@@ -207,11 +209,13 @@ with hand-selected mentions so the linking step remains visible.
 
 ## Generate candidates from normalized aliases
 
-In real datasets, exact casing rarely matches perfectly. Before joining, both
-the mentions and aliases are lowercased so differently capitalized names can
-match. This join generates candidates; it does not prove a link. A mention can
-have zero, one, or several candidates, and a separate resolution policy must
-decide whether to accept one or return NIL.
+Names in real datasets can use different capitalization. The code converts
+mentions and aliases to lowercase before the join. The join generates
+candidates but does not prove a link. Each mention can have zero, one, or
+several candidates.
+
+A separate resolution policy decides whether to accept a candidate or return
+**NIL**, meaning no accepted reference entity.
 
 ```{r}
 library(stringr)
@@ -306,10 +310,12 @@ stopifnot(
 ```
 
 The `relationship` argument tells dplyr that one mention may match several
-alias rows. `DATA SUPPORT CERTIFICATE` produces one candidate. This toy policy
+alias rows. `DATA SUPPORT CERTIFICATE` produces one candidate. This teaching policy
 accepts singleton candidates, but a production linker would still apply a
 score or NIL threshold. `Riverton` maps to two place records, so the alias alone
-cannot choose one. `Customer service badge` has no candidate. The 3/1/1 counts
+cannot choose one. `Customer service badge` has no candidate.
+
+The 3/1/1 counts
 describe only candidate generation for these five mentions.
 
 ## Count by identifier
@@ -357,22 +363,28 @@ credential.
 The normalized join here shows candidate generation from an alias table.
 Production entity linking systems add a separate resolution step:
 
-- **Unicode and case normalization policy**: A pipeline must define how it handles accents (e.g., NFC/NFD normalization) and casing before joining, ensuring mentions and aliases are normalized consistently. Never report linking rates over an unnormalized exact string join.
-- **Candidate generation and ranking**: When an alias is ambiguous (like `Riverton`), a modern pipeline generates candidate entities and ranks them using the surrounding sentence context.
-- **NIL handling**: A robust system detects when a mention matches an alias string but refers to a *different* entity not in the knowledge base (a NIL entity), rather than blindly linking it.
-- **KB versioning**: An entity's canonical name or status may change. Linking results must record the specific version of the knowledge base (KB) used.
-- **Alias and candidate-recall checks**: Pipelines need ongoing evaluation to ensure the alias table contains common misspellings (alias recall) and the ranking system surfaces the correct entity (candidate recall).
+- **Unicode and case normalization policy**: State the accent and capitalization
+  rules before the join. NFC/NFD normalization specifies consistent Unicode
+  representations for characters such as accented letters. Apply the same rules
+  to mentions and aliases. Do not report linking rates from an unnormalized
+  exact-string join.
+- **Candidate generation and ranking**: An ambiguous alias, such as `Riverton`, can match several entities. Production systems rank those candidates with the surrounding sentence context.
+- **NIL handling**: A matching alias can refer to a different entity outside the
+  knowledge base, the reference collection of entities. The system needs a NIL
+  result rather than an incorrect link.
+- **KB versioning**: An entity's canonical name or status may change. Linking results must record the specific knowledge-base (KB) version.
+- **Alias and candidate-recall checks**: Evaluation must measure coverage of common misspellings in the alias table, called alias recall. It must also measure whether candidate generation retains the correct entity, called candidate recall.
 
 ## What to remember
 
 - Entity linking connects a mention to a stable identifier.
-- An alias table can turn different spellings into one record.
-- Duplicate aliases create ambiguity that should be counted.
-- Alias matching only finds names someone has already written down.
+- An alias table can link different spellings to one record.
+- Count ambiguous cases caused by duplicate aliases.
+- Alias matching finds only names that the table contains.
 
 The two forklift spellings count as one credential in these examples. The table
-does not resolve which `Riverton` is meant, and a badge name absent from the alias
-file stays unlinked.
+does not identify the intended `Riverton`. The badge name remains unlinked
+because the alias file does not contain that name.
 
 ## Sources
 

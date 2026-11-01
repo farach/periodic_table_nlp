@@ -5,24 +5,23 @@ description: "Learn how exact, normalized, and near-duplicate checks behave on R
 categories: [documents, deduplication, workforce research]
 ---
 
-Before training and evaluation, one repeated record can make a collection look
-larger than it is. The coordinator sees the same training sentence more than
-once and has to decide whether it represents a repeated record or a separate
-notice.
+A repeated record can make a collection appear larger than it is before
+training and evaluation. The coordinator must distinguish a duplicated training
+sentence from separate notices that contain the same sentence.
 
-That choice affects every count that follows. A duplicate document can inflate a
-common phrase, make a rare label look common, and leak between a training split
-and an evaluation split.
+That choice affects later counts. Duplicate documents can inflate phrase and
+label frequencies. They can also place the same information in both training
+and evaluation splits.
 
-This lesson works at the document level. A **duplicate** is a record that should
-not be counted as a separate document for the question being asked.
+This lesson works at the document level. A **duplicate** is a record that the
+analyst should not count separately for the research question.
 
-Lesson 12 builds augmented examples with `source_family_id`; those rows need the
-same split-protection idea. This page uses a smaller constructed set so the
-distance mechanism is easy to inspect.
+Lesson 12 builds augmented examples with `source_family_id`. Those rows also
+need protection against overlap between splits. This page uses a smaller
+constructed set to show the distance calculation.
 
 ::: {.callout-note}
-Riverton is a teaching case; the documents and duplicate families below are
+Riverton is a teaching case. The documents and duplicate families below are
 fictional.
 :::
 
@@ -31,11 +30,11 @@ fictional.
 
 After this lesson, you should be able to:
 
-- explain why duplicate documents change downstream counts;
-- find exact duplicates with a SHA-256 hash;
-- find formatting-only duplicates with a normalized hash;
-- compare near duplicates with character trigram distance; and
-- choose a threshold by naming the error it makes cheaper.
+- explain why duplicate documents change downstream counts.
+- find exact duplicates with a SHA-256 hash.
+- find formatting-only duplicates with a normalized hash.
+- compare near duplicates with character trigram distance.
+- choose a threshold based on the relative costs of its errors.
 :::
 
 ```{r}
@@ -45,15 +44,15 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Build a small review set
+## Build a small comparison set
 
-The review table starts with the sentence file, then adds table shaping,
-repeated calculations, text normalization, fingerprints, distance measures,
-pairs, and a threshold plot.
+The comparison starts with the sentence file. The code prepares tables,
+normalizes text, and calculates fingerprints and distances. It then compares
+pairs and plots thresholds.
 
 A **hash** is a fixed-length fingerprint made from text. The same input gives the
-same hash. A changed input should give a different hash, so a hash checks exact
-identity rather than similarity.
+same hash. A different input should give a different hash. Hash comparison
+examines exact identity rather than similarity.
 
 ```{r}
 library(readr)
@@ -124,12 +123,15 @@ documents <- tibble(
 
 ```{r}
 #| echo: false
+#| html-table-processing: none
 
 knitr::kable(
   documents |>
     select(doc_id, source, text),
   col.names = c("Document", "Source", "Text"),
-  caption = "Six documents prepared for duplicate review",
+  caption = "Six documents prepared for duplicate comparison",
+  format = "html",
+  table.attr = 'class="caption-top table table-sm table-striped small" style="white-space: pre-wrap;"',
   row.names = FALSE
 )
 ```
@@ -146,17 +148,17 @@ stopifnot(
 )
 ```
 
-This six-row set was written to expose a known failure mode. Four rows are
-hand-marked as the same duplicate family: the source sentence, an exact copy, a
-spacing-and-case copy, and a one-word paraphrase. The exam sentence changes the
-claim while leaving much of the surface text intact. The spreadsheet sentence is
-unrelated.
+The author wrote this six-row set to demonstrate a known failure mode. Four
+rows form one marked duplicate family. They contain the source sentence, an
+exact copy, a spacing-and-case copy, and a one-word paraphrase. The exam
+sentence changes the claim but retains much of the original wording. The
+spreadsheet sentence is unrelated.
 
 ## Find exact duplicates
 
 An **exact duplicate** has the same text byte for byte. The code hashes each text
 value with SHA-256. In the code, `\(value)` is R shorthand for "for each value,
-run the small calculation that follows."
+execute the small calculation that follows."
 
 ```{r}
 documents <- documents |>
@@ -180,6 +182,7 @@ exact_duplicate_pairs <- sum(choose(exact_groups$documents, 2))
 
 ```{r}
 #| echo: false
+#| html-table-processing: none
 
 knitr::kable(
   documents |>
@@ -190,6 +193,8 @@ knitr::kable(
     ),
   col.names = c("Document", "Text", "SHA-256 start"),
   caption = "Exact hashes before normalization",
+  format = "html",
+  table.attr = 'class="caption-top table table-sm table-striped small" style="white-space: pre-wrap;"',
   row.names = FALSE
 )
 ```
@@ -211,10 +216,10 @@ extra spaces are real characters.
 
 ## Normalize before hashing
 
-**Normalization** means applying a recorded rule before comparing text. This
-rule does two things: lowercase the text and replace repeated whitespace with one
-space. It catches formatting-only differences and destroys information about
-capitalization and layout.
+**Normalization** applies a recorded rule before text comparison. This rule
+converts text to lowercase and replaces consecutive whitespace with one space.
+It removes formatting differences but also removes capitalization and layout
+information.
 
 ```{r}
 documents <- documents |>
@@ -274,12 +279,15 @@ carry meaning.
 
 ## Measure near duplicates
 
-A **near duplicate** is close enough to deserve review, even when the text is not
-identical. Cut each normalized string into every overlapping three-character
-piece, discard order and repeats, and the result is a set of character trigrams.
-Jaccard distance is the share of pieces the two sets do not have in common: 0
-when the sets match, 1 when they share nothing. Because order is discarded, the
-measure counts how much surface text differs, not which change matters.
+A **near duplicate** is similar enough to require a check even when its
+text is not identical. A **character trigram** contains three consecutive
+characters. The code extracts every overlapping trigram from each normalized
+string. It then removes ordering and duplicate trigrams to form a set.
+
+Jaccard distance is the share of trigrams in the combined sets that do not
+appear in both. The distance is 0 for identical sets and 1 for sets with no
+shared trigrams. Without order, this measure describes differences in surface
+text rather than meaning.
 
 ```{r}
 comparison_pairs <- expand_grid(
@@ -350,7 +358,7 @@ knitr::kable(
       jaccard_distance = round(jaccard_distance, 4)
     ),
   col.names = c("Pair", "Hand-marked duplicate", "Jaccard distance"),
-  caption = "Pairwise distances across the six review documents",
+  caption = "Pairwise distances across the six comparison documents",
   row.names = FALSE
 )
 
@@ -388,19 +396,21 @@ stopifnot(
 )
 ```
 
-The calibration strings are not part of the review set; they show how to read the
-scale. Two sentences that differ only in `certification` versus `certificate`
-score 0.1132. In this constructed review set, the exam distractor scores 0.2917
-against the source, while the meaning-preserving paraphrase scores 0.32. The
-distractor changes one short word and the duplicate changes one longer phrase, so
-surface overlap and meaning point in opposite directions. Real collections can
-contain pairs like this; the small set is designed so the mechanism is visible.
+The calibration strings explain the scale but are separate from the comparison
+set. Two sentences that differ only in `certification` versus `certificate`
+score 0.1132. In the constructed set, the exam distractor scores 0.2917
+against the source. The meaning-preserving paraphrase scores 0.32.
 
-## Sweep the threshold
+The distractor replaces one short word, while the duplicate replaces a longer
+phrase. Surface overlap therefore ranks the changed meaning as more similar.
+Real collections can contain such pairs. This small set makes the mechanism
+visible.
 
-A **threshold** is the distance at or below which the pipeline joins two
-documents. The threshold is not learned here. The team tries several values and
-counts both kinds of outcome.
+## Compare thresholds
+
+A **threshold** is the maximum distance at which the pipeline joins two
+documents. The lesson does not fit the threshold. The team tries several values
+and counts correct and incorrect joins.
 
 ```{r}
 threshold_sweep <- tibble(
@@ -434,7 +444,7 @@ knitr::kable(
   threshold_sweep,
   col.names = c(
     "Threshold",
-    "True duplicate pairs caught",
+    "True duplicate pairs found",
     "Distinct pairs wrongly joined"
   ),
   caption = "Near-duplicate results at six threshold values",
@@ -454,8 +464,8 @@ stopifnot(
 
 ```{r}
 #| label: fig-dedup-threshold
-#| fig-cap: "Duplicate pairs caught and distinct pairs wrongly joined at each tested threshold."
-#| fig-alt: "Step chart with two lines across Jaccard distance thresholds from 0 to 0.99. True duplicate pairs caught stay at 3 until threshold 0.35 and reach all 6 afterward. Distinct pairs wrongly joined rise from 0 to 3 at threshold 0.3, then 4, then 9. No threshold has 6 caught and 0 wrongly joined."
+#| fig-cap: "Duplicate pairs found and distinct pairs wrongly joined at each evaluated threshold."
+#| fig-alt: "Step chart with two lines across Jaccard distance thresholds from 0 to 0.99. The count of duplicate pairs found remains at 3 until threshold 0.35 and reaches all 6 afterward. The incorrectly joined distinct-pair count increases from 0 to 3 at threshold 0.3, then 4, then 9. No threshold finds 6 duplicates and incorrectly joins 0 distinct pairs."
 #| fig-height: 4.2
 #| code-fold: true
 #| code-summary: "Show the plotting code"
@@ -512,8 +522,8 @@ ggplot(sweep_lines, aes(x = threshold, y = pairs, colour = result)) +
   ) +
   scale_y_continuous(breaks = seq(0, 9, by = 3)) +
   labs(
-    title = "No threshold catches every duplicate without joining distinct pairs",
-    subtitle = "Pairs joined at or below each tested Jaccard distance threshold",
+    title = "No threshold finds every duplicate without joining distinct pairs",
+    subtitle = "Pairs joined at or below each evaluated Jaccard distance threshold",
     x = "Jaccard distance threshold",
     y = "Pairs"
   ) +
@@ -533,28 +543,37 @@ stopifnot(
 
 For this constructed set, 0.2917 is smaller than 0.32. The distractor is closer
 to the source than the paraphrase is. Because those two distances are ordered
-that way, no threshold on these pairs can catch the paraphrase without also
-joining the distractor. The sweep confirms that threshold choice trades one error
-against another here; it is not a general law of deduplication.
+that way, no threshold on these pairs can match the paraphrase without also
+joining the distractor. The comparison shows how a threshold reduces one error
+at the cost of another in this set. It does not establish a general law of
+deduplication.
 
 ## Deduplication at scale
 
-The `expand_grid()` step used here builds an all-pairs combination, which mathematically scales at $O(N^2)$. Pairwise comparisons work for a tiny teaching set, but mathematically collapse in production. For real-world datasets, an all-pairs Jaccard distance calculation is too slow and requires too much memory.
+The `expand_grid()` step builds all pairs, with $O(N^2)$ computational
+scaling. This approach works for a small teaching set. On large datasets,
+all-pairs Jaccard calculations require too much time and memory.
 
-Production systems bypass this $O(N^2)$ scaling boundary by using Locality Sensitive Hashing (LSH) and MinHash over shingled text. R packages like `textreuse` (or Python's `datasketch`) implement these algorithms to group near-duplicates across millions of documents without comparing every pair.
+Production systems avoid $O(N^2)$ all-pairs comparisons through Locality
+Sensitive Hashing (LSH) and MinHash. These algorithms operate on **shingles**,
+overlapping sequences of text units. MinHash summarizes set similarity, while
+LSH groups likely near matches for comparison. Packages such as R's
+`textreuse` and Python's `datasketch` can group near duplicates across
+millions of documents without comparing every pair.
 
 ## What to remember
 
 - Duplicate documents can inflate counts and leak between training and evaluation.
-- Exact hashes catch only byte-for-byte repeats.
-- Normalized hashes catch some formatting differences and erase formatting facts.
+- Exact hashes find only byte-for-byte duplicates.
+- Normalized hashes find some formatting-only duplicates but remove formatting information.
 - Character-trigram Jaccard distance measures surface overlap, not preserved meaning.
-- Near-duplicate thresholds trade missed duplicates against wrongly joined records in this set.
+- Near-duplicate thresholds change the numbers of missed duplicates and wrongly joined records in this set.
 - The right threshold depends on which error costs more for the project.
 
-Exact repeats can be removed automatically; near matches belong in review before
-any training or evaluation split. The threshold sweep is a warning label on this
-constructed set, not a universal setting for Riverton documents.
+The system can remove exact duplicates automatically. A person must examine
+near matches before any training or evaluation split. These threshold results
+describe the constructed set rather than a universal setting for Riverton
+documents.
 
 ## Sources
 

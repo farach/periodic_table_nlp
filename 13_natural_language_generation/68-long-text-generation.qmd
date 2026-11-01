@@ -1,31 +1,31 @@
 ---
 title: "Building a document one section at a time"
-subtitle: "Plan evidence, carry continuity, inspect stopping, and hold for review"
-description: "Learn a three-section local generation workflow with explicit evidence scopes, token budgets, continuity state, and publication gates."
+subtitle: "Separate evidence, continuity, generation, and publication approval"
+description: "Learn a three-section local generation workflow with explicit evidence limits, token budgets, continuity state, and publication decisions."
 categories: [natural language generation, long-text generation, evaluation]
 ---
 
-Kai needs a short public update about a fictional seed-sharing pilot. Asking a
-small model to "write the whole report" would combine document planning,
-evidence selection, continuity, and prose generation in one opaque call.
+Kai needs a short public update about a fictional seed-sharing pilot. A request
+to "write the whole report" combines planning, evidence selection, continuity,
+and prose generation. One model call would obscure those separate decisions.
 
 This lesson separates those jobs. A human-written plan assigns evidence to
-three sections. The local model generates each section. A compact,
-evidence-checked continuity state moves forward without copying the whole draft
-back into the prompt.
+three sections. The local model generates each section. Each section receives
+compact continuity state that matches recorded evidence. This state summarizes
+relevant evidence without copying the whole draft into the next prompt.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- plan a three-section document before generating prose;
-- give each section a bounded evidence ledger and output budget;
-- account for prompt and output tokens in a decoder-only context window;
-- carry compact, checked continuity state between section calls;
-- distinguish end-of-sequence stopping from a token-cap stop;
-- inspect repetition, unsupported numbers, and evidence coverage; and
-- reject the assembled draft for publication until human review is complete.
+- plan a three-section document before generating prose
+- give each section an evidence ledger and output limit
+- account for prompt and output tokens in a decoder-only context window
+- pass compact continuity state from assigned evidence between section calls
+- distinguish end-of-sequence stopping from a token-limit stop
+- examine repetition, numbers without evidence, and evidence coverage
+- reject the assembled draft for publication until human checks are complete.
 :::
 
 ```{r}
@@ -38,8 +38,9 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Load the local causal model
 
 The course helper loads a prepared local snapshot through `huggingfaceR`. The
-model is a decoder-only causal language model, so prompt tokens and newly
-generated tokens share the same context window.
+model is a decoder-only causal language model. It predicts each new token from
+preceding tokens. Prompt tokens and newly generated tokens share the same
+context window.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -131,7 +132,7 @@ The evidence below is fictional demonstration material. It is not a survey
 estimate, a program evaluation, or a claim about a real seed library.
 
 Each evidence row receives an ID. The plan assigns those IDs to one section and
-states the section's job before any prose is generated.
+states the section's purpose before prose generation.
 
 ```{r}
 evidence_ledger <- tribble(
@@ -204,7 +205,7 @@ knitr::kable(
     "Evidence IDs",
     "Output budget"
   ),
-  caption = "A three-section document plan fixes scope before generation",
+  caption = "A three-section document plan fixes evidence limits before generation",
   row.names = FALSE
 )
 ```
@@ -224,15 +225,15 @@ stopifnot(
 )
 ```
 
-The continuity state is a checked restatement of assigned evidence. It is not a
-model-generated summary of the previous section. This prevents an unsupported
-detail in one section from becoming accepted context for the next.
+The continuity state restates only assigned evidence. It is not a
+model-generated summary of the previous section. Thus, a generated detail without
+source evidence cannot become accepted context for the next section.
 
-The context-only policy is stricter than simple factual support: incoming
-continuity may orient a transition, but a section must not restate a continuity
-fact unless that fact is also assigned to the section's scoped evidence. The
-following E05 pattern is declared before generation to check that policy for
-SEC-03.
+The context-only policy requires more than evidence for a fact. Incoming
+continuity can guide transitions between sections. However, a section can
+restate a continuity fact only if its assigned evidence also contains that
+fact. Before generation, the author defines the E05 pattern below to examine
+that policy for SEC-03.
 
 ```{r}
 continuity_patterns <- tribble(
@@ -252,7 +253,7 @@ continuity_patterns <- tribble(
 knitr::kable(
   continuity_patterns |>
     select(section_id, context_evidence_id),
-  col.names = c("Section checked", "Context-only evidence"),
+  col.names = c("Section examined", "Context-only evidence"),
   caption = "Predeclared cross-section restatement check",
   row.names = FALSE
 )
@@ -272,7 +273,7 @@ stopifnot(
 ## Build section prompts and budgets
 
 Each prompt contains one section purpose, only its assigned evidence, and the
-compact incoming state. Raw previous prose is not concatenated.
+compact incoming state. The workflow does not append the previous model prose.
 
 ```{r}
 long_system <- paste(
@@ -366,9 +367,11 @@ stopifnot(
 ## Generate all three sections
 
 The loop below makes three separate neural generation calls. Greedy decoding
-keeps this demonstration repeatable. Literature documents repetitive
-degeneration as a risk of likelihood-maximizing decoding in open-ended tasks;
-it is an empirical tendency, not a guarantee that every greedy output loops.
+selects the highest-scoring next token and uses no random sampling. Small
+numerical differences between machines can still change a selection.
+Research documents repetitive output as a risk of likelihood-maximizing decoding
+in open-ended tasks. This observed tendency does not mean every greedy output
+contains repetition.
 
 ```{r}
 section_generations <- section_requests |>
@@ -421,11 +424,12 @@ stopifnot(
 )
 ```
 
-## Inspect architectural stopping
+## Examine architectural stopping
 
 A final period is a surface character. It does not reveal why generation
-stopped. The helper checks the final generated token ID against the model's EOS
-configuration and separately records whether the output reached the token cap.
+stopped. The helper compares the final generated token ID with the model's
+end-of-sequence, or EOS, configuration. It separately records whether the output
+reached the token limit.
 
 ```{r}
 stopping_diagnostics <- section_generations |>
@@ -474,20 +478,20 @@ stopifnot(
 ```
 
 EOS says the model selected a termination token. It does not establish that the
-section is complete, accurate, or ready to publish. EOS and the token-cap flag
-are independent: both may be true when a model forces EOS on the last permitted
-new token.
+section is complete, accurate, or ready to publish. The EOS and token-limit flags
+describe separate conditions. Both may be `TRUE` when a model forces EOS on the
+last permitted new token.
 
-## Check repetition and scoped evidence
+## Examine repetition and section-specific evidence
 
-The distinct trigram ratio divides unique three-token sequences by all
-three-token sequences after lowercasing and extracting letter and number
-sequences. Values nearer 1 show fewer exact repeated trigrams. No universal
-publication threshold is asserted.
+The calculation converts text to lowercase and extracts letter and number
+sequences. The **distinct trigram ratio** divides unique three-token sequences
+by all three-token sequences. Values nearer 1 show fewer exact repeated
+trigrams. The lesson claims no universal publication threshold.
 
 The evidence flags are simpler: each planned fact has a surface pattern. A
 missing pattern is a reason to revise. A present pattern cannot prove that the
-fact has the correct relation or scope.
+fact has the correct relation or limits.
 
 ```{r}
 distinct_ngram_ratio <- function(text, n = 3L) {
@@ -602,8 +606,8 @@ knitr::kable(
   col.names = c(
     "Section ID",
     "Distinct trigram ratio",
-    "Unsupported numeral present",
-    "Unsupported evaluative wording"
+    "Numeral without evidence present",
+    "Evaluative wording without evidence"
   ),
   caption = "Repetition and numeral diagnostics",
   row.names = FALSE
@@ -623,7 +627,7 @@ knitr::kable(
     "Context-only evidence",
     "Restated outside assigned scope"
   ),
-  caption = "Cross-section continuity leakage check",
+  caption = "Continuity-fact check against assigned section limits",
   row.names = FALSE
 )
 ```
@@ -647,16 +651,19 @@ stopifnot(
 )
 ```
 
-These are structural hygiene checks. They do not detect an invented plant
-example, an unsupported causal explanation, a shifted obligation, or a
-contradiction written without a new numeral.
-This render exposes three concrete failures. `Successfully` adds an evaluation
-absent from the ledger, and the final section does not state that volunteers
-made no guarantee about seed growth. SEC-03 also restates the E05 evening
-request from continuity context even though E05 belongs to SEC-02. The number
-29 was supplied to the model, so it is not an invented numeral; its reuse still
-violates the declared section scope. These findings send the draft back for
-revision.
+These are limited structural checks. They do not detect an invented plant
+example, a cause absent from the source, a changed obligation, or a contradiction without
+a new numeral.
+
+Compare each generated section with the ledger and its assigned evidence.
+In SEC-01, `successfully` would add an evaluation absent from the ledger.
+SEC-03 must retain the statement that volunteers made no guarantee about seed
+growth. Restating the E05 evening request in SEC-03 would violate the section
+limits because E05 belongs to SEC-02.
+
+The prompt supplies the number 29 in continuity context, so that number alone
+is not evidence of invention. Using it to restate E05 in SEC-03 would still
+require draft revision.
 
 ## Assemble the draft and make a decision
 
@@ -687,10 +694,10 @@ stopifnot(
 )
 ```
 
-The automatic findings determine whether the draft already needs revision.
-They still cannot authorize publication. Until a person checks every generated
-claim, continuity across sections, audience, and tone, the explicit publication
-decision is **reject**.
+The automatic findings show whether the draft already needs revision.
+They still cannot authorize publication. The publication decision remains
+**reject** until a person examines every generated claim, continuity across
+sections, audience, and tone.
 
 ```{r}
 automatic_revision_needed <- any(
@@ -723,7 +730,7 @@ long_review <- tibble(
     "prompt plus output budget",
     "token-level stopping diagnostics",
     "automatic evidence and continuity screens",
-    "human factual, continuity, tone, and audience review"
+    "human checks of facts, continuity, tone, and audience"
   ),
   status = c(
     sprintf(
@@ -760,8 +767,8 @@ document_decision <- tibble(
   ),
   publication_decision = "reject",
   reason = paste(
-    "Human factual, continuity, tone, and audience review is pending;",
-    "automatic checks cannot approve the document."
+    "Human checks of facts, continuity, tone, and audience are pending.",
+    "Automatic checks cannot approve the document."
   )
 )
 ```
@@ -771,7 +778,7 @@ document_decision <- tibble(
 
 knitr::kable(
   long_review,
-  col.names = c("Review gate", "Status"),
+  col.names = c("Check stage", "Status"),
   caption = "Completed scans do not approve the generated sections",
   row.names = FALSE
 )
@@ -806,14 +813,14 @@ approval.
 
 ## What to remember
 
-- Long-text generation starts with document planning and section-scoped
-  evidence.
+- Long-text generation starts with document planning and evidence limits for
+  each section.
 - Decoder-only prompts and outputs share one context window.
-- Carry compact, evidence-checked continuity state instead of unbounded raw
+- Pass compact continuity state from assigned evidence instead of unbounded raw
   history.
-- Check EOS and token-cap status directly; punctuation is only a surface clue.
+- Examine EOS and token-limit status directly. Punctuation alone does not explain stopping.
 - Repetition, numeral, and evidence flags are preliminary filters.
-- Reject generated prose for publication until a human editor reviews the
+- Reject generated prose for publication until a human editor examines the
   complete document.
 
 ## Sources
