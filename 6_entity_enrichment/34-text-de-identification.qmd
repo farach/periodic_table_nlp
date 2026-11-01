@@ -209,9 +209,9 @@ stopifnot(
 ```
 
 The rules and expected identifiers share an author, so the counts do not give an estimate of
-recall on real notes. The name rule is just a list of the two full names in this
-note. It cannot find a third name. The leaked value is `Green`, which the
-rule does not treat as a name when it appears alone.
+recall on real notes. The name rule is a list of the two full names in this
+note. It cannot find a third name. The leaked value is `Green`, a surname that
+the rule does not recognize when it appears alone.
 
 ## Compare spaCy PERSON labels
 
@@ -286,8 +286,8 @@ stopifnot(
 )
 ```
 
-spaCy finds the two full names but misses the standalone surname. The second
-detector produces the same failure: a name remains visible.
+spaCy finds the two full names but misses the standalone surname. The note
+still contains a name after either detector identifies the full names.
 
 ## Production de-identification
 
@@ -316,7 +316,7 @@ must distinguish several concepts:
 - The rule set missed a surname that also looks like a common word.
 - A second detector is not a safety guarantee.
 - Rule-based masking is not safe enough for real personal data.
-- Invented safe-looking values still need documented conventions.
+- Document the conventions for invented values, even when those values appear safe.
 
 The lesson uses invented values rather than real applicant details. Its phone
 number and email domain follow reserved fiction conventions. The leaked

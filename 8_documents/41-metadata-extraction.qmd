@@ -8,9 +8,8 @@ categories: [documents, metadata, workforce research]
 A sentence table does not contain every detail about its source. The
 coordinator also needs the document's origin and recorded properties.
 
-The answer depends on **metadata**, the description of a document rather than the
-main content. People use metadata to filter collections, cite documents, and
-examine their records.
+**Metadata** describes a document rather than its main content. People use
+metadata to filter collections, cite documents, and examine their records.
 
 Lesson 6 extracted sentences from this page and recorded a file fingerprint.
 This lesson examines the page's title, declared character set, headings, and
@@ -41,8 +40,8 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Read the document description
 
-The code reads source lines and recorded fields. It builds document records,
-compares strings, calculates fingerprints, and extracts HTML fields. A
+The code reads source lines and recorded fields, extracts HTML metadata, and
+calculates a fingerprint. It combines those values into document records. A
 **provenance** field records a document's origin and information needed to
 examine the stored copy.
 
@@ -314,7 +313,7 @@ stopifnot(
 ```
 
 Someone recorded the title, charset, creation date, and retrieval status as
-assertions. The code calculates only the size and SHA-256 fingerprint from the
+assertions. The code calculates the size and SHA-256 fingerprint from the
 stored copy. It follows the course's hashing rule. It reads text lines, joins
 them with `\n`, and hashes the resulting string.
 
@@ -331,7 +330,8 @@ result.
 
 For this page, the title and creation date are claims. The byte count, zero
 links, and SHA-256 are checks on the saved fixture. Those checks help audit the
-file. They do not establish completeness or an external source.
+file. They do not establish that the fixture is complete or comes from an
+external source.
 
 ## Sources
 

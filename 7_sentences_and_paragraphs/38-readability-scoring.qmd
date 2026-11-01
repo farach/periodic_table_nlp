@@ -42,10 +42,10 @@ The lesson reads local files and extracts HTML with rvest. It tokenises text
 and uses dplyr, tibble, purrr, and stringr for count checks. The counter is a
 **heuristic**, a rule for an approximate result.
 
-The rule first cleans the word. It removes a final silent `e` unless the word
-ends in a consonant plus `le`. It then counts groups of vowel letters, with
-`y` as a vowel. In the code, `\(word)` is R shorthand for a small function
-applied to one word.
+The rule converts words to lowercase and keeps only letters from a to z.
+It removes a final `e` unless the word ends in a consonant plus `le`. It then
+counts groups of vowel letters, including `y`. In the code, `\(word)` is R
+shorthand for a small function applied to one word.
 
 ```{r}
 library(readr)
@@ -215,8 +215,8 @@ Flesch-Kincaid Grade Level uses this formula:
 
 `0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59`
 
-The code calculates those formulas directly rather than calls a readability
-package. The arithmetic remains visible.
+The code calculates both formulas directly rather than calling a readability
+package.
 
 ```{r}
 score_from_counts <- function(document, sentence_count, word_count, syllable_count) {

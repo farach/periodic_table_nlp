@@ -137,6 +137,13 @@ stopifnot(
 The table contains 13 examples. One writes a five-digit amount without a comma.
 That case matters because a partial match would look like a real answer.
 
+When an example gives one amount, the expected answers put it in the
+lower-amount column. That is correct for `Pay starts at $16 per hour`, because
+that text gives the minimum pay. In `Up to $21/hour`, the amount is the maximum
+pay. A correct answer would put 21 in the upper-amount column and leave the
+lower amount missing. The parser below has no rule for `up to`, and a
+production parser needs one.
+
 ## Extract the visible components
 
 The pattern below uses the ICU regular expression engine through `stringr`. A
@@ -266,7 +273,7 @@ Three examples contain thousands separators. One is a range with two amounts.
 Two lack a dollar sign or dollar word. One has no number. The categories
 overlap, so this table is a checklist rather than a count of distinct rows.
 
-## Score the parser against the marking
+## Compare the parser with expected answers
 
 The parser and expected answers come from the same author. A high score
 here does not give an estimate of accuracy. Read it only as a check that the code behaves
@@ -360,7 +367,7 @@ stopifnot(
 )
 ```
 
-The line tells a reader that some stipend exists. It does not say how much. A
+The line tells a reader that a stipend exists. It does not say how much. A
 number without a unit is not a price. A unit without a number gives the
 coordinator no amount to compare.
 

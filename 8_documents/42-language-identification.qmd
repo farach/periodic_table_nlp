@@ -176,8 +176,8 @@ same strings.
 ## Run two detectors
 
 CLD2 and CLD3 are trained language detectors. `NA` means the detector returned no
-language label. The detectors classify the supplied characters rather than
-understand the complete situation around a note.
+language label. The detectors classify the supplied characters without
+understanding the full context of a note.
 
 ```{r}
 detected_samples <- language_samples |>
@@ -252,8 +252,8 @@ stopifnot(
 ```
 
 Both installed detectors **abstain**, or return no label, on `Open house.`.
-The `NA` result lets a person examine the item instead of automatic routing
-with an incorrect code.
+With the `NA` result, the team can send the item to a person for review rather
+than to a queue with an incorrect code.
 
 ## Count matches, abstentions, and label differences
 
@@ -308,8 +308,9 @@ stopifnot(
 ```
 
 Each detector matches 5 of the 8 recorded labels. It returns no label for
-3 of the 8 and an incorrect label for 0 of the 8. Those fractions describe
-this small teaching file, not detector accuracy on a workforce archive.
+3 of the 8 and a different label for 0 of the 8. These fractions describe
+only this teaching file. Eight samples cannot establish detector accuracy on a
+workforce archive.
 
 ## Compare short and longer text
 
@@ -369,10 +370,11 @@ on 1. The Dutch sentence is long enough to read by eye, but both detectors retur
 
 ## A wrong code is worse than no code
 
-The eight labelled samples produced no wrong codes, but wrong codes remain
-possible. The author selected the next string because it produces an incorrect
-code. This one case demonstrates a failure. It does not give an estimate of its rate.
-Its length is just above the arbitrary 13-character cutoff.
+No returned code differed from the recorded labels for the eight samples.
+An incorrect code is still possible. The author selected the next string
+because it produces an incorrect code. This one case demonstrates a failure.
+It does not give an estimate of its rate. Its length is just above the arbitrary
+13-character cutoff.
 
 ```{r}
 short_probe <- tibble(
@@ -427,20 +429,22 @@ reassurance.
 requires these considerations:
 
 - **Language limits and BCP 47**: State which languages the project handles. Record languages with standard BCP 47 tags, such as `en-US`, rather than informal names.
-- **Per-language recall**: A model's overall accuracy hides its failures. Always measure recall *per language*, because models routinely fail on low-resource languages.
-- **Code-switching**: The single-label `cld2::detect_language()` and
-  `cld3::detect_language()` calls used here return one document label. Mixed
-  language text needs a span-level or token-level detector, or a person to
-  examine the text. Code-switching means alternating languages within the text.
-  Single-label behavior does not describe every model.
+- **Per-language recall**: Overall accuracy can hide failures. Measure recall
+  separately for each language because models routinely fail on languages with
+  little training data.
+- **Code-switching** means alternating languages within one text.
+  The single-label `cld2::detect_language()` and
+  `cld3::detect_language()` calls used here return one document label.
+  Mixed-language text needs a span-level or token-level detector, or a person
+  to examine the text. Single-label behavior does not describe every model.
 - **Probability vs. certainty**: A confidence score such as `0.95` is not necessarily a calibrated probability. Calibration means predicted probabilities agree with observed frequencies. The internal score alone does not establish that agreement.
 
 ## What to remember
 
 - Language identification may return a code or no label.
 - Agreement between detectors does not prove that a language code is correct.
-- The eight-row file is an inspection exercise: both detectors returned no label
-  for the two shortest strings rather than a guess.
+- In the eight-row file, both detectors returned no label for the two shortest
+  strings rather than a guess.
 - Returning `NA` can be safer than sending text to the wrong language queue.
 
 People must examine items with `NA` results and codes from short text before

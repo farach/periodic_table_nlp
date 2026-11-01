@@ -173,8 +173,8 @@ a full coreference system.
 The rule links each personal pronoun to the nearest preceding noun phrase with
 the same grammatical number. Number means singular or plural. spaCy reports
 that feature through **morphology**, the grammatical properties of a word's
-form, on the noun-phrase head. An **antecedent** is the expression to which a
-pronoun refers.
+form, on the noun-phrase head. The head is the phrase's central word. An
+**antecedent** is the expression to which a pronoun refers.
 
 ```{r}
 number_from_morph <- function(morph_value) {
@@ -323,23 +323,29 @@ stopifnot(
 ```
 
 Because the baseline and expected answers share an author, the score is only a
-check on this page. The two correct answers are easy cases: `The workers` is the
-only plural phrase before `they`, and the rule links `she` without using gender.
+check on this page. The two correct answers are easy cases. `The workers` is
+the only plural phrase before `they`, and the rule links `she` without using
+gender.
 Excluding the ambiguous `he` row changes the scored denominator from five
 pronouns to four. Real coreference systems need document context, syntax, and
 meaning.
 
 ## Modern coreference resolution
 
-This deterministic nearest-agreeing-noun rule demonstrates coreference rather
-than provides a complete system. Most complex tasks now use neural models,
-such as AllenNLP or large language models, rather than fixed syntax rules.
+The nearest-agreeing-noun syntax rule is a deterministic baseline, so the same
+input always produces the same result. It demonstrates how coreference links
+work. Most complex coreference tasks now use neural models
+rather than fixed syntax rules. Examples include models implemented with
+AllenNLP and large language models.
 
 Consider these limits when evaluating modern systems:
 
 - **Cluster metrics**: Clusters group mentions of the same entity. Specialized metrics such as MUC, B³, and CEAF evaluate these groups rather than individual mention pairs. Errors can compound across long chains of linked mentions.
 - **Ambiguity**: Language can be ambiguous, as the `he` example shows. Deterministic models often choose a link where a person would preserve uncertainty.
-- **Stereotype and coverage asymmetry**: Coreference models can learn occupational gender stereotypes from training data. They may link `he` to `doctor` and `she` to `nurse` correctly but fail on anti-stereotypical or gender-neutral (`they`) examples.
+- **Stereotype and coverage asymmetry**: Coreference models can learn
+  occupational gender stereotypes from training data. They may link `he` to
+  `doctor` and `she` to `nurse` correctly but fail on examples that contradict
+  those stereotypes or use gender-neutral `they`.
 
 ## What to remember
 

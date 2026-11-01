@@ -130,10 +130,10 @@ stopifnot(
 )
 ```
 
-The reference table has nine rows. The duplicate `Riverton` rows are deliberate:
-one is in Marrow County, Calder, and one is in Tidewater. The `parent` column
-names the larger place that contains a row. The coordinates are arbitrary teaching
-points, not the locations of real sites.
+The reference table has nine rows. The duplicate `Riverton` rows are deliberate.
+One is in Marrow County, Calder, and one is in Tidewater. The `parent` column
+names the larger place that contains each location. The coordinates are
+arbitrary teaching points, not the locations of real sites.
 
 This table classifies `Riverton Skills Centre` as a building. The
 entity-linking lesson uses the same name for an organisation. The same string
@@ -330,7 +330,7 @@ specialized APIs, such as OpenStreetMap/Nominatim, rather than raw string joins.
 Packages such as `tidygeocoder` in R or `geopy` in Python provide interfaces
 to those services.
 
-When using a live service, several boundaries and limits apply:
+Live services have several limits:
 
 - **Match precision**: APIs can use fuzzy matching to compare similar names rather than require identical strings. Examine geocoding results with low confidence scores.
 - **Service boundaries**: Rate limits and Terms of Service often dictate how many requests you can make.

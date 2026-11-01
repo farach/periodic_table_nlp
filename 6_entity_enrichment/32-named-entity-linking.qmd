@@ -38,12 +38,13 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load entities and aliases
 
-Three CSV files provide the reference list, aliases, and sentence examples. The
-chunk compares the alias-file fingerprint with its expected value. dplyr and
-tibble create joins and tables. An **entity** is an item in the reference list, such
-as an organisation, place, or credential. The **canonical name** is the reference
-list's main name for that entity. An **alias** is an alternative name that may
-appear in text.
+Three CSV files provide the reference list, aliases, and sentence examples.
+The chunk compares the alias-file fingerprint, a value used to detect text
+changes, with its expected value. dplyr and tibble create joins and tables.
+
+An **entity** is an item in the reference list, such as an organisation, place,
+or credential. The **canonical name** is the reference list's main name for that
+entity. An **alias** is an alternative name that may appear in text.
 
 ```{r}
 library(readr)
@@ -150,8 +151,8 @@ problem: one name can point to an institution, a site, or both.
 
 ## Prepare mention candidates
 
-Two mention candidates come from the Riverton sentences. Three are constructed
-checks that exercise the credential and miss cases.
+Two mention candidates come from the Riverton sentences. Three constructed
+checks cover credential matches and missing matches.
 
 ```{r}
 real_mentions <- bind_rows(
@@ -362,9 +363,15 @@ credential.
 The normalized join here shows candidate generation from an alias table.
 Production entity linking systems add a separate resolution step:
 
-- **Unicode and case normalization policy**: State the accent and capitalization rules before the join, such as NFC/NFD Unicode normalization. Apply the same rules to mentions and aliases. Do not report linking rates from an unnormalized exact-string join.
+- **Unicode and case normalization policy**: State the accent and capitalization
+  rules before the join. NFC/NFD normalization specifies consistent Unicode
+  representations for characters such as accented letters. Apply the same rules
+  to mentions and aliases. Do not report linking rates from an unnormalized
+  exact-string join.
 - **Candidate generation and ranking**: An ambiguous alias, such as `Riverton`, can match several entities. Production systems rank those candidates with the surrounding sentence context.
-- **NIL handling**: A matching alias can refer to a different entity outside the knowledge base. The system needs a NIL result rather than an incorrect link.
+- **NIL handling**: A matching alias can refer to a different entity outside the
+  knowledge base, the reference collection of entities. The system needs a NIL
+  result rather than an incorrect link.
 - **KB versioning**: An entity's canonical name or status may change. Linking results must record the specific knowledge-base (KB) version.
 - **Alias and candidate-recall checks**: Evaluation must measure coverage of common misspellings in the alias table, called alias recall. It must also measure whether candidate generation retains the correct entity, called candidate recall.
 
@@ -376,8 +383,8 @@ Production entity linking systems add a separate resolution step:
 - Alias matching finds only names that the table contains.
 
 The two forklift spellings count as one credential in these examples. The table
-does not resolve which `Riverton` is meant, and a badge name absent from the alias
-file stays unlinked.
+does not identify the intended `Riverton`. The badge name remains unlinked
+because the alias file does not contain that name.
 
 ## Sources
 

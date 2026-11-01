@@ -25,6 +25,8 @@ This lesson shows how to:
 - compare translation with a source-copy baseline
 - examine names, numbers, and negation without treating these checks as adequacy scores
 - reserve meaning and register judgments for a bilingual reviewer.
+
+**Register** is the level of formality appropriate for an audience.
 :::
 
 ```{r}
@@ -345,8 +347,8 @@ The next checks compare exact Arabic numerals and search for the protected
 person name. They also search for common French negation markers when the
 English source contains `did not`. These checks can find some clear
 failures. They cannot establish correct grammar or preservation of the meanings
-of `must` and `may`. Nor can they establish an appropriate register, or level of
-formality, for the audience.
+of `must` and `may`. Nor can they establish an appropriate register for the
+audience.
 
 ```{r}
 extract_numbers <- function(text) {

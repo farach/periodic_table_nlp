@@ -561,7 +561,7 @@ needs people to examine a sample of predictions. It also needs dashboards.
 - Monitoring starts after a team packages a model or starts to operate it routinely.
 - Slice scores can show where performance changes.
 - A slice score is not the same as a new held-out evaluation.
-- Concept drift can affect words, labels, or the relationship between them.
+- Concept drift means the relationship between inputs and labels changes over time.
 - Monitoring cannot find errors in rows that no one examines.
 
 Continue to examine model results even when a dashboard has no alerts.

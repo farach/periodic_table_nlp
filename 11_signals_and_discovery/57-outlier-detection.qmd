@@ -18,7 +18,7 @@ This lesson shows how to:
 - compute cosine distance from the average speech.
 - report word length next to distance.
 - measure the association between distance and length.
-- compare rank agreement with a shuffled-feature null.
+- compare rank agreement with a random baseline that keeps document lengths fixed.
 :::
 
 ```{r}
@@ -264,7 +264,9 @@ The correlations are negative under all three representations. They are -0.738 f
 
 The comparison uses tf-idf weights and a separate raw-count representation that retains stopwords. The representations differ in weighting rule and feature set. A **rank agreement** statistic measures whether the three distance rankings place speeches in similar order.
 
-A **permutation null** reruns the rank-agreement calculation after feature counts are randomized. The **p-value** is the fraction of shuffled agreements that are at least as large as the observed agreement.
+The **random baseline** draws new word counts while keeping each speech's content-word and all-word totals fixed. Word probabilities come from the corresponding corpus-wide counts. The code draws the content-word and all-word matrices separately. Both the raw-count and tf-idf rankings use the same content-word matrix. The code compares all three rankings and repeats this process 500 times.
+
+The **p-value** adds 1 to the number of random agreements at least as large as the observed agreement. It then divides that sum by the number of random agreements plus 1.
 
 ```{r}
 feature_comparison <- all_rankings |>
@@ -362,7 +364,7 @@ knitr::kable(
 knitr::kable(
   rank_agreement_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
-  caption = "Permutation null for rank agreement across representations",
+  caption = "Random baseline for rank agreement with fixed document lengths",
   row.names = FALSE
 )
 ```
@@ -385,7 +387,7 @@ stopifnot(
 
 Content-word raw counts and content-word tf-idf share all five top speeches. The representation with stopwords shares four of five with content-word raw counts. Its third-ranked speech is 2001-Bush rather than 1865-Lincoln. The average Spearman rank agreement across the three full rankings is 0.770.
 
-Random feature allocation with fixed document lengths gives a null mean of 0.953 and a 90% interval from 0.939 to 0.966. The observed agreement does not exceed that shuffled-feature null (p = 1). Agreement across representations therefore provides insufficient evidence by itself.
+Random feature allocation with fixed document lengths gives a null mean of 0.953 and a 90% interval from 0.939 to 0.966. The observed agreement does not exceed that random baseline (p = 1). Agreement across representations therefore provides insufficient evidence by itself.
 
 Outlier methods always rank one item first. The randomization removes document-specific word patterns while preserving document lengths. It compares agreement across representations with agreement from random features. The observed agreement does not exceed that null. Document length still confounds the shortest-speech result, which requires closer reading.
 
@@ -395,7 +397,7 @@ Outlier methods always rank one item first. The randomization removes document-s
 - The content-word representations have 9,193 features. The all-word representation has 9,327.
 - Under content-word raw counts, 1793-Washington is farthest and 1897-McKinley is closest to the average.
 - Distance is strongly associated with length here. The shortest speeches occupy the highest ranks.
-- The three representation rankings do not agree more than shuffled features predict after lengths are fixed.
+- The observed rank agreement does not exceed agreement from random word counts with fixed document lengths.
 
 Use outlier scores to choose what to read next. Interpret each ranking in relation to its selected features.
 

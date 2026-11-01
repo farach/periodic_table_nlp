@@ -310,7 +310,7 @@ uses the following week.
 ## Compare spaCy entity labels
 
 spaCy gives spans of text entity labels such as `DATE` and `TIME`. The labels
-are useful clues, not answers to the resolution problem.
+help locate time expressions but do not determine their dates.
 
 ```{r}
 source("R/use-spacy.R")

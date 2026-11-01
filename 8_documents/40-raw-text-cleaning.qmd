@@ -240,10 +240,10 @@ stopifnot(
 )
 ```
 
-The two labels look alike to a hurried reader, but R does not treat them as
-identical. Whitespace squishing does not remove the control character in the
-second example. The category repair removes it. Keep an audit field if hidden
-characters help explain source damage.
+The two labels appear identical, but R treats them as different strings.
+Whitespace squishing does not remove the control character in the second
+example. The category repair removes that character. Keep an audit field if
+hidden characters help explain source damage.
 
 ## Repair mojibake carefully
 

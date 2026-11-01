@@ -223,7 +223,7 @@ stopifnot(
 
 A model token is a tokenizer unit, not necessarily a word. The prompt includes
 the instruction, brief, and source text, so all three count against the input
-budget. This demonstration uses a 256-token ceiling and refuses to truncate.
+budget. This demonstration uses a 256-token limit and prohibits truncation.
 
 ```{r}
 summary_system <- paste(
@@ -355,8 +355,9 @@ wording and generating a new account.
 
 The next table counts whitespace-separated words. That rule is easy to examine,
 but it is different from the model tokenizer used for the generation budget.
-A compression ratio below 1 means the candidate is shorter. It says nothing
-about whether the candidate kept the needed facts.
+A compression ratio is candidate length divided by source length. A ratio below
+1 means the candidate is shorter. The ratio says nothing about whether the
+candidate kept the needed facts.
 
 ```{r}
 count_words <- function(text) {
@@ -519,7 +520,7 @@ visitors. For SUM-02, the session does not include access to restricted storage.
 A general statement about limits does not preserve either rule. The string
 checks can miss changes in these relationships.
 
-Likewise, n-gram overlap metrics such as ROUGE compare word sequences with a
+N-gram overlap metrics such as ROUGE compare word sequences with a
 reference under a specified normalization rule. Normalization standardizes text
 before comparison. These metrics do not measure the share of claims with
 evidence in the source.

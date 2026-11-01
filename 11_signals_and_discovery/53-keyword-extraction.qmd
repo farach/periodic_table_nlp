@@ -250,7 +250,9 @@ RAKE favours phrases that contain tagged content words. The table also shows a t
 
 The two methods answer different questions. Tf-idf scores individual words across speeches. RAKE scores tagged word sequences within a speech. A comparison also requires matching word forms. Raw forms such as `offenses`, `wills`, and `answered` differ from RAKE lemmas such as `offense`, `will`, and `answer`.
 
-A **permutation null** is a benchmark made by randomly reordering the data values that contribute to the comparison. The **p-value** is the share of shuffled results at least as large as the observed result.
+The last comparison in this section uses a **frequency-weighted random baseline**. For each speech, the code draws two random lists of 20 lemmas and counts the shared words. A lemma that occurs more often in the speech is more likely to be drawn. The mean count across speeches is one random result, and the code makes 500 of them.
+
+The **p-value** adds 1 to the number of random results at least as large as the observed result. It then divides that sum by 501, the number of random results plus 1.
 
 ```{r}
 comparison <- tfidf_top |>
@@ -375,7 +377,7 @@ knitr::kable(
 knitr::kable(
   overlap_null_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
-  caption = "Permutation null for normalized top-20 overlap",
+  caption = "Frequency-weighted random baseline for normalized top-20 overlap",
   row.names = FALSE
 )
 ```
@@ -402,7 +404,7 @@ stopifnot(
 
 With 20 items per list, raw forms share 1.80 words on average. Lemmas share 2.27. The raw count understated agreement because it treated `offenses` and `offense` as different strings.
 
-Random frequency-weighted pairs of depth-20 lists from the same speech averaged 1.62 shared words. The central 90% of shuffles ranged from 1.38 to 1.85. The observed normalized overlap exceeds that null (p = 0.002), but the practical overlap remains small.
+Random frequency-weighted pairs of depth-20 lists from the same speech averaged 1.62 shared words. The central 90% of the 500 random results ranged from 1.38 to 1.85. No random result reached the observed 2.27, so p = 1/501, which rounds to 0.002. That is the smallest p-value possible with 500 random results. The observed normalized overlap exceeds that baseline, but the practical overlap remains small.
 
 Keyword extractors always return a list. The comparison above removes disagreement caused by different word forms. It then measures overlap between random lists that preserve the speech's word-frequency weights. This comparison adds evidence about the list beyond the algorithm's output alone.
 

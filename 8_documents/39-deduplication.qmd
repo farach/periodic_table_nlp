@@ -5,10 +5,9 @@ description: "Learn how exact, normalized, and near-duplicate checks behave on R
 categories: [documents, deduplication, workforce research]
 ---
 
-Before training and evaluation, one repeated record can make a collection look
-larger than it is. The coordinator sees the same training sentence more than
-once and has to decide whether it represents a repeated record or a separate
-notice.
+A repeated record can make a collection appear larger than it is before
+training and evaluation. The coordinator must distinguish a duplicated training
+sentence from separate notices that contain the same sentence.
 
 That choice affects later counts. Duplicate documents can inflate phrase and
 label frequencies. They can also place the same information in both training
@@ -35,7 +34,7 @@ After this lesson, you should be able to:
 - find exact duplicates with a SHA-256 hash.
 - find formatting-only duplicates with a normalized hash.
 - compare near duplicates with character trigram distance.
-- choose a threshold by naming the error it makes cheaper.
+- choose a threshold based on the relative costs of its errors.
 :::
 
 ```{r}
@@ -409,9 +408,9 @@ visible.
 
 ## Compare thresholds
 
-A **threshold** is the distance at or below which the pipeline joins two
-documents. The lesson does not fit the threshold. The team tries several values and
-counts both kinds of outcome.
+A **threshold** is the maximum distance at which the pipeline joins two
+documents. The lesson does not fit the threshold. The team tries several values
+and counts correct and incorrect joins.
 
 ```{r}
 threshold_sweep <- tibble(

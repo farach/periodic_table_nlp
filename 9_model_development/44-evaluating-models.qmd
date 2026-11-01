@@ -201,7 +201,7 @@ results. The minimum and maximum show the range across the 10 runs.
 
 Unlike five-fold cross-validation, repeated holdout does not guarantee that each
 speech appears in exactly one test set. Here it measures sensitivity to the split
-rather than guides model selection.
+and plays no part in model selection.
 
 ```{r}
 score_table <- split_summary |>

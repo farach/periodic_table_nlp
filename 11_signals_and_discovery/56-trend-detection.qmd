@@ -20,7 +20,7 @@ This lesson shows how to:
 - normalize word counts per thousand alphabetic tokens.
 - put a mark on rates from very short speeches.
 - recompute each peak after removing its peak speech.
-- compare one trajectory with a permutation null.
+- compare a peak rate with a length-weighted random baseline.
 :::
 
 ```{r}
@@ -246,7 +246,9 @@ The chart shows word rates rather than causes. A rate increase can reflect diffe
 
 The largest-contributor check must use the reported statistic. Here that statistic is the peak rate. The analysis recomputes each word's rate after it excludes the speech with the maximum per-thousand value.
 
-A **permutation null** asks what peak appears after the word occurrences are randomly reassigned. The **p-value** is the fraction of those shuffled peaks that are at least as high as the observed peak.
+For this **random baseline**, each word occurrence is assigned to a speech at random. Each speech's probability is proportional to its number of alphabetic tokens. Assignments are independent, so a speech can receive more than one occurrence. The code makes 1,000 allocations and records the highest rate in each.
+
+The **p-value** adds 1 to the number of random peaks at least as high as the observed peak. It then divides that sum by the number of random peaks plus 1.
 
 ```{r}
 constitution_counts <- trend_counts |>
@@ -310,7 +312,7 @@ knitr::kable(
 knitr::kable(
   constitution_peak_null_display,
   col.names = c("Observed", "Null mean", "Null low", "Null high", "p-value", "Replicates", "Alternative"),
-  caption = "Permutation null for the constitution peak rate",
+  caption = "Length-weighted random baseline for the constitution peak rate",
   row.names = FALSE
 )
 ```

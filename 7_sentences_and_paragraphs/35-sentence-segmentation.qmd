@@ -124,7 +124,7 @@ next three contain a title, an abbreviation, a decimal, and an initial.
 
 ## Compare three splitters
 
-The naive rule below splits wherever it sees a full stop. `tokenizers` uses a
+The naive rule below splits text at every full stop. `tokenizers` uses a
 sentence-splitting rule from an R package. spaCy uses a trained English pipeline.
 `spacy_parse()` returns one row per token, and its `sentence_id` column records
 the boundary spaCy chose.

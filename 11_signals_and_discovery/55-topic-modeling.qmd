@@ -252,8 +252,9 @@ across successive iterations. The analyst chooses the iteration count,
 warm-up, and number of retained samples. Both methods fit LDA but can return
 different answers.
 
-Other topic models use different assumptions. A correlated topic model lets
-topics appear together instead of assuming independent topic proportions.
+Other topic models use different assumptions. LDA cannot represent a tendency
+for some topics to appear together in the same documents. A correlated topic
+model can represent that tendency.
 A structural topic model can use document information such as year to calculate
 estimates of topic prevalence or content. Seeded and supervised topic models add analyst
 guidance or an outcome. These models answer different questions and are not
@@ -350,7 +351,7 @@ The row names identify topics by number. The words are high-probability terms un
 
 Topic numbers are arbitrary. Topic 1 in one run does not have to be topic 1 in another run. The comparison below matches topics by the largest total overlap in their top-10 term sets.
 
-A **permutation null** computes the comparison again after shuffling topic assignments across top-term rows. The **p-value** reports how often those shuffled runs match or exceed the observed overlap.
+A **permutation null** computes the comparison again after shuffling topic assignments across top-term rows. The **p-value** adds 1 to the number of shuffled runs that match or exceed the observed overlap. It then divides that sum by the number of shuffled runs plus 1.
 
 ```{r}
 permutations <- function(x) {

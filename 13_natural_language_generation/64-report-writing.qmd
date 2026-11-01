@@ -49,9 +49,9 @@ The brief limits the report before sentence generation:
 
 ## Build an evidence ledger
 
-An **evidence ledger** gives each usable result an ID. Each report sentence can
-refer to source records. This approach establishes sources before writing,
-rather than adding them afterward.
+An **evidence ledger** is a table that gives each usable result an ID. Each
+report sentence can refer to source records. This approach establishes sources
+before writing, rather than adding them afterward.
 
 ```{r}
 library(dplyr)
@@ -620,7 +620,7 @@ continuation would still not supply evidence for its own claims.
 
 - State the audience and decision before generating prose.
 - Select claims with source evidence before arranging sentences.
-- Keep evidence IDs, units, splits, and limits attached.
+- Keep evidence IDs, units, splits, and limits with each claim.
 - Templates improve reproducibility. They do not establish truth.
 - A language model may draft wording, but new claims require evidence.
 - Automated factual checks and human prose checks answer different questions.

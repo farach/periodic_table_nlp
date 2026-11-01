@@ -170,7 +170,7 @@ to a particular reader.
 
 A **lead baseline** selects the first sentences. News openings often contain the main facts, so summaries that use those openings can perform well. Here the baseline provides only a comparison.
 
-A **permutation null** gives the same statistic after random shuffling. The **p-value** is the share of shuffled selections at least as extreme as the observed selection.
+A **permutation null** gives the same statistic after random shuffling. The **p-value** adds 1 to the number of shuffled selections at least as extreme as the observed selection. It then divides that sum by the number of shuffled selections plus 1.
 
 ```{r}
 lead_baseline <- sentence_data |>

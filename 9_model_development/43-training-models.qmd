@@ -144,8 +144,8 @@ from a source document together. It leaves `r nrow(riverton_testing)` test
 sentences from one document, containing
 `r n_distinct(riverton_testing$reference_label)` of the five labels.
 A single changed answer would move accuracy by about
-`r round(100 / nrow(riverton_testing), 1)` percentage points. That is not enough
-evidence to calculate an adequate estimate of prediction performance.
+`r round(100 / nrow(riverton_testing), 1)` percentage points. A test set this
+small cannot give a reliable estimate of prediction performance.
 
 ## Use a larger corpus
 
@@ -222,9 +222,9 @@ Paragraphs before 1900 have median length
 paragraphs have median length
 `r era_counts$median_words[era_counts$era == "1900 or later"]`.
 
-That size does not make the task general to all political speech or all
-historical writing. It gives the lesson enough held-out paragraphs to examine a
-specific claim on this corpus.
+This corpus does not represent all political speech or all historical writing.
+It gives the lesson enough held-out paragraphs to examine a specific claim
+about these speeches.
 
 ## Keep the final test set out of model selection
 
@@ -476,9 +476,10 @@ stopifnot(
 
 Ridge with penalty `0.01` has the highest mean balanced accuracy,
 `r round(selected_candidate$mean_bal_accuracy, 4)`. The fold-to-fold standard
-errors overlap the nearby candidates, so the table does not establish the
-best model for every corpus. The lesson retains ridge because it ranks first here and
-provides a linear model. Lesson 45 examines its coefficients.
+errors overlap those of the nearby candidates, so the table does not
+establish the best model for every corpus. The lesson retains ridge because it
+ranks first here and provides a linear model. Lesson 45 examines its
+coefficients.
 
 The selected penalty is the lowest ridge value tried. Less **shrinkage**, or
 reduction in coefficient magnitudes, helped among these four settings. That
@@ -500,12 +501,12 @@ A tidymodels pipeline has four parts:
 3. An **engine** names the package that performs the calculations. Here that
    package is glmnet.
 4. A **workflow** keeps the recipe and model specification together. **Fitting**
-   the workflow calculates estimates of model weights from supplied training data.
+   uses training data to estimate model weights.
 
 The recipe converts text into model columns. **Tf-idf** means term frequency times
-inverse document frequency. In plain language, a word counts for more in a
-paragraph when it is common there and rare elsewhere. The recipe first removes
-stop words such as `the` and `of`. It then retains the 500 most frequent
+inverse document frequency. A word gets more weight in a paragraph when it is
+common there and rare elsewhere. The recipe first removes stop words such as
+`the` and `of`. It then retains the 500 most frequent
 remaining tokens.
 
 The selected model is **logistic regression**, a linear classifier for
@@ -601,12 +602,10 @@ speeches. The model scores `r round(live_accuracy, 4)` accuracy and
 from training would score `r round(split_baseline_accuracy, 4)` on this exact
 test set. That rate is below 0.5 because the training majority is
 `1900 or later`, while this test split contains more `before 1900` paragraphs.
-Keeping speeches whole does not preserve the corpus class mix.
 
-The corpus-wide
-largest-class baseline is
-`r round(corpus_baseline, 4)`, but the same-split comparison is the one a
-deployable rule could use.
+Keeping speeches whole does not preserve the corpus class mix. The corpus-wide
+largest-class baseline is `r round(corpus_baseline, 4)`, but the same-split
+comparison is the one a deployable rule could use.
 
 ## What the fit did not prove
 

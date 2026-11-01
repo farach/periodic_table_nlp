@@ -1,7 +1,7 @@
 ---
 title: "Small grammar checks"
 subtitle: "Score three checks and keep the limits visible"
-description: "Learn how small grammar checks can find planted errors and why they are not a full grammar checker."
+description: "Learn how small grammar checks can find inserted errors and why they are not a full grammar checker."
 categories: [sentences and paragraphs, grammar checking, workforce research]
 ---
 
@@ -12,9 +12,9 @@ A spelling check compares words with accepted spellings. **Grammar** concerns
 how words combine in sentences. This lesson builds three small checks for
 sentences with deliberately inserted errors.
 
-This project does not install a grammar checker, so the lesson builds three
-small checks by hand and treats them as a demonstration. Offline means the check
-uses local files, without sending text to a web service.
+This project does not install a grammar checker. The three custom checks
+demonstrate selected rules rather than provide a complete checker. An offline
+check uses local files without sending text to a web service.
 
 ::: {.callout-note}
 The Riverton sentences and marked grammar examples are invented for this lesson.
@@ -142,7 +142,7 @@ stopifnot(
 ```
 
 The author marks seven of the 14 test sentences as correct. The other seven
-each contain one planted error. Success on these examples does not establish
+each contain one inserted error. Success on these examples does not establish
 general grammar-checking performance.
 
 ## Do the three checks
@@ -296,14 +296,14 @@ stopifnot(
 ```
 
 The checks and expected answers share an author, so the score is a teaching
-check rather than an accuracy estimate. A true positive is a planted error that a
+check rather than an accuracy estimate. A true positive is an inserted error that a
 check puts a mark on. A false positive is a correct sentence that a check puts a
-mark on. A false negative is a planted error that a check misses. A true
-negative is a correct sentence it leaves alone.
+mark on. A false negative is an inserted error that a check misses. A true
+negative is a correct sentence with no mark from the check.
 
-The subject-verb number check finds all three planted number errors in this
+The subject-verb number check finds all three inserted number errors in this
 small set. The doubled-word check finds both repeated-word examples. The
-article check finds the two planted `a` mistakes but also puts a mark on the
+article check finds the two inserted `a` mistakes but also puts a mark on the
 correct phrases `an hour` and `A university`.
 
 That rule uses the first letter, while English article choice depends on
@@ -311,11 +311,11 @@ sound. `Hour` begins with a vowel sound because its h is silent.
 `University` begins with a consonant y sound. The rule uses letters without
 pronunciation information.
 
-A real grammar checker uses thousands of rules, a trained model, or both. These
-three checks demonstrate the idea. The project trains its deliberately weak
+A complete grammar checker uses thousands of rules, a trained model, or both.
+These three checks demonstrate selected rules. The project trains its deliberately weak
 UDPipe model on 500 sentences. Model errors can affect every subject-verb
-result. The article rule deliberately contains an error to demonstrate its
-failure.
+result. The article rule deliberately ignores pronunciation so the lesson can
+demonstrate the resulting errors.
 
 ## Try the Riverton sentences
 

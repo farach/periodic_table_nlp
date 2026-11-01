@@ -491,10 +491,15 @@ stopifnot(
 )
 ```
 
-Many scores are near 0 or 1. The median is 0.8629 because the later era is the
-larger class in this test split. The model encounters more examples from the
-larger class. A naive baseline therefore classifies many rows correctly by
-predicting that class.
+Many scores are near 0 or 1. The median is 0.8629. The later era is the larger
+class in this test split, and the model gives most later-era paragraphs high
+scores. Both facts make the median high. This lesson does not measure the
+separate effect of each fact.
+
+**Class imbalance** means that one class has more rows than another. The
+train-majority baseline gives every test row the label of the larger training
+class. With class imbalance, that rule labels many rows correctly without using
+the text.
 
 ## Choose the cut point
 

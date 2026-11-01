@@ -34,9 +34,10 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Load paragraphs and build periods
 
 **Multi-class classification** means one document receives one label from several
-mutually exclusive choices. The four periods below are equal-width year bins:
-1789-1847, 1848-1906, 1907-1965, and 1966-2025. They are technical bins for this
-lesson, not claims about political history.
+mutually exclusive choices. The four periods below are year bins: 1789-1847,
+1848-1906, 1907-1965, and 1966-2025. The first three bins are 59 years long, and
+the last bin is 60 years long. All four are technical bins for this lesson, not
+claims about political history.
 
 ```{r}
 library(readr)
