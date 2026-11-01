@@ -37,6 +37,20 @@ are in place.
 - The remaining optional items in the pull request description, such as K11,
   K35, and K36, are small wording and disclosure points.
 
+## Lesson 29 maximum pay amounts
+
+The expected answers put the amount from `Up to $21/hour` in the lower-amount
+column. The parser returns the same value, so the score counts it as a match.
+The amount is a maximum, and a paragraph below the example table says so. A
+later pull request can add an `up to` rule that puts 21 in the upper-amount
+column, and change the expected answers to match. It must also update:
+
+- the `parser_result` rule, which calls a row without a lower amount "not a
+  price";
+- the special-case table, which counts rows with an upper amount as ranges and
+  rows without a lower amount as having no number;
+- the hidden checks, the counts in the prose, and that paragraph.
+
 ## Lesson 74 collection builder
 
 `data-raw/build-riverton-review-collection.R` was frozen once lesson 74 had its

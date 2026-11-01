@@ -56,6 +56,14 @@ prose without inspecting raster image pixels. Automated browser tests and
 selected image inspections provide separate evidence. They do not establish
 complete visual or screen-reader coverage.
 
+After the `85af844` review snapshot, lessons 29 through 35, 37 through 44, 47,
+51 through 57, and 64 through 66 received further authored-prose edits. Table
+captions in lessons 53, 56, and 57 were also corrected. They sit in code chunks
+that earlier reviews left unchanged, and the repository owner approved the
+three new captions. Existing CSV rows remain records of the earlier source and
+rendered files. They do not cover the revised text. A new rendered-page review
+of those edits remains pending.
+
 ## Vocabulary records
 
 `technical-terms.csv` retains the 242-record baseline used for the source
