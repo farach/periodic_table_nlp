@@ -1,14 +1,13 @@
 ---
 title: "Drawing a knowledge graph"
 subtitle: "Use IDs, arrows, labels, and tables before reading a layout"
-description: "Learn how to draw a small knowledge graph in R with ggraph while keeping identifiers, edge labels, layout limits, and text alternatives visible."
+description: "Learn how to draw a small knowledge graph with ggraph in R. Keep identifiers, edge labels, layout limits, and text alternatives visible."
 categories: [information visualization, knowledge graph visualization, networks]
 ---
 
-Chloe has a tidy table of Riverton facts, but the table is hard to scan when
-she wants to follow a path. Which organisation offers the credential? Which
-deadline values did the knowledge base keep for review? Which place label might
-cause trouble if IDs were ignored?
+Chloe wants to follow relationships in a table of Riverton facts. Which
+organisation offers the credential? Which deadline values remain for human checks?
+Which place label could merge distinct places if the graph ignored IDs?
 
 **Knowledge graph visualization** draws entities as nodes and typed relations as
 edges. In this lesson, the edges are directed and labelled because the relation
@@ -26,12 +25,12 @@ The Riverton entities and facts in this lesson are fictional teaching records re
 
 By the end of this lesson, you will be able to:
 
-- key graph nodes by entity ID instead of display label;
-- show how label-keyed data wrongly merges two Riverton places;
+- identify graph nodes by entity ID instead of display label
+- show how label-based keys incorrectly merge two Riverton places
 - draw directed, labelled edges with ggraph, the ggplot2 extension for
-  networks;
-- explain why layout coordinates can change and are not data;
-- give a captioned edge table as the text alternative; and
+  networks
+- explain why layout coordinates can differ without a change in graph data
+- give a captioned edge table as the text alternative
 - compare a co-word network with a typed knowledge graph.
 :::
 
@@ -101,7 +100,7 @@ edges |>
     document_ids
   ) |>
   knitr::kable(
-    col.names = c("From", "Relation", "To", "Supporting documents"),
+    col.names = c("From", "Relation", "To", "Source documents"),
     caption = "Every edge drawn in the Riverton knowledge graph",
     row.names = FALSE
   )
@@ -123,17 +122,17 @@ stopifnot(
 )
 ```
 
-The table is the long description of the graph. It lists every drawn edge with
-IDs and labels, so each relation can be checked without seeing the picture.
-Both deadline values are kept because the knowledge base flagged them as a
-dated conflict rather than choosing one automatically. No year appears in these
-labels because the announcements say only `October 15` and `November 1`.
+The table provides the graph's long description. It lists IDs and labels for
+every edge, so readers can examine relations without the picture. The knowledge
+base retains both deadline values as a dated conflict for human checks. It does not
+select one automatically. The labels omit years because the announcements say
+only `October 15` and `November 1`.
 
 ## Show the label-keyed mistake
 
-If the graph used labels as node keys, both `Riverton` records would collapse
-into one node. That would merge two different places, so any later fact about
-one Riverton would appear to belong to the other.
+If the graph used labels as node keys, both `Riverton` records would merge into
+one node. A later fact about either place would then appear to describe the
+other place too.
 
 ```{r}
 id_graph <- tbl_graph(
@@ -192,8 +191,7 @@ stopifnot(
 
 `tbl_graph()` from tidygraph builds the graph from the two tables, with the
 entity ID as the node key. The ID-keyed graph has eight vertices. The
-label-keyed graph has seven because the two places named `Riverton` have been
-merged.
+label-keyed graph has seven because it merges the two places named `Riverton`.
 
 ```{r}
 name_clash <- nodes |>
@@ -215,7 +213,7 @@ unconnected_nodes <- nodes |>
 knitr::kable(
   name_clash,
   col.names = c("Shared label", "IDs with label", "Entity IDs", "Entity types"),
-  caption = "The name clash is a label problem, not a factual graph edge",
+  caption = "The shared name is a label problem, not a factual graph edge",
   row.names = FALSE
 )
 
@@ -244,20 +242,20 @@ yet. It places them in its bottom row, and the table above names them.
 
 ## Place nodes by hand and draw arrows
 
-**ggraph** draws graphs with the same grammar as ggplot2: a layout gives each
-node a position, `geom_edge_*()` layers draw the edges, and `geom_node_*()`
-layers draw the nodes. Here the layout is written by hand, so the drawing stays
-the same on every render while Chloe reads the arrows and labels.
+**ggraph** draws graphs with the same graphics grammar as ggplot2. A layout
+gives each node a position. `geom_edge_*()` layers draw edges, and
+`geom_node_*()` layers draw nodes. The author specifies this layout manually,
+so positions remain fixed across renders.
 
-The bottom row holds the nodes with no populated fact. Apart from that row, up,
-down, left, right, rotation, and mirror image carry no data. Count links in the
-table if you need a number. Viewers tend to read a centrally drawn node as more
-important, so the drawing should not be used as an importance score.
+The bottom row contains nodes with no populated fact. Apart from that row,
+position, rotation, and reflection represent no data. Count links in the table
+if you need a number. Viewers tend to interpret central nodes as more
+important. Do not treat this layout as an importance score.
 
 ```{r}
 #| label: fig-riverton-graph
-#| fig-cap: "ID-keyed Riverton knowledge graph with directed, labelled edges; the bottom row holds nodes with no populated fact."
-#| fig-alt: !expr paste0("A node-link diagram of ", nrow(nodes), " nodes, each labelled with a name and an ID, and ", nrow(edges), " directed relation edges. Riverton Skills Centre (ORG-0002) offers the Data Support Certificate (CRD-0002) and has two application deadlines, October 15 and November 1. A bottom row holds four nodes with no populated fact, including the two places labelled Riverton, which stay separate because they have different IDs. The exact edges are listed in the edge table above.")
+#| fig-cap: "ID-keyed Riverton knowledge graph with directed, labelled edges. The bottom row contains nodes with no populated fact."
+#| fig-alt: !expr paste0("A node-link diagram has ", nrow(nodes), " named, ID-labelled nodes and ", nrow(edges), " directed relation edges. Riverton Skills Centre (ORG-0002) offers the Data Support Certificate (CRD-0002). Its two application deadlines are October 15 and November 1. Four bottom-row nodes have no populated fact. These include two places named Riverton, which distinct IDs keep separate. The edge table lists the exact relations.")
 #| fig-width: 9
 #| fig-height: 6
 
@@ -324,8 +322,8 @@ graph_plot <- ggraph(
   labs(
     title = "Facts connect IDs, so the two places named Riverton stay apart",
     subtitle = str_c(
-      "Arrows point from subject to object and carry the relation. ",
-      "The bottom row holds nodes with no populated fact."
+      "Arrows point from subject to object and show the relation. ",
+      "The bottom row contains nodes with no populated fact."
     )
   ) +
   theme_lesson(grid = "none") +
@@ -417,13 +415,13 @@ the caption and table make the same information available outside the image.
 The fill colours group node types, and the ID prefix inside every label says
 the same thing in words.
 
-## Check that a layout seed changes only the picture
+## Examine whether a layout seed changes only the picture
 
-Force-directed layouts are useful for many graphs, but their coordinates depend
-on random starting positions. A layout cannot change the graph's edges or
-degrees; it only assigns positions. The code below runs two seeded
-Fruchterman-Reingold layouts and checks only whether their coordinates are
-identical, without printing them.
+**Force-directed layouts** compute node positions with simulated attraction and
+repulsion. Their coordinates depend on random starting positions. A layout
+changes positions, not graph edges or degrees. A node's **degree** counts its
+connections. The code computes two seeded Fruchterman-Reingold layouts. It
+compares coordinates for equality without printing them.
 
 ```{r}
 layout_for_seed <- function(graph, seed) {
@@ -447,17 +445,17 @@ stopifnot(
 )
 ```
 
-`FALSE` means the two seeds put the same eight nodes in different places. Use
-the hand-placed figure to follow the labelled arrows; the seeded check is here
-only to show why coordinates should not be treated as facts.
+`FALSE` means the two seeds place the same eight nodes at different coordinates.
+Use the manually positioned figure to follow labelled arrows. The seed
+comparison shows why coordinates are not facts about relationships.
 
 ## Build a co-word network for comparison
 
-A co-word network is a different graph. Its nodes are words. Its edges are
-undirected and based on how often two words appear in the same unit. Here the
-unit is an inaugural paragraph. The word rule keeps alphabetic tokens of four
-or more letters, lowercases them in English, removes tidytext stop words, and
-uses paragraph presence rather than raw repeated counts.
+A **co-word network** has words as nodes. Its undirected edges represent how
+often words appear in the same unit, here an inaugural paragraph. The word rule
+retains alphabetic tokens of four or more letters. It converts them to English
+lowercase and removes tidytext stop words. Each word counts once per paragraph,
+regardless of additional occurrences.
 
 ```{r}
 paragraphs <- inaugural_paragraphs()
@@ -539,25 +537,26 @@ stopifnot(
 )
 ```
 
-Raw co-occurrence among these ten frequent words is a complete graph: all 45
-pairs appear in at least one paragraph. The threshold is the author's choice
-for this lesson. It keeps `r nrow(coword_edges)` pairs and drops
-`r nrow(word_pairs) - nrow(coword_edges)` by requiring the observed count to be
-at least 1.8 times the count expected if the two words were independent,
-`count(word A) * count(word B) / paragraphs`. The top-ten words left out of the
-drawing are `r str_c(undrawn_words, collapse = ", ")`.
+Raw co-occurrence among these ten frequent words forms a complete graph: all 45
+pairs occur in at least one paragraph. The author chose the threshold for this
+lesson. It retains `r nrow(coword_edges)` pairs and excludes
+`r nrow(word_pairs) - nrow(coword_edges)` pairs.
+
+The observed count must be at least 1.8 times the expected count under
+independence. That expected count is
+`count(word A) * count(word B) / paragraphs`. The excluded top-ten words are
+`r str_c(undrawn_words, collapse = ", ")`.
 
 ## Draw the co-word graph
 
 The co-word graph uses the same ggraph grammar, but its edges are not typed
-facts. They are paragraph-level co-occurrences that passed the threshold, so
-each edge is labelled with its observed-to-expected ratio instead of a
-relation.
+facts. They are paragraph-level co-occurrences that passed the threshold. Each edge
+shows its observed-to-expected ratio instead of a relation.
 
 ```{r}
 #| label: fig-coword-network
 #| fig-cap: "Co-word network for the three top-word pairs that passed the observed-versus-expected threshold."
-#| fig-alt: "An undirected co-word diagram whose nodes are content words and whose edges are thresholded paragraph co-occurrences, each labelled with its observed-to-expected ratio. The kept edges and counts are listed in the table 'Co-word edges kept by the observed-versus-expected threshold'."
+#| fig-alt: "An undirected co-word diagram has content words as nodes. Edges represent paragraph co-occurrences above the threshold and display observed-to-expected ratios. The table 'Co-word edges kept by the observed-versus-expected threshold' lists retained edges and counts."
 #| fig-width: 8
 #| fig-height: 4.6
 
@@ -632,21 +631,21 @@ stopifnot(
 ```
 
 Unlike the Riverton knowledge graph, this co-word network has no entity IDs, no
-relation types, and no direction. It can show which word pairs survived a
+relation types, and no direction. It shows which word pairs remain after a
 preprocessing and threshold decision. It cannot say that the words mean the
 same thing or that one caused the other to appear.
 
 ## What to remember
 
-- Use stable IDs as node keys; labels can collide.
+- Use stable IDs as node keys. Distinct nodes can share a label.
 - The two `Riverton` places merge if labels are treated as IDs.
 - A force-directed layout is a computed drawing, not a measurement.
-- Arrowheads and relation labels carry the graph meaning.
+- Arrowheads and relation labels represent graph relationships.
 - The edge-list table is part of the graph's text alternative.
 - Co-word edges are thresholded co-occurrences, not typed knowledge-base facts.
 
-Start with the edge table, then use the drawing only as a guide to the paths it
-lists.
+Read the edge table first. Use the drawing to follow the paths listed in that
+table.
 
 ## Sources
 

@@ -1,27 +1,25 @@
 ---
 title: "Choosing which examples to label next"
 subtitle: "Use active learning without confusing uncertainty with truth"
-description: "Learn how a small model can rank unlabeled workforce sentences for human review."
+description: "Learn how a small model can rank unlabeled workforce text for people to label."
 categories: [training data, active learning, workforce research]
 ---
 
 A finished codebook covers training, requirements, schedules, skills, and other
-workforce text. For this exercise, five complete job
-postings form the labeled starting set. A sixth posting and the flyer form an
-unlabeled pool. The team could
-read the pool in file order. It tests whether a small model can point
-to cases that its current evidence does not separate cleanly.
+workforce text. Five complete job postings form the labeled starting set.
+A sixth posting and the flyer form an unlabeled pool.
+The team could read the pool in file order. Instead, it examines whether a small
+model can find cases that its current evidence does not distinguish clearly.
 
-**Active learning** is a loop in which a model helps choose the next items for
-people to label. The model does not supply the answer. It points to examples
-that meet a selection rule, and a person applies the codebook. Here, that rule
-measures uncertainty about `training`, not which sentence matters most to a
-worker.
+**Active learning** uses successive model updates to help select items for
+human labeling. The model does not supply the answer. It selects examples
+under a rule, and a person applies the codebook.
+Here, the rule measures uncertainty about `training`, not a sentence's
+importance to a worker.
 
 ::: {.callout-note}
-The sentences and research team are fictional. The model is deliberately small
-and exists to make the selection logic visible; it is not suitable for
-workforce decisions.
+The sentences and research team are fictional. The deliberately small model
+makes the selection logic visible. It is not suitable for workforce decisions.
 :::
 
 ::: {.callout-tip}
@@ -29,11 +27,11 @@ workforce decisions.
 
 By the end of this lesson, you will be able to:
 
-- separate an initial labeled set from an annotation pool;
-- explain uncertainty sampling;
-- rank items by distance from a 50% model score;
-- reveal labels only after selection;
-- show that a selected subset moves an estimate either way; and
+- separate an initial labeled set from an annotation pool.
+- explain uncertainty sampling.
+- rank items by distance from a 50% model score.
+- reveal labels only after selection.
+- show that a selected subset can increase or decrease an estimate.
 - name the biases that active learning can introduce.
 :::
 
@@ -46,13 +44,14 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Hide the answers in the annotation pool
 
-The teaching file contains reviewed labels so the lesson can check its work.
+The teaching file contains reviewed labels for comparison with results.
 During selection, the model receives labels from documents `J001` through
 `J005`. The complete `J006` posting and `F001` flyer form the annotation pool.
-Keeping documents intact avoids training on one part of a posting while
-selecting another part from the same source. The code below opens files with
-readr, handles tables with dplyr and tibble, repeats checks with purrr, and
-matches text with stringr.
+Keeping documents intact prevents training and selection from using different
+parts of the same posting.
+
+The code uses readr for files and dplyr and tibble for tables.
+It uses purrr for successive checks and stringr for text matching.
 
 ```{r}
 library(readr)
@@ -131,9 +130,9 @@ stopifnot(
 )
 ```
 
-The labels are stored separately and do not enter the selection calculation.
-This prevents the lesson from using an answer that would be unavailable in a
-real annotation round.
+The code stores pool labels separately and excludes them from selection.
+The selection calculation therefore cannot use answers unavailable in a real
+annotation round.
 
 ## Fit a small keyword model
 
@@ -142,16 +141,18 @@ terms appear, then compares how often those terms occur in training and
 non-training sentences. Half-count smoothing prevents an observed term from
 receiving a conditional probability of exactly zero or one.
 
-This model is transparent enough to inspect, but its assumptions are strong.
+A reader can examine the model's calculations, but its assumptions are strong.
 It treats the selected terms as conditionally independent and ignores word
 order, context, and most of the sentence.
 
-The candidate terms come from the codebook and labeled examples, not from
-reading the held-back pool. The code removes any candidate never observed in
-the labeled set. The short form `\(keyword)` means a small function with one
-input named `keyword`. Otherwise add-one smoothing could make an unseen term
-appear more common in the smaller class merely because its denominator is
-smaller.
+The candidate terms come from the codebook and labeled examples, not the
+held-back pool. The code removes candidates absent from the labeled set.
+The shorthand `\(keyword)` defines a small function with one input named
+`keyword`.
+
+Without that removal, add-one smoothing could make an unseen term appear more
+common in the smaller class. The difference would reflect only the smaller
+denominator.
 
 ```{r}
 candidate_keywords <- c(
@@ -327,10 +328,10 @@ stopifnot(
 )
 ```
 
-The half-count smoothing keeps probabilities away from zero and one. The
-assertion also requires each smoothed difference to point in the same direction
-as the observed difference. A term never seen in a training row cannot become
-positive evidence for training merely because that class is smaller.
+Half-count smoothing prevents probabilities of zero and one.
+The assertion requires each smoothed difference to have the same sign as the
+observed difference. A term absent from training rows cannot become positive
+training evidence merely because that class is smaller.
 
 The score used next is the model's estimate under this small dataset and model.
 It is not a validated probability that the label is correct.
@@ -393,9 +394,10 @@ stopifnot(
 ```
 
 The first two rows are the next annotation candidates. Neither contains a
-feature seen in the labeled set, so both receive the same score. This is a
-useful failure of uncertainty-only selection: a score can reflect missing
-vocabulary rather than a subtle boundary between labels.
+feature from the labeled set, so both receive the same score.
+This exposes a limit of uncertainty-only selection.
+A score can reflect missing vocabulary rather than a difficult distinction
+between labels.
 
 ## People still assign the labels
 
@@ -458,7 +460,7 @@ stopifnot(
 )
 ```
 
-The two sentences receive `schedule` and `other`. Human review adds distinctions
+The two sentences receive `schedule` and `other`. Human labeling adds distinctions
 that the binary training detector cannot express. The tie shows why a practical
 selection policy may combine uncertainty with diversity and explicit coverage
 goals.
@@ -468,10 +470,10 @@ goals.
 A model can be confidently wrong. Selecting only uncertain examples may also
 overlook:
 
-- communities or languages absent from the initial labels;
-- rare cases the model scores with false confidence;
-- duplicate examples that consume the annotation budget;
-- important harms that occur infrequently; and
+- communities or languages absent from the initial labels.
+- rare cases with incorrect but confident model scores.
+- duplicate examples that consume the annotation budget.
+- important harms that occur infrequently.
 - examples far from the model's training distribution.
 
 A stronger plan combines uncertainty with random audit samples, diversity,
@@ -481,15 +483,16 @@ design, selection, or training.
 
 ## Selection changes the estimate, and not in a fixed direction
 
-One consequence is easy to state backwards. A set of examples chosen because
-the model found them hard is not a picture of the whole pool, so a number
-measured on it is not a pool-level number. The tempting next sentence, that the
-measured error therefore looks worse than the truth, is not a rule. It depends
-on what the rule selected.
+Model-selected examples do not necessarily represent the whole pool.
+Here, **selection bias** means systematic error in a pool-level estimate
+caused by the item-selection process.
+A measurement on those examples therefore describes the selected subset, not
+the pool. Selection does not always increase measured error.
+The direction depends on which examples the rule selects.
 
-The comparison below measures one quantity, the gap between the model's score
-and the label a person applied, on three sets of items: the two the uncertainty
-rule chose, the two the model was most decisive about, and the whole pool.
+The comparison measures the gap between each model score and the human label.
+It compares three sets: the two uncertainty-selected items, the two most
+decisive predictions, and the whole pool.
 
 ```{r}
 pool_outcomes <- annotation_pool |>
@@ -572,37 +575,37 @@ stopifnot(
 )
 ```
 
-The pool value is 0.112. Selecting by uncertainty raised the measured gap to
-0.194. Selecting by confidence lowered it to 0.019. Same model, same ten items,
-same quantity, and the estimate moved in opposite directions because the
-selection rule differed.
+The pool value is 0.112. Uncertainty selection increased the measured gap to
+0.194. Confidence selection reduced it to 0.019.
+The model, ten items, and quantity remained the same.
+Only the selection rule changed, producing opposite changes in the estimate.
 
-Neither direction is a law. A rule that finds hard cases usually flatters the
-data and punishes the score; a rule that finds easy cases does the reverse; a
-rule that happens to select a class the model handles well can make a weak model
-look strong. The more defensible statement is also more useful: any estimate
-computed on a selected subset describes that subset.
+Selection can increase or decrease measured error.
+Selecting difficult cases can reduce a score, while selecting easy cases can
+increase it. Selecting a class that the model handles well can make a weak
+model appear stronger. Each estimate describes the selected subset.
 
-The remedy has not changed. Keep a fixed evaluation set drawn at random,
-disjoint by document from anything active learning touches, and report pool-level
-numbers only from it. In this exercise the classifier also happens to place all
-ten pool items on the correct side of 0.5, which is worth stating plainly and
-worth trusting very little: ten items, a vocabulary built from the labeled
-documents, and no independent test set.
+Keep a fixed, randomly selected evaluation set.
+Exclude its documents from active-learning feature design, selection, and
+training. Use that set for pool-level estimates.
+
+This classifier places all ten pool items on the correct side of 0.5.
+That result has strict limits. The exercise uses ten items, vocabulary from
+the labeled documents, and no independent test set.
 
 ## What to remember
 
-- Active learning chooses what people label next; it does not replace them.
+- Active learning selects items for human labeling. It does not replace people.
 - Hide pool labels until after selection.
 - A score near 0.5 is uncertain only under the current model.
 - Confidence is not the same as correctness or social importance.
-- A number measured on selected items can land above or below the pool value.
+- A measurement on selected items can exceed or be less than the pool value.
 - Audit random, rare, and underrepresented cases alongside uncertainty.
 
-The selection trail accounts for two new reviews, but it does not broaden what
-the fictional notices cover. Selection cannot repair source coverage. The Lab
-therefore inspects three outside resources and asks whether any can answer the
-same questions before their records are combined.
+The selection record accounts for two new human decisions but does not expand the
+fictional notices' coverage. Selection cannot repair source coverage.
+Before combining records, the Lab examines three outside resources for
+information relevant to the same questions.
 
 ## Sources
 

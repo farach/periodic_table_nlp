@@ -1,26 +1,25 @@
 ---
 title: "Finding what a sentence denies"
-subtitle: "Use parser links to test a simple negation rule"
-description: "Learn why negation breaks keyword matching and how a small parser-based rule performs on workforce text."
+subtitle: "Use parser links to evaluate a simple negation rule"
+description: "Learn why keyword matches can give incorrect conclusions about negation and how a small parser-based rule performs on workforce text."
 categories: [word processing, negation recognition, workforce research]
 ---
 
-A search for experience requirements begins with an uneasy hit. The team tries a
-quick match for `experience` followed by `required` and finds a
-sentence that says, `No prior data experience is required.`
+The team searches for `experience` followed by `required`.
+The search returns `No prior data experience is required.`
 
-That match is dangerous. The words are present, but the sentence says experience
-is not required. A keyword search has found the opposite of the claim the team
-cares about.
+That match can mislead readers. Both keywords are present, but the sentence
+says experience is not required. The search returns the opposite of the
+intended claim.
 
-**Negation recognition** looks for language that reverses or blocks an ordinary
+**Negation recognition** finds language that reverses or blocks an ordinary
 positive reading. A real system needs a **scope**, the part of the sentence that
 the negating word controls.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. The hand markings below are teaching judgments
-for these 28 sentences.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching. The hand markings are teaching judgments for
+these 28 text units.
 :::
 
 ::: {.callout-tip}
@@ -28,10 +27,11 @@ for these 28 sentences.
 
 By the end of this lesson, you will be able to:
 
-- show why a keyword search can misread negation;
-- find `no` in this corpus and name trigger words it does not test;
-- define a small scope rule using dependency links;
-- read a development-set score without treating it as performance; and
+- show why a keyword search can misread negation.
+- find `no` in this corpus.
+- list trigger words absent from this evaluation.
+- write a small scope rule using dependency links.
+- read a development-set score without treating it as general performance.
 - explain why trigger words alone are not enough.
 :::
 
@@ -44,10 +44,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Parse the sentences
 
-The parser starts with the CSV, then readr reads it, dplyr and tibble shape the
-tables, purrr repeats scope work, stringr matches text, tokenizers fixes the
-word split, and udpipe applies the local model. Each sentence is passed to
-udpipe as one vertical block of tokens.
+The readr package reads the CSV, and dplyr and tibble create tables.
+The purrr package processes scopes, and stringr matches text.
+The tokenizers package fixes the word split, while udpipe applies the local
+model. Each text unit enters udpipe as a vertical token block.
 
 ```{r}
 library(readr)
@@ -108,12 +108,12 @@ stopifnot(
 )
 ```
 
-The parser supplies lemmas, relation labels, and head word IDs. Those columns
-let the team move beyond a plain string match.
+The parser supplies lemmas, relation labels, and head-word IDs.
+These columns add grammatical information to the string match.
 
-## Start with the tempting keyword search
+## Start with a keyword search
 
-The naive search below lowercases each sentence and looks for `experience`
+The naive search below lowercases each sentence and searches for `experience`
 before `required`.
 
 ```{r}
@@ -152,10 +152,10 @@ plain match is not enough for the requirement question.
 
 ## Mark negation by hand
 
-Before showing the rule, the team records a judgment for every sentence. For
-this teaching example, a sentence counts as negated when a word in it reverses
-the truth of the sentence's main claim. These are single-author teaching labels,
-so they are open to dispute.
+Before presenting the rule, the team records a judgment for each text unit.
+A unit counts as negated when one of its words reverses the truth of its main
+claim. One author supplies these teaching labels.
+Other readers may dispute them.
 
 ```{r}
 no_sentence_count <- sum(str_detect(str_to_lower(sentences$text), "\\bno\\b"))
@@ -179,7 +179,7 @@ hand_judgments <- sentences |>
 knitr::kable(
   hand_judgments,
   col.names = c("Sentence ID", "Text", "Hand-marked negated", "Reason"),
-  caption = "Hand judgments for negation in the 28 Riverton sentences",
+  caption = "Hand judgments for negation in the 28 Riverton text units",
   row.names = FALSE
 )
 ```
@@ -198,19 +198,23 @@ stopifnot(
 )
 ```
 
-Only 2 of the 28 sentences are hand-marked as negated. Both use `No`, but they
-have different shapes: one is a full sentence and one is a flyer headline.
+The author marks 2 of the 28 text units as negated.
+Both use `No`. One is a full sentence, and the other is a flyer headline.
 
-## Define a parser-based scope rule
+## Write a parser-based scope rule
 
-The rule has three parts. First, find a trigger whose lemma is `no`, `not`, or
-`never`. A surface-form backup also checks `advmod` and `det` tokens; on these 28
-sentences it never has to add a trigger. Second, build a scope from the trigger's
-head, that head's clause head, and their direct dependents. Third, mark the
-sentence negated when that scope contains a form of `be`. The rule was shaped
-after reading `s002`, so this page treats the score as a demonstration.
-This trigger-and-scope shape echoes NegEx, a rule system built for clinical notes
-in 2001; the idea is broader than that setting.
+The rule has three steps:
+
+1. Find a trigger with lemma `no`, `not`, or `never`.
+2. Select the trigger's head, its clause head, and their direct dependents as
+   the scope.
+3. Mark the sentence negated when the scope contains an auxiliary form of `be`.
+
+A surface-form backup also examines `advmod` and `det` tokens.
+It adds no triggers in these 28 units.
+The author designed the rule after reading `s002`, so this score is a
+demonstration. This trigger-and-scope structure resembles NegEx, a 2001 system
+for clinical notes. The method can apply beyond that setting.
 
 ```{r}
 negating_words <- c("no", "not", "never")
@@ -320,11 +324,11 @@ stopifnot(
 )
 ```
 
-The corpus contains `No` but not `not` or `never`; those words are in the rule so
-the pattern is explicit, not because this batch tests them. The surface-form
-backup adds no triggers here. The rule catches the full sentence because the
-scope contains `is`, and it misses the headline because the headline has no
-helper verb.
+The corpus contains `No`, but not `not` or `never`.
+The rule names those other triggers explicitly, but this batch does not
+evaluate them. The surface-form backup adds no triggers.
+The rule detects the full sentence because its scope contains `is`.
+It misses the headline because the headline has no helper verb.
 
 ## Show the development-set score
 
@@ -383,7 +387,7 @@ knitr::kable(
 knitr::kable(
   mistakes,
   col.names = c("Sentence ID", "Text", "Hand negated", "Rule negated", "Result", "Scope tokens"),
-  caption = "The case the simple rule gets wrong",
+  caption = "The case with an incorrect rule result",
   row.names = FALSE
 )
 ```
@@ -401,28 +405,35 @@ stopifnot(
 )
 ```
 
-The rule agrees with the hand marking on 27 of 28 sentences. That number should
-not be read as performance. Twenty-six sentences contain no negation, so a rule
-that never fired would score 26 of 28. The rule was written after looking at the
-two negated sentences and was shaped to catch `s002`, so `s002` is not a test of
-it. One true positive and one false negative is a recall count from two cases,
-and zero false positives in twenty-six negatives is still consistent with false
-alarms in a larger set. The score also belongs to the parser: every trigger,
-scope, and lemma comes from the 500-sentence model. Keep the error: `No prior
-experience required` has no helper verb, and this rule requires one.
+The rule agrees with hand judgments on 27 of 28 text units.
+This does not establish performance on new data.
+Twenty-six units contain no negation. A rule that never predicts negation
+would therefore score 26 of 28.
+
+The author examined both negated units before rule design and specifically
+targeted `s002`. That unit is not an independent test.
+The recall count contains one true positive and one false negative.
+Zero false positives among twenty-six negatives does not exclude false alarms
+in a larger set.
+
+The result also depends on the 500-sentence parser, which supplies every
+trigger, scope, and lemma. Preserve the observed failure.
+The headline `No prior experience required` lacks the helper verb that this
+rule requires.
 
 ## What to remember
 
 - Negation can reverse a keyword match.
-- This corpus tests `no`; it does not test `not` or `never`.
+- This corpus evaluates `no`, not `not` or `never`.
 - A scope says which words the trigger controls.
-- The simple parser rule catches `s002` and misses `s027`.
-- Trigger words are only one way English says no: `Experience is unnecessary`
-  has no trigger word and the same shape as `Experience is required`.
+- The simple parser rule detects `s002` and misses `s027`.
+- English can express negation without these triggers.
+  `Experience is unnecessary` has no trigger word and the same structure as
+  `Experience is required`.
 - The 27/28 score is a demonstration on the development set.
 
-Use the rule as a triage note beside the sentence, not as an automatic label. The
-missed headline is the part to carry forward into the next design.
+Use the rule to select text for checks, not to assign automatic labels.
+Address the missed headline in the next rule design.
 
 ## Sources
 

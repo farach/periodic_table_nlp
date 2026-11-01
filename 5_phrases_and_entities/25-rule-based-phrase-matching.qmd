@@ -1,20 +1,21 @@
 ---
 title: "Finding phrases with readable rules"
-subtitle: "Score a credential pattern before trusting it"
+subtitle: "Evaluate a credential pattern before using its results"
 description: "Learn how simple string rules find credential phrases, how concordances help inspection, and why rules need maintenance."
 categories: [phrases and entities, rule-based matching, workforce research]
 ---
 
 Credential requirements are easy to miss in a short job-board feed. The
-Riverton Workforce Lab starts with a readable rule, then checks whether the rule
+Riverton Workforce Lab starts with a readable rule, then examines whether the rule
 answers the same question a reviewer would ask.
 
-That readability is useful only if the rule is checked. A pattern can find real
-mentions, miss wording it did not include, and catch lines that use the same word
-for a different purpose.
+Readability does not establish correctness.
+A pattern can find real mentions, miss differently worded mentions, or match
+the same word with a different meaning.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching.
 :::
 
 ::: {.callout-tip}
@@ -22,11 +23,11 @@ The Riverton Workforce Lab, its job board, and its training flyer are fictional 
 
 After this lesson, you should be able to:
 
-- write small phrase rules with stringr;
-- extract the matched credential word;
-- apply a written hand-marking rule for required credentials;
-- count false positives and false negatives without treating the counts as a rate; and
-- use a concordance to inspect matches in context.
+- write small phrase rules with stringr.
+- extract the matched credential word.
+- apply a written hand-marking rule for required credentials.
+- count false positives and false negatives without treating the counts as a rate.
+- use a concordance to examine matches in context.
 :::
 
 ```{r}
@@ -40,7 +41,7 @@ stopifnot(identical(getOption("warn"), 2L))
 
 The setup chunk reads the Riverton sentences, builds rule-result tables, handles
 regular expressions, and prepares a concordance. In stringr, regular expressions
-use the ICU engine, which defines how boundaries and letter classes behave.
+use the ICU engine and its rules for boundaries and letter classes.
 
 ```{r}
 library(readr)
@@ -122,21 +123,25 @@ stopifnot(
 ```
 
 The rule searches for `certificate`, `certification`, and either spelling of
-`license`. The lesson author hand-marked each sentence against this written
-definition: mark the sentence if it says the employer requires a formal
-qualification issued by a school, licensing body, or certifying organisation,
-and do not mark a sentence that merely mentions one. Under that rule, `s005`
-and `s017` qualify. One reviewer applying one rule to 28 sentences gives a
-worked example, not a reference standard.
+`license`. The author hand-marked each text unit under this definition:
+
+Mark a unit only when it states an employer requirement for a formal
+qualification. The qualification must come from a school, licensing body, or
+certifying organisation. Do not mark a unit that merely mentions a
+qualification.
+
+Under that rule, `s005` and `s017` qualify.
+One reviewer applying one rule to 28 units provides a worked example, not a
+reference standard.
 
 ## Score the rule
 
-A **false positive** is a sentence the rule flags but the hand marking rejects. A
-**false negative** is a sentence the hand marking accepts but the rule misses.
-The rule and the hand marking are not asking the same question: the pattern
-looks for a credential word, while the hand marking asks whether a credential is
-required. Nothing in the pattern tests for requirement, so it can fire on
-`preferred` and on a heading.
+A **false positive** is a text unit that the rule flags but the hand marking
+rejects. A **false negative** is a unit that the hand marking accepts but the
+rule misses. The pattern searches for credential words.
+The hand marking instead marks required credentials.
+The pattern has no requirement condition, so it can match `preferred` or a
+heading.
 
 ```{r}
 score_counts <- rule_results |>
@@ -174,8 +179,8 @@ problem_examples <- tibble(
 
 knitr::kable(
   score_counts,
-  col.names = c("Result", "Sentences"),
-  caption = "Sentence-level counts for the first credential rule",
+  col.names = c("Result", "Text units"),
+  caption = "Text-unit counts for the first credential rule",
   row.names = FALSE
 )
 
@@ -200,17 +205,18 @@ stopifnot(
 )
 ```
 
-This is a bad rule for required credentials: 3 of its 4 hits are wrong, and it
-misses 1 of the 2 hand-marked positives. Two positives cannot measure how well a
-rule works. These counts only show failure modes: `certificate` and
-`certification` can appear without a requirement, while `diploma` is absent from
-the pattern.
+For required credentials, 3 of the 4 matches are wrong.
+The rule also misses 1 of the 2 hand-marked positives.
+Two positives cannot establish general performance.
+These counts illustrate failures. Both `certificate` and `certification` can
+appear without a requirement, while the pattern omits `diploma`.
 
-## Inspect matches in context
+## Examine matches in context
 
-A **concordance** is a list of every place a word occurs in a text. The usual
-layout, called keyword in context, or **KWIC**, puts the matched word in the
-middle with a few words on each side.
+A **concordance** lists every occurrence of a word in text.
+The usual display is **keyword in context**, or **KWIC**.
+It places the matched word between a few words of preceding and following
+context.
 
 ```{r}
 riverton_corpus <- corpus(setNames(sentences$text, sentences$sentence_id))
@@ -250,20 +256,21 @@ stopifnot(
 )
 ```
 
-The KWIC display makes the maintenance problem visible. The token-level regex
-uses the same credential terms as the scoring pattern: it finds `certification
-training`, a `certificate` that is preferred, a `license` that is required, and a
-flyer heading.
+The KWIC display shows why the pattern needs revision.
+Its token-level regex uses the same credential terms as the scoring pattern.
+It finds `certification training`, a preferred `certificate`, a required
+`license`, and a flyer heading.
 
 ## What to remember
 
 - A readable rule can still answer the wrong question.
 - This first credential rule has 1 true positive, 3 false positives, and 1 false negative.
 - Two hand-marked positives are enough for a worked example, not for a performance estimate.
-- KWIC lines help reviewers see why a pattern fired.
+- KWIC lines show reviewers why a pattern matched.
 
-Use this pattern only as a review aid. Its next revision should test requirement
-language before widening the credential word list.
+Use this pattern only to select text for further checks.
+In the next revision, evaluate requirement language before adding credential
+terms.
 
 ## Sources
 

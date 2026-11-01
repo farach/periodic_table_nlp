@@ -1,23 +1,23 @@
 ---
 title: "Finding speeches unlike the rest"
-subtitle: "Rank cosine distance and test length"
+subtitle: "Cosine-distance rankings and speech length"
 description: "Learn how outlier detection depends on the text representation and why length belongs beside distance."
 categories: [signals and discovery, outlier detection, inaugural addresses]
 ---
 
 Owen has one shelf for speeches that deserve closer reading. He asks for the addresses most unlike the rest, expecting a neutral ranking.
 
-The ranking arrives with a catch. An **outlier** is a case that looks far from other cases under a chosen measurement. For text, changing the features can change what looks far away, and very short documents can look strange because they have little vocabulary to average.
+An **outlier** is a case with a large measured distance from other cases. Different text features can produce different distances. Very short documents can appear unusual because their small vocabularies provide little information for the average.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- build speech-level document-feature matrices;
-- compute cosine distance from the average speech;
-- report word length next to distance;
-- test how much distance tracks length; and
+- build speech-level document-feature matrices.
+- compute cosine distance from the average speech.
+- report word length next to distance.
+- measure the association between distance and length.
 - compare rank agreement with a shuffled-feature null.
 :::
 
@@ -30,7 +30,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Build the representations
 
-A **representation** is the version of the text that a method sees. Here one representation keeps content words after removing stopwords, another gives those content words tf-idf weights, and a third keeps all words as raw counts. **Cosine distance** compares the direction of two word-count vectors. A value closer to 1 means farther from the average vector.
+A **representation** records the text features available to a method. The first representation retains content-word counts after stopword removal. The second applies tf-idf weights to those content words. The third retains raw counts for all words.
+
+**Cosine distance** compares the direction of two word-count vectors. A value closer to 1 indicates greater distance from the average vector.
 
 ```{r}
 library(dplyr)
@@ -181,9 +183,9 @@ stopifnot(
 )
 ```
 
-The 1793-Washington speech is the most distant under this representation, and it is the shortest speech at 135 total words. A 135-word document has little vocabulary to average, so a handful of words can drive its position.
+The 1793-Washington speech is most distant under this representation. It is also the shortest speech, with 135 total words. Its ranking can depend on only a few words because it has a small vocabulary.
 
-## Check the length confound
+## Examine the length confound
 
 A **confound** is a second factor that can explain a result the analyst might otherwise attribute to the method's target. Here the candidate confound is document length.
 
@@ -256,11 +258,11 @@ stopifnot(
 )
 ```
 
-The correlations are negative under all three representations: -0.738 for content-word counts, -0.908 for content-word tf-idf, and -0.534 for all-word counts. Shorter speeches tend to sit farther from the average. Once speeches under 1,000 words are removed, 1793-Washington and 2021-Biden leave the top lists. The outlier ranking is substantially a length ranking.
+The correlations are negative under all three representations. They are -0.738 for content-word counts, -0.908 for content-word tf-idf, and -0.534 for all-word counts. Shorter speeches tend to have greater distances from the average. The analysis excludes speeches under 1,000 words, which removes 1793-Washington and 2021-Biden from the top lists. The outlier ranking therefore reflects speech length to a substantial degree.
 
 ## Compare the feature choices with a null
 
-Now add tf-idf weights and then keep stopwords in a separate raw-count representation. This changes both the weighting rule and the feature set. A **rank agreement** statistic checks whether the three distance rankings put speeches in similar order.
+The comparison uses tf-idf weights and a separate raw-count representation that retains stopwords. The representations differ in weighting rule and feature set. A **rank agreement** statistic measures whether the three distance rankings place speeches in similar order.
 
 A **permutation null** reruns the rank-agreement calculation after feature counts are randomized. The **p-value** is the fraction of shuffled agreements that are at least as large as the observed agreement.
 
@@ -381,19 +383,21 @@ stopifnot(
 )
 ```
 
-Content-word raw counts and content-word tf-idf share all five top speeches. Keeping stopwords shares four of five with content-word raw counts and changes the third slot from 1865-Lincoln to 2001-Bush. The average Spearman rank agreement across the three full rankings is 0.770. When document lengths are held fixed but features are randomly reassigned, the null mean is 0.953 with a 90% interval from 0.939 to 0.966. The observed agreement does not exceed that shuffled-feature null (p = 1). Cross-representation agreement is therefore not reassuring by itself.
+Content-word raw counts and content-word tf-idf share all five top speeches. The representation with stopwords shares four of five with content-word raw counts. Its third-ranked speech is 2001-Bush rather than 1865-Lincoln. The average Spearman rank agreement across the three full rankings is 0.770.
 
-Outlier methods always rank something first. The shuffle removes document-specific word patterns while preserving lengths, so it asks whether the three representations agree more than feature noise would. They do not. The shortest-speech result remains a length-confounded reading lead.
+Random feature allocation with fixed document lengths gives a null mean of 0.953 and a 90% interval from 0.939 to 0.966. The observed agreement does not exceed that shuffled-feature null (p = 1). Agreement across representations therefore provides insufficient evidence by itself.
+
+Outlier methods always rank one item first. The randomization removes document-specific word patterns while preserving document lengths. It compares agreement across representations with agreement from random features. The observed agreement does not exceed that null. Document length still confounds the shortest-speech result, which requires closer reading.
 
 ## What to remember
 
 - Cosine distance ranks each speech against the average vector.
-- The content-word representations have 9,193 features; the all-word representation has 9,327.
+- The content-word representations have 9,193 features. The all-word representation has 9,327.
 - Under content-word raw counts, 1793-Washington is farthest and 1897-McKinley is closest to the average.
-- Distance is strongly tied to length here; the shortest speeches drive the top of the list.
+- Distance is strongly associated with length here. The shortest speeches occupy the highest ranks.
 - The three representation rankings do not agree more than shuffled features predict after lengths are fixed.
 
-Use outlier scores to choose what to read next. Do not treat the ranking as a property of the speech apart from the features you chose.
+Use outlier scores to choose what to read next. Interpret each ranking in relation to its selected features.
 
 ## Sources
 

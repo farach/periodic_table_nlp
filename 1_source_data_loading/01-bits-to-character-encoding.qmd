@@ -1,22 +1,22 @@
 ---
 title: "How computers store text"
-subtitle: "A friendly guide to bits, bytes, Unicode, and UTF-8 in R"
+subtitle: "Bits, bytes, Unicode, and UTF-8 in R"
 description: "Learn why text sometimes becomes garbled and how to protect it when working in R."
 categories: [source data loading, encoding, Unicode]
 ---
 
-Imagine opening the attendance file for a community class and finding `AnaÃ¯s`
-where `Anaïs` should be. A person can infer the name, but a search, badge
-printer, or duplicate check may treat it as something else. The error is easy
+A community class attendance file contains `AnaÃ¯s` where `Anaïs` should be.
+A person can infer the intended name. A search, badge printer, or duplicate
+check may treat the damaged name as a different name. The error is easy
 to miss until the damaged name reaches a badge or a lookup fails.
 
 One possible cause is a wrong **character encoding**, the rules that connect
 stored byte values with written text. We will recreate that failure from known
-bytes, decode the bytes correctly, and then handle text that looks identical
-but still fails an exact comparison.
+bytes and decode the bytes correctly. Then we will compare text values that
+look identical but fail an exact comparison.
 
 ::: {.callout-note}
-The attendance file and incident are constructed for this lesson. The encoding
+This lesson uses a constructed attendance file and incident. The encoding
 failure is real, but the story does not describe an actual person or class.
 :::
 
@@ -25,11 +25,11 @@ failure is real, but the story does not describe an actual person or class.
 
 By the end of this lesson, you will be able to:
 
-- distinguish a visible text unit, a code point, and a byte;
-- explain the different jobs of Unicode and UTF-8;
-- convert text to UTF-8 in R;
-- recognize bytes that no UTF-8 decoder can read, and a byte-order mark; and
-- check text that looks the same but behaves differently.
+- distinguish a visible text unit, a code point, and a byte.
+- explain the different functions of Unicode and UTF-8.
+- convert text to UTF-8 in R.
+- recognize bytes that no UTF-8 decoder can read, and a byte-order mark.
+- examine text that looks the same but behaves differently.
 :::
 
 ```{r}
@@ -46,14 +46,14 @@ stopifnot(
 
 ## What happens when a computer saves a word
 
-Checking Anaïs's name begins with a precise account of what the computer saved.
+A check of Anaïs's name begins with a precise account of what the computer saved.
 People see letters, punctuation, and emoji. A computer stores numbers, so
 saving text takes a few steps:
 
 1. Unicode assigns numbers called **code points** to abstract text elements.
-2. UTF-8 turns Unicode scalar values into one or more **bytes**.
-3. Those bytes are saved in a file or sent across a network.
-4. Software uses the same encoding to turn the bytes back into text.
+2. UTF-8 encodes Unicode scalar values as one or more **bytes**.
+3. Software saves those bytes in a file or sends them across a network.
+4. Software uses the same encoding to decode the bytes as text.
 
 What a reader sees as one character is often called a **grapheme cluster**. A
 grapheme cluster can contain one code point or several. The difference becomes
@@ -68,7 +68,7 @@ Consider two characters:
 
 : Unicode code points and UTF-8 bytes for two characters
 
-The values are written in hexadecimal, a compact way to write numbers. There is
+The table uses hexadecimal, a compact way to write numbers. There is
 no need to memorize them. For now, notice that `A` needs one UTF-8 byte while
 `é` needs two.
 
@@ -81,30 +81,30 @@ has 256 possible combinations numbered from 0 through 255.
 ## Why eight bits make a byte
 
 A byte did not always have a fixed size. Early computers grouped bits according
-to the characters and numbers each machine needed, so a byte could mean
+to the characters and numbers each machine needed. A byte could therefore mean
 different things on different systems.
 
 Two standards helped settle the size:
 
-1. ASCII defined 128 text and control values, which fit in seven bits. RFC 20,
-   written for early network interchange in 1969, put each seven-bit ASCII value
-   inside an eight-bit byte and set the extra high bit to zero.
+1. ASCII defined 128 text and control values, which fit in seven bits.
+   RFC 20 described early network interchange in 1969.
+   It placed each seven-bit ASCII value inside an eight-bit byte and set the
+   extra high bit to zero.
 2. IBM's System/360 family, announced in 1964, made an eight-bit byte the basic
-   building block of its storage formats. Its compatible machines became widely
-   used, and their byte size travelled with the software and hardware built
-   around them.
+   unit of its storage formats. Its compatible machines became widely used.
+   Software and hardware for those machines used the same byte size.
 
 Eight bits provide \(2^8 = 256\) patterns: enough to hold every ASCII value with
-one bit left over. Today, a byte almost always means eight bits. Technical
-standards sometimes use **octet** when they need to rule out the older,
+one unused bit. Today, a byte almost always means eight bits. Technical
+standards sometimes use **octet** when they need to exclude the older,
 variable-size meaning.
 :::
 
-We will start with `A` and `é`, two characters small enough to inspect by eye.
+We will examine `A` and `é`, two characters with short byte sequences.
 R's `charToRaw()` function shows bytes. The word "raw" means that R should
 display the stored values without interpreting them as letters. `map()` from
-purrr applies that byte check to each text value and returns a list, which can
-hold byte results of different lengths.
+purrr applies that byte check to each text value and returns a list.
+The list can hold byte results of different lengths.
 
 ```{r}
 library(tibble)
@@ -172,21 +172,21 @@ stopifnot(
 ```
 
 Both results came from the same bytes. Reading the bytes as Latin-1 produced
-`AnaÃ¯s`; reading them as UTF-8 produced `Anaïs`. The correct choice comes from
+`AnaÃ¯s`. Reading them as UTF-8 produced `Anaïs`. The correct choice comes from
 the source's encoding declaration or other trustworthy metadata, not from
 guessing based on appearance.
 
-## Unicode and UTF-8 do different jobs
+## Unicode and UTF-8 have different functions
 
 Unicode and UTF-8 answer different questions. **Unicode** is a shared catalog
-that assigns code points for text from many writing systems, along with
-punctuation, symbols, and emoji.
+that assigns code points to text from many writing systems. The catalog also
+includes punctuation, symbols, and emoji.
 
 **UTF-8** describes how to store Unicode scalar values as bytes. It uses:
 
-- one byte for common ASCII characters;
-- two bytes for many accented letters;
-- three bytes for many other characters; and
+- one byte for common ASCII characters.
+- two bytes for many accented letters.
+- three bytes for many other characters.
 - four bytes for characters such as many emoji.
 
 UTF-16 and UTF-32 encode the same Unicode code points in other ways. The reader
@@ -195,7 +195,7 @@ of a file still needs to know which encoding the writer used.
 ::: {.callout-note}
 ## Where ASCII and Latin-1 fit
 
-ASCII grew from the need for incompatible machines to exchange text. The
+Incompatible machines needed a common text format. ASCII supplied it. The
 standard uses seven bits for 128 values covering English letters, digits,
 punctuation, and control instructions such as a line break. UTF-8 deliberately
 keeps those same values, so an ASCII file is also valid UTF-8.
@@ -206,17 +206,17 @@ represent most of the world's writing systems. Its byte values above 127 do not
 mean the same thing in UTF-8. Confusing Latin-1 with UTF-8 is a common cause of
 garbled text.
 
-Unicode took a different approach: assign a common number to each text element,
-then let encodings such as UTF-8 decide how those numbers become bytes. That
+Unicode assigns a common number to each text element.
+Encodings such as UTF-8 specify how those numbers become bytes. That
 separation is why one system can cover far more than any single eight-bit code
 page.
 :::
 
 ## What R knows about a string
 
-A **string** is one text value. R may attach a label to a string saying that it
-is Latin-1, UTF-8, or a sequence of bytes. `Encoding()` reports that label, so
-we can check what R believes about the text it received. We will display the
+A **string** is one text value. R may label a string as Latin-1, UTF-8,
+or a sequence of bytes. `Encoding()` reports that label, so
+we can examine how R will interpret the text it received. We will display the
 answer as a tibble, a table that prints its size and each column's type.
 
 ```{r}
@@ -255,14 +255,14 @@ R reports the plain letter as `"unknown"`. The letter is still valid. ASCII text
 uses the same byte values in the encodings R supports, so R does not need a
 special label here.
 
-An encoding label describes how R should interpret bytes; it does not convert
+An encoding label describes how R should interpret bytes. It does not convert
 them. Assigning a different label can leave every byte untouched. When the
 bytes need to change, use a conversion function.
 
 ## Transcode known Latin-1 text
 
-Some files are correctly stored as Latin-1 and need to be converted for a
-UTF-8 workflow. This operation is called **transcoding**. The next example
+Some files correctly use Latin-1 but need conversion for a UTF-8 workflow.
+This operation is called **transcoding**. The next example
 creates `"café"` from known Latin-1 bytes, then uses `iconv()` to convert them.
 
 ```{r}
@@ -302,16 +302,17 @@ visible missing value gives us a chance to investigate the source.
 
 ## Bytes that are not well-formed UTF-8
 
-The attendance file arrived from a system that had already lost track of its own
-encoding, so part of it is not valid UTF-8 at all. UTF-8 has a strict shape: a
-byte such as `c3` promises that a continuation byte follows. When the promised
-byte is missing, the sequence is **malformed**, and a UTF-8 decoder must reject
-or replace it. Another encoding, such as Latin-1, can assign characters to the
-same bytes, but the bytes alone cannot recover which interpretation the author
-intended.
+The attendance file came from a system that no longer gave the correct encoding.
+Part of the file is not valid UTF-8. UTF-8 has a strict structure.
+A byte such as `c3` requires a continuation byte. When the required byte is
+missing, the sequence is **malformed**. A UTF-8 decoder must reject or replace
+that sequence.
+
+Another encoding, such as Latin-1, can assign characters to the same bytes.
+The bytes alone cannot show the interpretation that the author intended.
 
 The example below builds `Hi ` followed by `c3 28`. The byte `28` is an opening
-parenthesis, not a continuation byte, so the pair is broken.
+parenthesis, not a continuation byte, so the pair is malformed.
 
 ```{r}
 damaged_bytes <- as.raw(c(0x48, 0x69, 0x20, 0xC3, 0x28))
@@ -370,29 +371,31 @@ knitr::kable(
 )
 ```
 
-Three behaviors are worth separating. `validUTF8()` answers yes or no. Strict
-conversion returns `NA`, which is loud and easy to count. Replacement produces
-`U+FFFD`, the replacement character, which keeps the row readable while
-destroying the evidence of what was there.
+The functions report three different results. `validUTF8()` answers yes or no.
+Strict conversion returns `NA`, which is visible and easy to count.
+Replacement produces `U+FFFD`, the replacement character.
+The replacement keeps the row readable but removes evidence of the original
+bytes.
 
-Position four is where the prefix stops being decodable, and that number is
-worth keeping. Report the file, the offset, and the raw bytes rather than the
-repaired string. A byte offset lets someone open the source and see the record
-that produced it; `Hi \uFFFD(` does not.
+Position four is where the prefix stops being decodable. Record that position.
+Report the file, the offset, and the raw bytes rather than the repaired string.
+A byte offset identifies the relevant source position. The repaired string
+`Hi \uFFFD(` does not.
 
-Never write the repaired text back over the source. Keep the original bytes,
-record the substitution rule, and count how many values needed it.
+Do not overwrite the source with repaired text. Keep the original bytes.
+Record the substitution rule. Count the values that needed substitution.
 
 ## A byte-order mark and a file with two encodings
 
-Two more arrival problems show up in the same class list. Some tools begin a
+The same class list has two more problems. Some tools begin a
 UTF-8 file with the three bytes `ef bb bf`, a **byte-order mark**, usually
-shortened to BOM. It carries no text. Left in place it becomes an invisible
-prefix on the first field, so `name` stops matching `name`.
+shortened to BOM. It contains no text. If retained, the mark becomes an invisible
+prefix on the first field. The prefixed `name` no longer matches an unprefixed
+`name`.
 
-The file also mixes encodings, because rows were appended by two systems. That
-is common in exported data and it means one encoding rule cannot decode the
-whole file.
+The file also mixes encodings because two systems appended rows.
+Mixed encodings are common in exported data. One encoding rule cannot decode
+the whole file.
 
 ```{r}
 byte_order_mark <- as.raw(c(0xEF, 0xBB, 0xBF))
@@ -484,35 +487,36 @@ stopifnot(
 )
 ```
 
-The last two rows display the same word from different bytes. That is the point
-of the provenance column: `declared_by_source` records where the decoding rule
-came from, and it is metadata from the sending system rather than a guess made
-from appearance. The third row would have been lost had the whole file been
-decoded as UTF-8, since its bytes are not valid there.
+The last two rows display the same word from different bytes.
+The provenance column, `declared_by_source`, records the source of each decoding
+rule. This metadata comes from the sending system rather than a guess based on
+appearance. Decoding the whole file as UTF-8 would lose the third row because
+its bytes are not valid UTF-8.
 
 Detecting an encoding by inspection is possible and sometimes necessary, but a
 detector returns a ranked guess. Keep the guess, its confidence, and the byte
-evidence beside the decoded text so that a later reader can disagree with it.
+evidence beside the decoded text. A later reader can then assess the guess.
 
 ## What current R does
 
-This site builds and tests with R `r r_version`. That is the version that built
-this page, not a promise that it remains the newest release; CRAN's
+This site builds and runs checks with R `r r_version`. That version built
+this page but may not remain the newest release. CRAN's
 [R for Windows page](https://cran.r-project.org/bin/windows/base/) lists the
 current installer.
 
-On Windows 10 version 1903 and later, and on Windows Server 2022 and later,
-current 64-bit R builds use UTF-8 as their native encoding, matching the usual
-setup on macOS and Linux. This removed many older Windows limitations around
+Current 64-bit R builds use UTF-8 as their native encoding on Windows 10 version
+1903 and later. This also applies to Windows Server 2022 and later.
+The native encoding matches the usual setup on macOS and Linux.
+This removed many older Windows limitations around
 file names, comments, symbols, and text passed to external libraries.
 
-Recent releases have tightened the edges too. R 4.5 made package metadata files
-such as `DESCRIPTION` and `PACKAGES` UTF-8, added
-`readLines(encoding = "bytes")` for inspecting a file without creating invalid
-strings, and made `iconv(from = "")` prefer a string's declared encoding.
+R 4.5 made package metadata files such as `DESCRIPTION` and `PACKAGES` UTF-8.
+It added `readLines(encoding = "bytes")` for examining a file without creating
+invalid strings. It also made `iconv(from = "")` prefer a string's declared
+encoding.
 
-Those improvements make modern R safer; they do not tell R how an outside file
-was written. Older software may still produce Windows-1252, Latin-1, or another
+Those improvements make modern R safer. They do not show an outside file's
+encoding. Older software may still produce Windows-1252, Latin-1, or another
 encoding, and one file may still contain rows from several systems.
 
 We can ask R about the current session:
@@ -541,7 +545,7 @@ Correcting the encoding fixes the obvious damage, but an exact comparison can
 still fail. Unicode can represent some visible characters in more than one
 way. The accented letter `é` can be:
 
-- one code point for the complete letter; or
+- one code point for the complete letter.
 - the letter `e` followed by a separate accent mark.
 
 Both forms look the same on screen. A duplicate check may still treat them as
@@ -579,7 +583,7 @@ stopifnot(
 )
 ```
 
-An exact comparison sees two different sequences until both are normalized:
+An exact comparison reports different sequences until normalization:
 
 ```{r}
 exact_match_before <- identical(
@@ -613,16 +617,16 @@ text when its exact representation matters.
 
 ## A safe routine for text files
 
-When source metadata says the attendance file is UTF-8, the same bytes can be
-decoded as UTF-8 without guessing. When text comes from a file, website, or
+Source metadata that identifies UTF-8 lets us decode the attendance file's bytes
+without guessing. When text comes from a file, website, or
 another system:
 
-1. Find out which encoding the source promises to use.
+1. Find the encoding that the source declares.
 2. Read the text using that encoding.
 3. Remove a byte-order mark before comparing or joining on the first field.
 4. Convert the working copy to UTF-8.
-5. Count the values that failed to decode and keep their byte offsets.
-6. Check accented letters, non-Latin scripts, and emoji.
+5. Count the values that failed to decode. Keep the byte offsets of those values.
+6. Examine accented letters, non-Latin scripts, and emoji.
 7. Normalize only when the task requires equivalent forms to match.
 8. Keep conversion warnings visible.
 
@@ -635,17 +639,17 @@ time and can split a multi-byte character.
 - UTF-8 stores Unicode scalar values as bytes.
 - Reading bytes with the wrong encoding is one common cause of garbled text,
   but appearance alone does not prove the cause.
-- Some byte sequences are valid in no encoding you were promised. Decide
-  whether they become `NA` or a replacement character, and record which.
+- Some byte sequences are invalid in every declared encoding. Decide whether
+  to use `NA` or a replacement character. Record the choice.
 - A byte-order mark is invisible and still breaks an exact match.
 - One file can hold rows written under two encodings.
 - An encoding label does not convert text.
 - UTF-8 is a practical working format for text from many languages.
 - Text that looks identical may need Unicode normalization before comparison.
 
-With these checks, `Anaïs` can survive the trip from file to screen and match
-an equivalent spelling when the task requires it. Good text handling has a
-human-sized test: the person who entered a name should get the same name back.
+These checks preserve `Anaïs` when software displays the file.
+They also let equivalent spellings match when the task requires it.
+The person who entered a name should receive the same name in the output.
 
 ## Sources
 

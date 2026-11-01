@@ -1,7 +1,7 @@
 ---
 title: "Loading data from an API"
-subtitle: "Ask an online service for information and check its reply"
-description: "Learn how an API request becomes a checked data table in R."
+subtitle: "Ask an online service for information. Examine its reply."
+description: "Learn how to create a data table from an API reply and examine the result in R."
 categories: [source data loading, API, JSON]
 ---
 
@@ -10,23 +10,23 @@ copy search results from a catalog into a table. Search results are candidates,
 not recommendations. The librarian still needs to judge whether each record is
 relevant, accurate, and useful.
 
-An **application programming interface**, usually called an **API**, gives
-software a defined way to ask another service for information. This lesson
-reconstructs a query sent to the Open Library Search API and checks the saved
-reply. The displayed table comes from a dated response so the published output
-can be reproduced even when the service is unavailable or its ranking changes.
+An **application programming interface**, or **API**, defines how software can
+request information from another service. This lesson reconstructs a query to
+the Open Library Search API and runs checks on the saved reply.
+The displayed table uses a dated response. That saved response preserves the
+published output if the service becomes unavailable or changes its ranking.
 
 ::: {.callout-tip}
 ## What you will learn
 
 By the end of this lesson, you will be able to:
 
-- explain the request-and-response pattern used by an API;
-- add search choices to an API request;
-- check whether the request succeeded;
-- turn a JSON response into a table in R;
+- explain the request-and-response pattern used by an API.
+- add search choices to an API request.
+- examine the request's success status.
+- convert a JSON response to a table in R.
 - replay a rate limit, a second page, and a changed schema from saved
-  responses; and
+  responses.
 - handle changing results, service limits, and secret API keys.
 :::
 
@@ -102,7 +102,7 @@ stopifnot(
 ```
 
 The printed request begins with `GET`, the standard method used here to ask a
-service to send information. Printing it lets us inspect the destination and
+service to send information. Printing it lets us examine the destination and
 search choices without contacting the service again.
 
 The choices added to the address are called **query parameters**:
@@ -116,17 +116,17 @@ The choices added to the address are called **query parameters**:
 : Query parameters used in the Open Library request
 
 The user-agent identifies the project making the request. The 20-second timeout
-keeps R from waiting indefinitely. The retry setting permits up to three
-attempts when a temporary connection problem interrupts the exchange; it does
-not guarantee that an unavailable service will respond.
+keeps R from waiting indefinitely. The retry setting permits at most three attempts when a temporary connection
+problem interrupts the exchange. It does not guarantee a response from an
+unavailable service.
 
 ## Understand what happened when the request was sent
 
-The original request was sent once on the retrieval date recorded below. During
-this lesson, `req_perform()` receives the same request but uses a local mock that
-replays the saved response bytes. That exercises the request-to-response step
-without contacting Open Library again. A normal `req_perform()` call would stop
-on an unsuccessful HTTP status such as 404 or 500.
+The original request ran once on the recorded retrieval date.
+Here, `req_perform()` receives the same request but replays saved response
+bytes through a local mock. The example exercises the request-to-response step
+without contacting Open Library again. A normal `req_perform()` call stops
+on unsuccessful HTTP statuses such as 404 or 500.
 
 **JSON**, short for JavaScript Object Notation, is a text format that can hold
 named values, lists, and records. Many programming languages can read it, which
@@ -134,10 +134,10 @@ makes it common in API responses.
 
 ## Keep a dated response
 
-One successful request cannot guarantee that the service will be available
-tomorrow or return the same ranking. The repository keeps the JSON response
-with its retrieval time, request address, HTTP status, content type, record
-level, licensing reference, and fingerprint.
+One successful request cannot guarantee future service availability or an
+unchanged ranking. The repository keeps the JSON response and its retrieval
+time, request address, HTTP status, and content type.
+It also records the record level, licensing reference, and fingerprint.
 
 ```{r}
 fixture_path <- "data/openlibrary-nlp-search.json"
@@ -224,9 +224,9 @@ documentation remain in the metadata file for a later audit.
 
 ## Perform the request against the saved reply
 
-A **mock** replaces the network exchange with a local function. httr2 still
-passes the prepared request into `req_perform()` and returns an
-`httr2_response`; the mock supplies the dated status, header, and JSON body.
+A **mock** replaces the network exchange with a local function. httr2 passes
+the prepared request to `req_perform()` and returns an `httr2_response`.
+The mock supplies the dated status, header, and JSON body.
 
 ```{r}
 replay_saved_response <- function(req) {
@@ -284,7 +284,7 @@ stopifnot(
 )
 ```
 
-## Turn the saved response into a table
+## Convert the saved response to a table
 
 Open Library places search results inside a JSON section named `docs`.
 `resp_body_json()` translates that section into rows and columns because this
@@ -387,40 +387,42 @@ stopifnot(
 
 Open Library returns work-level catalog records by default. A row can represent
 many editions of the same work. The table contains candidate search results,
-not a checked reading list or a judgment about a book's quality.
+not an examined reading list or a judgment about a book's quality.
 
-The authors and titles are escaped before display so API text cannot become
-page markup. Only the validated Open Library addresses are rendered as links.
+The code escapes author names and titles before display so API text cannot
+become page markup. It renders only validated Open Library addresses as links.
 
 ## Live data can change
 
-Open Library may add records, correct dates, or reorder results. Nothing in this
-page contacts the service while it builds, so the displayed table comes from the
-saved response and stays stable.
+Open Library may add records, correct dates, or reorder results.
+This page does not contact the service during rendering.
+The displayed table therefore remains based on the saved response.
 
-When the request is sent again, the checks worth applying describe a bounded
-structure rather than five specific titles:
+For a new request, examine the response structure rather than requiring five
+specific titles:
 
-- the service returned a successful status;
-- the response is JSON;
-- the response contains between one and five records; and
+- the service returned a successful status.
+- the response is JSON.
+- the response contains between one and five records.
 - every returned record has a title.
 
 The saved fixture makes the displayed table repeatable. Its metadata records
-when and how it was retrieved. Open Library states that the Internet Archive
-does not assert new proprietary rights over the database, while warning that
-existing rights may vary by contribution and jurisdiction. Reusers should read
-the current licensing statement rather than assume a blanket license.
+when and how retrieval occurred. Open Library states that the Internet Archive
+does not assert new proprietary rights over the database.
+Existing rights may vary by contribution and jurisdiction.
+
+Read the current licensing statement. Do not assume that one license covers
+all contributions or every way you plan to use them.
 
 Respect the service's rate limit and stated preference for low-volume,
 human-facing requests.
 
-## Replay the awkward responses
+## Replay refusal, pagination, and schema changes
 
-A successful reply is the easy case. The three awkward ones are a refusal, a
-result set too large for one reply, and a reply whose fields have moved. Each is
-reconstructed below from the status codes and body shapes the service documents,
-built inside the lesson with `httr2::response()`. No request leaves the machine.
+The next examples cover three cases: refusal, results that require several
+pages, and changed response fields. The lesson constructs these examples with
+`httr2::response()`, using documented status codes and body structures.
+No request leaves the machine.
 
 ```{r}
 saved_response <- function(
@@ -537,8 +539,7 @@ stopifnot(
 )
 ```
 
-The reader now has several saved replies and one function that has to survive
-all of them.
+The following function must handle each saved reply.
 
 ```{r}
 required_fields <- c("key", "title")
@@ -752,7 +753,7 @@ knitr::kable(
     )
   ),
   col.names = c("Saved reply", "Outcome", "Records used"),
-  caption = "Four saved replies and what the reading function did with each",
+  caption = "Six saved replies and what the reading function did with each",
   row.names = FALSE
 )
 ```
@@ -798,27 +799,27 @@ stopifnot(
 ```
 
 Six saved replies exercised two retry formats, two result pages, and two schema
-failures. None produced an empty result table without an error.
+failures. Each refusal or schema failure returned an empty records table with
+an explicit failure outcome.
 
-The refusal returned no records and a waiting time taken from the
-`Retry-After` header, which is the service telling the client how long to pause.
-Guessing that number, or retrying immediately, is how a temporary limit becomes
-a ban.
+The refusal returned no records. Its `Retry-After` header supplied the waiting
+time. Guessing that time or retrying immediately can cause a ban.
 
-The first page reports `start = 0`, returns five records, and says seven exist,
-so `start + records returned < numFound` supplies the next offset. The second
-page reports `start = 5`; adding its two records reaches the reported total, so
-the client stops. A full page alone would not prove that another page exists.
+The first page reports `start = 0`, returns five records, and reports seven
+total records. The condition `start + records returned < numFound` therefore
+supplies the next offset. The second page reports `start = 5`.
+Adding its two records reaches the reported total, so the client stops.
+A full page alone does not prove that another page exists.
 
-The renamed field is harder to catch. The record still parsed as JSON and still
-had a key. Only the explicit list of required fields turned it into a reported
-failure instead of a table with a missing column.
+The renamed field requires a separate check. The record still parsed as JSON
+and contained a key. The required-field list detected the schema failure
+instead of accepting a table with a missing column.
 
-### Do not let the arithmetic pass unexamined
+### Compare received and distinct record counts
 
 The service reported seven matching records. Seven rows arrived across two
-pages. Six of them were distinct, because one work appeared on both pages, which
-happens when ranking shifts between two requests.
+pages, but only six were distinct. One work appeared on both pages.
+Ranking changes between requests can cause such duplication.
 
 ```{r}
 pagination_report <- tibble(
@@ -860,10 +861,11 @@ stopifnot(
 )
 ```
 
-The shortfall of one is the useful number. A collection script that reported six
-records without it would look complete. Record the totals the service claimed,
-the rows you received, and the rows you kept, and treat any gap as a question
-about the collection rather than a rounding detail.
+The shortfall of one shows a difference from the reported total.
+Reporting six records alone would make the collection appear complete.
+
+Record the service's reported total. Record the received and retained row
+counts. Investigate any difference between those counts.
 
 ## Keep API keys private
 
@@ -873,21 +875,20 @@ billable or private access.
 
 Never place a real key in:
 
-- an R or Quarto file;
-- a public repository;
-- a screenshot; or
+- an R or Quarto file.
+- a public repository.
+- a screenshot.
 - printed output.
 
-Store secrets outside the project, usually in an **environment variable**, a
-named setting that R can read at run time. If a key is exposed, revoke it and
-create a replacement.
+An **environment variable** is a named setting that R can read at run time.
+Store secrets outside the project, usually in environment variables.
+Revoke any exposed key. Create a replacement key.
 
 ## When an API request fails
 
-A failed request leaves the librarian without a checked list. Turning that
-failure into an empty table would hide the difference between "no books found"
-and "the service did not answer." Report the failure and keep the reported
-error. Then ask:
+A failed request leaves the librarian without an examined list. An empty table
+for that failure would hide the difference between "no books found"
+and "the service did not answer." Report the failure. Keep the reported error. Then ask:
 
 1. Is the device connected to the internet?
 2. Is the endpoint address correct?
@@ -895,18 +896,19 @@ error. Then ask:
 4. Did the request exceed a rate limit?
 5. Did the response format change?
 
-The code in this lesson stops when the request fails or the response lacks the
-expected structure. The interruption is visible rather than being published as
-an apparently complete result.
+A normal `req_perform()` call stops on unsuccessful HTTP statuses.
+Here, `read_saved_page()` instead returns a recorded failure outcome for the
+saved refusals and schema failures. Its empty records table does not mean
+that the service found no matching records.
 
 ## What to remember
 
 - An API request asks a service for structured information.
 - Query parameters describe what to return and how much.
-- Check the status and response type before using the body.
+- Examine the status and response type before using the body.
 - Some JSON structures can be reshaped into rows and columns in R.
-- A refusal, a second page, and a renamed field can all be rehearsed from saved
-  replies before any request is sent.
+- Saved replies let you examine refusals, pagination, and renamed fields before
+  sending requests.
 - Honor the waiting time a service sends instead of guessing one.
 - Compare the total a service reports with the rows you actually kept.
 - Live API results may change even when the code stays the same.

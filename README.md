@@ -175,6 +175,7 @@ Rscript tests/test-nlg-runtime.R
 npm ci
 npx playwright install chromium
 Rscript scripts/check-prose.R
+Rscript tests/test-repetition-disclosure.R
 Rscript scripts/check-repetition.R
 Rscript tests/test-system-evaluation.R
 Rscript tests/test-vocabulary-bpe.R

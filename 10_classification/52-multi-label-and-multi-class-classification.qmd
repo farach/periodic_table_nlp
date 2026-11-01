@@ -5,23 +5,22 @@ description: "Learn the difference between multi-class and multi-label text clas
 categories: [classification, multi-class classification, multi-label classification]
 ---
 
-Ravi is building filters for an archive search page. One control asks for a time
+Ravi builds filters for an archive search page. One control asks for a time
 period, where each paragraph can belong to only one period. Another asks for
 themes, where a paragraph can mention work, time, people, all three, or none.
 
 Those two controls look similar on the screen, but they ask different questions.
-One forces a single choice. The other lets several tags sit on the same
-paragraph.
+One requires a single choice. The other permits several tags on one paragraph.
 
 ::: {.callout-tip}
 ## What you will learn
 
 By the end of this lesson, you will be able to:
 
-- distinguish multi-class from multi-label classification;
-- build a four-way period label from years;
-- read a confusion matrix for a multi-class model;
-- create theme labels with a small quanteda dictionary; and
+- distinguish multi-class from multi-label classification.
+- build a four-way period label from years.
+- read a confusion matrix for a multi-class model.
+- create theme labels with a small quanteda dictionary.
 - explain why label-level accuracy can mislead in multi-label work.
 :::
 
@@ -222,16 +221,19 @@ stopifnot(
 )
 ```
 
-The overall accuracy is 0.5938 on this speech-level split. A deployable baseline
-chooses the most common period in training, `1966-2025`, then applies that rule
-to test; it scores 0.3324. Looking at the test labels first produces the same
-0.3324 oracle value by coincidence on this split, but that is not a rule a
-deployed system could choose in advance. The confusion matrix shows, for example,
-that many 1907-1965 test paragraphs are sent to the 1966-2025 label.
+The overall accuracy is 0.5938 on this speech-level split. A deployable
+baseline chooses the most common training period, `1966-2025`, and applies
+that label to the test set. It scores 0.3324.
 
-## Check recall by class
+An **oracle baseline** instead chooses the majority label after reading the
+test labels. It also scores 0.3324 by coincidence on this split. A deployed
+system cannot choose that rule in advance. The confusion matrix shows many
+1907-1965 test paragraphs with predictions of 1966-2025.
 
-**Recall** asks, within one recorded class, how many rows returned to that class.
+## Compare recall by class
+
+**Recall** is the share of rows in a recorded class that receive the same
+predicted class.
 For a multi-class task, recall by class is often more useful than one accuracy
 number.
 
@@ -320,7 +322,7 @@ label_count_table <- theme_labels |>
 knitr::kable(
   label_count_table,
   col.names = c("Theme labels on a paragraph", "Paragraphs"),
-  caption = "Paragraphs can carry zero, one, or several dictionary labels",
+  caption = "Paragraphs can receive zero, one, or several dictionary labels",
   row.names = FALSE
 )
 ```
@@ -341,14 +343,15 @@ stopifnot(
 )
 ```
 
-The memorable distinction is this: multi-class chooses one box from several;
-multi-label lets the same document carry several tags.
+Multi-class classification chooses one label from several. Multi-label
+classification can assign several labels to the same document.
 
 ## Accuracy can reward saying no
 
-Most possible theme labels are absent. A do-nothing system that predicts every
-label as absent therefore gets many cells right while finding no present labels.
-That is why multi-label reporting needs per-label precision and recall.
+Most possible theme labels are absent. A system that always predicts absent
+therefore classifies many cells correctly but finds no present labels.
+Each cell represents one label for one document. Multi-label reports therefore
+need per-label precision and recall.
 
 ```{r}
 label_long <- theme_labels |>
@@ -427,7 +430,7 @@ knitr::kable(
     "Precision",
     "Recall"
   ),
-  caption = "Per-label metrics expose the no-label baseline",
+  caption = "Per-label metrics describe the always-absent baseline",
   row.names = FALSE
 )
 
@@ -459,15 +462,17 @@ stopifnot(
 )
 ```
 
-Precision is `NA` because the baseline never predicts a present label, leaving
-zero predicted positives in the denominator. That is an undefined metric, not a
-display error.
+Precision is `NA` because the baseline never predicts a present label. Its
+denominator, the number of predicted positives, is zero. The metric is
+undefined rather than a display error.
 
 The always-absent baseline gets
 `r round(overall_label_accuracy, 4)` label-cell accuracy because absent labels
 are common. The label prevalences are 0.422 for people, 0.364 for time, and 0.159
-for work. Its recall is 0 for every label, so it finds none of the 219 work, 501
-time, or 581 people dictionary labels. Exact empty-set accuracy is
+for work. Its recall is 0 for every label. It finds none of the 219 work,
+501 time, or 581 people dictionary labels.
+
+Exact empty-set accuracy is
 `r round(exact_empty_accuracy, 4)`, the share of paragraphs with no dictionary
 theme at all.
 

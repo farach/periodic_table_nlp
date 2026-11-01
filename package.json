@@ -2,6 +2,7 @@
   "name": "periodic-table-nlp-site",
   "private": true,
   "scripts": {
+    "test:prose": "node --test tests/plain-language.test.mjs && node scripts/check-plain-language.mjs",
     "test:a11y": "playwright test --config=playwright.config.mjs"
   },
   "devDependencies": {

@@ -5,16 +5,15 @@ description: "Learn how simple R rules handle dates, weekdays, times of day, and
 categories: [entity enrichment, temporal parsing, workforce research]
 ---
 
-Calendar work stalls at `Apply by October 15`: the coordinator can see the
-month and day, but not the year. A deadline needs that missing context before it
-can land on a calendar.
+The phrase `Apply by October 15` gives the coordinator a month and day but no
+year. The deadline needs a year before the team can add it to a calendar.
 
-A date parser turns a time expression into a date a computer can sort. The hard
-part is knowing when the text gives a full date, when it needs a reference date,
-and when it is not a calendar date at all.
+A date parser converts a time expression into a sortable date. Some expressions
+give complete dates, while others need a reference date. Other expressions do
+not describe calendar dates.
 
 ::: {.callout-note}
-Riverton dates and notices in this lesson are made-up teaching examples.
+Riverton dates and notices in this lesson are invented teaching examples.
 :::
 
 ::: {.callout-tip}
@@ -22,10 +21,10 @@ Riverton dates and notices in this lesson are made-up teaching examples.
 
 By the end of this lesson, you will be able to:
 
-- separate full dates from relative dates;
-- use an explicit reference date rather than `Sys.Date()`;
-- recognize durations and times of day as different kinds of time language;
-- compare a small temporal parser with this page's expected answers; and
+- separate full dates from relative dates.
+- use an explicit reference date rather than `Sys.Date()`.
+- recognize durations and times of day as different kinds of time language.
+- compare a small temporal parser with this page's expected answers.
 - compare the rule output with spaCy entity labels.
 :::
 
@@ -38,9 +37,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## State the reference date
 
-A fixed reference date anchors the examples: 2026-08-28. That date is a Friday.
-A page whose output changes each day cannot be checked, so the lesson passes the
-date as a variable and never calls `Sys.Date()`.
+The examples use the fixed reference date 2026-08-28, a Friday. A date that
+changes daily would prevent comparison with fixed expected results. The lesson
+therefore passes the date as a variable and never calls `Sys.Date()`.
 
 ```{r}
 library(readr)
@@ -149,9 +148,9 @@ stopifnot(
 
 ## Write a small resolver
 
-The resolver looks for a full ISO date such as `2026-10-15`, then for a month and
-day, then for weekdays. The shorthand `\(text)` means "for each text value, run
-this small function."
+The resolver first searches for a full ISO date, such as `2026-10-15`, in
+year-month-day order. It then searches for a month and day, followed by weekdays.
+The shorthand `\(text)` means "for each text value, execute this small function."
 
 ```{r}
 resolve_temporal <- function(text, reference_date) {
@@ -237,17 +236,19 @@ stopifnot(
 )
 ```
 
-The resolver turns `Monday` into the next Monday after the reference date. It
-uses the same-year convention for month-day phrases, gives `next Friday` its own
-branch, and treats any bare weekday name as the next occurrence. Those are policy
-choices. A different rollover rule would be needed after October 15, and `next
-Monday` shows that the weekday branch is too blunt.
+The resolver assigns `Monday` to the next Monday after the reference date.
+Month-day phrases use the reference year. `next Friday` has a separate branch,
+while other weekday names mean their next occurrence. These are policy choices.
+
+A rollover rule, which advances the year, would be necessary after October 15.
+The `next Monday` result shows that the general weekday branch misses a
+distinction in the expected answers.
 
 ## Score the examples
 
 The resolver and expected answers share an author, so the score below does not
-estimate parser accuracy. It checks whether this page still behaves as
-described.
+give an estimate of parser accuracy. It compares the page's actual behavior with its
+stated behavior.
 
 ```{r}
 date_matches <- (is.na(temporal_results$resolved_date) & is.na(temporal_results$expected_date)) |
@@ -306,9 +307,9 @@ Five are not resolvable as a single date. The `next Monday` row is the date
 mismatch: the rule treats it like `Monday`, while this lesson's expected answer
 uses the following week.
 
-## Ask spaCy for a second opinion
+## Compare spaCy entity labels
 
-spaCy labels spans of text as entity types such as `DATE` and `TIME`. The labels
+spaCy gives spans of text entity labels such as `DATE` and `TIME`. The labels
 are useful clues, not answers to the resolution problem.
 
 ```{r}
@@ -346,7 +347,7 @@ knitr::kable(
     spacy = pipeline_version$spacy
   ),
   col.names = c("Pipeline", "Version", "Language", "License", "spaCy"),
-  caption = "spaCy pipeline used for the second opinion",
+  caption = "spaCy pipeline used for the entity comparison",
   row.names = FALSE
 )
 
@@ -372,29 +373,32 @@ stopifnot(
 )
 ```
 
-spaCy labels `October 15` as `DATE`, `Evening` as `TIME`, and `12-week` as
-`DATE`. The first label helps find the span, but it still needs a year. `12-week`
-belongs in `DATE` under the scheme spaCy was trained on because that class
-includes periods. The label is right, and it is still not a calendar date.
+spaCy gives `October 15` the label `DATE`, `Evening` the label `TIME`, and `12-week` the label
+`DATE`. The first expression still needs a year. spaCy's training scheme puts
+periods in the `DATE` class, so it assigns that label to `12-week`. That
+label is correct under the scheme but does not specify a calendar date.
 
 ## Temporal parsing in production
 
-Finding a temporal span (like spaCy tagging `next Friday` as a `DATE`) is only the first step. Extracting a fully normalized value requires a dedicated tool like Meta's Duckling or Python's `dateparser` rather than hand-coded R branches.
+Temporal-span detection is only the first step, as spaCy's `DATE` label for
+`next Friday` shows. Full normalization requires a dedicated tool, such as
+Meta's Duckling or Python's `dateparser`, rather than custom R branches.
 
-These tools organize key concepts that custom rules often mix together:
-- **Document Creation Time (DCT) / Reference Time**: A relative phrase like `next Friday` or `tomorrow` means nothing without a strict reference date. Parsers do not enforce this automatically; callers must provide the anchor (e.g., passing `RELATIVE_BASE` to `dateparser`).
-- **Granularity and representative ambiguity**: A phrase like `last month` is ambiguous. Depending on the context, does it mean the previous calendar month (a granularity of one month) or the last 30 days? A robust parser separates the span detection from the normalized value, keeping these assumptions visible.
+These tools distinguish concepts that custom rules can combine incorrectly:
+
+- **Document Creation Time (DCT) / Reference Time**: Relative expressions such as `next Friday` or `tomorrow` require an explicit reference date. The document creation time can provide that reference. Callers must supply the date, for example through `RELATIVE_BASE` in `dateparser`.
+- **Granularity and representative ambiguity**: Granularity is the size of the time unit. `last month` could mean the previous calendar month or the last 30 days. A parser must separate span detection from normalization and record those assumptions.
 
 ## What to remember
 
 - A temporal parser needs a stated reference date for relative expressions.
 - Month-day dates need a same-year or rollover policy.
 - Weekday phrases need more than one `next Friday` special case.
-- Entity labels can find time language without settling the date.
+- Entity labels can find time language without resolving a date.
 
-`Apply by October 15` can be put on a 2026 calendar here because the lesson
-supplies 2026 as the reference year. `Evening` and `starts in the fall` still do
-not give this parser a day to place.
+The lesson supplies 2026 as the reference year, so `Apply by October 15`
+resolves to a date in 2026. `Evening` and `starts in the fall` still give
+this parser no specific day.
 
 ## Sources
 

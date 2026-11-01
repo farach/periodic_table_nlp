@@ -1,15 +1,17 @@
 ---
 title: "Building a semantic search index"
-subtitle: "Compare lexical, dense, and fused rankings without pretending a top hit is an answer"
+subtitle: "Compare lexical, dense, and combined rankings without equating rank with relevance"
 description: "Learn how a small search index stores terms, vectors, metadata, and relevance checks for one fictional handbook."
 categories: [systems, semantic search, retrieval]
 ---
 
-A parent asked the handbook, "Where can my kid stay while I study at night?" The answer lived in passage H13, but the wording did not say `child care`.
+A parent asked, "Where can my kid stay while I study at night?" Passage H13 contained the answer, but the question did not include `child care`.
 
-This lesson uses a related search query, `somewhere for my kid during night class`. Under the lexical scoring used later in this lesson, which keeps stop words and does no stemming, H13 ranks second because it shares only the function words `for` and `during`; the class-related distractor H15 shares `class`. That rank does not come from the meaning of `kid` or `night`. If stop words were removed, H13 would receive no lexical score for this query.
+This lesson uses a related search query, `somewhere for my kid during night class`. The lexical scoring retains stop words, such as `for`, and does no stemming. Stemming reduces related word forms to a common base. H13 ranks second because it shares only the function words `for` and `during` with the query. The class-related distractor H15 shares `class`.
 
-**Semantic search indexing** prepares a searchable structure before the next query arrives. A lexical index stores terms and counts. A dense index stores one vector for each passage, using the same local embedding model for passages and queries. Both indexes can return a ranked list; neither can decide by itself that the top passage is relevant.
+H13's rank does not reflect the meaning of `kid` or `night`. Removing stop words would give H13 no lexical score for this query.
+
+**Semantic search indexing** prepares a searchable structure before a query arrives. A lexical index stores terms and counts. A dense index stores one vector for each passage. It uses the same local embedding model to represent passages and queries. Both indexes can return a ranked list. Neither can establish by itself that the highest-ranked passage is relevant.
 
 ::: {.callout-note}
 The Riverton handbook in this lesson is an invented teaching fixture about fictional programs and policies.
@@ -20,12 +22,12 @@ The Riverton handbook in this lesson is an invented teaching fixture about ficti
 
 This lesson shows how to:
 
-- build a lexical inverted index with explicit identifier tokenization;
-- score the index with a fixed BM25 formula;
-- mean-pool local MiniLM token vectors into one passage vector;
-- record index metadata so stale vectors are caught;
-- fuse lexical and dense ranks with reciprocal rank fusion; and
-- read recall and reciprocal rank without naming a winner.
+- build a lexical inverted index with explicit identifier tokenization
+- score the index with a fixed BM25 formula
+- average local MiniLM token vectors into one passage vector
+- record index metadata to find outdated vectors
+- combine lexical and dense ranks with reciprocal rank fusion
+- read recall and reciprocal rank without declaring one method best.
 :::
 
 ```{r}
@@ -35,9 +37,9 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Load the frozen handbook and judgments
+## Load the fixed handbook and judgments
 
-The handbook, queries, and relevance judgments were written before this page ran any search code. The judgments cover every query against every passage. They are page-author reference labels, not ground truth.
+The author wrote the handbook, queries, and relevance judgments before executing search code. The judgments cover every query against every passage. They are the page author's reference labels, not independently established truth.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -198,7 +200,9 @@ stopifnot(
 
 ## Build terms for a lexical inverted index
 
-An **inverted index** stores, for each term, the passages that contain it. The tokenizer matters. A common word tokenizer splits `DSC-104` into `dsc` and `104`; that makes it share `104` with Room 104. This lesson keeps course-like identifiers as one term with the pattern `[a-z]+-\d+|[a-z]+|\d+`. It lowercases text, keeps stop words, and does no stemming, so `class` and `classes` remain different terms.
+An **inverted index** stores, for each term, the passages that contain it. A common word tokenizer splits `DSC-104` into `dsc` and `104`. That split creates a shared `104` token with Room 104.
+
+This lesson keeps course-like identifiers as one term with the pattern `[a-z]+-\d+|[a-z]+|\d+`. It converts text to lowercase, retains stop words, and does no stemming. Thus, `class` and `classes` remain different terms.
 
 ```{r}
 tokenize_index_terms <- function(text) {
@@ -264,11 +268,11 @@ stopifnot(
 )
 ```
 
-These index terms are what the scoring formula in the next section counts. If a system needs exact course-code search, `dsc-104` must be a term, not an accident of two smaller terms.
+The scoring formula in the next section counts these index terms. Exact course-code search requires `dsc-104` as one term, not two smaller terms that can match unrelated text.
 
 ## Score query terms with BM25
 
-BM25 gives more weight to rare query terms, discounts long passages, and lets repeated terms help less each time. This lesson uses Lucene's positive idf form, with `k1 = 1.2` and `b = 0.75`, fixed before any query runs.
+BM25 gives more weight to rare query terms and reduces the advantage of long passages. Each additional occurrence of a term contributes less to the score. This lesson uses Lucene's positive inverse document frequency, or idf, form. The settings `k1 = 1.2` and `b = 0.75` remain fixed before query execution.
 
 ```{r}
 k1 <- 1.2
@@ -390,7 +394,7 @@ knitr::kable(
   default_s2_preview |>
     mutate(score = round(score, 3)),
   col.names = c("Passage", "Topic", "Default-tokenizer rank", "BM25 score"),
-  caption = "Default word splitting keeps the right course-code passage first but fills the rest of the top three with partial matches",
+  caption = "Default word splitting keeps the correct course-code passage first. Partial matches occupy the other two highest-ranked positions.",
   row.names = FALSE
 )
 ```
@@ -427,13 +431,15 @@ stopifnot(
 )
 ```
 
-BM25 handles `DSC-104` cleanly because the tokenizer kept the identifier. With default word splitting, the right passage still stays first in this render, but Room 104 and `DSC-105` become partial matches that fill the rest of the top three. BM25 still struggles when the query says "money while I train" and the passage says "training stipend."
+BM25 matches `DSC-104` because the tokenizer retains the identifier. With default word splitting, the correct passage still ranks first in this render. Room 104 and `DSC-105` become partial matches in the other two highest-ranked positions. BM25 still misses the match between "money while I train" in the query and "training stipend" in the passage.
 
 ## Make dense passage vectors
 
-The dense index uses the pinned `sentence-transformers/all-MiniLM-L6-v2` model. The local Hugging Face feature-extraction pipeline returns one vector per word piece. For each text, this lesson averages those vectors, then scales the result to length 1.
+The dense index uses a fixed revision of `sentence-transformers/all-MiniLM-L6-v2`. The local Hugging Face feature-extraction pipeline returns one vector per word piece, a token that can represent part of a word. For each text, this lesson averages those vectors and scales the result to length 1.
 
-The model's own files say the sentence-transformer wrapper uses mean pooling and a normalization module. The model card says sentence-transformers truncates inputs longer than 256 word pieces by default and that training used sequences of at most 128 tokens. The page applies the model's pooling steps one text at a time, so the pipeline output has no padding tokens (filler tokens that a batch adds so every text in it has the same length); the helper is valid only for that one-text call pattern.
+The model files specify **mean pooling**, which averages token vectors, and normalization, which scales the result. The model card specifies default truncation after 256 word pieces in sentence-transformers. Training used sequences of at most 128 tokens.
+
+The page applies these steps to one text at a time, so the output has no padding tokens. **Padding tokens** equalize text lengths within a batch. This helper is valid only for the one-text call pattern.
 
 The model manifest records an Apache-2.0 license. This lesson uses English (`en`) handbook text and does not claim the same behavior for other languages or domains.
 
@@ -506,7 +512,7 @@ dense_metadata <- tibble(
     "pooling",
     "normalization",
     "prefix",
-    "runtime length checked here",
+    "runtime length examined here",
     "training sequence length on model card",
     "casing",
     "dimension"
@@ -571,7 +577,7 @@ All passages are short enough to embed without truncation. The lesson embeds one
 
 ## Record stale-index checks
 
-An index is tied to its passages and model conventions. The embedding dimension alone cannot detect a swap: several small English embedding models can produce 384-dimensional vectors. The safer record includes model revision, pooling, prefixes, tokenizer behavior, library versions, lexical settings, and passage fingerprints.
+An index depends on its passages and model conventions. Dimension alone cannot reveal a model difference because several small English embedding models produce 384-dimensional vectors. The record therefore includes model revision, pooling, prefixes, tokenizer behavior, library versions, lexical settings, and passage fingerprints. A **fingerprint** identifies file contents.
 
 ```{r}
 #| code-fold: true
@@ -707,7 +713,7 @@ knitr::kable(
 knitr::kable(
   metadata_check,
   col.names = c("Check", "Safe to query"),
-  caption = "A changed pooling convention fails closed before search",
+  caption = "A changed pooling convention prevents search",
   row.names = FALSE
 )
 
@@ -829,7 +835,7 @@ knitr::kable(
   format = "html",
   escape = TRUE,
   col.names = c("Method", "Query", "Query text", "Top passage", "Top topic", "Score type", "Score"),
-  caption = "Top passage per method; BM25 returns no lexical match for S3 and S8",
+  caption = "Top passage per method. BM25 returns no lexical match for S3 and S8.",
   row.names = FALSE
 )
 ```
@@ -863,7 +869,7 @@ stopifnot(
 )
 ```
 
-S8 asks for a cafeteria lunch menu. The judgments say no passage is relevant. BM25 returns no lexical match after zero-score rows are excluded, while dense search and RRF still return a top passage. That is a property of similarity search, not evidence that the handbook contains a lunch-menu answer.
+S8 asks for a cafeteria lunch menu. The judgments list no relevant passage. BM25 excludes zero-score rows and returns no lexical match. Dense search and RRF still return a top passage. This result reflects similarity search, not evidence that the handbook contains a lunch-menu answer.
 
 ## Evaluate the ranks query by query
 
@@ -1135,9 +1141,11 @@ stopifnot(
 )
 ```
 
-Dense search fixes the child-care wording mismatch in S1 and the stipend wording mismatch in S3. It misses the transit query at the top three. BM25 does well on identifiers and exact wording, but it has no nonzero score for some paraphrases. RRF helps S1 and S3 and keeps several exact hits, yet it still misses the transit query at the top three. For S4, dense ranks the relevant H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "dense" & rank_evaluation$query_id == "S4"]`, while RRF ranks it at `r rank_evaluation$relevant_rank[rank_evaluation$method == "RRF hybrid" & rank_evaluation$query_id == "S4"]` because H05 appears only in the dense list and receives no BM25 rank contribution. These are paired demonstrations on seven author-written probes, not a benchmark.
+Dense search resolves the child-care wording mismatch in S1 and the stipend wording mismatch in S3. It misses the transit passage in the first three results. BM25 performs well on identifiers and exact wording, but some paraphrases receive no nonzero score. RRF helps S1 and S3 and preserves several exact matches. It still misses the transit passage in the first three results.
 
-Larger evaluations do not give one method a permanent crown. BEIR reported BM25 as a strong zero-shot baseline across varied retrieval tasks, while dense passage retrieval reported large gains on open-domain question answering; entity-question work found dense retrievers can miss questions about rarely seen named entities. One `DSC-104` probe in a 15-passage handbook cannot show that dense search handles identifiers.
+For S4, dense search ranks the relevant H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "dense" & rank_evaluation$query_id == "S4"]`. RRF ranks H05 at `r rank_evaluation$relevant_rank[rank_evaluation$method == "RRF hybrid" & rank_evaluation$query_id == "S4"]`. H05 appears only in the dense list, so it receives no BM25 rank contribution. These are paired demonstrations on seven author-written probes, not a benchmark.
+
+Larger evaluations do not establish one universally best method. BEIR reported BM25 as a strong zero-shot baseline across varied retrieval tasks. **Zero-shot** means the method receives no training for the specific evaluation task. Dense passage retrieval reported large gains on open-domain question answering. Entity-question research found that dense retrievers can miss questions about rarely seen named entities. One `DSC-104` probe in a 15-passage handbook cannot establish general identifier-search performance.
 
 ## What approximate search would change
 
@@ -1147,7 +1155,9 @@ An index of private text is private data. Embeddings can leak information about 
 
 ## Choosing an embedding model now
 
-The embedding model here is small and several years old. Newer open models, such as EmbeddingGemma and the Qwen3 embedding models, score higher on public benchmarks like MMTEB, and some can run on a laptop. A benchmark rank does not reliably predict performance on your own documents, and a new model means re-embedding the whole index, because vectors from different models cannot be compared. Judge any change on a small set of your own queries with relevance judgments written in advance, as this page does, and keep a lexical list beside the dense one.
+The embedding model here is small and several years old. Newer open models such as EmbeddingGemma and Qwen3 embedding models score higher on public benchmarks such as MMTEB. Some can execute on a laptop. A benchmark rank does not establish performance on your documents. A new model requires new vectors for the whole index because vectors from different models are not comparable.
+
+Evaluate a replacement model with your own queries and relevance judgments written in advance. Keep a lexical list beside the dense list.
 
 ## What to remember
 
@@ -1158,7 +1168,7 @@ The embedding model here is small and several years old. Newer open models, such
 - Similarity search returns a ranked row even when no relevant passage exists.
 - Recall from relevance judgments and ANN recall answer different questions.
 
-The dense list rescued the child-care query, but the no-menu query showed why every search result still needs a relevance check.
+The dense list retrieved the child-care passage. The lunch-menu query showed that every search result still needs a relevance check.
 
 ## Sources
 

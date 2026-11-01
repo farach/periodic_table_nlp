@@ -1,28 +1,27 @@
 ---
-title: "Tagging words by their job"
+title: "Tagging words by grammatical function"
 subtitle: "Read part-of-speech tags from a small trained model"
 description: "Learn how a part-of-speech tagger labels workforce text and why held-out accuracy has limits."
 categories: [word parsing, part-of-speech tagging, workforce research]
 ---
 
-With sentence labels finished, attention turns to single words. The team points
-to a job posting and asks a smaller question: which words are the actions?
+After sentence labeling, the team examines single words in a job posting.
+It asks which words describe actions.
 
-That question changes the level of analysis. The team is no longer asking
-whether a whole sentence is about training or schedules. It wants to know what
-each word is doing inside the sentence.
+This changes the level of analysis. The team no longer classifies whole
+sentences about training or schedules. It examines each word's grammatical
+function.
 
-A **part-of-speech tagger** assigns a grammatical tag to each token. The tag can
-say that a word is a thing, an action, a description, a helper verb, a number,
-or punctuation. This lesson uses a UDPipe tagger trained on 500 hand-labeled
-sentences from the Universal Dependencies English Web Treebank. A **treebank**
-is a collection of sentences that people have labelled by hand, word by word.
+A **part-of-speech tagger** assigns a grammatical tag to each token.
+Tags can identify things, actions, descriptions, helper verbs, numbers, or
+punctuation. This lesson uses a UDPipe tagger with 500 hand-labeled training
+sentences from the Universal Dependencies English Web Treebank.
+A **treebank** contains sentences with human-assigned word-level labels.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. The UDPipe model and treebank artifacts are local
-files bundled with this project, so the lesson does not download anything while
-it runs.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching. The project includes local UDPipe model and
+treebank files. The lesson downloads nothing during execution.
 :::
 
 ::: {.callout-tip}
@@ -30,12 +29,11 @@ it runs.
 
 By the end of this lesson, you will be able to:
 
-- describe common Universal POS tags in plain language;
-- run a local UDPipe part-of-speech tagger on fixed tokens;
-- inspect a tagging mistake in a job-posting sentence;
-- read a held-out accuracy score; and
-- explain why accuracy on weblog posts does not promise the same result on job
-  postings.
+- describe common Universal POS tags in plain language.
+- run a local UDPipe part-of-speech tagger on fixed tokens.
+- examine a tagging mistake in a job-posting sentence.
+- read a held-out accuracy score.
+- explain why weblog-post accuracy does not establish accuracy on job postings.
 :::
 
 ```{r}
@@ -47,11 +45,11 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the local files
 
-For this read-only pass, readr opens the files, dplyr and tibble handle tables,
-purrr repeats token work, tokenizers split words, udpipe tags them, and digest
-checks file fingerprints. The model has already been trained, so the code only
-reads artifacts from disk and records the settings needed to describe the
-bundled run.
+In this read-only pass, readr opens files, and dplyr and tibble handle tables.
+The purrr package processes token lists, tokenizers splits words, and udpipe
+assigns tags. The digest package supplies file fingerprints for comparison.
+The code reads the trained model from disk and records settings for the
+bundled run. It does not train a model.
 
 ```{r}
 library(readr)
@@ -200,26 +198,27 @@ stopifnot(
 )
 ```
 
-The table prints the first 12 characters of each SHA-256 fingerprint so it stays
-readable at high zoom. The full values are in
-`data/treebank/treebank-metadata.csv`. A hash shows that a file has not changed
-since it was made. It says nothing about whether the numbers in the file are
-right. The second table mixes one build setting that is recorded in the builder
-script with details from the current rerun environment. The committed model does
-not carry build-time RNG kind, R version, or package-version metadata, so those
-details would need to be recorded on the next rebuild. Only the 500-sentence
-tagger is included in this repository, so the other four rows of the learning
-curve cannot be rebuilt from the committed files.
+The table prints the first 12 SHA-256 characters for readability at high zoom.
+The full values are in `data/treebank/treebank-metadata.csv`.
+A matching hash indicates that the file remains unchanged from the recorded
+version. It does not establish that the numbers are correct.
+
+The second table combines one setting from the builder script with current
+environment details. The committed model lacks build-time RNG kind, R version,
+and package-version metadata. Record those details on the next rebuild.
+Only the 500-sentence tagger is in this repository.
+The committed files cannot recreate the other four learning-curve rows.
 
 ## Tag fixed tokens
 
-The model was trained to tag tokens it receives. It was not trained to split raw
-sentences. The code therefore tokenizes each Riverton sentence first, writes one
-token per line, and tells UDPipe that the input is already vertical text.
+The model's training covers token tagging, not raw-text sentence splitting.
+The code first tokenizes each Riverton text unit.
+It writes one token per line and declares the input as vertical text to UDPipe.
 
-The output includes a **lemma**, the dictionary form of a word, the form you
-would look up. `is` has the lemma `be`. In the code, `\(tokens)` is R shorthand
-for a small function that handles one sentence's tokens at a time.
+The output contains a **lemma**, a word's dictionary form.
+For example, `is` has the lemma `be`.
+The shorthand `\(tokens)` defines an R function that handles one sentence's
+tokens at a time.
 
 ```{r}
 tagger <- udpipe_load_model(
@@ -285,13 +284,21 @@ stem from a suffix rule.
 
 ## Count the tags
 
-The tagger uses **Universal POS tags**. The **tagset** is the fixed list of
-labels a tagger is allowed to choose from. `NOUN` marks things, `VERB` marks
-actions, `ADJ` marks descriptions, `ADP` marks words such as `of` and `in`,
-`AUX` marks helper verbs such as `is`, `DET` marks words such as `the` and `a`,
-`PART` marks particles such as `to` in `to apply`, `PROPN` marks names, `PRON`
-marks pronouns, `ADV` marks adverbs, `CCONJ` marks coordinating conjunctions
-such as `and`, and `INTJ` marks interjections.
+The tagger uses **Universal POS tags**.
+The **tagset** is its fixed list of permitted labels.
+
+- `NOUN` marks things.
+- `VERB` marks actions.
+- `ADJ` marks descriptions.
+- `ADP` marks words such as `of` and `in`.
+- `AUX` marks helper verbs such as `is`.
+- `DET` marks words such as `the` and `a`.
+- `PART` marks particles such as `to` in `to apply`.
+- `PROPN` marks names.
+- `PRON` marks pronouns.
+- `ADV` marks adverbs.
+- `CCONJ` marks coordinating conjunctions such as `and`.
+- `INTJ` marks interjections.
 
 ```{r}
 tag_counts <- tagged |>
@@ -335,7 +342,7 @@ expected_tag_counts <- tibble(
 knitr::kable(
   tag_counts,
   col.names = c("POS tag", "Tagged tokens"),
-  caption = "Universal POS tag counts across the 28 Riverton sentences",
+  caption = "Universal POS tag counts across the 28 Riverton text units",
   row.names = FALSE
 )
 ```
@@ -369,20 +376,23 @@ stopifnot(
 ```
 
 Nouns are the largest group, followed by punctuation, verbs, and helper verbs.
-That matches the practical question well enough to start a review, but the
-mistakes in the first sentence warn against treating the table as a perfect
-grammar of the job postings.
+These categories provide a starting point for checks.
+The first sentence's errors show that the table is not a perfect grammatical
+description of the postings.
 
-This lesson keeps punctuation as tokens, so it tags 178 tokens. Twenty-five are
-`PUNCT`; dropping them leaves the 153 word tokens counted in Lesson 15.
+This lesson keeps punctuation and tags 178 tokens.
+Removing the 25 `PUNCT` tokens leaves the 153 word tokens counted in Lesson 15.
 
-One row deserves a closer look. The only `INTJ` is `No` in sentence `s002`,
-which is wrong in context. Of the 11 `PROPN` tokens, seven are all-capital flyer
-words (`RIVERTON`, `SKILLS`, `OPEN`, `HOUSE`, `DATA`, `SUPPORT`, `CERTIFICATE`),
-two are `Paid` at the start of sentences `s001` and `s025`, one is `Clear` in
-`s022`, and one is `October` in `s028`, which is right. The tagger reads capital
-letters as a signal for names, a systematic failure on this kind of text that is
-invisible in an accuracy score.
+The only `INTJ` is `No` in `s002`, which is wrong in context.
+Seven of the 11 `PROPN` tokens are all-capital flyer words:
+`RIVERTON`, `SKILLS`, `OPEN`, `HOUSE`, `DATA`, `SUPPORT`, and `CERTIFICATE`.
+Two are sentence-initial `Paid` in `s001` and `s025`.
+One is `Clear` in `s022`. The remaining token, `October` in `s028`, has the
+correct tag.
+
+The tagger treats capital letters as evidence of names.
+An overall accuracy score does not show this systematic error on the Riverton
+text.
 
 ## Read the accuracy number
 
@@ -611,41 +621,44 @@ stopifnot(
 )
 ```
 
-The lookup baseline gives each word its most frequent tag in the 500 training
-sentences and guesses `NOUN` for words it has not seen. It gets 3,178 of 4,007
-tokens right, or 0.7931. The trained tagger gets 3,641 of 4,007 right, or about
-91 percent, which buys about 11.6 points over the lookup table. In the held-out
-posts, 3,140 of 4,007 tokens, or 78.4 percent, are words that also appear in the
-training sentences.
+The lookup baseline assigns each word its most frequent tag from the 500
+training sentences. It assigns `NOUN` to unseen words.
+It correctly tags 3,178 of 4,007 tokens, or 0.7931.
+The trained tagger correctly tags 3,641 of 4,007, or about 91 percent.
+This is about 11.6 points above the lookup baseline.
 
-The easy tags matter. `PUNCT` and `DET` are 884 of the 4,007 held-out tokens, or
-22.1 percent. Excluding them, the trained tagger scores 2,766 of 3,123, or
-0.8857, and the lookup baseline scores 2,307 of 3,123, or 0.7387. The easy tokens
-flatter both systems.
+Of the 4,007 held-out tokens, 3,140 also appear in the training sentences.
+Those tokens account for 78.4 percent of the held-out set.
 
-On this one learning curve, accuracy rises quickly at first and then more slowly.
-Moving from 100 to 500 training sentences buys about 8.5 points. Moving from 500
-to 2,000 buys about 3.4 more. The curve cannot separate more labeled sentences
-from broader topic coverage, because each step adds new blog posts as well as
-new sentences. The intervals are not the same scale: 100 to 500 is a five-fold
-increase, while 500 to 2,000 is a four-fold increase.
+The easier tags `PUNCT` and `DET` account for 884 of 4,007 held-out tokens, or
+22.1 percent. Without them, the trained tagger scores 2,766 of 3,123, or
+0.8857. The lookup baseline scores 2,307 of 3,123, or 0.7387.
+The easier tokens increase both overall scores.
+
+On this learning curve, accuracy increases quickly at first and then more
+slowly. Increasing training from 100 to 500 sentences adds about 8.5 points.
+Increasing from 500 to 2,000 adds about 3.4 points.
+Each step adds blog posts and sentences, so the curve cannot separate training
+quantity from topic coverage. The intervals also differ proportionally.
+The first is a five-fold increase, and the second is a four-fold increase.
 
 ## Keep the limits attached
 
-The score is one number from one run over thirteen blog posts. Tokens inside a
-post are not independent, because vocabulary, topic, and author repeat within
-the post. The real spread is wider than the token count suggests. The builder
-script sets `set.seed(20260828)`. The RNG and R-version rows above describe the
-current rerun environment, not the build-time environment of the committed
-model. This page still reports the bundled run only and does not add a
-confidence interval, because it does not retrain or rescore on new samples or
-domains.
+The score comes from one run over thirteen blog posts.
+Tokens within a post are not independent because they share vocabulary, topic,
+and author. Actual variation exceeds what the token count alone suggests.
+The builder script sets `set.seed(20260828)`.
 
-The Riverton sentences are job postings and flyer lines, a different kind of
-writing. This lesson does not claim the same rate there. On the Riverton text,
-we can point to individual mistakes a reader can judge.
+The RNG and R-version rows describe the current environment, not the committed
+model's build-time environment. This page reports only the bundled run.
+It provides no confidence interval because it neither retrains nor rescores
+on new samples or domains.
 
-Universal POS tags are a useful set of bins for this task. Other projects can
+The Riverton text contains job postings and flyer lines, a different type of
+writing. This lesson does not claim the same accuracy there.
+It shows individual Riverton mistakes that readers can evaluate.
+
+Universal POS tags provide grammatical categories for this task. Other projects can
 choose a different tagset.
 
 ## What to remember
@@ -655,10 +668,10 @@ choose a different tagset.
 - The local tagger labeled 178 Riverton tokens.
 - Its held-out weblog-post accuracy is 3,641 of 4,007 tokens, or about 91
   percent.
-- Job-posting errors must be checked directly; the weblog-post score does not
-  transfer by promise.
+- Examine job-posting errors directly.
+- Weblog-post accuracy does not establish job-posting accuracy.
 
-The team can use the tagger to make a first action-word list, then inspect the
+The team can use the tagger to make a first action-word list, then examine the
 mistakes before treating the labels as evidence.
 
 ## Sources

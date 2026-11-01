@@ -1,31 +1,31 @@
 ---
 title: "Writing a shorter account"
-subtitle: "Generate a summary, then check what it kept and changed"
-description: "Learn how abstractive summarization differs from sentence selection and why shorter text still needs source review."
+subtitle: "Examine what a generated summary preserves and changes"
+description: "Learn how abstractive summarization differs from sentence selection and why shorter text still needs comparison with its source."
 categories: [natural language generation, abstractive summarization, evaluation]
 ---
 
-Rosa prepares the morning brief for a neighborhood archive. Two service notes
-have arrived, and each is longer than the one sentence her colleagues need.
-The shorter sentence still has to respect the source.
+Rosa prepares the morning brief for a neighborhood archive. She receives two
+service notes. Each is longer than the one sentence her colleagues need. A
+shorter sentence must still preserve the source's meaning.
 
 **Abstractive summarization** generates wording for a shorter account of a
 source. The output may reuse some source phrases, but it is not limited to
 selecting whole sentences. Lesson 54 used sentence selection. This lesson asks
-a local language model to write a new sentence, then checks the candidate
-against the original record.
+a local language model to write a new sentence. The lesson then compares the
+candidate with the original record.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- keep source records, prompts, and outputs tied to durable IDs;
-- count the model's input tokens before generation;
-- compare generated summaries with a first-sentence baseline;
-- separate compression from source support and useful coverage;
-- inspect names, numbers, and explicit limits without calling them proof; and
-- leave factual and editorial approval to a recorded human review.
+- keep source records, prompts, and outputs linked to persistent IDs
+- count the model's input tokens before generation
+- compare generated summaries with a first-sentence baseline
+- separate compression from source evidence and useful coverage
+- examine names, numbers, and explicit limits without treating these checks as proof
+- leave factual and editorial approval to a recorded human check.
 :::
 
 ```{r}
@@ -37,10 +37,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the local model
 
-The model files were downloaded before rendering at the revision recorded in
+Course setup downloads model files before rendering at the revision recorded in
 `data/nlg-models.csv`. The code below uses `huggingfaceR` to load that local
-snapshot. Offline mode is set by `R/use-nlg.R`, so a missing model stops the
-lesson instead of starting a network download.
+version. `R/use-nlg.R` sets offline mode. If model files are missing, the lesson
+stops instead of starting a network download.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -69,7 +69,7 @@ model_record <- summary_model$metadata |>
 
 knitr::kable(
   model_record,
-  col.names = c("Model", "Revision", "License", "Use in this course"),
+  col.names = c("Model", "Revision", "License", "Course task"),
   caption = "Pinned local model used for the generated summaries",
   row.names = FALSE
 )
@@ -97,9 +97,9 @@ description and license do not establish that its summaries are accurate.
 
 ## Keep the source beside the brief
 
-These records are fictional teaching examples. They were written for this
-lesson and are not a random sample, a held-out benchmark, or evidence about
-archive services elsewhere.
+The author wrote these fictional teaching records for this lesson. They are not
+a random sample, a held-out benchmark, or evidence about archive services
+elsewhere.
 
 Each brief states information that matters to the reader. SUM-01 needs the
 service, Tuesday schedule, and boundary on volunteer help. SUM-02 needs the
@@ -157,8 +157,8 @@ stopifnot(
 
 ## Declare required and optional facts
 
-The checklist is fixed before generation. A missing required item sends a
-candidate back for revision. Optional clues remain useful during source review,
+The author fixes the checklist before generation. A missing required item
+requires candidate revision. Optional clues remain useful during source checks,
 but their omission alone does not violate the brief.
 
 ```{r}
@@ -203,7 +203,7 @@ knitr::kable(
     "Predeclared information",
     "Required by brief"
   ),
-  caption = "Required facts and optional review clues declared before generation",
+  caption = "Required facts and optional clues for source checks declared before generation",
   row.names = FALSE
 )
 ```
@@ -219,7 +219,7 @@ stopifnot(
 )
 ```
 
-## Check the input budget before generation
+## Examine the input limit before generation
 
 A model token is a tokenizer unit, not necessarily a word. The prompt includes
 the instruction, brief, and source text, so all three count against the input
@@ -280,8 +280,10 @@ stopifnot(
 )
 ```
 
-No text is cut to fit. A longer document would need a stated policy such as
-sectioning or hierarchical summarization before the model call.
+The workflow does not remove text to fit the limit. A longer document would
+need a stated policy before the model call. Options include separate sections
+or hierarchical summarization, which summarizes sections before combining their
+summaries.
 
 ## Generate the candidate summaries
 
@@ -345,13 +347,13 @@ stopifnot(
 )
 ```
 
-The first-sentence baseline is available before any model output is read. It is
-not a fair contest with a matched length budget; it shows the difference
-between selecting source wording and generating a new account.
+The first-sentence baseline is available before model generation. The comparison
+does not match output lengths. It shows the difference between selecting source
+wording and generating a new account.
 
 ## Measure shortening without calling it truth
 
-The next table counts whitespace-separated words. That rule is easy to inspect,
+The next table counts whitespace-separated words. That rule is easy to examine,
 but it is different from the model tokenizer used for the generation budget.
 A compression ratio below 1 means the candidate is shorter. It says nothing
 about whether the candidate kept the needed facts.
@@ -402,15 +404,16 @@ stopifnot(
 )
 ```
 
-The generated sentence can be short because it chose the right content, because
-it omitted necessary content, or both. Length cannot separate those cases.
+The model can produce a short sentence by selecting relevant content, omitting
+necessary content, or both. Length cannot distinguish those cases.
 
-## Inspect facts chosen before generation
+## Examine facts chosen before generation
 
-Rosa writes a checklist before reading the output. The regular expressions
-below flag visible strings related to that checklist. A missing flag points to
-an omission worth reading. A present flag cannot prove that the name, number,
-or negative statement has the right role or scope.
+Rosa writes a checklist before reading the output. A **regular expression** is a
+pattern for matching text. The expressions below find visible strings
+related to that checklist. A missing match suggests a possible omission to
+examine. A match does not establish the correct role or scope of a name, number,
+or negative statement.
 
 ```{r}
 summary_flags <- summary_checks |>
@@ -468,7 +471,7 @@ knitr::kable(
     "Required by brief",
     "Surface flag present"
   ),
-  caption = "Surface flags for required facts and optional review clues",
+  caption = "String-match flags for required facts and optional clues for source checks",
   row.names = FALSE
 )
 
@@ -506,20 +509,23 @@ stopifnot(
 )
 ```
 
-This check is intentionally incomplete. It cannot detect a changed relation, a
-number attached to the wrong thing, an unsupported cause, or a fluent
-generalization. Those require reading the source and candidate together.
-In this render, the first candidate changes the boundary on volunteer help.
-The second uses negative wording while changing the relationship to restricted
-storage. The surface table catches part of the problem, and source comparison
-catches the rest.
-Likewise, n-gram overlap metrics such as ROUGE measure reference overlap under a
-specified normalization rule. They do not measure the share of claims supported
-by the source.
+This check is intentionally incomplete. It cannot detect a changed relation, an
+incorrect number association, a cause absent from the source, or a fluent generalization.
+Those errors require comparison of the source and candidate.
 
-## Record the review boundary
+In this render, the first candidate changes the limit on volunteer help. The
+second uses negative wording but changes the relationship to restricted
+storage. The string checks find some errors. Comparison with the source
+reveals the others.
 
-Execution can establish that a model ran, stayed inside the configured budgets,
+Likewise, n-gram overlap metrics such as ROUGE compare word sequences with a
+reference under a specified normalization rule. Normalization standardizes text
+before comparison. These metrics do not measure the share of claims with
+evidence in the source.
+
+## Record the limit of automated checks
+
+Execution can establish that a model executed, stayed within the configured limits,
 and returned text. It cannot grant factual or editorial approval.
 
 ```{r}
@@ -529,8 +535,8 @@ summary_review <- tibble(
     "prompt input within 256 tokens",
     "output stopped at EOS or token cap",
     "required-fact surface screen",
-    "human source-support review",
-    "human usefulness and prose review"
+    "human checks of source evidence",
+    "human checks of usefulness and prose"
   ),
   status = c(
     sprintf(
@@ -563,8 +569,8 @@ summary_review <- tibble(
 
 knitr::kable(
   summary_review,
-  col.names = c("Review gate", "Status"),
-  caption = "Automatic execution checks remain separate from human review",
+  col.names = c("Check stage", "Status"),
+  caption = "Automatic execution checks remain separate from human checks",
   row.names = FALSE
 )
 ```
@@ -578,18 +584,19 @@ stopifnot(
 )
 ```
 
-A publishable summary needs a reader to trace each claim to the source, decide
-whether the brief's essential information survived, and reject unsupported
-additions. A fluent one-sentence result is only a candidate.
+Before publication, a reader must compare each summary claim with its source.
+The reader must find omissions of essential information. The reader must reject
+additions without source evidence. A fluent one-sentence result is only a candidate.
 
 ## What to remember
 
-- Abstractive summarization generates wording; extractive summarization selects
+- Abstractive summarization generates wording. Extractive summarization selects
   source text.
-- Count the complete prompt with the model tokenizer and do not hide truncation.
-- Compression describes length, not coverage or source support.
-- Check omissions and additions against a brief written before generation.
-- Names, numbers, and negation flags are prompts for review, not semantic proof.
+- Count the complete prompt with the model tokenizer.
+- Disclose any truncation.
+- Compression describes length, not coverage or source evidence.
+- Examine omissions and additions against a brief written before generation.
+- Names, numbers, and negation flags are prompts for human checks, not semantic proof.
 - Keep model execution separate from human factual and editorial approval.
 
 ## Sources

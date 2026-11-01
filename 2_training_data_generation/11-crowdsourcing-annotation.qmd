@@ -5,10 +5,10 @@ description: "Learn how to compare workforce labels from several reviewers witho
 categories: [training data, crowdsourcing, agreement]
 ---
 
-The outside provider review kept unlike records separate. The Riverton
-Workforce Lab now checks whether the people assigning labels make comparable
+The provider checks kept unlike records separate. The Riverton
+Workforce Lab now examines whether the people assigning labels make comparable
 decisions. Three fictional paid reviewers apply the same codebook independently
-to 11 local sentences. Nine rows match; two do not.
+to 11 local sentences. Nine rows match. Two do not.
 
 **Crowdsourcing** distributes tasks to a group of people, often through an
 online marketplace. Access to more reviewers can increase coverage, but a
@@ -16,8 +16,9 @@ marketplace does not create expertise, fair working conditions, or valid
 labels. The team must design those conditions.
 
 ::: {.callout-note}
-The reviewers, annotations, and research team are fictional. The disagreements
-were designed for this lesson and do not evaluate real workers.
+The reviewers, annotations, and research team are fictional.
+The author designed the disagreements for this lesson, not to evaluate real
+workers.
 :::
 
 ::: {.callout-tip}
@@ -25,11 +26,12 @@ were designed for this lesson and do not evaluate real workers.
 
 By the end of this lesson, you will be able to:
 
-- keep reviewer labels separate;
-- calculate pairwise agreement with foundryR;
-- distinguish observed agreement from chance-corrected measures;
-- test how much one item moves an agreement statistic;
-- find items that need adjudication and record the decision; and
+- keep reviewer labels separate.
+- calculate pairwise agreement with foundryR.
+- distinguish observed agreement from chance-corrected measures.
+- measure the effect of one item on an agreement statistic.
+- find items that need adjudication.
+- record adjudication decisions.
 - explain why majority vote is not automatic truth.
 :::
 
@@ -42,10 +44,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Preserve each person's answer
 
-The annotation file stores one column per reviewer. The next chunk loads file,
-table, reshaping, repeated-work, agreement, and reliability helpers, then reads
-the CSV files with declared column types. No vote has been combined or
-overwritten.
+The annotation file stores one column per reviewer.
+The next chunk loads file, table, reshaping, repetition, agreement, and
+reliability helpers. It then reads the CSV files with declared column types.
+The code neither combines nor overwrites votes.
 
 ```{r}
 library(readr)
@@ -172,13 +174,14 @@ makes those disagreements visible, and the sample includes all five labels.
 
 Simple agreement is the share of answers that match. **Cohen's kappa** adjusts
 for the agreement expected from the reviewers' label frequencies.
-**Krippendorff's alpha** is another chance-corrected measure that can support
-more coders and missing labels under suitable settings.
+**Krippendorff's alpha** is another chance-corrected measure.
+Its calculation can use data from more coders, even with missing labels, under suitable settings.
 
-foundryR calculates several measures together. Here we retain observed
-agreement and Cohen's kappa for every reviewer pair. Directional classification
-measures such as precision and recall are not shown because no reviewer is
-treated as the truth.
+foundryR calculates several measures together. This example retains observed
+agreement and Cohen's kappa for every reviewer pair.
+The comparison treats no reviewer as the truth.
+It therefore excludes directional classification measures such as precision
+and recall.
 
 ```{r}
 reviewer_pairs <- tibble(
@@ -254,16 +257,15 @@ stopifnot(
 The B-and-C comparison is weaker than A and C. Reporting only one pair would
 hide that difference.
 
-The table shows two decimals on purpose. With 11 items, one reviewer changing
-one answer moves observed agreement by about nine points, so a third decimal
-describes arithmetic rather than measurement. Publishing 0.818 invites a reader
-to compare it with 0.812 from another study as though the difference meant
-something.
+The table shows two decimals. With 11 items, one changed answer can alter
+observed agreement by about nine points. A third decimal would imply
+unsupported measurement precision. Reporting 0.818 could encourage a
+meaningless comparison with 0.812 from another study.
 
-Krippendorff's alpha summarizes all three reviewers at once. `pivot_longer()`
-puts the reviewer columns into one label column, then `pivot_wider()` builds the
-matrix that `irr` needs. The calculation converts label names to category
-numbers; the numbers carry no order.
+Krippendorff's alpha summarizes all three reviewers at once.
+`pivot_longer()` converts the reviewer columns into one label column.
+Then `pivot_wider()` creates the matrix that `irr` needs.
+The calculation converts label names to category numbers without an ordering.
 
 ```{r}
 numeric_ratings <- crowd_labels |>
@@ -335,15 +337,15 @@ stopifnot(
 )
 ```
 
-The 11-item example is too small for a precise population estimate. These
-statistics describe this annotation exercise and help locate problems; they do
-not certify the codebook or any reviewer.
+The 11-item example is too small for a precise population estimate.
+These statistics describe the annotation exercise and help find problems.
+They do not certify the codebook or any reviewer.
 
-## Ask how much one item is worth
+## Measure sensitivity to one item
 
-"Too small for a precise estimate" is a phrase readers skim past. The way to
-make it concrete is to remove one item at a time and recompute, which for 11
-items means 11 recalculations and no new data.
+Removing one item at a time shows the estimate's sensitivity to individual
+items. With 11 items, this procedure requires 11 recalculations and no new
+data.
 
 ```{r}
 alpha_without_item <- map_dbl(
@@ -377,7 +379,7 @@ knitr::kable(
       )
     ),
   col.names = c("Item removed", "Alpha for the other ten"),
-  caption = "Krippendorff's alpha after dropping each item in turn",
+  caption = "Krippendorff's alpha after removing one item at a time",
   row.names = FALSE
 )
 ```
@@ -400,26 +402,26 @@ stopifnot(
 )
 ```
 
-Alpha is 0.80 on all 11 items. Drop one item and it lands anywhere between 0.76
-and 0.91. The high end is not a coincidence: removing `s013`, the item all three
-reviewers read differently, is what produces it.
+Alpha is 0.80 on all 11 items. Removing one item changes alpha to a value
+between 0.76 and 0.91. Removing `s013` produces the highest value.
+All three reviewers interpreted that item differently.
 
-This is not a confidence interval, and it should not be reported as one. It is a
-cruder statement and a sufficient one here: a summary this sensitive to a single
-item cannot support a claim that one codebook, task, or reviewer pool is more
-reliable than another. Reporting the range beside the estimate is honest;
-reporting 0.797 alone is not.
+This range is not a confidence interval. Do not report it as one.
+This single-item sensitivity leaves comparisons between codebooks, tasks,
+or reviewer pools uncertain. Report the range alongside the estimate.
+Reporting 0.797 alone would conceal that sensitivity.
 
-A larger sample can reduce single-item sensitivity, but sample size alone does
-not determine how much alpha moves. Label prevalence, clustered documents,
-which item is removed, and the pattern of disagreement all matter. For a larger
-study, resample whole source documents rather than individual rows and report
-the resulting bootstrap distribution; this lesson's 11 items cannot predict
-what its width would be for 500.
+A larger sample can reduce single-item sensitivity, but sample size alone
+does not explain the change in alpha. Label prevalence, document clustering,
+the removed item, and the disagreement pattern also affect the result.
+
+For a larger study, resample whole source documents rather than individual
+rows. Report the resulting bootstrap distribution.
+These 11 items cannot predict the distribution's width for 500 items.
 
 ## Find the disagreements
 
-An item needs review when the three labels are not identical. `left_join()`
+An item needs a check when the three labels are not identical. `left_join()`
 adds the sentence text by matching the shared sentence identifier.
 
 ```{r}
@@ -479,15 +481,15 @@ stopifnot(
 )
 ```
 
-The first sentence says experience is preferred; one reviewer chose `other`.
-The second mentions a certificate and receives three different labels. Those
-choices place the same notices under different questions for a person comparing
-options. The codebook needs to explain the boundary rather than hide it in a
-vote.
+The first sentence says experience is preferred. One reviewer chose `other`.
+The second mentions a certificate and receives three different labels.
+These choices classify the same notices differently for readers who compare
+options. The codebook must explain the category distinction instead of
+replacing that explanation with a vote.
 
 ## Calculate a majority label carefully
 
-A majority label can organize the next review step. It should not erase the
+A majority label can organize the next check. It should not erase the
 individual answers or replace adjudication.
 
 ```{r}
@@ -583,17 +585,18 @@ stopifnot(
 )
 ```
 
-The `unanimous` column prevents an easy majority from looking like complete
-agreement. The tie check stays because teams may change the reviewer count; any
-tie among top labels goes to `adjudicate`. Sentence `s013` returns `adjudicate`
-because three different answers do not form a majority. The team can review the
-sentence, codebook, and source labels before choosing a reference label.
+The `unanimous` column distinguishes majority decisions from complete
+agreement. The tie check remains necessary if teams change the reviewer count.
+Any tie among the top labels returns `adjudicate`.
+Sentence `s013` returns `adjudicate` because three different answers do not
+form a majority. The team can examine the sentence, codebook, and source labels
+before choosing a reference label.
 
 ## Finish the adjudication
 
-An adjudication queue that stays a queue is not a quality process. Both flagged
-items were decided by a fourth reader who had not labeled them, working from the
-codebook text rather than from the vote counts.
+A queue of disputed items alone does not resolve disagreements.
+A fourth reader adjudicated both flagged items using the codebook rather than
+the vote counts. That reader did not participate in the initial labeling.
 
 ```{r}
 adjudication <- tibble(
@@ -673,40 +676,41 @@ stopifnot(
 )
 ```
 
-Both items resolve to `requirement`, and both decisions rest on a clause the
-adjudicator can point to in the codebook. The reviewer columns are still in the
-table with their disagreements intact, which is why the check above can confirm
-that the reviewers still differ after the item was settled.
+Both items resolve to `requirement`. Each decision cites a codebook clause.
+The table retains the original reviewer columns and disagreements.
+The check confirms that adjudication did not overwrite the different reviewer
+answers.
 
-Notice what the adjudication of `s013` did not do. It did not make the item
-easy. Three trained readers reached three answers, and the sensitivity analysis
-showed that this one item carries most of the distance between an alpha of 0.80
-and one of 0.91. A decision closes the item; it does not retire the question,
-which belongs in the next codebook revision as a worked example.
+Adjudication did not make `s013` easy to interpret.
+Three trained readers reached three answers. The sensitivity analysis shows
+that this item accounts for most of the difference between alpha values of
+0.80 and 0.91. The decision resolves the label but not the interpretive
+difficulty. Include the item as a worked example in the next codebook revision.
 
 ## Agreement does not prove validity
 
 Reviewers can agree because:
 
-- the codebook is clear;
-- the item is easy;
-- they share the same misunderstanding;
-- the task excludes a relevant perspective; or
+- the codebook is clear.
+- the item is easy.
+- they share the same misunderstanding.
+- the task excludes a relevant perspective.
 - the platform trained everyone toward the same shortcut.
 
-Validity requires evidence that the labels measure the intended idea. Compare
-annotations with the research question, consult people with relevant knowledge,
-and test how conclusions change under reasonable label choices.
+Validity requires evidence that the labels measure the intended idea.
+Compare annotations with the research question.
+Consult people with relevant knowledge.
+Examine how conclusions change under reasonable label choices.
 
 ## Treat crowd work as work
 
 A responsible plan states:
 
-1. payment for training, annotation, and adjudication time;
-2. expected task length and rejection rules;
-3. privacy and data-handling requirements;
-4. access to support and the ability to skip harmful material;
-5. the expertise and language knowledge required; and
+1. payment for training, annotation, and adjudication time.
+2. expected task length and rejection rules.
+3. privacy and data-handling requirements.
+4. access to support and the ability to skip harmful material.
+5. required expertise and language knowledge.
 6. an appeal path for disputed quality decisions.
 
 Hidden attention checks and automatic rejection can shift measurement errors
@@ -717,18 +721,19 @@ as individual answers.
 
 - Keep individual reviewer labels before combining them.
 - Agreement measures summarize consistency, not truth.
-- Report agreement to a precision the sample size can support.
+- Report agreement without implying more precision than the sample size provides.
 - Show how far a statistic moves when one item is removed.
-- Inspect disagreement items and revise the codebook when needed.
-- Finish the adjudication and record which rule decided it.
+- Examine disagreement items. Revise the codebook when needed.
+- Complete adjudication. Record the rule for each decision.
 - Preserve whether a majority label was unanimous.
 - Fair pay, privacy, expertise, and appeal processes are part of data quality.
 
-The comparison leaves nothing in the queue: two boundary cases were adjudicated
-against named rules, and the reviewer answers that produced them are still on
-the page. The following augmentation exercise keeps that annotation record
-intact and creates fictional variants. Each is marked as synthetic and checked
-against the same codebook before it can join training data.
+The adjudicator resolved both disputed cases under named rules.
+The page retains the original reviewer answers.
+The following augmentation exercise preserves that record and creates
+fictional variants. Each variant retains a synthetic label.
+A reviewer compares each variant with the same codebook before its inclusion
+in training data.
 
 ## Sources
 

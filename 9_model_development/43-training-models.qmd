@@ -1,27 +1,25 @@
 ---
 title: "Training models"
 subtitle: "Fit a text model only after the example set is large enough"
-description: "Learn what model training means for text, why a 28-sentence pilot set is too small, and how a penalized logistic model learns from inaugural paragraphs."
+description: "Learn why a 28-sentence pilot cannot evaluate a model and fit penalized logistic regression on inaugural paragraphs."
 categories: [model development, training models, text classification]
 ---
 
-Maya has a folder of sentence labels that did its first job well. It helped a
-small team agree on what counted as training, scheduling, skills, requirements,
+Maya's folder of sentence labels helped the team agree on its annotation
+categories. Those categories cover training, scheduling, skills, requirements,
 and other workforce details.
 
-Then someone asks for a predictor. The folder has the same labels, the same
-care, and a new problem: the material that is useful for learning a codebook can
-be far too small for measuring a model.
+The team now needs a predictor. Data that help people learn a codebook can
+still be too limited for model evaluation.
 
-This lesson makes that break visible. The Riverton teaching set stops at a pilot
-check. The modeling work moves to a larger public corpus, presidential inaugural
-paragraphs bundled with quanteda.
+This lesson uses the Riverton set only for a pilot check. Model development
+uses the larger public corpus of presidential inaugural paragraphs bundled
+with quanteda.
 
 ::: {.callout-note}
 The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. The inaugural addresses are works of the United
-States government and are treated here as public domain text packaged by
-quanteda.
+teaching materials. The inaugural addresses are works of the United States
+government. This lesson treats them as public domain text packaged by quanteda.
 :::
 
 ::: {.callout-tip}
@@ -29,11 +27,11 @@ quanteda.
 
 This lesson shows how to:
 
-- tell when a labeled set is too small for model testing;
-- move from a labeling pilot to a larger teaching corpus;
-- distinguish a recipe, model specification, workflow, fit, and prediction;
-- compare a few candidate models without touching the final test set;
-- fit the selected penalized logistic regression model; and
+- explain when a labeled set is too small for model testing.
+- use a larger teaching corpus after the labeling pilot.
+- distinguish a recipe, model specification, workflow, fit, and prediction.
+- compare candidate models without using the final test set.
+- fit the selected penalized logistic regression model.
 - report a live score with a baseline and limits attached.
 :::
 
@@ -47,8 +45,8 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Stop at the pilot set
 
 A **training set** is the labeled material a model learns from. A **test set** is
-labeled material held back until scoring. If the test set is tiny, one right or
-wrong row can swing the score by a large amount.
+labeled material reserved for scoring. In a small test set, one correct or
+incorrect prediction can greatly affect the score.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -147,14 +145,14 @@ sentences from one document, containing
 `r n_distinct(riverton_testing$reference_label)` of the five labels.
 A single changed answer would move accuracy by about
 `r round(100 / nrow(riverton_testing), 1)` percentage points. That is not enough
-room to learn how far off an automatic answer might be.
+evidence to calculate an adequate estimate of prediction performance.
 
-## Change the material
+## Use a larger corpus
 
-The larger corpus comes from `quanteda::data_corpus_inaugural`, reached through
-the shared helper. Each row is one paragraph of at least 25 words. The outcome
-for this lesson is **era**, which asks whether a paragraph came from an address
-before 1900 or from 1900 or later.
+The shared helper reads the larger corpus from
+`quanteda::data_corpus_inaugural`. Each row contains one paragraph of at
+least 25 words. The **era** outcome distinguishes addresses before 1900 from
+addresses in 1900 or later.
 
 ```{r}
 source("R/inaugural-corpus.R")
@@ -215,34 +213,35 @@ stopifnot(
 
 The material has `r format(nrow(paragraphs), big.mark = ",")` paragraphs from
 `r n_distinct(paragraphs$speech_id)` speeches by `r n_distinct(paragraphs$president)` people.
-The helper keeps `president` as the full name and also keeps `surname`, because a
-surname-only grouping would merge separate people who share a family name. The
-word-count column matters too: paragraphs before 1900 have median length
-`r era_counts$median_words[era_counts$era == "before 1900"]`, while later
+The helper retains both the full name in `president` and the `surname`.
+Grouping by surname alone would merge different people with the same family
+name.
+
+Paragraphs before 1900 have median length
+`r era_counts$median_words[era_counts$era == "before 1900"]`. Later
 paragraphs have median length
 `r era_counts$median_words[era_counts$era == "1900 or later"]`.
 
 That size does not make the task general to all political speech or all
-historical writing. It does give the lesson enough held-out paragraphs to test a
+historical writing. It gives the lesson enough held-out paragraphs to examine a
 specific claim on this corpus.
 
 ## Keep the final test set out of model selection
 
-The split keeps each speech whole. A paragraph from one inaugural address cannot
-sit in training while another paragraph from the same address sits in testing.
+The split keeps each speech whole. Paragraphs from one inaugural address cannot
+appear in both training and test sets.
 The seed is `4301` for the split.
 
-The test speeches get one job in this worked example: estimate performance
-after the model choice is finished. Choosing a model from its test score would
-spend that evidence before the final check. This is still an internal holdout
-from a corpus used throughout the section, not confirmation on new text from
-another source.
+The test speeches provide an estimate of performance after model selection. Selection based
+on test scores would reuse final evaluation evidence. This internal holdout
+comes from a corpus used throughout the section. It does not confirm
+performance on new text from another source.
 
 Inside the training set, **cross-validation** makes several temporary
 train-and-check splits. Each temporary check is called a **fold**. The folds are
 often called **CV folds**. They are grouped by speech here, so every paragraph
 from one address stays together. Five folds put 9 or 10 speeches in each
-assessment set while leaving both era labels represented.
+held-out set while leaving both era labels represented.
 
 ```{r}
 baselines <- read_csv(
@@ -329,8 +328,8 @@ knitr::kable(
   col.names = c(
     "Fold",
     "Training speeches",
-    "Assessment speeches",
-    "Assessment paragraphs",
+    "Held-out speeches",
+    "Held-out paragraphs",
     "Before 1900",
     "1900 or later"
   ),
@@ -355,7 +354,7 @@ stopifnot(
 )
 ```
 
-Stratification distributes early and later speeches across the folds; it does
+Stratification distributes early and later speeches across the folds. It does
 not equalize paragraph counts. The table shows that the paragraph-level class
 mix still varies, which is one reason balanced accuracy is the primary measure.
 
@@ -364,21 +363,23 @@ mix still varies, which is one reason balanced accuracy is the primary measure.
 This is not a search across every model R can fit. The comparison asks whether a
 different kind of decision rule changes the answer:
 
-- **Ridge logistic regression** keeps every word feature but pulls all fitted
-  weights toward zero.
+- **Ridge logistic regression** retains every word feature but reduces the
+  magnitudes of fitted weights toward zero.
 - **Lasso logistic regression** uses the same linear model but can set some word
   weights exactly to zero.
 - A **random forest** combines many branching rules and can learn relationships
   that are not linear.
 
-The **tuning parameters** control how each candidate learns. Ridge tests four
-penalties from `0.01` to `10`; lasso tests four from `0.0001` to `0.1`.
-Their fitted penalty paths span different scales, so copying one grid across
-both would waste settings on duplicate or intercept-only fits. The forest tries
-six combinations of features per split (`mtry`) and the minimum rows needed in
-a branch (`min_n`). The builder in `data-raw/build-model-comparison.R` fits all
-14 settings: four ridge, four lasso, and six forest. It never reads the final
-test speeches.
+**Tuning parameters** control how each candidate learns. The comparison uses
+four ridge penalties from `0.01` to `10` and four lasso penalties from
+`0.0001` to `0.1`. Their fitted penalty paths use different scales. One
+shared grid would include duplicate or intercept-only fits without adding
+useful comparisons.
+
+The forest uses six combinations of features per split (`mtry`) and minimum
+rows per branch (`min_n`). The builder in `data-raw/build-model-comparison.R`
+fits all 14 settings: four ridge, four lasso, and six forest. It never reads
+the final test speeches.
 
 Balanced accuracy is the primary selection measure because it gives the two era
 classes equal weight. Raw accuracy appears beside it so the effect of the
@@ -475,14 +476,14 @@ stopifnot(
 
 Ridge with penalty `0.01` has the highest mean balanced accuracy,
 `r round(selected_candidate$mean_bal_accuracy, 4)`. The fold-to-fold standard
-errors overlap the nearby candidates, so the table does not establish a
-universal winner. We keep ridge because it leads this comparison and leaves a
-linear model whose coefficients can be inspected in lesson 45.
+errors overlap the nearby candidates, so the table does not establish the
+best model for every corpus. The lesson retains ridge because it ranks first here and
+provides a linear model. Lesson 45 examines its coefficients.
 
-The selected penalty is the lowest ridge value tried. That says less shrinkage
-helped among these four settings; it does not establish that `0.01` is the best
-possible penalty. A finished search would extend the grid before making that
-claim.
+The selected penalty is the lowest ridge value tried. Less **shrinkage**, or
+reduction in coefficient magnitudes, helped among these four settings. That
+does not establish `0.01` as the best possible penalty. A complete search
+would extend the grid before making that claim.
 
 The random forest is a useful check rather than a required upgrade. Its best raw
 accuracy is competitive, but its lower balanced accuracy shows that more correct
@@ -492,24 +493,24 @@ paragraphs can still mean less even performance across classes.
 
 A tidymodels pipeline has four parts:
 
-1. A **recipe** is a set of instructions that turns raw text into numeric model
+1. A **recipe** is a set of instructions that converts raw text into numeric model
    columns. Each `step_*()` line adds one instruction.
-2. A **model specification** names the kind of model and its settings before it
-   sees data.
+2. A **model specification** names the model family and its settings before
+   fitting.
 3. An **engine** names the package that performs the calculations. Here that
    package is glmnet.
 4. A **workflow** keeps the recipe and model specification together. **Fitting**
-   the workflow hands it training data so it can estimate model weights.
+   the workflow calculates estimates of model weights from supplied training data.
 
-The recipe turns text into model columns. **Tf-idf** means term frequency times
+The recipe converts text into model columns. **Tf-idf** means term frequency times
 inverse document frequency. In plain language, a word counts for more in a
-paragraph when it is common there and rare elsewhere. Stop words such as `the`
-and `of` are removed first, and the recipe keeps the 500 most frequent remaining
-tokens.
+paragraph when it is common there and rare elsewhere. The recipe first removes
+stop words such as `the` and `of`. It then retains the 500 most frequent
+remaining tokens.
 
 The selected model is **logistic regression**, a linear classifier for
-categories. The penalty pulls large coefficients toward zero so the model does
-not chase every small accident in the training text.
+categories. The penalty reduces coefficient magnitudes toward zero to limit
+the model's response to incidental patterns in the training text.
 
 ```{r}
 text_recipe <- recipe(era ~ paragraph, data = era_training) |>
@@ -600,31 +601,34 @@ speeches. The model scores `r round(live_accuracy, 4)` accuracy and
 from training would score `r round(split_baseline_accuracy, 4)` on this exact
 test set. That rate is below 0.5 because the training majority is
 `1900 or later`, while this test split contains more `before 1900` paragraphs.
-Keeping speeches whole does not preserve the corpus class mix. The corpus-wide
+Keeping speeches whole does not preserve the corpus class mix.
+
+The corpus-wide
 largest-class baseline is
 `r round(corpus_baseline, 4)`, but the same-split comparison is the one a
 deployable rule could use.
 
 ## What the fit did not prove
 
-A fitted model is a frozen recipe plus learned weights. It can label new rows in
-the same shape as the training rows. It cannot prove that the label is well
-chosen, that the corpus stands for other text, or that the score will hold under
-a harder split. The next lesson tests those questions with repeated splits.
+A fitted model contains a fixed recipe and learned weights. It gives labels to new rows
+with the same structure as the training rows. It does not establish that the
+label is appropriate or that the corpus represents other text. It also cannot
+guarantee performance under a harder split. The next lesson examines
+sensitivity to repeated splits.
 
 ## What to remember
 
 - A pilot corpus can teach labeling without being large enough for testing.
 - A grouped test set with four rows cannot measure much.
 - A speech-held-out split keeps one address from leaking across both sides.
-- Grouped folds compare candidates without spending the final test set.
+- Grouped folds compare candidates without using the final test set.
 - A recipe, model specification, engine, and workflow have different jobs.
 - Tf-idf gives more weight to words that are common in one paragraph and rare in
   the rest.
 - A model score needs a baseline beside it.
 
-A trained classifier is only the start of the measurement. The useful question is
-whether its score survives a fairer test.
+A trained classifier requires further evaluation. Its score must remain useful
+under a more demanding test.
 
 ## Sources
 

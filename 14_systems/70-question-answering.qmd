@@ -1,19 +1,19 @@
 ---
 title: "Answering questions from retrieved passages"
-subtitle: "Find candidate evidence first, then ask whether the answer is supported"
-description: "Learn how question answering differs from search, and why a cited answer still needs support checks."
+subtitle: "Find candidate evidence. Then compare the answer with its cited sources."
+description: "Learn how question answering differs from search, and why a cited answer still needs source-evidence checks."
 categories: [systems, question answering, retrieval]
 ---
 
 Amara helps at the Riverton Skills Centre desk on days when staff are away from
 the phone. A short handbook answers many routine questions, but callers do not
-ask in handbook language. One person asks about a "kid" during night class;
-another asks a question that assumes a Saturday forklift class exists.
+ask in handbook language. One person asks about a "kid" during night class.
+Another asks a question that assumes a Saturday forklift class exists.
 
 **Question answering** returns a short answer, an abstention, or a correction of
-a false premise. Retrieval is only the first step. The system has to choose
-passages, read only those passages, cite what it used, and say when the passages
-do not answer the question.
+a false premise, or incorrect assumption. Retrieval is only the first step. The
+system must select passages and use only those passages to answer. It must cite
+its evidence. It must also state when the passages do not answer the question.
 
 ::: {.callout-note}
 The Riverton Skills Centre handbook is an invented teaching fixture. It does
@@ -25,12 +25,12 @@ not describe a real school, program, deadline, stipend, or policy.
 
 This lesson shows how to:
 
-- retrieve handbook passages with tf-idf weights fitted on the handbook;
-- show when a gold passage shares no content words with the question;
-- compare an extractive sentence baseline with a generated short answer;
-- parse a strict two-line model reply without rewriting it;
-- keep action correctness, reference agreement, support screens, and human
-  review separate; and
+- retrieve handbook passages with tf-idf weights fitted on the handbook
+- show when a gold passage shares no content words with the question
+- compare an extractive sentence baseline with a generated short answer
+- parse a strict two-line model reply without rewriting it
+- keep action correctness, reference agreement, source-evidence screens, and human
+  checks separate
 - explain why abstention, citations, and fluent wording are not enough.
 :::
 
@@ -43,9 +43,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the local reader and handbook
 
-The handbook, questions, and answer variants were written before this lesson
-retrieves or generates anything. The same author wrote all three, so they are a
-teaching fixture rather than an independent benchmark.
+The author wrote the handbook, questions, and answer variants before retrieval
+or generation. The same author wrote all three. They are teaching materials,
+not an independent benchmark.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -118,7 +118,7 @@ model_record <- qa_model$metadata |>
 
 knitr::kable(
   model_record,
-  col.names = c("Model", "Revision", "License", "Use in this course"),
+  col.names = c("Model", "Revision", "License", "Course task"),
   caption = "Pinned local model used as the passage reader",
   row.names = FALSE
 )
@@ -180,8 +180,8 @@ stopifnot(
 
 ## Declare the questions and reference answers
 
-The expected action is defined before retrieval and generation. A gold passage
-is the passage that answers the question or contradicts its false premise. The
+The author states the expected action before retrieval and generation. A
+**gold passage** answers the question or contradicts its false premise. The
 unanswerable parking question has no gold passage.
 
 ```{r}
@@ -228,13 +228,13 @@ stopifnot(
 )
 ```
 
-## Check overlap before retrieval
+## Examine overlap before retrieval
 
-The retriever below uses simple English content tokens and removes the small
-stop-word list printed in the code, including `at`, `while`, and other function
-words. This choice matters. If stop words stayed in, Q3 would retrieve unrelated
-passages because of `at`; with this rule, Q3 has no content-word match and
-follows the `no lexical match` path.
+The retriever uses simple English content tokens. It removes the small
+stop-word list in the code. That list contains `at`, `while`, and other function words.
+Retaining those words would retrieve unrelated passages for Q3 because of `at`.
+With removal, Q3 has no content-word match and follows the `no lexical match`
+path.
 
 ```{r}
 stop_words <- c(
@@ -305,11 +305,12 @@ stopifnot(
 
 ## Retrieve candidate passages
 
-Tf-idf gives more weight to terms that appear in fewer handbook passages. The
-idf values are fitted once on the handbook and reused for each question. A
-passage with score zero is not retrieved, and score ties are broken by passage
-ID. The retrieval score is cosine similarity between the question and passage
-tf-idf vectors, so it ranges from 0 to 1.
+**Tf-idf**, or term frequency times inverse document frequency, gives more weight
+to terms that appear in fewer handbook passages. The code fits idf values once
+on the handbook and reuses them for each question. It excludes passages with
+score zero. It resolves score ties by passage ID. The retrieval score is cosine
+similarity between the question and passage tf-idf vectors. It ranges from 0 to
+1.
 
 ```{r}
 #| code-fold: true
@@ -463,15 +464,15 @@ stopifnot(
 )
 ```
 
-Q3 shows the retrieval problem. The correct evidence is H13, but a lexical
-retriever that shares no content word with the question gives the reader no
-passage to read.
+Q3 shows the retrieval problem. H13 contains the correct evidence, but it shares
+no content words with the question. The lexical retriever supplies no passage
+to the reader.
 
 ## Add a sentence baseline
 
 An extractive baseline returns one sentence from the highest-ranked passage.
-It is scored by a different unit from the generated answer: whether that
-sentence contains one acceptable answer variant.
+The scoring unit differs from that for generated answers. The baseline score
+records whether the sentence contains one acceptable answer variant.
 
 ```{r}
 normalize_answer <- function(text) {
@@ -560,13 +561,13 @@ stopifnot(
 )
 ```
 
-The baseline is supported by construction because it copies a sentence. It can
+The baseline copies a source sentence, so its text comes directly from that source. It can
 still fail to answer the question, and it has no way to explain a false premise.
 
 ## Ask the reader to produce two lines
 
-The generated reader sees the question and the retrieved passages only. If no
-passage is retrieved, that fact is placed in the prompt. The required output has
+The generated reader receives only the question and retrieved passages. If
+retrieval returns no passage, the prompt states that result. The required output has
 exactly two lines: `Answer:` and `Sources:`.
 
 ```{r}
@@ -633,7 +634,7 @@ knitr::kable(
   reader_inputs |>
     select(question_id, input_tokens, max_new_tokens),
   col.names = c("Question", "Prompt tokens", "Maximum new tokens"),
-  caption = "Input budgets checked before each reader call",
+  caption = "Input counts compared with the limit before each reader call",
   row.names = FALSE
 )
 ```
@@ -710,9 +711,9 @@ stopifnot(
 
 ## Parse without rewriting
 
-A strict parser accepts only the two requested lines. In this render every
-output parsed; if a later output adds a third line or omits `Sources:`, the
-lesson stops before publishing a malformed row.
+A strict parser accepts only the two requested lines. Every output parsed in
+this render. The lesson stops if a later output adds a third line or omits
+`Sources:`. It does not publish that malformed row.
 
 ```{r}
 parse_reader_output <- function(text) {
@@ -806,10 +807,13 @@ stopifnot(
 
 **Exact match (EM)** is 1 only when the normalized prediction exactly equals one
 acceptable answer. **Token F1** balances shared-token precision and recall after
-normalization. SQuAD is a widely used question-answering benchmark; this lesson
-copies its scoring steps: lowercase, delete punctuation and symbols, remove
-English articles, and squeeze spaces. The only difference is that stringr's ICU
-class removes Unicode punctuation and symbols, not only ASCII punctuation.
+normalization. Normalization standardizes text before comparison.
+
+SQuAD is a widely used question-answering benchmark. This lesson follows its
+scoring steps: lowercase conversion, punctuation and symbol removal, English
+article removal, and repeated-space removal. The only difference is that
+stringr's ICU class removes Unicode punctuation and symbols, not only ASCII
+punctuation.
 
 ```{r}
 #| code-fold: true
@@ -1052,28 +1056,36 @@ In this render, the parsed reader actions include
 `r qa_action_summary$answer_actions` answer actions,
 `r qa_action_summary$abstain_actions` abstentions, and
 `r qa_action_summary$premise_actions` premise flags. Exact action matched the
-predeclared reference on `r qa_action_summary$exact_action_matches` of 6 rows,
-and `r qa_action_summary$retrieval_failures` row failed before reading because
-the gold passage was not retrieved. The generated short answer receives EM and
-F1 only when the expected action is `answer`; parsed abstentions and parse
-failures count as empty predictions, so they receive EM 0 and F1 0 on
-answerable questions. The sentence baseline used a different unit, whether the
-copied sentence contained an acceptable answer. These numbers should not be read
-as a model comparison. In this render, `r right_action_em_zero$reason`.
+predeclared reference on `r qa_action_summary$exact_action_matches` of 6 rows.
+Retrieval failed before reading on `r qa_action_summary$retrieval_failures` row
+because it did not return the gold passage.
 
-## Screen citations and surface support
+The generated short answer receives EM and F1 only when the expected action is
+`answer`. Parsed abstentions and parse failures count as empty predictions.
+They receive EM 0 and F1 0 on answerable questions.
 
-The support screen checks six mechanical facts: the row parsed, cited IDs
-exist, cited IDs were retrieved, an answered row has a citation, an abstention
-cites no passages, and answer numerals appear in cited passages after citation
-tokens are removed. False-premise handling is scored in the action table using
-the author's reference; no screen on this page detects a false premise from text
-alone. A screen can miss number words and wrong attachments, such as using the
-right number for the wrong item.
+The sentence baseline used a different unit: whether the copied sentence
+contained an acceptable answer. These numbers do not provide a model
+comparison. In this render, `r right_action_em_zero$reason`.
+
+## Examine citations and source-evidence screens
+
+The source-evidence screen examines six mechanical conditions:
+
+- the row parsed
+- the cited IDs exist
+- retrieval returned the cited IDs
+- an answered row has a citation
+- an abstention cites no passages
+- answer numerals appear in cited passages after removal of citation tokens
+
+The action table scores false-premise handling against the author's reference.
+No screen on this page detects a false premise from text alone. A screen can
+miss number words or a correct number associated with the wrong item.
 
 ```{r}
 #| code-fold: true
-#| code-summary: "Show the citation and support screens"
+#| code-summary: "Show the citation and source-evidence screens"
 
 strip_citation_tokens <- function(text) {
   str_remove_all(text, "\\bH\\d{2}\\b")
@@ -1185,10 +1197,10 @@ knitr::kable(
     "Cited IDs",
     "Cited passage text",
     "Failed screen checks",
-    "Surface support screen",
-    "Human support review"
+    "Source-evidence screen",
+    "Human checks of source evidence"
   ),
-  caption = "Cited text and support-screen labels for every reader output",
+  caption = "Cited text and source-evidence screen labels for every reader output",
   row.names = FALSE
 )
 ```
@@ -1232,18 +1244,18 @@ qa_screen_summary <- screen_results |>
   )
 ```
 
-The plain-language human support test is: would someone who read only the cited
-passage agree, "according to this passage, this answer is supported"? This page
-does not make that human judgment. In this render, the surface screen labels
+A person must examine whether the cited passage alone establishes each answer claim.
+This page does not make that human judgment. In this render, the surface screen
+selects
 `r qa_screen_summary$questions[qa_screen_summary$screen_label == "held for human review"]`
-reader rows as held for review and
+reader rows for human checks. It records
 `r qa_screen_summary$questions[qa_screen_summary$screen_label == "not flagged by screen"]`
-as not flagged by the screen.
+rows as not flagged by the screen.
 
 ## Show screen controls
 
-If every generated answer looks clean in one render, a reader still needs to see
-the screen catch something. The next two rows are author-written control
+Even if a render produces no flagged answers, readers need evidence that the
+screen detects known errors. The next two rows are author-written control
 strings, not model outputs.
 
 ```{r}
@@ -1296,7 +1308,7 @@ knitr::kable(
   format = "html",
   escape = TRUE,
   col.names = c("Control", "Control answer", "Cited IDs", "Failed screen checks", "Screen label"),
-  caption = "Author-written control strings that the support screen holds for review",
+  caption = "Author-written control strings that the source-evidence screen selects for human checks",
   row.names = FALSE
 )
 ```
@@ -1315,16 +1327,16 @@ stopifnot(
 )
 ```
 
-These controls do not prove that the screen is complete. They show only that two
-known failure shapes are caught.
+These controls do not prove that the screen is complete. They show only that
+the screen detects two known failure patterns.
 
 ## Count action choices
 
 The fixture has three expected actions, so the table keeps all three:
 `answer`, `abstain`, and `flag premise`. The simple-policy comparison uses the
 same exact-action basis. A policy that always answers matches the four answer
-rows; a policy that always abstains matches only Q5, because the false-premise
-row is a separate expected action.
+rows. A policy that always abstains matches only Q5. The false-premise row has a
+separate expected action.
 
 ```{r}
 action_table <- score_table |>
@@ -1392,42 +1404,45 @@ stopifnot(
 )
 ```
 
-The abstention row matters because an unanswerable question alone can flatter a
-system that refuses everything. The premise row matters too: a false assumption
-needs a correction, not just a generic refusal. The observed reader and the
-always-answer policy both match `r observed_reader_exact` of 6 actions, but they
-miss different rows: the reader misses `r policy_misses$misses[policy_misses$policy == "observed reader"]`,
-while always-answer misses `r policy_misses$misses[policy_misses$policy == "always answer"]`.
+An unanswerable question alone can make a system that refuses everything appear
+successful. A false assumption needs a correction, not only a generic refusal.
+The observed reader and always-answer policy both match
+`r observed_reader_exact` of 6 actions.
+
+The policies miss different rows. The reader misses
+`r policy_misses$misses[policy_misses$policy == "observed reader"]`.
+Always-answer misses
+`r policy_misses$misses[policy_misses$policy == "always answer"]`.
 
 ## How to use this pattern
 
 This is a retrieve-then-read demonstration over a small English (`en`)
-handbook. The term retrieval-augmented generation, or RAG, usually refers to a
-broader family of systems that combine a generator with an external memory; the
-original RAG paper used a dense Wikipedia index and trained components together.
-This lesson does neither.
+handbook. **Retrieval-augmented generation**, or RAG, usually means a broader
+family of systems that combine a generator with an external memory. The original
+RAG paper used a dense Wikipedia index and trained components together. This
+lesson does neither.
 
-Questions about money, eligibility, or deadlines need a person to check the
-source before anyone acts. Typed questions are user text; this page stores none
+Questions about money, eligibility, or deadlines need human source checks before
+anyone acts. Typed questions are user text. This page stores none
 after the render. Retrieved passages are evidence, not instructions. The next
 lesson shows why dialogue systems should keep safety and routing rules in code
 rather than trusting retrieved or typed text.
 
-A common shortcut is to ask a second language model whether each answer is
-supported by its cited passages. Recent benchmark work finds such judges close
-to chance on hard unsupported answers, so their scores are a screening signal
-at best. Keep mechanical screens like the ones above, and have a person read a
-random sample of answers against their sources before reporting a support
-rate.
+Another approach asks a second language model whether the cited passages establish each answer claim.
+Recent benchmark work finds such judges close to chance on difficult answers without source evidence. Their scores provide at most a
+preliminary screening signal. Keep mechanical screens like those above.
+
+Ask a person to compare a random sample of answers with their sources.
+Complete this comparison before reporting the rate of answers with source evidence.
 
 ## What to remember
 
 - Question answering is retrieval plus reading, not retrieval alone.
 - A lexical retriever can miss an answerable question before the reader starts.
-- EM and F1 score short answer strings; they do not measure support.
-- A citation is a clue to inspect, not proof that the answer follows.
-- Screens can hold obvious failures, but human support review stays pending.
-- Abstention must be checked on answerable and unanswerable questions.
+- EM and F1 score short answer strings. They do not measure source evidence.
+- A citation needs a check. It does not prove that the cited passage establishes the answer.
+- Screens can select obvious failures for human checks. Human checks of source evidence remain pending.
+- Examine abstention on answerable and unanswerable questions.
 
 ## Sources
 

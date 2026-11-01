@@ -1,18 +1,17 @@
 ---
 title: "Parsing prices from text"
-subtitle: "Turn pay mentions into amounts with units"
-description: "Learn how simple R rules pull wages and stipends from text while keeping ranges, missing units, and no-number cases visible."
+subtitle: "Extract pay amounts and units"
+description: "Learn how R rules extract wages and stipends while preserving ranges and missing values."
 categories: [entity enrichment, price parsing, workforce research]
 ---
 
-After labelling sentences from the job board and training flyer, the team faces
-a new question from the coordinator: which notices say anything concrete about
-pay?
+The team gives labels to sentences from the job board and training flyer. The
+coordinator then asks which notices contain specific pay information.
 
 A phrase such as `$18.50 per hour` looks easy. A phrase such as `competitive pay`
 looks useful to a reader but gives a computer no amount to compare. The team
-needs a rule that can extract a value and also say when the text did not contain
-a usable price.
+needs a rule that extracts values and reports when the text contains no usable
+price.
 
 ::: {.callout-note}
 The Riverton job board and flyer in this lesson are fictional teaching materials.
@@ -23,10 +22,10 @@ The Riverton job board and flyer in this lesson are fictional teaching materials
 
 By the end of this lesson, you will be able to:
 
-- explain why a number alone is not a price;
-- write `stringr` patterns for money-like text;
-- separate amount, currency, and pay period;
-- keep ranges and missing values visible; and
+- explain why a number alone is not a price.
+- write `stringr` patterns for money-like text.
+- separate amount, currency, and pay period.
+- keep ranges and missing values visible.
 - compare a small rule set with this page's expected answers.
 :::
 
@@ -39,8 +38,8 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Build examples with expected answers
 
-The setup reads the Riverton CSV with readr, shapes tables with dplyr and
-tibble, and asks stringr to match the money-like patterns. The examples are
+readr reads the Riverton CSV, while dplyr and tibble prepare tables. stringr
+matches patterns for monetary amounts. The examples are
 author-created pay strings in the Riverton style. A **price** here means an
 amount, a currency, and a unit such as hour, year, or stipend.
 
@@ -138,12 +137,12 @@ stopifnot(
 The table contains 13 examples. One writes a five-digit amount without a comma.
 That case matters because a partial match would look like a real answer.
 
-## Pull out the visible pieces
+## Extract the visible components
 
 The pattern below uses the ICU regular expression engine through `stringr`. A
-**regular expression** is a compact search pattern. This one looks for an
-optional dollar sign, a number that may contain commas or cents, and an optional
-second number after a hyphen or the word `to`.
+**regular expression** is a compact search pattern. This pattern matches an
+optional dollar sign followed by a number that may contain commas or cents.
+It also matches an optional second number after a hyphen or the word `to`.
 
 ```{r}
 parse_prices <- function(data) {
@@ -212,14 +211,14 @@ stopifnot(
 
 The number and the unit come from different parts of the phrase. `18.50/hr`
 contains an amount and a unit, but the rule marks the currency as missing. The
-rule treats every dollar sign as US dollars, which would be wrong on a board that
-mixed US, Canadian, and Australian postings. Units outside this small set, such
-as monthly pay, would need another branch.
+rule treats every dollar sign as US dollars. That assumption fails on a board
+with US, Canadian, and Australian postings. Units outside this small set, such
+as monthly pay, require another branch.
 
 ## Count the special cases
 
-A parser is easier to trust when it reports what it could not settle. The code
-below counts the rows that ask for special handling.
+A parser should report unresolved cases. The code below counts rows that
+require special handling.
 
 ```{r}
 case_counts <- tibble(
@@ -269,8 +268,8 @@ overlap, so this table is a checklist rather than a count of distinct rows.
 
 ## Score the parser against the marking
 
-Because the parser and expected answers come from the same author, a high score
-here does not estimate accuracy. Read it only as a check that the code behaves
+The parser and expected answers come from the same author. A high score
+here does not give an estimate of accuracy. Read it only as a check that the code behaves
 as this page says it should.
 
 ```{r}
@@ -315,13 +314,13 @@ stopifnot(
 ```
 
 The parser matches the expected lower amount, upper amount, unit, and currency on
-all 13 examples. The comma-free case would have been dangerous without the wider
-number pattern: `$38000` must not be cut to `$380`.
+all 13 examples. The wider number pattern prevents an incomplete match for the
+comma-free case. The parser must not read `$38000` as `$380`.
 
-## Check the Riverton stipend line
+## Examine the Riverton stipend line
 
-The real Riverton teaching file contains a stipend phrase, but not a stipend
-amount. The rule should return a miss rather than inventing one.
+The Riverton teaching file contains a stipend phrase but no stipend amount.
+The rule should report a missing amount rather than invent one.
 
 ```{r}
 riverton_pay_line <- sentences |>
@@ -362,12 +361,12 @@ stopifnot(
 ```
 
 The line tells a reader that some stipend exists. It does not say how much. A
-number without a unit is not a price, and a unit without a number is not an
-amount the coordinator can compare.
+number without a unit is not a price. A unit without a number gives the
+coordinator no amount to compare.
 
 ## The limits of custom rules
 
-A custom regular expression is a quick way to find highly constrained formats, but it breaks quickly on varied real-world data.
+A custom regular expression can find a restricted set of formats. It can fail on more varied data.
 
 ```{r}
 failure_examples <- tibble(
@@ -397,12 +396,15 @@ stopifnot(
 ```
 
 - **Value normalization**: The pattern misses `"thirty-eight thousand"` entirely because it only looks for digits.
-- **Locale formats**: It reads the European format `1.250,50` incorrectly: it
-  matches `1.250` without warning and yields an amount of 1.25 because it
-  expects commas as thousands separators.
+- **Locale formats**: It reads the European format `1.250,50` incorrectly. The
+  pattern expects commas as thousands separators, so it matches `1.250` without
+  warning and returns 1.25.
 - **Ambiguous currencies**: It assumes `$` means USD, which is wrong for CAD.
 
-In standard NLP workflows, relying entirely on custom regex for entity parsing is an anti-pattern. Systems use Named Entity Recognition (like `MONEY` entities in spaCy) to detect relevant spans, and separate value parsers (like Duckling) to normalize amounts, currencies, and locales into structured data.
+Custom regular expressions alone are a poor choice for general entity parsing.
+Systems use named entity recognition, such as spaCy `MONEY` entities, to find
+relevant text spans. Separate value parsers, such as Duckling, normalize
+amounts, currencies, and locale-specific formats into structured data.
 
 ## What to remember
 
@@ -411,8 +413,8 @@ In standard NLP workflows, relying entirely on custom regex for entity parsing i
 - A parser must not return a partial number when the text contains a longer one.
 - These counts describe 13 teaching examples and one Riverton line.
 
-The stipend line can be flagged as pay-related, but it cannot support a wage
-comparison because it gives no amount.
+The parser can flag the stipend line as pay-related. The line gives no amount
+for a wage comparison.
 
 ## Sources
 

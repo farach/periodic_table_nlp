@@ -1,23 +1,23 @@
 ---
 title: "Selecting sentences as a summary"
-subtitle: "Test TextRank against simple nulls"
+subtitle: "Compare TextRank with simple null models"
 description: "Learn how extractive summarization ranks existing sentences and why chance baselines still matter."
 categories: [signals and discovery, extractive summarization, inaugural addresses]
 ---
 
 Jon has ten minutes before a reading-group meeting and one speech still open on his laptop. He does not need a new paragraph written for him. He needs to know which existing sentences deserve a first look.
 
-That task has a name. **Extractive summarization** selects sentences already present in a text. It does not write new sentences, so its output can be checked against the source line by line.
+**Extractive summarization** selects sentences already present in a text. It does not write new sentences. Readers can therefore compare each selected sentence with the source.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- define extractive summarization;
-- build the two input tables required by `textrank_sentences()`;
-- rank sentences from one speech;
-- compare the result with random-position baselines; and
+- explain extractive summarization.
+- build the two input tables required by `textrank_sentences()`.
+- rank sentences from one speech.
+- compare the result with random-position baselines.
 - state what cannot be measured without a reference summary.
 :::
 
@@ -30,7 +30,7 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Build the sentence and term tables
 
-**TextRank** is a graph-ranking algorithm. It treats sentences as **nodes**, the items in a graph that can be connected to other items. Sentences connect when they share terms. The function needs a `data` table with `textrank_id` and `sentence`, plus a `terminology` table with `textrank_id` and `term`.
+**TextRank** is a graph-ranking algorithm. Each sentence is a **node**, an item in a graph. Two nodes connect when their sentences share terms. The function needs a `data` table with `textrank_id` and `sentence`. It also needs a `terminology` table with `textrank_id` and `term`.
 
 ```{r}
 library(dplyr)
@@ -104,7 +104,7 @@ The `data` table has 81 sentences. The terminology table has 700 sentence-term r
 
 ## Rank the sentences
 
-The algorithm gives each sentence a score based on its connections to other sentences. A sentence can rank high because it shares terms with many other sentences, or because it connects to other sentences that also rank high.
+The algorithm scores each sentence from its connections to other sentences. A sentence can rank high because it shares terms with many sentences. Connections to other high-ranked sentences can also increase its rank.
 
 ```{r}
 textrank_result <- textrank_sentences(
@@ -157,18 +157,18 @@ stopifnot(
 )
 ```
 
-The selected sentences come from positions 6, 67, and 60. That spread looks different from the opening of the speech, but a visible difference is not yet evidence that the algorithm found something rare.
+The selected sentences come from positions 6, 67, and 60. Their positions differ from the speech opening. A visible difference does not establish that the selection is unusual.
 
 ## Ask what random positions do
 
-There is no reference summary for this speech in the corpus. That means this page cannot report accuracy. It can test checkable behavior: which sentences were selected, where they appear, and whether those positions look unusual compared with random sentence choices.
+The corpus has no reference summary for this speech, so this page cannot report accuracy. It can show the selected sentences and their positions. It can also compare those positions with random sentence selections.
 
 If human reference summaries existed, an overlap measure such as **ROUGE**
 could compare selected words or word sequences with those references. ROUGE
 would measure overlap, not whether the summary is complete, factual, or useful
 to a particular reader.
 
-A **lead baseline** takes the first sentences. This baseline is often hard to beat in news writing because opening paragraphs often carry the main facts. Here it is only a comparison point.
+A **lead baseline** selects the first sentences. News openings often contain the main facts, so summaries that use those openings can perform well. Here the baseline provides only a comparison.
 
 A **permutation null** gives the same statistic after random shuffling. The **p-value** is the share of shuffled selections at least as extreme as the observed selection.
 
@@ -282,13 +282,13 @@ stopifnot(
 )
 ```
 
-The two selections share 0 sentence positions. That says almost nothing by itself: random three-sentence selections from an 81-sentence speech usually share no positions with sentences 1 to 3. In 1,000 shuffles, the null mean was 0.113 and the p-value for unusually low overlap was 0.889.
+The two selections share 0 sentence positions. Random three-sentence selections from an 81-sentence speech usually share no positions with sentences 1 to 3. In 1,000 shuffles, the null mean was 0.113. The p-value for unusually low overlap was 0.889.
 
-The more useful checks ask whether TextRank spread its picks through the speech or chose longer sentences. The observed range was 61 sentence positions, against a random mean of 41.346 (p = 0.189). The selected sentences averaged 26.33 words, against a random mean of 22.771 (p = 0.297). Neither check clears a chance baseline, so the honest conclusion is modest: TextRank gives a reading list, not evidence that these three sentences are better.
+Other checks examine whether TextRank selects widely separated or longer sentences. The observed range was 61 sentence positions, against a random mean of 41.346 (p = 0.189). The selected sentences averaged 26.33 words, against a random mean of 22.771 (p = 0.297). Neither result exceeds its chance baseline convincingly. TextRank supplies sentences for a person to examine, not evidence that these three sentences form a better summary.
 
-Summarizers always return sentences. A null check asks what the same selection statistic looks like after document position is stripped away. Without that comparison, a neat list can look more meaningful than it is.
+Summarizers always return sentences. A null comparison measures the same statistic after random selection replaces the algorithm's selection. Without that comparison, a clear list can appear more meaningful than the evidence warrants.
 
-Nothing here cleared a baseline, and that is still a result worth having. The method ran, the output is readable, and three separate checks told you how much weight it will carry. Knowing that before you put a summary in front of someone is worth more than a number that flatters the tool. Extractive summarization earns its place when a person is going to read the selected sentences and judge them; these checks say it has not earned the right to run unattended on this material.
+These three checks do not establish that TextRank produces a better summary. The method executes and returns readable output, but the evidence does not justify unattended summarization of this material. A person must read the selected sentences and judge their adequacy.
 
 ## What to remember
 
@@ -298,7 +298,7 @@ Nothing here cleared a baseline, and that is still a result worth having. The me
 - Zero overlap with the lead-3 baseline is what random selection usually produces here.
 - Without a reference summary, accuracy is not available.
 
-Use the ranked sentences as a reading aid. Do not turn them into a score for what the speech means.
+Use the ranked sentences as a reading aid. Do not interpret their ranks as scores for the speech's meaning.
 
 ## Sources
 

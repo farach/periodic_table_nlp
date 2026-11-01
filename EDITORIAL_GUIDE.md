@@ -12,22 +12,23 @@ Each lesson should follow a human-scale arc:
 3. Let the reader investigate through a small example.
 4. Show the limit, complication, or tempting mistake.
 5. Resolve the immediate problem with evidence.
-6. End with an image or rule the reader can recall later.
+6. End with a brief rule that the reader can apply later.
 
 The person may be fictional, but the page must say so when readers could mistake
 the example for a real case. Do not invent quotes, statistics, studies, or
 personal details. Avoid danger, urgency, or sentiment that the subject has not
 earned.
 
-A recurring object can support memory. A badge with a damaged name, a labeled
-folder of documents, or a librarian's reading list gives an abstract idea a
-place to live. Use one image and let it go when its work is done.
+Use a concrete example to explain an abstract concept. Keep the example's
+objects and terms consistent. Do not replace a technical explanation with a
+metaphor or an idiom.
 
 ## Keep the prose out of the way
 
 - Prefer specific nouns and plain verbs.
 - Define a new term beside the example that needs it.
-- Vary sentence length, but do not manufacture drama with fragments.
+- Vary sentence length within the limits: 20 words for instructions and 25
+  words for descriptions. Do not manufacture drama with fragments.
 - Use headings to answer reader questions.
 - Explain an output instead of praising it.
 - Cut introductory sentences that delay the point.
@@ -35,6 +36,54 @@ place to live. Use one image and let it go when its work is done.
 
 Sentence-case headings are required. Public lessons do not discuss drafting
 history.
+
+## Apply controlled-language rules in context
+
+Use ASD-STE100 Issue 9 as the reference for this project's plain-language
+checks. The official edition is dated 15 January 2025.
+The project does not claim certification or complete compliance.
+
+- Give one action per instruction, except actions that must occur together.
+- Keep each paragraph on one topic, with no more than six sentences.
+- Prefer active voice. A descriptive passive needs a reason, such as an unknown actor.
+- Use simple tenses. Do not use a progressive or perfect tense for an ordinary action.
+- Avoid semicolons, idioms, and figurative meanings in authored teaching prose.
+- Give meanings for technical terms near their first occurrence. Use one term for each concept.
+- Examine general words for their permitted meaning and part of speech.
+  A matching spelling alone is not enough.
+- Record technical nouns and verbs with their subject, meaning, and page context.
+  A technical term does not justify an unrelated ordinary meaning.
+
+Apply these rules to descriptions, instructions, captions, alt text,
+navigation labels, and authored prose emitted by R. Preserve quoted evidence,
+source titles, code identifiers, and raw example data.
+
+Execute `npm run test:prose` for source checks.
+Its report lists inline-R blocks whose sentence boundaries and lengths need rendered checks.
+The source checks still flag unambiguous semicolons in those blocks.
+The browser suite examines rendered paragraphs, captions, and alt text without that deferral.
+Examine authored display strings and figure options directly in the source as well.
+These tests do not find every imperative or prove correct grammar and permitted vocabulary meanings.
+
+Their word counts are conservative approximations, not the standard's exact
+counting procedure. Read flagged passages in context. Do not hide findings
+with a page exemption or a broad vocabulary whitelist.
+
+The per-page record in `reviews/plain-language-pages.csv` distinguishes
+completed reading from pending vocabulary work. The term register is
+`reviews/technical-terms.csv`. People must still examine the prose.
+
+For a prose-only repair, preserve calculations, model settings, conditions,
+identifiers, numerical claims, citations, and data. A display-only string may
+change when its meaning and interpolated values stay the same.
+Record those changes separately. If an assertion compares that authored
+wording, retain the assertion and change only its expected wording.
+Compare executable structure and data fingerprints, then execute the relevant
+tests and render the affected pages.
+
+Read the applied pages twice after the last material edit. Record two clean
+reads only if neither read finds a necessary change. Finish with an
+uninterrupted read of the rendered page. A scan result does not replace these manual checks.
 
 ## Review for signs of machine-written prose
 

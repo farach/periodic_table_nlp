@@ -1,11 +1,11 @@
 ---
 title: "Building a text corpus"
-subtitle: "Turn separate documents into an organized collection"
-description: "Learn how to collect text, attach useful labels, and check a corpus before analysis."
+subtitle: "Organize separate documents as a collection"
+description: "Learn how to collect text, attach useful labels, and examine a corpus before analysis."
 categories: [source data loading, corpus, data quality]
 ---
 
-A person locked out of an account needs the right help article. The
+A person who cannot access an account needs the right help article. The
 help-center editor has three separate files about deliveries, returns, and
 account access. The password-reset instructions are somewhere in those files,
 but each search result also needs to retain its topic and source. That becomes
@@ -13,11 +13,11 @@ harder as loose documents accumulate.
 
 The editor needs an organized collection called a **corpus**. Its plural is
 **corpora**. A corpus keeps text documents together and usually stores
-information describing each one. We will build a three-document corpus, check
+information describing each one. We will build a three-document corpus, examine it
 for empty or duplicate records, and use it to find the password-reset article.
 
 ::: {.callout-note}
-The help articles in this lesson were written for this example. They do not
+The author wrote these help articles for this example. They do not
 come from a real support system.
 :::
 
@@ -26,13 +26,13 @@ come from a real support system.
 
 By the end of this lesson, you will be able to:
 
-- explain what a corpus is;
-- read several text files into R;
-- decide what counts as one document;
-- state the sampling frame and what was excluded;
-- keep source information with each document;
-- find near-duplicate documents and keep their families together; and
-- check a corpus for common problems.
+- explain what a corpus is.
+- read several text files into R.
+- decide what counts as one document.
+- state the sampling frame and exclusions.
+- keep source information with each document.
+- find near-duplicate documents and keep their families together.
+- examine a corpus for common problems.
 :::
 
 ```{r}
@@ -48,10 +48,10 @@ Before collecting anything, the editor must choose the **document unit**, the
 amount of text that will count as one document. Depending on the question, it
 might be:
 
-- one help article;
-- one customer message;
-- one news story;
-- one interview; or
+- one help article.
+- one customer message.
+- one news story.
+- one interview.
 - one paragraph within a longer report.
 
 The right unit depends on the question. Because the editor wants to compare and
@@ -60,9 +60,10 @@ sentence as a separate document would detach the sentence from the rest of its
 article.
 
 Before loading real documents, confirm the right to use them. Record the
-license or permission, collection method, expected audience, privacy risk, and
-whether the people represented could reasonably expect this use. The files
-below are synthetic, so they contain no personal records or third-party text.
+license or permission, collection method, expected audience, and privacy risk.
+Record whether the people represented could reasonably expect you to use their data this way.
+The example files are synthetic and contain no personal records or third-party
+text.
 
 The example uses three **plain-text files**, files that store characters
 without page layout or styling. `list.files()` asks R to find file names ending
@@ -101,9 +102,8 @@ stopifnot(
 )
 ```
 
-R prints all three file names in alphabetical order. We keep those names as the
-first labels in the collection so each result can still be traced to the file
-that supplied its text.
+R prints all three file names in alphabetical order. We retain those names as
+labels so each result identifies its source file.
 
 ## Read every document
 
@@ -162,16 +162,15 @@ stopifnot(
 `map_chr()` runs `read_document()` once for each path and returns a character
 vector. The result contains three source copies, and the file names remain
 attached. A separate `analysis_documents` object replaces line breaks with
-spaces. The source copy
-is left untouched so paragraph boundaries can be recovered later.
+spaces. The unchanged source copy preserves paragraph boundaries so later steps can use them.
 
-The check using `str_length()` confirms that none of the documents is
-empty. An empty file might mean that loading failed or that the source itself
-was blank. Either case should be investigated before analysis.
+The `str_length()` check confirms that no document is empty.
+An empty result could indicate a loading failure or a blank source.
+Investigate either case before analysis.
 
 ## Put text and labels together
 
-The text is present, but the values alone have little room for context. Each
+The text alone does not provide its source or context. Each
 document also needs **metadata**, information about the document rather than
 its main text. A source file, topic, publication date, or author can be
 metadata.
@@ -238,25 +237,23 @@ stopifnot(
 ```
 
 The `document_id` gives every row a stable label. The topic identifies the
-article's subject without requiring someone to open the full text. The source
-file records where that text came from. `source_hash` is a fingerprint that
-changes if a file changes; it helps detect accidental edits but is not proof of
-authorship or trustworthiness. Keeping these fields on the same row is the
-corpus equivalent of keeping a label attached to its folder.
+article's subject without requiring the reader to open the full text.
+The source file records the text's origin. The `source_hash` value changes
+when a file changes and helps detect accidental edits.
+A hash does not prove authorship or trustworthiness.
+Keeping these fields together preserves each document's source and context.
 
 ## Say what the collection is a sample of
 
-A corpus is always a sample of something, even when nobody chose a sample. The
-honest version of that sentence names the frame: the population the collection
-was drawn from, the rule used to draw it, and what the rule left out.
+A corpus needs a defined collection frame, even when nobody selects a sample.
+Record the population, selection rule, and exclusions.
 
-For these three articles the frame is small and the answer is unusual. The
-collection is not a sample within its stated frame. It is every active,
-non-archived article this fictional help center published as of the collection
-date, which makes it a census of that tiny frame rather than a sample of the
-support questions people actually ask.
+These three articles form a census within the stated frame, not a sample.
+The collection contains every active, non-archived article that this fictional
+help center published by the collection date.
+It does not sample the support questions that people actually ask.
 
-That distinction changes what the corpus can support later. A count over a
+That distinction changes what the corpus can show later. A count over a
 census of published articles describes what the help center wrote. It does not
 describe what readers needed and did not find.
 
@@ -289,7 +286,7 @@ collection_record <- tibble(
 knitr::kable(
   collection_record,
   col.names = c("Field", "Recorded value"),
-  caption = "What the collection covers and what it leaves out",
+  caption = "The collection's scope and exclusions",
   row.names = FALSE
 )
 ```
@@ -309,8 +306,8 @@ stopifnot(
 )
 ```
 
-Write this record before the analysis, not after it. Once results exist, the
-frame tends to be described in whatever terms make the results sound broader.
+Write this record before analysis. Otherwise, a researcher may describe the
+frame later in terms that exaggerate the results' scope.
 
 ## Add a simple measurement
 
@@ -366,15 +363,15 @@ are often called tokens, not universal word counts. Languages without spaces
 between words, contractions, punctuation, and specialized tokenizers can
 produce different results. The counts are quick checks, not quality scores.
 
-## Check the corpus before using it
+## Examine the corpus before using it
 
 The editor now has rows, labels, and text. Before trusting the collection, we
 confirm that:
 
-- every source file still exists;
-- every document has text;
-- document IDs are unique;
-- no two documents contain exactly the same text; and
+- every source file still exists.
+- every document has text.
+- document IDs are unique.
+- no two documents contain exactly the same text.
 - the topic and source file are present.
 
 ```{r}
@@ -420,9 +417,9 @@ labeled, nonempty, distinct records.
 
 ## Use the corpus as a collection
 
-The collection is now ready for the editor's original question. Because every
-document shares one structure, the same search can be applied to all three.
-This one looks for the exact phrase `"password reset"`.
+The collection is ready for the editor's original question.
+All three documents share a structure, so one search can examine them all.
+This search finds the exact phrase `"password reset"`.
 
 ```{r}
 matching_documents <- corpus |>
@@ -460,19 +457,18 @@ stopifnot(
 ```
 
 The account-access article is the single match. Its topic, document ID, and
-text arrive together, so the editor can inspect the result and return to the
-source file. That connection becomes easier to lose as a corpus grows.
+text remain together. The editor can examine the result and its source file.
+Maintaining that connection becomes harder as a corpus grows.
 
 ::: {.callout-note}
 ## Technical detail: a corpus can have a special R class
 
-An R **class** tells R what kind of object it is handling and which operations
+An R **class** tells R what kind of object it receives and which operations
 belong with it.
 
 Packages such as quanteda and tm provide dedicated corpus objects with tools
 for metadata and text processing. A tibble is enough for this lesson because
-its rows and columns are visible and easy to inspect. The same records can be
-converted to a package-specific corpus later.
+its rows and columns are visible and easy to examine. The researcher can convert these records to a package-specific corpus later.
 :::
 
 ## A near duplicate is not an exact duplicate
@@ -591,30 +587,33 @@ stopifnot(
 )
 ```
 
-The exact-duplicate check returns `FALSE`: no two documents are byte-identical.
-The two comparisons that follow both single out the same pair, and they
-disagree about how strong the resemblance is.
+The exact-duplicate check returns `FALSE` because no two documents are
+byte-identical. Both subsequent comparisons find the same pair to be similar,
+but their similarity values differ.
 
-Character similarity reaches 0.65 for the reprint. The added courtesy line
-holds it down, because every extra character counts as a difference. Word
-containment asks whether one document's words all appear in the other, and
-returns 1.00. When a copy is extended rather than edited, containment is the
-measure that keeps working.
+Character similarity is 0.65 for the reprint. The added courtesy line reduces
+similarity because each extra character counts as a difference.
+Word containment measures whether one document's words all appear in the other.
+It returns 1.00. Containment can find a copy with added text that reduces
+character similarity.
 
-The thresholds used here, 0.6 and 0.9, are decisions rather than discoveries.
-Any threshold belongs in the record with the measure that produced it, because
-the same pair can be a near duplicate under one measure and a distinct document
-under another. Both comparisons are quadratic in the number of documents, which
-is invisible at four and prohibitive at four million.
+The thresholds, 0.6 and 0.9, are choices rather than discoveries.
+Record each threshold with its measure. The same document pair can qualify
+as a near duplicate under one measure but not another.
 
-### Keep families together, then report what left
+Both comparisons are quadratic in the number of documents.
+The computational cost is negligible for four documents but prohibitive for
+four million.
 
-A near duplicate creates a second problem. If one copy trains a model and the
-other tests it, the overlap may inflate the evaluation by letting the model
-reuse wording or memorize examples. This lesson does not train a model, so it
-cannot determine which mechanism would cause the inflation. The preventive
-step is to group related documents into a **family** and let a split move the
-whole family at once.
+### Keep document families together and report removals
+
+A near duplicate creates a second problem. If one copy enters training and
+another enters evaluation, shared wording or memorized examples may inflate
+the evaluation result. This lesson trains no model and cannot show which
+mechanism would cause that inflation.
+
+Group related documents into a **family**. Assign the whole family to the same
+data split.
 
 ```{r}
 families <- incoming |>
@@ -679,7 +678,7 @@ stopifnot(
 )
 ```
 
-The text that left the corpus is printed in full, not summarized:
+The output prints the removed text in full:
 
 ```{r}
 removed$analysis_text
@@ -695,35 +694,34 @@ stopifnot(
 )
 ```
 
-Four candidates went in, three came out, and the removed text is printed rather
-than summarized. Reading what a cleaning step deleted is the only way to notice
-that it deleted the wrong thing. Here the discarded copy carries one sentence
-the original does not, about contacting the help desk, so a careful editor might
-merge that line instead of dropping the file.
+The process retained three of four candidates and prints the removed text in
+full. Read removed text to find incorrect deletions.
+Here, the removed copy adds a sentence about contacting the help desk.
+A careful editor might add that sentence to the original instead of discarding
+it.
 
-`split_is_family_consistent` is the falsifiable part. It counts the distinct
-splits any family received, and the corpus is only safe to evaluate on when that
-number is one.
+The `split_is_family_consistent` check counts distinct splits per family.
+Evaluation requires one split per family.
 
 ## A corpus is a set of choices
 
 The successful search does not make the collection neutral. Someone decided
 which files belong, where a document ends, which metadata to keep, and which
-text to exclude. Every later result inherits those choices.
+text to exclude. Every later result depends on those choices.
 
 Record:
 
-1. where the documents came from;
-2. when they were collected;
-3. what one row represents;
-4. which frame the collection covers and which rule selected from it;
-5. why any documents were excluded;
-6. what each metadata field means;
-7. what license, permission, or consent supports the use;
-8. which privacy risks were checked;
-9. whether people or communities are missing from the collection;
-10. which near-duplicate rule and threshold were applied; and
-11. which fingerprint identifies each untouched source file.
+1. the source of each document.
+2. the collection date.
+3. the meaning of one row.
+4. the collection frame and selection rule.
+5. the reasons for exclusions.
+6. the meaning of each metadata field.
+7. the license, permission, or consent to use the text.
+8. the privacy checks.
+9. any people or communities absent from the collection.
+10. the near-duplicate rule and threshold.
+11. the fingerprint of each unchanged source file.
 
 ## What to remember
 
@@ -732,16 +730,17 @@ Record:
 - Name the frame the collection came from, even when it is a census.
 - Metadata keeps each document connected to its source and context.
 - Preserve source text separately from text changed for analysis.
-- Empty files, duplicate IDs, and duplicate text should be checked early.
-- Near duplicates survive exact-match checks and need a stated threshold.
+- Search for empty files, duplicate IDs, and duplicate text before analysis.
+- Exact-match checks miss near duplicates, which need a stated threshold.
 - Related documents belong to one family and move between splits together.
 - A technically clean corpus can still be incomplete or unrepresentative.
 
-The password-reset answer is now findable without losing the article around
-it. The seasonal reprint is out of the collection, its family is recorded, and
-the sentence it added is still on the page for someone to judge. For a larger
-corpus, keep the same small label beside every document: what this text is,
-where it came from, and why it belongs in the collection.
+The editor can find the password-reset answer together with its complete
+article. The report records the excluded seasonal copy and its family.
+The editor can examine the additional sentence.
+
+For each document in a larger corpus, record its content, source, and reason
+for inclusion.
 
 ## Sources
 

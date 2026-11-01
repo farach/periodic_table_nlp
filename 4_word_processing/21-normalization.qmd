@@ -5,22 +5,22 @@ description: "Learn how case, spacing, punctuation, and Unicode normalization ch
 categories: [word processing, normalization, workforce research]
 ---
 
-Repeated phrases across the 28 sentences do not quite line up. One flyer
-heading is all capitals, `RIVERTON SKILLS OPEN HOUSE`, while the job
-details use ordinary case. The team also expects text pasted from other systems
-to arrive with stray spacing and accented characters, so it wants to know what
-each cleanup step costs before applying any of them.
+Related phrases across the 28 text units can differ in formatting.
+The flyer heading `RIVERTON SKILLS OPEN HOUSE` uses capitals, while job details
+use ordinary case. Pasted text may also contain extra spacing and accented
+characters. The team examines each normalization step's effect before applying
+it.
 
 Before counting matches, the team has to decide which small differences to
 ignore. Each edit can make comparison easier and also erase information.
 
-**Normalization** is the set of small edits made before comparing text. Common
-steps include changing case, trimming spaces, removing punctuation, and putting
-Unicode characters into a consistent form.
+**Normalization** applies edits before text comparison.
+Common operations change case, trim spaces, remove punctuation, or convert
+Unicode characters to a consistent form.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. The text files are local and fixed.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching. The text files are local and fixed.
 :::
 
 ::: {.callout-tip}
@@ -28,9 +28,9 @@ and were created for teaching. The text files are local and fixed.
 
 By the end of this lesson, you will be able to:
 
-- explain why text is normalized before comparison;
-- see how case folding and space repair change examples;
-- test punctuation removal with stringr's ICU regex engine; and
+- explain the purpose of normalization before comparison.
+- examine the effects of lowercasing and space repair.
+- examine punctuation removal with stringr's ICU regex engine.
 - compare two Unicode forms of the same visible word.
 :::
 
@@ -43,10 +43,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load text with an accent check
 
-readr opens the CSV files, dplyr and tibble keep the examples in compact tables,
-stringr handles text operations, stringi handles Unicode normalization, and
-purrr repeats checks. The inputs are the Riverton sentences and a feedback file
-that contains the word `café`.
+The readr package opens CSV files, and dplyr and tibble handle tables.
+The stringr package handles text operations, while stringi normalizes Unicode.
+The purrr package applies checks to each item.
+Inputs contain the Riverton text and feedback with the word `café`.
 
 ```{r}
 library(readr)
@@ -103,11 +103,12 @@ The accent check matters because normalization can change text that looks stable
 on screen. The visible word may stay the same while the stored code points
 change.
 
-## Fold case and repair spaces
+## Lowercase text and repair spaces
 
-**Case folding** means converting letters to one case before comparison. The
-next table uses one real Riverton string, one copy of `s002` with its spaces
-tripled to stand in for pasted text, and one short warning pair, `US` and `us`.
+**Case folding** prepares text for case-insensitive comparison.
+This example uses lowercasing, which differs from full Unicode case folding.
+The table contains a Riverton string and a copy of `s002` with tripled spaces
+to simulate pasted text. It also compares `US` with `us`.
 
 ```{r}
 padded_requirement <- str_replace_all(
@@ -140,8 +141,8 @@ case_space_examples <- tibble(
 
 knitr::kable(
   case_space_examples,
-  col.names = c("Example", "Raw text", "Lowercased", "Squished"),
-  caption = "Case folding and spacing changes",
+  col.names = c("Example", "Raw text", "Lowercased", "Spacing normalized"),
+  caption = "Lowercasing and spacing changes",
   row.names = FALSE
 )
 ```
@@ -159,7 +160,7 @@ stopifnot(
 
 Lowercasing makes `RIVERTON SKILLS OPEN HOUSE` easier to compare with ordinary
 case. It also makes `US` and `us` the same string. `str_squish()` removes leading
-and trailing spaces and turns repeated spaces into one space.
+and trailing spaces and replaces repeated spaces with one space.
 
 ## Remove punctuation only when it is safe
 
@@ -183,7 +184,7 @@ unicode_punctuation_check <- str_remove_all("“paid—training”", "[[:punct:]
 knitr::kable(
   punctuation_examples,
   col.names = c("Sentence ID", "Raw text", "After punctuation removal"),
-  caption = "Punctuation removal can erase useful distinctions",
+  caption = "Punctuation removal can remove useful distinctions",
   row.names = FALSE
 )
 ```
@@ -208,16 +209,17 @@ stopifnot(
 )
 ```
 
-Removing punctuation destroys the hyphen in `12-week` and the apostrophe in
-`driver's`. `str_remove_all()` uses stringr's ICU engine, where `[[:punct:]]`
-means punctuation across Unicode, including curly quotes and em dashes pasted
-from word processors.
+Punctuation removal deletes the hyphen in `12-week` and the apostrophe in
+`driver's`. The function `str_remove_all()` uses stringr's ICU engine.
+Its `[[:punct:]]` class covers Unicode punctuation, such as curly quotes and
+em dashes from word processors.
 
 ## Normalize Unicode forms
 
-Unicode stores text using code points. The word `café` can be stored as one code
-point for `é`, or as `e` plus a combining accent. NFC keeps the composed form;
-NFD splits the accent into its own code point.
+Unicode stores text as code points.
+In `café`, the letter `é` can occupy one code point or combine `e` with a
+separate accent. NFC keeps the composed form.
+NFD separates the accent into its own code point.
 
 ```{r}
 cafe_word <- str_extract(feedback$comment[2], "café")
@@ -257,16 +259,15 @@ stopifnot(
 )
 ```
 
-The two forms look the same in the table, but `identical()` says they are not the
-same stored string. Both forms show four letters on screen. The NFC form stores
-them as 4 code points and, as UTF-8, 5 bytes. The NFD form stores them as 5 code
-points and 6 bytes, because the accent is a separate code point after the `e`.
+The forms look the same, but `identical()` detects different stored strings.
+Both forms show four letters. NFC uses 4 code points and 5 UTF-8 bytes.
+NFD uses 5 code points and 6 bytes.
+Its accent occupies a separate code point after `e`.
 
 ## Keep two columns
 
-The safe pattern is to store at least two versions: the raw text for display and
-a normalized text for comparison. The normalized column can be lowercased,
-squished, or changed to NFC as the task requires.
+Store at least two versions: raw text for display and normalized text for
+comparison. Normalize case, spaces, or Unicode form as the task requires.
 
 ```{r}
 display_and_match <- sentences |>
@@ -303,23 +304,24 @@ stopifnot(
 )
 ```
 
-Normalize for comparison, keep the raw text for display. These edits run one
-way. Once `US` has been lowercased to `us`, nothing in the normalized column can
-tell you which one it was. Pick NFC for the comparison column because it is the
-form recommended for web text, so strings arriving from different systems settle
-on the same spelling.
+Normalize text for comparison. Keep raw text for display.
+Some normalization operations are irreversible.
+After lowercasing, `us` does not reveal whether the source was `US` or `us`.
+Choose NFC for the comparison column.
+This recommended web-text form gives equivalent character sequences a
+consistent representation across systems.
 
 ## What to remember
 
 - Normalization makes text easier to compare.
 - Lowercasing can merge strings that mean different things.
-- ICU punctuation classes reach beyond keyboard punctuation.
+- ICU punctuation classes contain more than keyboard punctuation.
 - Unicode forms can look the same while storing different code points.
 - Keep the display text and comparison text separate.
-- Raw text is the fallback when a cleanup step erases information.
+- Raw text preserves information that normalization removes.
 
-A normalized column is a matching aid, not display copy. The Riverton sentences
-that readers see should remain the raw sentences the Lab collected.
+A normalized column assists matching, not display.
+Show readers the original Riverton text that the Lab collected.
 
 ## Sources
 

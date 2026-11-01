@@ -1,36 +1,35 @@
 ---
 title: "Changing the wording without changing the instruction"
 subtitle: "Separate a real rewrite from a meaning-preservation check"
-description: "Learn how to generate paraphrases and inspect names, numbers, negation, and modality without treating word overlap as equivalence."
+description: "Learn how to generate paraphrases and examine names, numbers, negation, and modality without treating word overlap as equivalence."
 categories: [natural language generation, paraphrasing, evaluation]
 ---
 
-June edits public notices for an archive. Repeating the same sentence in every
-channel sounds stiff, but a rewrite that changes who may enter or what visitors
-must bring creates a new instruction.
+June edits public notices for an archive. Sentences with identical wording can seem unnatural.
+However, a rewrite creates a new instruction if it changes who may enter or what
+visitors must bring.
 
-For this lesson, a **paraphrase** changes the wording while preserving the
-participants, quantities, negation, scope, and obligations that matter for the
-notice. Linguistic research sometimes uses a looser idea of approximate
-meaning. An operational notice needs a stricter rule because readers may act on
-one word such as `may`, `must`, or `not`.
+For this lesson, a **paraphrase** changes wording but preserves the notice's
+participants, quantities, negation, scope, and obligations. Linguistic research
+sometimes accepts approximate meaning. An operational notice needs a stricter
+rule because readers may act on one word such as `may`, `must`, or `not`.
 
-The primary aim of paraphrasing is to preserve meaning while changing wording;
-summarization primarily compresses or selects content, and simplification
-primarily reduces complexity or register. A real output can serve more than one
-aim, so these are not mutually exclusive classes.
+Paraphrasing primarily preserves meaning while changing wording. Summarization
+primarily compresses or selects content. Simplification primarily reduces
+complexity or makes the language less formal. An output can serve more than one
+aim, so these classes can overlap.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- generate paraphrase candidates with a pinned local model;
-- keep an unchanged-input baseline beside the generated wording;
-- measure visible wording change without calling it semantic equivalence;
-- probe names, numbers, negation, and modality;
-- preserve model failures instead of filtering them away; and
-- record human meaning review as pending.
+- generate paraphrase candidates with a fixed local model
+- keep an unchanged-input baseline beside the generated wording
+- measure visible wording change without treating it as semantic equivalence
+- examine names, numbers, negation, and modality
+- preserve model failures instead of removing them
+- record human checks of meaning as pending.
 :::
 
 ```{r}
@@ -42,9 +41,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the same fixed checkpoint
 
-The checkpoint is shared with the summarization lesson, but this page gives it
-a different task, prompt, baseline, and review rule. The model is loaded from
-the prepared local directory through `huggingfaceR`.
+This page uses the summarization lesson's checkpoint, or saved model. The task,
+prompt, baseline, and rule for checks differ. `huggingfaceR` loads the model from the
+prepared local directory.
 
 ```{r}
 suppressPackageStartupMessages({
@@ -98,12 +97,13 @@ stopifnot(
 
 ## Write the preservation rule first
 
-The four notices below are constructed behavioral probes. They were chosen to
-expose common changes in operational meaning. They are not a random test set,
-and no population accuracy will be estimated from them.
+The author constructed these four behavioral probes to expose common changes
+in operational meaning. A **probe** is a selected diagnostic example. The probes
+are not a random test set. The lesson calculates no population accuracy estimate
+from them.
 
 `protected_name`, `modality_class`, and `modality_pattern` are blank when a
-probe does not need that check. A copy of the source is kept as the baseline.
+probe does not need that check. The baseline uses a copy of the source.
 Copying preserves the original wording and facts, but it does not perform the
 requested rewrite.
 
@@ -176,8 +176,9 @@ stopifnot(
 ## Generate candidates without silent truncation
 
 The complete chat-formatted prompt must stay below 192 input tokens. Greedy
-decoding and a 72-token output cap make the call repeatable, but deterministic
-generation can still produce a wrong paraphrase.
+decoding selects the highest-scoring next token. This method and a 72-token
+output limit make the call repeatable. Deterministic generation can still
+produce an incorrect paraphrase.
 
 ```{r}
 paraphrase_system <- paste(
@@ -217,7 +218,7 @@ knitr::kable(
   paraphrase_requests |>
     select(probe_id, input_tokens),
   col.names = c("Probe ID", "Complete prompt tokens"),
-  caption = "Paraphrase input budgets checked before generation",
+  caption = "The workflow examines paraphrase input counts before generation",
   row.names = FALSE
 )
 ```
@@ -296,14 +297,16 @@ stopifnot(
 ```
 
 The copy baseline should pass every literal preservation check. It also fails
-the user's request for different wording. The generated column has to solve
-both parts.
+the user's request for different wording. Each generated candidate must preserve
+meaning and change wording.
 
 ## Measure wording change
 
-This diagnostic lowercases each string, extracts letter and number sequences
-with the ICU regular-expression engine used by `stringr`, and computes Jaccard
-overlap on the unique token sets. An overlap of 1 means the sets match. A lower
+This diagnostic converts each string to lowercase. It extracts letter and
+number sequences with the ICU regular-expression engine in `stringr`. It then
+computes Jaccard overlap between the unique token sets. Jaccard overlap divides
+the number of shared tokens by the number of tokens in either set. An overlap
+of 1 means the sets match. A lower
 value means some visible wording changed.
 
 ```{r}
@@ -345,7 +348,7 @@ knitr::kable(
     "Exact copy",
     "Unique-token Jaccard overlap"
   ),
-  caption = "Wording diagnostics do not decide whether meaning survived",
+  caption = "Wording diagnostics do not decide whether meaning is unchanged",
   row.names = FALSE
 )
 ```
@@ -362,17 +365,19 @@ stopifnot(
 )
 ```
 
-A low overlap can come from a good synonym or a damaging change. A high overlap
-can hide a removed `not`. The score describes token sets, not equivalence.
+A low overlap can result from a good synonym or a damaging change. A high overlap
+can still occur after removal of `not`. The score describes token sets, not equivalence.
 
-## Check visible invariants
+## Examine visible invariants
 
-The code now looks for exact Arabic numerals, the protected name, an explicit
-negation marker, and a short list of surface markers for the predeclared
-modality class. These conservative screens catch some preventable mistakes.
-They also miss valid alternatives: `24` may become `twenty-four`, and `must`
-may become `have to`. A screen result cannot establish whether the meaning
-survived.
+An **invariant** is information that a rewrite must preserve. The code searches
+for exact Arabic numerals, the protected name, and an explicit negation marker.
+It also searches for a short list of markers for the predeclared modality
+class. **Modality** distinguishes permission, obligation, and related meanings.
+
+These string checks find some preventable mistakes. They also reject some
+valid alternatives: `24` may become `twenty-four`, and `must` may become `have to`.
+A string-check result cannot establish whether the rewrite preserves meaning.
 
 ```{r}
 extract_numbers <- function(text) {
@@ -508,7 +513,7 @@ knitr::kable(
 knitr::kable(
   paraphrase_actions,
   col.names = c("Probe ID", "Screen flags", "Next action"),
-  caption = "Screen flags route candidates to human meaning review",
+  caption = "Screen flags select candidates for human checks of meaning",
   row.names = FALSE
 )
 ```
@@ -534,18 +539,19 @@ stopifnot(
 )
 ```
 
-Any applicable `FALSE` value is a reason to hold the candidate for human
-review, not proof that its meaning changed. In this render, reading source and
-output together shows that the stress probe echoes prompt labels and drops Room
-2. The obligation probe replaces `must sign` with `authorized to sign`, which
-raises a substantive obligation concern. Its modal screen also flags the row,
-but the same finite screen would miss or flag some equivalent phrasings, so the
-human comparison carries the conclusion.
+Any applicable `FALSE` value requires a human check. It does not prove a change
+in meaning. In this render, comparison with the source shows that the stress
+probe copies prompt labels and omits Room 2.
 
-## Keep the decision honest
+The obligation probe replaces `must sign` with `authorized to sign`, changing
+obligation to permission. Its modality check also selects the row for
+a human check. However, the finite pattern list can also reject equivalent wording.
+The conclusion therefore depends on human comparison, not the automatic check.
 
-The model has completed generation, and the automatic checks have completed
-their limited jobs. No human has approved the candidates.
+## Record check status
+
+The model completed generation, and the automatic checks completed their limited
+tasks. Human approval remains pending.
 
 ```{r}
 paraphrase_review <- tibble(
@@ -554,8 +560,8 @@ paraphrase_review <- tibble(
     "complete prompt within 192 tokens",
     "wording-change diagnostic",
     "surface invariant checks",
-    "human meaning-preservation review",
-    "human prose review"
+    "human checks of meaning preservation",
+    "human prose checks"
   ),
   status = c(
     sprintf(
@@ -588,7 +594,7 @@ paraphrase_review <- tibble(
 
 knitr::kable(
   paraphrase_review,
-  col.names = c("Review gate", "Status"),
+  col.names = c("Check stage", "Status"),
   caption = "A generated rewrite is not an approved paraphrase",
   row.names = FALSE
 )
@@ -603,18 +609,18 @@ stopifnot(
 )
 ```
 
-June can accept a candidate only after reading it beside the notice and applying
-the rule stated at the start. Generation, visible wording change, and invariant
-flags are evidence for that review. None replaces it.
+June can accept a candidate only after comparison with the notice under the
+initial preservation rule. Generation, visible wording change, and invariant
+flags supply evidence for human checks. None replaces those checks.
 
 ## What to remember
 
 - A paraphrase changes wording while preserving the information that matters.
 - Copying is a useful preservation baseline, but it is not a successful rewrite.
 - Token overlap measures wording, not semantic equivalence.
-- Check names, numbers, negation, scope, permission, and obligation separately.
-- Keep failed model outputs visible when they reveal a broken invariant.
-- Record human meaning and prose review apart from automatic execution.
+- Examine names, numbers, negation, scope, permission, and obligation separately.
+- Keep failed model outputs visible when they reveal an invariant violation.
+- Record human checks of meaning and prose apart from automatic execution.
 
 ## Sources
 

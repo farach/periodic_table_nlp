@@ -1,19 +1,23 @@
 ---
 title: "Adding facts to a knowledge base"
-subtitle: "Keep provenance, conflicts, NIL records, and review decisions visible"
-description: "Learn how knowledge base population links mentions, adds typed facts, and records why some candidates stay out of the knowledge base."
+subtitle: "Keep provenance, conflicts, NIL records, and decisions from checks visible"
+description: "Learn how knowledge base population links mentions, adds typed facts, and records why the pipeline excludes some candidates."
 categories: [systems, knowledge base population, entity linking]
 ---
 
 Grace receives a week of short announcements about Riverton training programs.
-Some repeat each other. Two give different deadlines for the same program.
+Some contain the same facts. Two give different deadlines for the same program.
 Another uses the name `Riverton`, which could mean two different places in the
 reference table.
 
-**Knowledge base population** reads documents, links entity mentions, and adds
-typed facts to a knowledge base with provenance. A knowledge base is not a truth
-machine. It is a structured record of claims, sources, conflicts, and review
-decisions.
+**Knowledge base population** links document mentions to entities and adds typed
+facts to a knowledge base. **Provenance** records each fact's sources and
+derivation. A knowledge base structures claims, sources, conflicts, and decisions
+from checks. It does not establish truth by itself.
+
+A **NIL** record represents a mention with no matching entity in the reference
+table. A provisional ID preserves that mention without assuming an existing
+identity.
 
 ::: {.callout-note}
 The Riverton records in this lesson are fictional teaching examples about training programs, places, and organisations.
@@ -24,12 +28,12 @@ The Riverton records in this lesson are fictional teaching examples about traini
 
 By the end of this lesson, you will be able to:
 
-- distinguish entity linking from fact insertion;
-- declare single-valued and list-valued slots before merging;
-- keep document dates, evidence text, and offsets for every fact;
-- merge duplicate facts without losing provenance;
-- keep conflicting dated values instead of overwriting them; and
-- route negated, hedged, ambiguous, NIL, and type-failed candidates to review.
+- distinguish entity linking from fact insertion
+- declare single-valued and list-valued slots before merging
+- keep document dates, evidence text, and offsets for every fact
+- merge duplicate facts without losing provenance
+- keep conflicting dated values instead of overwriting them
+- route negated, hedged, ambiguous, NIL, and type-failed candidates to human checks.
 :::
 
 ```{r}
@@ -41,10 +45,11 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the Riverton reference list
 
-The existing knowledge base starts with entity IDs and aliases. The lesson reads
-the local CSV files with fixed column types, computes each file's SHA-256
-fingerprint, and compares it with the fingerprint recorded when the file was
-made. A mismatch stops the page before any fact is added.
+The existing knowledge base starts with entity IDs and aliases. The lesson
+reads local CSV files with fixed column types. It computes each file's SHA-256
+fingerprint, which identifies the file contents. It compares that fingerprint
+with the recorded value from file creation. A mismatch stops processing before
+the code adds any fact.
 
 ```{r}
 library(readr)
@@ -127,7 +132,7 @@ tibble(
     col.names = c(
       "Artifact", "Rows", "Computed SHA-256", "Recorded SHA-256", "Match"
     ),
-    caption = "Reference files checked against their recorded fingerprints before use",
+    caption = "Reference files compared with their recorded fingerprints before processing",
     row.names = FALSE
   )
 ```
@@ -150,25 +155,26 @@ stopifnot(
 )
 ```
 
-The table prints names and types only. It does not repeat the description field
-for the forklift credential because this lesson is about provenance, and that
-description is not evidence for a job-board claim.
+The table prints names and types only. It omits the forklift credential's
+description because this lesson concerns provenance. That description is not
+evidence for a job-board claim.
 
 ## Declare slot rules before merging
 
-A **slot** is a typed place where the knowledge base stores a value. Some slots
+A **slot** is a field with a specified value type. Some slots
 can hold a list. Others are single-valued for a named time period, so a second
-dated value becomes a conflict to review.
+dated value becomes a conflict to examine. **Cardinality** specifies how many
+values a slot can contain.
 
 ```{r}
 slot_schema <- tribble(
   ~slot, ~subject_type, ~object_type, ~cardinality, ~merge_rule,
   "offers", "organisation", "credential", "list-valued",
-  "One fact per subject-object pair; repeated evidence adds provenance.",
+  "One fact per subject-object pair. Additional evidence adds provenance.",
   "requires", "organisation", "credential", "list-valued",
-  "One fact per subject-object pair; negated or hedged statements stay out of facts.",
+  "One fact per subject-object pair. Negated or hedged statements do not become facts.",
   "application_deadline", "organisation", "date literal", "single-valued",
-  "Keep each dated value, flag conflict, and let review decide."
+  "Keep each dated value. Mark the conflict. Let a person resolve the conflict."
 )
 ```
 
@@ -193,17 +199,16 @@ stopifnot(
 )
 ```
 
-The slot schema tells the code what counts as a duplicate and what counts as a
-conflict. Without that rule, a pipeline might replace a deadline without
-reporting the value recorded on 4 September, or turn two offerings into an
-error.
+The slot schema defines duplicates and conflicts. Without those rules, a
+pipeline might replace a deadline and omit the value recorded on 4 September.
+It might also incorrectly reject two offerings as a conflict.
 
 ## Prepare dated announcements
 
 The documents below are constructed announcements. They include one duplicate,
-one single-valued conflict, one negated statement, one hedged
-statement, an ambiguous `Riverton` mention, one NIL organisation, one
-undeclared slot, and one visible type-check failure.
+one single-valued conflict, one negated statement, and one hedged statement that
+expresses uncertainty. They also include an ambiguous `Riverton` mention, one
+NIL organisation, one undeclared slot, and one visible type-check failure.
 
 ```{r}
 extractor_version <- "riverton-kbp-rules-1.0"
@@ -253,7 +258,7 @@ knitr::kable(
     "Candidate ID", "Document ID", "Slot", "Subject mention", "Object mention",
     "Status", "Expected action"
   ),
-  caption = "Same-author expected actions written before the pipeline runs",
+  caption = "Same-author expected actions written before pipeline execution",
   row.names = FALSE
 )
 ```
@@ -272,19 +277,18 @@ stopifnot(
 )
 ```
 
-These expected actions are not a benchmark. They are a checklist for a teaching
-pipeline written by the same author as the examples.
-They are hand-supplied candidates, standing in for an extractor such as lesson
-69's relation extractor. The code below links their mentions, checks types and
-status, and applies population rules.
+These expected actions are not a benchmark. The author wrote both the examples
+and the teaching pipeline's checklist. The author also supplied candidates
+manually, in place of output from an extractor such as lesson 69's relation
+extractor. The code links their mentions, examines types and status, and applies
+population rules.
 
 ## Link mentions and keep offsets
 
-The linker below accepts an alias only when it has one candidate. If the mention
-is absent from the alias table, the code creates a provisional NIL ID for a
-subject mention; a candidate whose object is not in the table is held for
-review. If the alias has several candidates, the candidate goes to review
-instead of choosing a nearby name.
+The linker accepts an alias only when it has one candidate entity. An absent
+subject mention receives a provisional NIL ID. An absent object mention
+requires a human check. An alias with several candidate entities also requires
+a human check. The linker does not guess among similar names.
 
 ```{r}
 #| code-fold: true
@@ -447,9 +451,9 @@ stopifnot(
 )
 ```
 
-The `Riverton` row keeps both candidate IDs in the review record. It is not
-auto-linked to either place. The `Riverton Transit` row gets a provisional NIL
-ID and is not merged into Marrow County Transit.
+The `Riverton` row keeps both candidate IDs in the check record. The linker
+does not select either place. It gives `Riverton Transit` a provisional NIL ID
+instead of merging that name into Marrow County Transit.
 
 ## Apply slot, status, and type decisions
 
@@ -518,13 +522,13 @@ candidate_actions <- schema_checks |>
     action_matches = actual_action == expected_action,
     action_reason = case_when(
       status == "negated" ~ "negated statements never become facts",
-      status == "hedged" ~ "hedged statements wait for review",
+      status == "hedged" ~ "hedged statements require human checks",
       subject_link_status == "ambiguous" ~ "alias maps to more than one ID",
-      subject_link_status == "NIL" ~ "new name receives a provisional ID for review",
+      subject_link_status == "NIL" ~ "new name receives a provisional ID for human checks",
       !declared_slot ~ "slot is not declared in the schema",
       object_link_status == "NIL" | is.na(type_check) ~ "object mention is not linked",
       !type_check ~ "slot type check failed",
-      candidate_id != first_candidate_id ~ "same fact already exists; keep provenance",
+      candidate_id != first_candidate_id ~ "same fact already exists. Keep provenance.",
       cardinality == "single-valued" &
         single_value_count > 1L &
         candidate_id != first_single_candidate_id ~ "single-valued slot has dated conflict",
@@ -574,8 +578,8 @@ stopifnot(
 ```
 
 The type failure is visible: `Bellhaven` is a place ID, not an organisation.
-The negated requirement row is rejected rather than stored as a negative fact or
-used to delete anything.
+The pipeline rejects the negated requirement row. It neither stores a negative
+fact nor deletes an existing fact.
 
 ## Build facts and provenance
 
@@ -665,9 +669,9 @@ knitr::kable(
   review_queue,
   col.names = c(
     "Candidate ID", "Document ID", "Subject mention", "Object mention",
-    "Provisional or candidate ID", "Review reason"
+    "Provisional or candidate ID", "Reason for human checks"
   ),
-  caption = "Candidates held out of the fact table for review",
+  caption = "Candidates excluded from the fact table for human checks",
   row.names = FALSE
 )
 ```
@@ -691,13 +695,14 @@ stopifnot(
 )
 ```
 
-One offer fact has two provenance records. The two deadline facts both remain,
-and both are flagged because a later document might be an update, an error, or a
-different session. The candidate set adds `r nrow(populated_facts)` populated
-facts after the review rules run. The table records the conflict; it does not
-resolve it.
-The `FACT-` values here are display IDs minted during this render; a real
-knowledge base keeps issued fact IDs stable once it publishes them.
+One offer fact has two provenance records. Both deadline facts remain and
+require human checks. A later document might contain an update, an error, or
+information about a different session. After applying the check rules, the
+pipeline adds `r nrow(populated_facts)` populated facts. The table records the
+conflict but does not resolve it.
+
+Rendering creates the `FACT-` display IDs. A real knowledge base keeps fact IDs
+stable after publication.
 
 ## Prepare the graph facts used in the visualization lesson
 
@@ -748,29 +753,30 @@ stopifnot(
 ```
 
 These graph edges are still KB records, not proof about the real world. The
-source column says they came from the constructed population step, and the
-document IDs point back to the provenance table above. The two `Riverton` place
-IDs remain in the entity table, but their shared label is a naming note for the
-visualization lesson rather than a factual relation.
+source column names the constructed population step. Document IDs refer
+to the provenance table above. Both `Riverton` place IDs remain in the entity
+table. Their shared label is a naming note for the visualization lesson, not a
+factual relation.
 
 ## What the knowledge base does not know
 
-A missing edge is not evidence that a relation is false. This is the open-world
-caveat: the KB records what it has seen and accepted under its current policy.
-It may be incomplete, stale, or contradicted by a later document. Provenance
-helps a reviewer inspect a claim; it does not certify the claim as true.
+A missing edge does not establish that a relation is false. Under this
+**open-world** approach, the KB records only claims accepted under its current
+policy. Records may be incomplete or outdated. A later document may contradict
+them. Provenance helps readers examine claims, but it does not certify truth.
 
 ## What to remember
 
 - Knowledge base population combines linking and slot filling.
-- Slot cardinality must be declared before merging facts.
+- Declare slot cardinality before merging facts.
 - Duplicate facts can share one fact ID with several provenance records.
-- Single-valued conflicts keep both dated values until review.
+- Single-valued conflicts keep both dated values until a human examines them.
 - Negated and hedged statements do not become facts.
 - `Riverton` stays ambiguous, and a NIL organisation receives a provisional ID.
 
-Grace ends with fewer automatic facts than candidate statements. That is the
-point: a useful KBP step records what it added, what it held, and why.
+Grace's resulting knowledge base contains fewer automatic facts than candidate
+statements. The population step records additions, candidates requiring human checks,
+and the reasons for each decision.
 
 ## Sources
 

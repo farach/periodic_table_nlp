@@ -4,9 +4,8 @@
 # four-word openings. It does not detect a shared paragraph shape, argument, or
 # lesson shell; those require human editorial review.
 #
-# One sentence is meant to be identical everywhere: the notice that the
-# Riverton material is invented. A standard disclosure should read the same on
-# every page, so it is exempt.
+# The standard notice that the Riverton material is invented is deliberately
+# repeated. Its original and active-voice forms are exact exceptions.
 
 suppressPackageStartupMessages({
   library(readr)
@@ -20,6 +19,10 @@ allowed_repeats <- c(
   paste(
     "The Riverton Workforce Lab, its job board, and its training flyer are",
     "fictional and were created for teaching."
+  ),
+  paste(
+    "The author created the fictional Riverton Workforce Lab, its job board,",
+    "and its training flyer for teaching."
   )
 )
 

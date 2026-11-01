@@ -1,11 +1,11 @@
 ---
 title: "Predicting the next token"
-subtitle: "Count context, choose on validation data, and test once"
-description: "Learn how a language model assigns probabilities to the next token and how to evaluate an inspectable count model."
+subtitle: "Count context and select a model before the final test"
+description: "Learn how a language model assigns probabilities to the next token. Evaluate a count model whose values readers can examine."
 categories: [natural language generation, next-token prediction, language models]
 ---
 
-Nia is building an autocomplete demonstration for an archive. After a reader
+Nia builds an autocomplete demonstration for an archive. After a reader
 types `we`, the tool must decide which token could come next.
 
 A **language model** assigns probabilities to token sequences. In
@@ -19,11 +19,11 @@ text-generation system.
 
 This lesson shows how to:
 
-- keep training, validation, and test speeches separate;
-- build next-token rows without crossing paragraph boundaries;
-- estimate unigram, bigram, and trigram count models;
-- compare greedy choice with probability-weighted sampling;
-- select context length and interpolation strength with validation perplexity; and
+- keep training, validation, and test speeches separate
+- build next-token rows without crossing paragraph boundaries
+- fit unigram, bigram, and trigram count models
+- compare greedy choice with probability-weighted sampling
+- select context length and interpolation strength with validation perplexity
 - explain what held-out perplexity does not measure.
 :::
 
@@ -38,9 +38,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 The inaugural corpus contains 60 public-domain speeches. The committed study
 uses 37 speeches for training, 10 for model selection, and 13 for the final
-test. A speech belongs to one split only. The split is stratified by era so both
-eras appear in every part. The split holds out speeches, not speakers:
-presidents with more than one inaugural address can appear in multiple splits.
+test. A speech belongs to one split only. Assignment by era places both
+eras in every part. The split separates speeches, not speakers.
+Presidents with more than one inaugural address can appear in multiple splits.
 
 ```{r}
 library(digest)
@@ -191,23 +191,25 @@ stopifnot(
 )
 ```
 
-The validation set is used to choose among candidate models. The test speeches
-stay closed until that choice is fixed. Calling both sets "held out" would hide
-their different jobs.
+The study uses validation speeches to select a candidate model. It uses test
+speeches only after that choice is final. Calling both sets "held out" would
+obscure their different purposes.
 
 ## Build paragraph-bounded next-token rows
 
 The study uses an explicit word-like pattern so token counts do not depend on
 the rendering machine's word-boundary library. It then keeps lowercase ASCII
-alphabetic tokens. The 2,499 most common training token types get their own
-vocabulary entries; every other token maps to `<unk>`, giving a 2,500-token
-model vocabulary.
+alphabetic tokens. The 2,499 most common training token types receive separate
+vocabulary entries. Every other token maps to `<unk>`, the unknown-token entry.
+The model vocabulary therefore contains 2,500 tokens.
 
 Each prediction row keeps its paragraph and speech ID. `previous_1` is the token
-immediately before the target. `previous_2` is one more step back. The first two
-tokens in each paragraph have no full two-token context, so they are not
-evaluation rows. No transition joins the end of one paragraph to the beginning
-of another, and this model does not learn how to start a paragraph.
+immediately before the target. `previous_2` is the token before `previous_1`.
+The first two tokens in each paragraph lack a full two-token context, so the
+evaluation excludes those rows.
+
+No transition joins the end of one paragraph to the beginning of another. This
+model therefore does not learn how to start a paragraph.
 
 ```{r}
 paragraphs <- inaugural_paragraphs()
@@ -315,10 +317,10 @@ longer context appears less often.
 
 Raw counts assign probability zero to a next token that never followed the
 context in training. The study avoids zero probabilities through
-**interpolation**: every estimate mixes the longer-context counts with the
-shorter model. The **interpolation strength** controls how much weight the
-shorter model receives, so a larger value leans more on that model. Six values
-are compared on validation speeches; the selected trigram uses 100.
+**interpolation**, which combines longer-context counts with the shorter model.
+The **interpolation strength** controls the weight of the shorter model. A larger
+value gives that model more weight. The study compares six values on validation
+speeches. The selected trigram uses 100.
 
 ```{r}
 selected_validation <- validation_results |>
@@ -469,12 +471,12 @@ After `the united`, the model assigns about 0.72 probability to `states`. That
 reflects a repeated phrase in US inaugural addresses. It does not show a general
 English rule. After `we must`, several continuations remain plausible.
 
-The `<unk>` row stands for any token outside the training vocabulary. Predicting
-that bucket does not identify the original word.
+The `<unk>` row represents any token outside the training vocabulary. Predicting
+that category does not recover the original word.
 
-## Choose or sample a next token
+## Select a next token
 
-The probability table does not decide how text is generated. **Greedy decoding**
+The probability table does not specify a text-generation rule. **Greedy decoding**
 takes the highest-probability token. **Sampling** draws according to the full
 distribution. The seed below makes five draws reproducible.
 
@@ -504,7 +506,7 @@ choice_table <- tibble(
 knitr::kable(
   choice_table,
   col.names = c("Choice rule", "Next-token output after 'we must'"),
-  caption = "One probability distribution can support different choice rules",
+  caption = "Different choice rules can use one probability distribution",
   row.names = FALSE
 )
 ```
@@ -520,8 +522,8 @@ stopifnot(
 )
 ```
 
-Greedy choice repeats the most common continuation. Sampling can select less
-common tokens and will change when the seed changes. Neither rule checks whether
+Greedy choice always selects the most common continuation. Sampling can select less
+common tokens and will change when the seed changes. Neither rule establishes whether
 a continuation is factual, useful, or appropriate for a reader.
 
 ## Select context length and smoothing before testing
@@ -529,8 +531,8 @@ a continuation is factual, useful, or appropriate for a reader.
 The builder compares six interpolation strengths for both the bigram and trigram, plus
 the unigram baseline, on validation speeches.
 **Log loss** penalizes probability assigned away from the observed next token.
-**Perplexity** is the exponentiated mean log loss; lower is better when the
-tokenizer, vocabulary, and evaluation rows are identical.
+**Perplexity** is the exponentiated mean log loss. Lower values are better when
+the tokenizer, vocabulary, and evaluation rows are identical.
 
 ```{r}
 validation_display <- validation_results |>
@@ -618,19 +620,24 @@ stopifnot(
 ```
 
 The trigram with interpolation strength 100 has the lowest validation perplexity,
-133.3. The best bigram is close at 134.8. The tested strengths on both sides of
-100 score worse, so the selected value is not a grid boundary. Only 74.9 percent
+133.3. The best bigram is close at 134.8. The tested strengths above and below
+100 score worse. The selected value is therefore not a boundary of the candidate
+grid.
+
+Only 74.9 percent
 of the trigram's two-token validation contexts appeared in training. When a
 context is unseen, its estimate relies entirely on the bigram and then the
-unigram. The bigram's 100 percent seen-context rate follows from mapping every
-token into the training vocabulary, including `<unk>`; it is not evidence that
-the model generalizes to every word.
+unigram.
+
+The bigram's 100 percent seen-context rate results from mapping every token into
+the training vocabulary, which contains `<unk>`. It does not show that the model
+generalizes to every word.
 
 ## Open the test speeches once
 
-After selecting the trigram and its interpolation strength, the study scores it,
-the predeclared unigram baseline, and a uniform 2,500-token floor on the 13 test
-speeches.
+The study selects the trigram and its interpolation strength before the final
+test. It then scores the trigram, the predeclared unigram baseline, and a uniform
+2,500-token comparison model on the 13 test speeches.
 
 ```{r}
 test_display <- test_results |>
@@ -752,19 +759,18 @@ stopifnot(
 The uniform model has perplexity 2,500 because it gives every vocabulary item
 the same probability. The selected trigram reduces test perplexity by about
 `r sprintf("%.1f%%", 100 * perplexity_reduction)` relative to the unigram
-baseline and wins the paired comparison in all
+baseline. It has lower perplexity in the paired comparison for all
 `r paired_test$trigram_wins` test speeches.
 
 Its highest-probability guess is right on 19.2 percent of test rows. The unigram
-scores 11.7 percent because its most likely token is `<unk>`, the bucket that
-collects many rare training words. A correct unknown-bucket guess does not
-recover the original word. The trigram also leans on this bucket: roughly one
-third of its correct guesses are unknown-bucket matches rather than recovered
-words.
+scores 11.7 percent because its most likely token is `<unk>`, the category for
+many rare training words. A correct unknown-token prediction does not recover
+the original word. Roughly one third of the trigram's correct guesses are also
+unknown-token matches rather than recovered words.
 
-Eight of the 13 test speeches were delivered by a president who also appears in
-training. The test is speech-held-out, not speaker-held-out; repeated presidents
-can carry phrasing across splits. The trigram still beats the unigram on all five
+Presidents who also appear in training delivered eight of the 13 test speeches.
+The test separates speeches, not speakers. Repeated presidents can therefore
+contribute similar phrasing to different splits. The trigram still has lower perplexity than the unigram on all five
 test speeches whose president is absent from training.
 
 Perplexity would change under another vocabulary, tokenizer, boundary rule, or
@@ -773,17 +779,17 @@ test set. The values here cannot be compared with the LDA perplexity in Lesson
 
 The result does not show that the model understands a speech, writes a good
 report, or produces facts. The next lesson uses these same measurements to show
-how a report can stay tied to evidence.
+how a report can retain its evidence references.
 
 ## What to remember
 
 - Next-token prediction assigns probabilities after a context.
 - Paragraph boundaries prevent invented transitions between source records.
-- Validation data select context length and interpolation strength; test data
-  check the fixed choice.
-- The trigram and interpolation strength are selected together on validation data.
-- The selected trigram beats the unigram on all 13 test speeches here, but its
-  top choice is still wrong on about four out of five rows.
+- Validation data select context length and interpolation strength. Test data
+  measure performance after that choice.
+- The study selects the trigram and interpolation strength together on validation data.
+- The selected trigram has lower perplexity than the unigram on all 13 test speeches here. Its top
+  choice is still wrong on about four out of five rows.
 - Perplexity is comparable only under the same tokens, vocabulary, and test rows.
 - A likely next token is not necessarily factual or useful.
 

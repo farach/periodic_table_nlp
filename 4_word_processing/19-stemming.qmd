@@ -1,17 +1,17 @@
 ---
-title: "Chopping word endings"
+title: "Removing word endings with stemming rules"
 subtitle: "Use Snowball stems without mistaking them for words"
 description: "Learn how stemming groups some workforce word forms and creates non-word stems."
 categories: [word processing, stemming, workforce research]
 ---
 
-A short vocabulary list from the job-board and flyer sentences is the team's
+A short vocabulary list from the job-board and flyer text is the team's
 next goal. The team sees `shifts`, `skills`, and `schedules` and asks
 whether plural endings should count as separate words.
 
-That choice affects a simple summary. If every surface spelling stays separate,
-the list grows. If endings are chopped too aggressively, different meanings can
-collapse into one code.
+That choice affects the summary. Keeping every surface spelling separate
+increases the list length. Excessive removal of endings can assign one code
+to words with different meanings.
 
 **Stemming** removes or changes word endings using fixed rules. In linguistics,
 a stem is the part of a word that an ending attaches to. In this lesson, a
@@ -19,8 +19,8 @@ a stem is the part of a word that an ending attaches to. In this lesson, a
 comparison key. It may or may not be a word.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. The stems come from SnowballC running locally.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching. SnowballC produces the stems locally.
 :::
 
 ::: {.callout-tip}
@@ -28,9 +28,9 @@ and were created for teaching. The stems come from SnowballC running locally.
 
 By the end of this lesson, you will be able to:
 
-- describe what a stemmer does;
-- find stems that are not dictionary words;
-- identify collisions, where several words share one stem; and
+- describe what a stemmer does.
+- find stems that are not dictionary words.
+- find collisions, where several words share one stem.
 - name related words that a suffix rule leaves apart.
 :::
 
@@ -44,9 +44,9 @@ stopifnot(identical(getOption("warn"), 2L))
 ## Build the Riverton vocabulary
 
 The vocabulary build uses readr, dplyr, tibble, tidytext, SnowballC, hunspell,
-purrr, and stringr. A word type is one distinct lowercased word form in these 28
-sentences using the same `tokenizers::tokenize_words()` rule as Lesson 15, so
-the count would change under a different tokenizer.
+purrr, and stringr. A word type is one distinct lowercased form in these 28
+text units. The count uses Lesson 15's `tokenizers::tokenize_words()` rule.
+A different tokenizer would change the count.
 
 ```{r}
 library(readr)
@@ -128,9 +128,9 @@ becomes `requir`, which is not a word a reader should see.
 
 ## Watch the rule on a nearby word
 
-SnowballC's English stemmer, often called Porter2, uses a fixed rule system. The
-word `requires` is not in the Riverton vocabulary, but it shows the same kind of
-ending chop as `required`.
+SnowballC's English stemmer, often called Porter2, uses fixed rules.
+The word `requires` is absent from the Riverton vocabulary.
+It illustrates the same ending removal as `required`.
 
 ```{r}
 example_stems <- tibble(
@@ -163,12 +163,12 @@ stopifnot(
 )
 ```
 
-Treat the returned stem as a machine comparison string. It should not be shown to
-a reader as if it were the dictionary form of the word.
+Treat the returned stem as a machine comparison string.
+Do not present it as the word's dictionary form.
 
-Hunspell checks a spelling dictionary and affix rules. SnowballC does not ask a
-dictionary before returning a stem, so it can return `requir`, `provid`, and
-`schedul`.
+Hunspell uses a spelling dictionary and affix rules.
+SnowballC returns stems without consulting a dictionary.
+It can therefore return `requir`, `provid`, and `schedul`.
 
 ## Count stems that are words and stems that are not
 
@@ -230,9 +230,10 @@ stopifnot(
 )
 ```
 
-Among these 96 word types, 21 changed forms lead to dictionary words and 22 lead
-to strings hunspell does not know. A dictionary-word stem can still be the wrong
-grouping key for a particular workforce question.
+Among these 96 word types, 21 transformed forms are dictionary words.
+Another 22 transformed forms are unknown to hunspell.
+A dictionary-word stem can still be an unsuitable grouping key for a workforce
+question.
 
 ## Find collisions
 
@@ -279,13 +280,13 @@ stopifnot(
 
 The four collision groups contain eight word types. `schedule` and `schedules`
 are a helpful group. `certificate` and `certification` may or may not be close
-enough, depending on whether the Lab is counting credentials or training topics.
+enough, depending on whether the Lab counts credentials or training topics.
 
 ## Find misses
 
-A **miss** is a related pair that the stemmer leaves apart. The team picked three
-pairs it already suspected the stemmer would keep apart, so the table is not a
-survey. It is a set of examples chosen to show what a suffix rule cannot see.
+A **miss** is a related pair that receives different stems.
+The team selected three pairs with suspected differences, not a survey sample.
+These examples show limitations of suffix rules.
 
 ```{r}
 miss_pairs <- tribble(
@@ -306,8 +307,8 @@ miss_pairs <- tribble(
 
 knitr::kable(
   miss_pairs,
-  col.names = c("Word A", "Word B", "Why the pair was checked", "Stem A", "Stem B", "Same stem"),
-  caption = "Related Riverton word pairs that Snowball keeps apart",
+  col.names = c("Word A", "Word B", "Reason for comparison", "Stem A", "Stem B", "Same stem"),
+  caption = "Related Riverton word pairs with different Snowball stems",
   row.names = FALSE
 )
 ```
@@ -323,20 +324,21 @@ stopifnot(
 )
 ```
 
-All three selected pairs stay apart. The result says what these examples were
-chosen to show: suffix rules can miss irregular forms and relations whose meaning
-comes from more than an ending.
+All three selected pairs receive different stems.
+Suffix rules can miss irregular forms and relationships whose meaning depends
+on more than an ending.
 
 ## What to remember
 
-- Stemming chops word endings with fixed rules.
+- Stemming removes or changes word endings with fixed rules.
 - The Snowball English stemmer is a Porter2 rule system.
 - SnowballC changed 43 of the 96 Riverton word types.
 - In this vocabulary, 22 changed stems are non-words.
 - Collisions and selected misses both need human judgment.
 
-Stems are useful backstage keys for rough grouping. The public-facing list should
-show words a reader recognizes, with the disputed groups reviewed by a person.
+Stems can provide internal keys for approximate grouping.
+A public list should show recognizable words.
+A person must examine disputed groups.
 
 ## Sources
 

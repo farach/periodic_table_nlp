@@ -1,25 +1,26 @@
 ---
 title: "Loading a structured data file"
-subtitle: "Open a CSV file and check what R received"
+subtitle: "Open a CSV file. Examine what R received."
 description: "Learn how rows, columns, missing values, and text encodings affect a CSV file in R."
 categories: [source data loading, CSV, data quality]
 ---
 
 Before a community team's weekly meeting, a coordinator receives one CSV file
 containing feedback from email, web forms, and live chat. The group plans to
-review low ratings. First, the coordinator has to find out what the five
-records contain and whether their structure survived the move into R.
+examine low ratings. First, the coordinator must find what the five records
+contain and whether loading changed their structure.
 
-A file can open without an error while a column is missing, an accent mark is
-damaged, or an identification number has changed format. A blank rating can
-also be mistaken for a score if its meaning is not checked. We will follow the
-coordinator's arrival check from the file's raw lines to the one low rating the
-table can support, then repeat the check on a second export that arrives with a
-repeated identifier, an impossible rating, and a row that has too many fields.
+A file can open without an error even when a column is missing, an accent is
+damaged, or an identifier changes format. A reader can also mistake a blank
+rating for a score unless they know its meaning. We will examine the file's
+raw lines, then find the one low rating.
+
+We will run the checks again on a second export. That export contains a repeated
+identifier, an impossible rating, and a row with too many fields.
 
 ::: {.callout-note}
-The feedback records in this lesson are fictional and were created for
-teaching. They do not describe real people or customers.
+The author created these fictional feedback records for teaching. They do not
+describe real people or customers.
 :::
 
 ::: {.callout-tip}
@@ -27,12 +28,12 @@ teaching. They do not describe real people or customers.
 
 By the end of this lesson, you will be able to:
 
-- explain how a structured data file organizes information;
-- load a CSV file into R;
-- check rows, columns, and data types;
-- find missing values;
-- inspect the parse problems, duplicate keys, and out-of-range values in a
-  flawed file; and
+- explain how a structured data file organizes information.
+- load a CSV file into R.
+- examine rows, columns, and data types.
+- find missing values.
+- examine the parse problems, duplicate keys, and out-of-range values in a
+  flawed file.
 - select records that meet a stated condition.
 :::
 
@@ -45,23 +46,21 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## What makes a file structured?
 
-The first uncertainty is basic: what does each part of the file represent? A
+What does each part of the file represent? A
 **structured data file** follows a consistent arrangement. In a CSV file:
 
-- each **row** usually represents one record;
-- each **column** represents one kind of information; and
+- each **row** usually represents one record.
+- each **column** represents one kind of information.
 - commas separate one column from the next.
 
 CSV stands for **comma-separated values**. The first line often contains the
-column names. Text containing a comma is placed inside quotation marks so that
-the comma remains part of the text. A quoted field can also contain a line
+column names. Quotation marks enclose text containing a comma so the comma
+remains part of the text. A quoted field can also contain a line
 break, so one physical line does not always equal one record. A quotation mark
-inside a quoted field is usually written twice.
+inside a quoted field usually appears twice.
 
 Before asking R to make a table, the coordinator reads the file as plain lines.
-`read_lines()` from readr returns one text value for each physical line. This
-exposes what is actually stored and keeps the example small enough to count by
-eye.
+`read_lines()` from readr returns one text value for each physical line. This shows the stored lines, which the reader can count directly.
 
 ```{r}
 library(readr)
@@ -89,18 +88,18 @@ stopifnot(
 )
 ```
 
-The file has six lines: one header and five records. The first comment contains
-a comma, and its quotation marks keep the full sentence in one field rather
-than splitting it across columns. This line count works because the teaching
+The file has six lines: one header and five records. Quotation marks keep the
+first comment's comma inside one field rather than separating columns.
+This line count works because the teaching
 file has no quoted line breaks.
 
 ## Load the CSV into R
 
-The line count and header are as expected, so the next step is to organize the
-records. `read_csv()` from readr turns the file into a **tibble**, a table that
-prints its size and each column's type. readr treats text as UTF-8 by default,
-a common way to store characters from many languages, so the accented text is
-read using that expected encoding.
+The line count and header match expectations. The next step organizes the
+records. The readr function `read_csv()` converts the file into a **tibble**, a
+table that prints its size and each column's type. By default, readr interprets
+text as UTF-8, an encoding for characters from many languages.
+It therefore uses UTF-8 to read the accented text.
 
 ```{r}
 feedback <- read_csv(
@@ -153,11 +152,11 @@ easy to use."
 
 The teaching file's data dictionary defines a blank rating as missing.
 `na = ""` applies that rule while loading. A real project should use the
-missing-value rules supplied by its data provider. The literal text `"NA"`,
-zero, and a blank field must not be treated as equivalent without such evidence.
+missing-value rules supplied by its data provider. Do not treat the literal text `"NA"`, zero, and a blank field as equivalent
+without such evidence.
 
-Those checks show that the visible layout survived the trip into R. We still
-need to check how R interpreted each column.
+Those checks show that loading preserved the visible layout. We still
+need to examine how R interpreted each column.
 
 ### Why choose the column types?
 
@@ -165,9 +164,9 @@ The `col_types = cols(...)` setting tells readr which **data type** to use for
 each column. A data type records whether values should behave as text, whole
 numbers, dates, or another kind of information.
 
-- identification numbers are text because they label records;
-- dates begin as text so we can convert them deliberately;
-- ratings are whole numbers; and
+- identification numbers are text because they label records.
+- dates begin as text so we can convert them deliberately.
+- ratings are whole numbers.
 - channels and comments are text.
 
 Treating an ID as text protects leading zeros. For example, the label `"0012"`
@@ -210,16 +209,15 @@ stopifnot(
 ```
 
 R reports `character` for text and `integer` for whole numbers. Here,
-`character` is R's name for text; a value may contain an entire comment.
-Choosing these types deliberately prevents R from turning record labels into
+`character` is R's name for text. A value may contain an entire comment.
+Choosing these types deliberately prevents R from converting record labels to
 quantities.
 
 ## Convert the date column
 
-The submission dates have arrived as text. `mutate()` from dplyr changes a
+The submission dates are text. The dplyr function `mutate()` changes a
 column while keeping the rest of the table. Here `as.Date()` converts the text
-to R's date type so the coordinator can sort and compare the values as calendar
-dates.
+to R's date type. The coordinator can then sort and compare calendar dates.
 
 ```{r}
 feedback <- feedback |>
@@ -257,12 +255,12 @@ stopifnot(
 
 The format `%Y-%m-%d` means four-digit year, two-digit month, and two-digit day.
 Writing it explicitly records the order expected in this file rather than
-leaving that order to a guess.
+requiring the reader to guess.
 
 ## Find missing information
 
-With the rows, columns, and types accounted for, the coordinator can ask which
-values are absent. R uses `NA` to represent a **missing value**. The CSV
+After examining rows, columns, and types, the coordinator finds absent
+values. R uses `NA` to represent a **missing value**. The CSV
 contains one blank rating, which `read_csv()` changed to `NA`. `map_int()`
 returns one whole-number count for each column.
 
@@ -296,16 +294,16 @@ stopifnot(
 )
 ```
 
-The rating column has one missing value. A blank tells us only that no rating
-is recorded in this file. It is different from a rating of zero and should not
-be replaced without evidence about what the blank means.
+The rating column has one missing value. A blank means only that this file
+records no rating. It differs from a rating of zero.
+Do not replace the blank without evidence about its meaning.
 
 ## Select a record that needs attention
 
 Only now does the coordinator select feedback with a rating of two or lower.
 `filter()` from dplyr keeps rows that meet a condition, and `select()` keeps the
-columns needed for the meeting. The expression `!is.na(rating)` keeps the
-unknown rating out of the comparison rather than treating it as high or low.
+columns needed for the meeting. The expression `!is.na(rating)` excludes the unknown rating from the comparison
+rather than treating it as high or low.
 
 ```{r}
 low_ratings <- feedback |>
@@ -340,15 +338,15 @@ tell us how that person would have scored the experience.
 
 ## When the next file is not clean
 
-Everything above worked because the file was well formed. That is the
-uninteresting case. The next export from the same web form is written out
-below, inside the lesson rather than saved to disk, so the damage is visible
-line by line.
+The first file was well formed. The next example represents another export
+from the same web form. The lesson defines the text directly rather than
+reading a saved file, so each line remains visible.
 
-It contains six records and six problems: a repeated `feedback_id`, a rating
-typed as a word, a row with an extra field, a rating outside the documented
-range of one to five, a blank rating, and a comment that runs across two
-physical lines inside its quotation marks.
+The six records contain six features to examine. These include a repeated
+`feedback_id`, a rating typed as a word, and a row with an extra field.
+Another rating exceeds the documented range of one to five.
+The file also contains a blank rating and a quoted comment across two physical
+lines.
 
 ```{r}
 messy_text <- paste(
@@ -410,12 +408,12 @@ stopifnot(
 )
 ```
 
-Eight lines produced six records. The quoted line break is the reason, and it is
-why the arrival check earlier in this lesson could only compare a line count
-with a record count on a file known to have none.
+Eight physical lines produced six records because one quoted comment contains
+a line break. The earlier line-count check worked only because that file had
+no quoted line breaks.
 
-`suppressWarnings()` appears because this page turns warnings into errors.
-Suppressing the warning does not discard the evidence: readr keeps a structured
+`suppressWarnings()` appears because this page treats warnings as errors.
+Suppressing the warning does not discard the evidence. readr keeps a structured
 report of everything it could not parse.
 
 ### Read the parse problems
@@ -468,24 +466,23 @@ stopifnot(
 )
 ```
 
-readr counts the header line, so the reported row 4 is the third record, the one
-whose rating was typed as `five`. That value became `NA`. The row with an extra
-field kept its data by folding the stray text into the comment, which is worth
-knowing: a parse problem does not always produce a missing value, and a missing
-value does not always come from a parse problem.
+readr counts the header line. Reported row 4 is therefore the third record,
+whose rating is `five`. The parser changed that value to `NA`.
+For the extra-field row, the parser added the unexpected text to the comment.
 
-The transferable idea is not the function name. Declaring column types and
-missing-value rules at read time, and keeping the parser's complaint, is the
-same discipline that `dtype` and `na_values` serve in pandas or an explicit
-schema serves in Arrow. A parser that guesses without reporting the guess is
-the hazard in every language.
+A parse problem does not always produce a missing value. A missing value does
+not always indicate a parse problem.
 
-### Check the things a parser cannot know
+The same checks apply in other languages. In pandas, `dtype` and `na_values`
+declare column types and missing-value rules. Arrow can use an explicit schema.
+Keep the parser's problem report with those declarations.
+An unreported parser guess creates a risk in any language.
 
-Parsing succeeds when the shape is right. It says nothing about whether the
-identification numbers are unique or the ratings are possible. Those rules come
-from the data dictionary, and each one can be written as a check that fails
-loudly.
+### Examine what a parser cannot establish
+
+Successful parsing confirms the expected structure. It does not establish that
+identifiers are unique or ratings are possible. The data dictionary supplies
+those rules. Each rule can become a check that reports a failure.
 
 ```{r}
 documented_rating_range <- 1:5
@@ -537,7 +534,7 @@ knitr::kable(
     "Parsed rating",
     "Decision"
   ),
-  caption = "Every record accounted for, including the ones held back",
+  caption = "All records with reasons for inclusion or exclusion",
   row.names = FALSE
 )
 ```
@@ -567,31 +564,30 @@ stopifnot(
 )
 ```
 
-Five of six records are held back and the reasons differ. Two share an ID, so
-neither can be trusted as the record for `1006` until the source explains the
-repeat. The raw value `five` failed integer parsing and is not treated as an
-ordinary missing rating. One row has an unexpected sixth field. One carries a
-rating of nine, which the dictionary does not allow.
+The report excludes five of six records for different reasons. Two share an
+ID. The source must explain the duplicate before either can identify record
+`1006`. The raw value `five` failed integer parsing and differs from an ordinary
+missing rating. One row has an unexpected sixth field. Another has a rating of
+nine, which exceeds the dictionary's maximum.
 
 The remaining record has a blank rating. A blank that the dictionary defines as
 missing is not a parse error.
 
-The important discipline is the accounting: six records in, six records
-classified, nothing dropped in silence. A pipeline that filtered to the clean
-rows and moved on would have reported one tidy record and lost the fact that a
-duplicate ID exists in the source.
+The report classifies all six input records and omits none without explanation.
+Filtering to usable rows alone would report one record. That output would omit
+the evidence of a duplicate ID in the source.
 
 ## Questions to ask about any structured file
 
-The five-row arrival check is complete, but technical tidiness cannot answer
-every question about the feedback. Before analyzing any structured file, ask:
+The five-row check is complete, but structural checks cannot answer every
+question about the feedback. Before an analysis of any structured file, ask:
 
 1. What does one row represent?
 2. What does each column mean?
 3. Which encoding does the file use?
 4. How are missing values recorded?
 5. Are dates and identification numbers stored correctly?
-6. Who created the file, and what information did they leave out?
+6. Who created the file, and what information did they exclude?
 
 A tidy table cannot tell you whether the collection process was fair or
 complete. These rows represent only the feedback that reached the recorded
@@ -606,15 +602,16 @@ limits belong alongside the technical checks.
 - Choose important column types rather than relying on guesses.
 - Read the parser's problem report instead of only its output table.
 - Uniqueness and value ranges come from the data dictionary, not the parser.
-- Check missing values before filtering or summarizing.
-- Opening a file successfully is only the beginning of checking it.
+- Examine missing values before filtering or summarizing.
+- Opening a file successfully does not complete the required checks.
 
 At the meeting, the coordinator can report five records, one missing rating,
-and one recorded rating of two. The second file is a different report: six
-records, one usable, five held back with a stated reason each. The blank
-remains a blank, and the file's reach remains an open question. That is the
-useful discipline of an arrival check: say exactly what is recorded, what is
-blank, and what the file cannot settle.
+and one recorded rating of two. The second file contains six records.
+One is usable, and five remain excluded for stated reasons.
+The blank remains missing, and the file's coverage remains uncertain.
+
+Report the recorded values and missing values. State which questions the file
+cannot answer.
 
 ## Sources
 

@@ -37,7 +37,8 @@ This project checks for visible writing habits and residue instead.
 
 1. Run `Rscript scripts/check-prose.R` for machine residue and common style
    patterns.
-2. Run `Rscript scripts/check-repetition.R`. It checks exact repeated sentences
+2. Run `Rscript tests/test-repetition-disclosure.R` for the disclosure exception.
+   Run `Rscript scripts/check-repetition.R`. It checks exact repeated sentences
    and repeated four-word openings; it does not detect a repeated paragraph
    shape or argument.
 3. Read the lesson aloud and remove stiff phrasing, repeated structures, and
@@ -292,9 +293,13 @@ For the saved-output evaluation guide, run
 `Rscript tests/test-system-evaluation.R` before rendering.
 It checks the predeclared results, sparse inputs, invalid annotations,
 fingerprints, and all three decision branches.
-Use short sentences and define technical terms near first use.
-Apply ASD-STE100 writing rules where they fit the explanation.
-Do not claim formal controlled-language certification.
+Use no more than 20 words per instruction and 25 words per description.
+Keep paragraphs to six sentences or fewer. Define technical terms near their
+first occurrence. Follow the controlled-language section of
+`EDITORIAL_GUIDE.md`, with contextual vocabulary review.
+Run `npm run test:prose` before rendering and `npm run test:a11y` afterwards.
+Record per-page findings and unresolved vocabulary in `reviews/`.
+Do not claim formal controlled-language certification from these checks.
 
 - Show the reader the code that does the work, not the code that formats the
   page. A table is built in the visible chunk and printed from an

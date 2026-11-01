@@ -1,22 +1,20 @@
 ---
 title: "Identifying document language"
 subtitle: "Treat language guesses as fallible classifications"
-description: "Learn how two language detectors behave on short Riverton text samples and why abstention can be safer than a wrong route."
+description: "Compare two language detectors on short Riverton samples and learn why no label can be safer than a wrong label."
 categories: [documents, language identification, workforce research]
 ---
 
-Short notes in several languages create a routing problem before content labels
-begin. The coordinator wants to route each note to the right review queue before
-anyone labels its content.
+Short notes in several languages require routing before content annotation.
+The coordinator must assign each note to people who can read its language.
 
 `Open house.` exposes the problem. A person reads the two-word notice as English,
 while a language detector may have too little evidence to say.
 
 **Language identification** is a classification problem. A classifier assigns a
 label from a fixed set, such as `en` for English or `es` for Spanish. The risk
-has two shapes: a detector can return the wrong code, or it can decline to answer
-and leave the item unrouted. This lesson shows which shape these two detectors
-take on a tiny teaching file.
+is either a wrong code or no answer, which leaves the item without a route.
+This lesson compares those outcomes for two detectors on a small teaching file.
 
 ::: {.callout-note}
 The Riverton inbox and the language samples are fictional teaching materials.
@@ -27,10 +25,10 @@ The Riverton inbox and the language samples are fictional teaching materials.
 
 Use this lesson to practice how to:
 
-- run two local language detectors on fixed samples;
-- compare detector output with recorded labels;
-- separate agreement from correctness;
-- explain why short texts are hard to classify; and
+- execute two local language detectors on fixed samples.
+- compare detector output with recorded labels.
+- separate agreement from correctness.
+- explain why short texts are hard to classify.
 - describe why returning `NA` can be safer than a wrong language code.
 :::
 
@@ -43,9 +41,9 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the labelled samples
 
-The sample table is small, but the setup still records detector versions,
-checks text length, runs the local CLD2 and CLD3 detectors, and fingerprints the
-file. The samples are short strings written by the author for teaching.
+The setup records detector versions and measures text length. It executes the local
+CLD2 and CLD3 detectors and calculates a file fingerprint. The author wrote
+the short samples for teaching.
 
 ```{r}
 library(readr)
@@ -168,17 +166,18 @@ stopifnot(
 )
 ```
 
-The `written_in` column records the language the author meant to write, not a
-verified annotation. The Spanish [Casa abierta.]{lang="es"} is grammatical, but
-as an event notice it is a calque rather than an idiomatic phrase. These results come from
-the detector versions printed above; a package change can return different codes
-for the same strings.
+The `written_in` column records the author's intended language rather than an
+independently assessed annotation. The Spanish [Casa abierta.]{lang="es"} is
+grammatical. As an event notice, it is a **calque**, a direct translation,
+rather than an idiomatic phrase. The results describe the detector versions
+printed above. A different package version can return different codes for the
+same strings.
 
 ## Run two detectors
 
 CLD2 and CLD3 are trained language detectors. `NA` means the detector returned no
-language label. They do not understand the whole situation around a note; they
-classify the characters they receive.
+language label. The detectors classify the supplied characters rather than
+understand the complete situation around a note.
 
 ```{r}
 detected_samples <- language_samples |>
@@ -252,9 +251,9 @@ stopifnot(
 )
 ```
 
-For this installed version, both detectors abstain on `Open house.` by returning
-`NA`. That is a useful failure for routing, because the item can be sent to human
-review rather than routed under a wrong code without review.
+Both installed detectors **abstain**, or return no label, on `Open house.`.
+The `NA` result lets a person examine the item instead of automatic routing
+with an incorrect code.
 
 ## Count matches, abstentions, and label differences
 
@@ -308,15 +307,14 @@ stopifnot(
 )
 ```
 
-Each detector matches 5 of the 8 recorded labels, returns no label for 3 of the
-8, and differs from the recorded label on 0 of the 8. Those fractions describe
-this tiny teaching file. Eight samples measure nothing about detector accuracy on
-a workforce archive.
+Each detector matches 5 of the 8 recorded labels. It returns no label for
+3 of the 8 and an incorrect label for 0 of the 8. Those fractions describe
+this small teaching file, not detector accuracy on a workforce archive.
 
 ## Compare short and longer text
 
-Length changes the amount of evidence a detector sees, but this file is too
-small to estimate a length effect. There is no principled cutoff here. The
+Text length affects the amount of evidence a detector receives. This file is too
+small to give an estimate of the length effect. There is no principled cutoff here. The
 13-character line separates the two shortest strings from the other 6 examples.
 
 ```{r}
@@ -371,10 +369,10 @@ on 1. The Dutch sentence is long enough to read by eye, but both detectors retur
 
 ## A wrong code is worse than no code
 
-The eight labelled samples produced no wrong codes. That does not mean wrong
-codes are impossible. The next string was chosen because it produces one: it is a
-single hand-picked case, not a rate, and it shows what a wrong code looks like.
-It also sits just above the arbitrary 13-character cutoff.
+The eight labelled samples produced no wrong codes, but wrong codes remain
+possible. The author selected the next string because it produces an incorrect
+code. This one case demonstrates a failure. It does not give an estimate of its rate.
+Its length is just above the arbitrary 13-character cutoff.
 
 ```{r}
 short_probe <- tibble(
@@ -416,7 +414,7 @@ stopifnot(
 
 `Evening class.` is English in this teaching probe. CLD2 returns `NA`, while CLD3
 returns `lb`, the ISO 639-1 code for Luxembourgish. For routing, the abstention
-is safer: no queue is selected until someone checks the item.
+is safer because a person examines the item before selecting a queue.
 
 These eight samples are all written in the Latin alphabet, so this page shows
 nothing about other writing systems. That is a limit of the file, not a
@@ -424,27 +422,30 @@ reassurance.
 
 ## Language identification in production
 
-While `cld2` and `cld3` illustrate the routing problem, models such as Meta's `fasttext` are common alternatives for fast language identification. When deploying any model, keep these production realities in mind:
+`cld2` and `cld3` illustrate the routing problem. Models such as Meta's
+`fasttext` are common alternatives for fast language identification. Deployment
+requires these considerations:
 
-- **Language scope and BCP 47**: Projects must explicitly state their supported language scope upfront. When recording a language, use a standard like BCP 47 tags (e.g., `en-US`) rather than informal names.
+- **Language scope and BCP 47**: State which languages the project handles. Record languages with standard BCP 47 tags, such as `en-US`, rather than informal names.
 - **Per-language recall**: A model's overall accuracy hides its failures. Always measure recall *per language*, because models routinely fail on low-resource languages.
 - **Code-switching**: The single-label `cld2::detect_language()` and
   `cld3::detect_language()` calls used here return one document label. Mixed
-  language text needs a detector designed for spans or tokens, or a review
-  route; single-label behavior should not be generalized to every model.
-- **Probability vs. certainty**: A model might return a confidence score like `0.95`, but do not treat this as a calibrated probability. It is only the model's internal score, not a statistical guarantee.
+  language text needs a span-level or token-level detector, or a person to
+  examine the text. Code-switching means alternating languages within the text.
+  Single-label behavior does not describe every model.
+- **Probability vs. certainty**: A confidence score such as `0.95` is not necessarily a calibrated probability. Calibration means predicted probabilities agree with observed frequencies. The internal score alone does not establish that agreement.
 
 ## What to remember
 
 - Language identification may return a code or no label.
 - Agreement between detectors does not prove that a language code is correct.
-- The eight-row file is an inspection exercise: both detectors declined to label
-  the two shortest strings rather than guessing at them.
+- The eight-row file is an inspection exercise: both detectors returned no label
+  for the two shortest strings rather than a guess.
 - Returning `NA` can be safer than sending text to the wrong language queue.
 
-Items with `NA` results belong in review, and short-text language codes should
-prompt checking rather than settle a queue. The hand-picked probe demonstrates a
-possible wrong code; the eight-row file demonstrates safe abstention.
+People must examine items with `NA` results and codes from short text before
+routing them. The selected probe demonstrates a possible wrong code. The
+eight-row file demonstrates abstention instead of an incorrect assignment.
 
 ## Sources
 

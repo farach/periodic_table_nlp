@@ -103,8 +103,13 @@ jobs:
       - name: Check writing
         run: Rscript scripts/check-prose.R
 
+      - name: Check plain-language limits and scanner tests
+        run: npm run test:prose
+
       - name: Check repetition across lessons
-        run: Rscript scripts/check-repetition.R
+        run: |
+          Rscript tests/test-repetition-disclosure.R
+          Rscript scripts/check-repetition.R
 
       - name: Check R code style
         run: Rscript scripts/check-r-style.R

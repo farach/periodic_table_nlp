@@ -5,25 +5,24 @@ description: "Learn how a dependency parser links words in workforce text and wh
 categories: [word parsing, dependency parsing, workforce research]
 ---
 
-Word labels are ready for the 28 Riverton sentences. The team then faces a
-harder decision: when a sentence says training is provided, which word
-is the thing provided, and does the sentence name a provider?
+Word labels are ready for the 28 Riverton text units.
+The team now asks what a sentence describes as the thing provided.
+It also asks whether the sentence names a provider.
 
-That question matters because labels alone do not say how words fit together. A
-sentence can contain `experience` and `required` while still saying the opposite
-of a simple keyword match. A passive sentence can also leave the provider
-unnamed, so the team needs links between words and a habit of checking them by
-eye.
+Labels alone do not describe relationships between words.
+A sentence with `experience` and `required` can contradict a simple keyword
+interpretation. A passive sentence can also omit the provider.
+The team needs word relationships and direct inspection of those relationships.
 
-A **dependency parse** says which word each token attaches to and what the link
-is called. The link points from one token to its **head**, the word it depends
-on. This lesson uses a local UDPipe model trained on the same 500-sentence
-English Web Treebank excerpt as the tagger in Lesson 17, with parsing turned on.
+A **dependency parse** records each token's attachment and relation label.
+The attachment connects a token to its **head**, the word on which it depends.
+The local UDPipe model uses the same 500-sentence English Web Treebank training
+excerpt as Lesson 17. This model also performs parsing.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. The parser and scoring files are local artifacts,
-so the lesson does not download a model while it runs.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching. Local files contain the parser and scores.
+The lesson downloads no model during execution.
 :::
 
 ::: {.callout-tip}
@@ -31,9 +30,9 @@ so the lesson does not download a model while it runs.
 
 By the end of this lesson, you will be able to:
 
-- describe a dependency parse in plain language;
-- read root, compound, numeric modifier, passive subject, and punctuation links;
-- compare two parses of the same sentence; and
+- describe a dependency parse in plain language.
+- read root, compound, numeric modifier, passive subject, and punctuation links.
+- compare two parses of the same sentence.
 - explain why a parser score from weblog posts needs a baseline and local checks.
 :::
 
@@ -46,10 +45,11 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load the local parser inputs
 
-The parser inputs come from local CSV files. dplyr, tibble, and purrr handle
-the table work; tokenizers and udpipe keep parsing tied to fixed tokens; digest
-records artifact fingerprints; and spacyr starts a comparison parse. The
-project helper `use_project_spacy()` starts the pinned spaCy pipeline.
+The parser inputs come from local CSV files.
+The dplyr, tibble, and purrr packages handle tables.
+The tokenizers and udpipe packages parse fixed tokens, while digest records
+file fingerprints. The spacyr package produces a comparison parse.
+The helper `use_project_spacy()` starts the pinned spaCy pipeline.
 
 ```{r}
 library(readr)
@@ -218,15 +218,17 @@ stopifnot(
 )
 ```
 
-The chunk checks the score file against the held-out token count, recomputes both
-ratios, and matches the parser and score fingerprints in the metadata. The
-parser attaches 2,899 of 4,007 held-out tokens to the right head word, about
-0.72, and gets both head and relation right for 2,629 tokens, about 0.66.
+The chunk compares the held-out token count with the recorded value.
+It recomputes both ratios from
+stored numerators. It also compares parser and score fingerprints with the
+metadata. The recorded parser result has 2,899 correct heads among 4,007
+held-out tokens, about 0.72. Both head and relation are correct for 2,629
+tokens, about 0.66.
 
 ## Parse fixed tokens
 
-The parser receives one token per line because the model has no tokenizer. The
-vertical text block hands udpipe each sentence as a stack of fixed tokens.
+The model has no tokenizer, so the parser receives one token per line.
+This vertical format supplies each text unit as fixed tokens.
 
 ```{r}
 parser <- udpipe_load_model(parser_model_path)
@@ -289,28 +291,34 @@ stopifnot(
 )
 ```
 
-The parse says `provided` is the **root**, the central word of this sentence.
-`training` attaches to `provided` as a passive subject, and `is` attaches as a
-passive helper verb. Inside `Paid 12-week`, the parser is wrong. It makes `Paid`
-part of `week` and hangs `12` off `Paid`. A reader would attach `Paid` to
-`training` and `12` to `week`.
+The parse identifies `provided` as the **root**, the sentence's central word.
+It attaches `training` to `provided` as a passive subject.
+It attaches `is` as a passive helper verb.
+The parser misinterprets `Paid 12-week` by attaching `Paid` to `week` and `12`
+to `Paid`. A reader would attach `Paid` to `training` and `12` to `week`.
 
-The parse answers half the team's question. `training` is the thing provided.
-Nothing in the sentence says who provides it, because English lets a passive
-drop the doer. There is no word for the parser to point at.
+The parse identifies `training` as the thing provided.
+The sentence does not name its provider. English passive constructions can
+omit the agent, so no provider token exists for the parser to identify.
 
-These tables use a few relation labels. `root` marks the central word.
-`compound` links words inside a larger noun phrase. `flat` is for flat name-like
-material, though it is a bad fit for `12` here. `nummod` marks a numeric
-modifier, and `nmod` marks a nominal modifier. `nsubj:pass` marks a passive
-subject, `aux:pass` marks a passive helper, `ccomp` marks a clausal complement,
-and `punct` marks punctuation.
+The tables use these relation labels:
+
+- `root` marks the central word.
+- `compound` links words within a larger noun phrase.
+- `flat` marks name-like sequences without internal hierarchy. It is incorrect
+  for `12` here.
+- `nummod` marks a numeric modifier.
+- `nmod` marks a nominal modifier.
+- `nsubj:pass` marks a passive subject.
+- `aux:pass` marks a passive helper.
+- `ccomp` marks a clausal complement.
+- `punct` marks punctuation.
 
 ## Compare one sentence with spaCy
 
-The same idea can come from a different tool. spaCy's English parser does not
-use the Universal Dependencies label set. It uses another scheme, which is why
-`nsubjpass` will not be found in the UD documentation linked below.
+spaCy's English parser uses a different label scheme from Universal
+Dependencies. The linked UD documentation therefore does not explain its
+`nsubjpass` label.
 
 ```{r}
 spacy_s001 <- spacy_parse(
@@ -368,10 +376,11 @@ stopifnot(
 )
 ```
 
-The two tools produce different structures, not a spelling difference in the
-labels. spaCy attaches `Paid` to `training` and `12` to `week`; UDPipe attaches
-`Paid` to `week` and `12` to `Paid`. Both outputs still have tokens, heads, and
-labels, but they disagree about this sentence.
+The tools produce different structures, not merely different label spellings.
+spaCy attaches `Paid` to `training` and `12` to `week`.
+UDPipe attaches `Paid` to `week` and `12` to `Paid`.
+Both outputs contain tokens, heads, and labels, but their sentence analyses
+differ.
 
 ## Read morphology in context
 
@@ -416,9 +425,9 @@ is why the relation labels include passive forms.
 
 ## Compare parsing with tagging
 
-A parser score needs its own baseline. The chunk below uses a deliberately weak
-one: attach each token to the token before it, with the first token in a sentence
-attached to the root.
+A parser score needs a baseline.
+The following weak baseline attaches each token to the previous token.
+It attaches the first sentence token to the root.
 
 ```{r}
 tagger_curve <- read_csv(
@@ -501,19 +510,22 @@ stopifnot(
 )
 ```
 
-Attaching every token to the word before it gets 304 of 4,007 heads right. The
-trained parser gets 2,899 heads right, about 0.72. The tagger's 0.91 belongs to
-a different task with a different set of choices, so the table keeps it separate.
-The head-and-relation row is stricter by construction: it can be right only when
-the head is right. These numbers come from one train-and-test split of thirteen
-weblog posts, and tokens inside a post are related because vocabulary, topic, and
-author repeat.
+The previous-token baseline has 304 correct heads among 4,007 tokens.
+The trained parser has 2,899 correct heads, about 0.72.
+The tagger's 0.91 describes a different task with different choices.
+The table therefore reports tagging separately.
+Correct head-and-relation assignment requires a correct head, so that measure
+is stricter.
 
-## Check Riverton roots
+These numbers come from one train-and-test split of thirteen weblog posts.
+Tokens within a post share vocabulary, topic, and author, so they are not
+independent.
 
-The held-out score is a warning, not a local audit. Because the Riverton set has
-only 28 sentences, the lesson can compare each parser root with a hand-chosen
-root for the sentence.
+## Examine Riverton roots
+
+The held-out score does not evaluate local text.
+The Riverton set contains only 28 text units.
+The lesson compares each parser root with a hand-chosen root for that unit.
 
 ```{r}
 parser_roots <- parsed |>
@@ -574,7 +586,7 @@ root_mismatches <- root_audit |>
 knitr::kable(
   root_mismatches,
   col.names = c("Sentence ID", "Hand root", "Parser root", "Root matches"),
-  caption = "Riverton sentences where the parser root needs review",
+  caption = "Riverton text units whose parser root needs a check",
   row.names = FALSE
 )
 ```
@@ -594,9 +606,9 @@ stopifnot(
 )
 ```
 
-Of the 28 Riverton sentences, the parser picks the hand-marked root in 21 and
-misses 7. The misses cluster in noun-heavy lines and flyer headings, where there
-is little sentence structure for the parser to hold on to.
+The parser matches 21 of the 28 hand-marked Riverton roots and misses 7.
+Errors concentrate in noun-heavy lines and flyer headings with little sentence
+structure.
 
 ```{r}
 included_parse <- parsed |>
@@ -617,7 +629,7 @@ included_parse <- parsed |>
 knitr::kable(
   included_parse,
   col.names = c("Token", "Head word", "Relation"),
-  caption = "A Riverton parse that needs human review",
+  caption = "A Riverton parse for human checks",
   row.names = FALSE
 )
 ```
@@ -633,21 +645,22 @@ stopifnot(
 ```
 
 In `Product training is included`, the main claim is that training is included.
-The parser has made `Product` the head of the sentence and hung `included`
-beneath it as a subordinate clause, so the parser has the sentence inside out.
+The parser incorrectly selects `Product` as the sentence head.
+It attaches `included` beneath `Product` as a subordinate clause, reversing the
+intended dependency.
 
 ## What to remember
 
 - A dependency parse links each token to a head word and names the relation.
 - UDPipe and spaCy disagree on the heads inside `Paid 12-week`.
-- A previous-token baseline gets 304 of 4,007 weblog heads right.
-- The trained parser gets 2,899 of 4,007 heads right, about 0.72.
+- A previous-token baseline assigns correct heads to 304 of 4,007 weblog tokens.
+- The trained parser assigns correct heads to 2,899 of 4,007 tokens, about 0.72.
 - The parser misses 7 of 28 hand-marked Riverton roots.
 - Parser links on job-posting text need direct inspection.
 
-Use dependency links as leads for reading, especially around passives. On this
-corpus the useful warning is concrete: seven root choices need review before any
-downstream count trusts them.
+Use dependency links to select text for checks, especially passive
+constructions. Examine the seven disputed roots before using them in downstream
+counts.
 
 ## Sources
 

@@ -1,7 +1,7 @@
 ---
 title: "Extracting text from an image"
-subtitle: "Run OCR and compare the result with a known transcript"
-description: "Learn what optical character recognition can recover from a training flyer and how to check its errors."
+subtitle: "Run OCR. Compare the result with a known transcript."
+description: "Learn what optical character recognition can recover from a training flyer and how to measure its errors."
 categories: [source data loading, OCR, workforce research]
 ---
 
@@ -11,14 +11,14 @@ covers a stipend, a class schedule, prior experience, and an application date.
 Losing or reversing a phrase would change what a person understood about the
 program.
 
-**Optical character recognition**, shortened to **OCR**, estimates which text
-appears in an image. The team will run OCR, compare the result with a
-known reference transcript, and keep both the image and extracted text. Recovery
-comes before any attempt to classify what the flyer says.
+**Optical character recognition**, or **OCR**, estimates which text appears in
+an image. The team will compare OCR output with a known reference transcript.
+It will keep the image and extracted text. Text recovery precedes classification
+of the flyer's claims.
 
 ::: {.callout-note}
-The flyer and program are fictional. The image was generated for this lesson,
-and the transcript was written from the source text that created it.
+The flyer and program are fictional. The author generated the image for this
+lesson and wrote the transcript from the image's source text.
 :::
 
 ::: {.callout-tip}
@@ -26,12 +26,12 @@ and the transcript was written from the source text that created it.
 
 By the end of this lesson, you will be able to:
 
-- explain the difference between digital text and text inside an image;
-- run the Tesseract OCR engine from R;
-- compare OCR output with a known reference transcript;
-- interpret character-level edit distance;
-- report character and word error rates for a damaged image; and
-- identify conditions that make OCR output less reliable.
+- explain the difference between digital text and text inside an image.
+- run the Tesseract OCR engine from R.
+- compare OCR output with a known reference transcript.
+- interpret character-level edit distance.
+- report character and word error rates for a damaged image.
+- describe conditions that increase OCR errors.
 :::
 
 ```{r}
@@ -41,7 +41,7 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Inspect the source image
+## Examine the source image
 
 ![Fictional training flyer used for the OCR example](../data/workforce/training-flyer.png){#fig-training-flyer width=720 height=480 fig-alt="A fictional Riverton workforce training flyer. A complete text transcript follows."}
 
@@ -52,11 +52,11 @@ stopifnot(identical(getOption("warn"), 2L))
 > No prior experience required<br>
 > Apply by October 15
 
-The adjacent text is the complete flyer transcript. It is needed even when OCR
-is available because automated extraction can be wrong or may not run in a
-reader's browser. The image remains the source; OCR is one reading of it.
+The adjacent text gives the complete flyer transcript. Readers need that
+transcript because OCR can make errors or fail to run in their browser.
+The image remains the source. OCR provides one interpretation of the image.
 
-The checked transcript contains six lines.
+The reference transcript contains six lines.
 
 ```{r}
 library(readr)
@@ -169,9 +169,9 @@ stopifnot(
 )
 ```
 
-The transcript is the comparison source for this controlled example. In real
-research, the reference should be checked by people who can read the document
-and understand its language and layout.
+The transcript is the comparison source for this controlled example.
+In real research, qualified readers must examine the reference.
+Those readers need to understand the document's language and layout.
 
 ## Run OCR
 
@@ -213,10 +213,10 @@ stopifnot(
 )
 ```
 
-The published transcript is the committed output recorded with native
-Tesseract 5.3.2. The host engine still runs as a diagnostic, but its result does
-not change the displayed transcript or metrics. The exact match belongs to this
-image and recorded software version; it is not a general OCR accuracy claim.
+The published transcript uses committed output from native Tesseract 5.3.2.
+The host engine runs a diagnostic, but its output does not change the displayed
+transcript or metrics. The exact match applies to this image and software
+version. It does not establish general OCR accuracy.
 
 ```{r}
 ocr_provenance <- tibble(
@@ -266,7 +266,7 @@ also preserves the raw output recorded with native Tesseract 5.3.2 in
 ## Measure the difference
 
 **Edit distance** counts the smallest number of character insertions,
-deletions, or substitutions needed to turn one text into another. We normalize
+deletions, or substitutions needed to convert one text to another. We normalize
 case and punctuation before comparing because the research question concerns
 the words, not the flyer styling.
 
@@ -313,24 +313,25 @@ stopifnot(
 )
 ```
 
-An edit distance of zero means that the normalized texts match exactly. This is
-not a universal character-error rate: normalization removed case, punctuation,
-and line boundaries, and the denominator includes spaces. The code separately
-requires every raw line and the critical experience statement to match
-exactly.
+An edit distance of zero means that the normalized texts match exactly.
+This is not a universal character-error rate. Normalization removed case,
+punctuation, and line boundaries, and the denominator includes spaces.
+The code separately requires exact matches for every raw line and the critical
+experience statement.
 
 ## Damage the image and measure what is lost
 
-A flyer generated at 1200 pixels wide and read at full size is the best case
-this pipeline will ever see. Real material arrives photographed at an angle,
-faxed, scanned at low resolution, or printed with a failing toner cartridge.
+This 1200-pixel-wide flyer at full size represents ideal conditions for the
+pipeline. Real material can include angled photographs, faxes, low-resolution
+scans, or prints from failing toner cartridges.
 
-The image below is degraded inside the lesson so the damage is reproducible.
-Two things happen to it. Every third row and column is kept, which reduces it
-to a third of its size, and every third remaining row is lightened, which
-imitates the banding a tired scanner produces. Both steps are arithmetic on the
-pixel array, with no randomness, so the same page produces the same file every
-time it renders.
+The lesson degrades the image with two reproducible operations.
+First, it retains every third row and column, reducing each dimension to a
+third of its original size. Then it lightens every third remaining row to
+imitate scanner banding.
+
+Both operations use arithmetic on the pixel array without randomness.
+Each render therefore produces the same file.
 
 ```{r}
 keep_every <- 3L
@@ -403,14 +404,16 @@ metrics below remain tied to the recorded 5.3.2 output.
 
 ### Character and word error rates
 
-Two rates are standard for this comparison. **Character error rate**, or CER,
-divides the character-level edit distance by the number of characters in the
-reference. **Word error rate**, or WER, does the same with whole words, so a
-word that is wrong in one letter counts once rather than once per letter.
+Two standard rates describe this comparison.
+**Character error rate**, or CER, divides character-level edit distance by the
+number of reference characters. **Word error rate**, or WER, applies the same
+calculation to whole words. A word with one incorrect letter therefore counts
+as one word error.
 
-Word-level distance needs its own small calculation, because `adist()` compares
-characters. The function below fills a table of costs, one row per reference
-word and one column per observed word, and reads the answer from the corner.
+Word-level distance needs a separate calculation because `adist()` compares
+characters. The following function fills a cost table.
+Rows represent reference words, and columns represent observed words.
+The function returns the value in the final row and column.
 
 ```{r}
 word_edit_distance <- function(reference_words, observed_words) {
@@ -563,42 +566,43 @@ stopifnot(
 )
 ```
 
-Read the table beside the rate. A CER of 0.558 means 0.558 character edits per
-reference character; it is not a fraction of information preserved and has no
-meaningful midpoint. Insertions can even push CER or WER above one. Here, the
-remaining words are not a faithful partial transcript of the flyer.
+Read the table alongside the rate. A CER of 0.558 means 0.558 character edits
+per reference character. It does not measure the fraction of information
+preserved and has no meaningful midpoint. Insertions can increase CER or WER
+above one. Here, the remaining words do not form a faithful partial transcript.
 
-Two limits belong with these numbers. Both rates are computed against one
-transcript of one image, so they describe this pair and estimate nothing about
-OCR in general. The word rate also assumes that words are separated by spaces,
-which is true for this English flyer and false for Chinese, Japanese, and Thai,
-where a character rate or a script-aware segmentation is needed instead.
+Both rates compare one transcript with the output for one image.
+They describe this pair, not OCR performance in general.
+
+The word rate also assumes that spaces separate words.
+That assumption works for this English flyer but not for Chinese, Japanese,
+and Thai. Those scripts require a character rate or script-aware segmentation.
 
 ## OCR errors are not evenly distributed
 
 OCR becomes harder when a source has:
 
-- low resolution, blur, shadows, or skew;
-- handwriting or decorative fonts;
-- tables, columns, stamps, or text over images;
-- uncommon symbols or several languages;
-- damaged pages; or
+- low resolution, blur, shadows, or skew.
+- handwriting or decorative fonts.
+- tables, columns, stamps, or text over images.
+- uncommon symbols or several languages.
+- damaged pages.
 - a reading order that is not visually obvious.
 
 An average error rate can hide the error that matters most. Changing
 `"No prior experience required"` to `"prior experience required"` would reverse
-the meaning while affecting only a few characters. The team must inspect
+the meaning while affecting only a few characters. The team must examine
 important fields directly, not rely on one summary score.
 
-## Preserve the source and the correction trail
+## Preserve the source and correction history
 
 Keep:
 
-1. the source image;
-2. the OCR engine and language settings;
-3. the unedited OCR output;
-4. the reviewed and corrected transcript;
-5. the person or process that checked it; and
+1. the source image.
+2. the OCR engine and language settings.
+3. the unedited OCR output.
+4. the reviewed and corrected transcript.
+5. the identity of the reader or process that performed the checks.
 6. any uncertainty about layout or unreadable text.
 
 Do not overwrite raw OCR with corrections. Separate fields make later edits
@@ -608,16 +612,16 @@ visible and let another reviewer return to the source.
 
 - Text inside an image must be recognized before ordinary text analysis.
 - OCR output is an estimate, not a transcription guarantee.
-- Compare important output with a human-checked reference.
-- Report character and word error rates, and say which image produced them.
+- Compare important output with a reference after human checks.
+- Report character and word error rates. Identify the source image.
 - One clean image cannot estimate accuracy on damaged material.
-- Measure errors and inspect meaning-changing cases.
-- Preserve the image, raw output, corrected text, and review history.
+- Measure errors. Examine cases where errors change meaning.
+- Preserve the image, raw output, corrected text, and correction history.
 
-The archived job cards and checked flyer transcript now provide traceable text
-about training, schedules, requirements, and skills. Extraction has not decided
-what any sentence means. Human classification follows, using a versioned
-annotation codebook to record those reading decisions.
+The archived job cards and reference transcript provide traceable text about
+training, schedules, requirements, and skills. Extraction does not explain
+the meaning of each sentence. Human classification follows, with a versioned
+annotation codebook to record the decisions.
 
 ## Sources
 

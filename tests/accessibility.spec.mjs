@@ -2,6 +2,7 @@ import { readdirSync } from "node:fs";
 import { join, posix } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { inspectText } from "../scripts/check-plain-language.mjs";
 
 const siteDir = "_site";
 
@@ -36,9 +37,76 @@ const pages = [
 ];
 const totalTasks = 81;
 
+test("Map and Beyond are available in desktop and mobile navigation", async ({ page }) => {
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const header = page.locator("#quarto-header");
+    if (width < 992) await header.getByRole("button", { name: "Toggle navigation" }).click();
+    await header.getByRole("link", { name: "Beyond the periodic table", exact: true }).click();
+    await expect(page.locator("h1")).toHaveText("Beyond the periodic table");
+    if (width < 992) await header.getByRole("button", { name: "Toggle navigation" }).click();
+    await header.getByRole("link", { name: "Map", exact: true }).click();
+    await expect(page.locator("#nlp-task-map")).toBeVisible();
+  }
+});
+
+test("six sidebar stages retain every lesson in task order", async ({ page }) => {
+  await page.goto("/advanced/index.html");
+  const stages = [
+    ["1. Source and training data", 1, 13],
+    ["2. Language structure", 14, 42],
+    ["3. Models and analysis", 43, 62],
+    ["4. Language generation", 63, 68],
+    ["5. Language systems", 69, 74],
+    ["6. Visualization", 75, 81]
+  ];
+  for (const [name, first, last] of stages) {
+    const group = page.locator("#quarto-sidebar li.sidebar-item-section").filter({
+      has: page.getByText(name, { exact: true })
+    });
+    await expect(group).toHaveCount(1);
+    const numbers = await group.locator("a[href]").evaluateAll((links) => links
+      .map((link) => link.getAttribute("href").match(/\/(\d{2})-[^/]+\.html$/)?.[1])
+      .filter(Boolean).map(Number));
+    expect(numbers).toEqual(Array.from({ length: last - first + 1 }, (_, index) => first + index));
+    const lessonLinks = group.locator('a[href$=".html"]');
+    if (!(await lessonLinks.first().isVisible())) {
+      await group.getByText(name, { exact: true }).click();
+    }
+    await expect(lessonLinks.first()).toBeVisible();
+    await expect(lessonLinks.last()).toBeVisible();
+    const visibleNumbers = await lessonLinks.evaluateAll((links) => links.map((link) =>
+      Number(link.innerText.trim().match(/^(\d+)\.\s+/)?.[1])));
+    expect(visibleNumbers).toEqual(numbers);
+  }
+});
+
+for (const path of pages) {
+  test(`Rendered authored-prose limits: ${path}`, async ({ page }) => {
+    const response = await page.goto(path);
+    expect(response.status()).toBe(200);
+    const parts = await page.locator("main p, main li, main figcaption, main caption, main h1, main h2, main h3, main h4, main h5, main h6").evaluateAll((elements) => elements.flatMap((element) => {
+      if (element.closest("pre") || (element.closest("table") && element.tagName !== "CAPTION")) return [];
+      const copy = element.cloneNode(true);
+      for (const nested of copy.querySelectorAll("ul, ol, p, pre, table, .anchorjs-link")) nested.remove();
+      for (const unit of copy.querySelectorAll("code, .math")) unit.replaceWith(" CODE ");
+      if (element.closest("#sources")) {
+        for (const title of copy.querySelectorAll("a")) title.replaceWith(" TITLE ");
+      }
+      return [{ kind: /^H[1-6]$/.test(element.tagName) ? "label" : "paragraph", text: copy.textContent.trim() }];
+    }));
+    for (const text of await page.locator("main img[alt]").evaluateAll((images) => images.map((image) => image.alt))) {
+      parts.push({ kind: "paragraph", text });
+    }
+    const findings = parts.flatMap(({ text, kind }) => inspectText(text, kind).map((finding) => `${path}: ${finding}`));
+    expect(findings, findings.join("\n")).toEqual([]);
+  });
+}
+
 test("advanced lesson keeps its expected results and routes", async ({ page }) => {
   await page.goto("/");
-  await page.locator("main a[href$='advanced/index.html']").click();
+  await page.locator("main a[href$='advanced/index.html']").first().click();
   await expect(page.locator("h1")).toHaveText("Beyond the periodic table");
   for (const name of ["LangChain", "LangGraph", "LangSmith", "vitals"]) {
     await expect(page.locator("main")).toContainText(name);

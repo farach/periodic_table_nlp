@@ -1,21 +1,21 @@
 ---
 title: "Building a vocabulary from tokens"
-subtitle: "Choose which words to keep and measure what falls outside"
-description: "Learn how frequency cutoffs and out-of-vocabulary checks shape a small workforce text vocabulary."
+subtitle: "Choose which words to keep and measure excluded tokens"
+description: "Learn how frequency cutoffs and out-of-vocabulary checks affect a small workforce text vocabulary."
 categories: [word parsing, vocabulary, workforce research]
 ---
 
-After the tokenization check, the coordinator prints the Riverton Workforce
-Lab's word tokens on a single sheet. The list looks manageable until the
-repeated words and one-time words sit side by side. A vocabulary cannot keep
-everything in a large project without a rule.
+After tokenization, the coordinator prints the Riverton Workforce Lab's word
+tokens. The list contains frequent words and words that occur only once.
+A large project needs a rule for vocabulary selection.
 
-The team decides to test the rule on its small teaching data. It will build a
-word list from the job-detail rows, then ask how much of the training flyer
-falls outside that list.
+The team measures the rule's effects on its small teaching dataset.
+It builds a word list from the job-detail rows.
+Then it measures the flyer tokens absent from that list.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching.
 :::
 
 ::: {.callout-tip}
@@ -23,10 +23,10 @@ The Riverton Workforce Lab, its job board, and its training flyer are fictional 
 
 By the end of this lesson, you will be able to:
 
-- distinguish tokens from types;
-- count a word vocabulary and its one-time terms;
-- apply minimum-frequency cutoffs;
-- measure out-of-vocabulary words on held-out text; and
+- distinguish tokens from types.
+- count a word vocabulary and its one-time terms.
+- apply minimum-frequency cutoffs.
+- measure out-of-vocabulary words on held-out text.
 - compare a word vocabulary with a subword vocabulary.
 :::
 
@@ -39,10 +39,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Count tokens and types
 
-The first visible chunk loads readr for files, dplyr, tidyr, and tibble for
-tables, purrr for repeated work, tokenizers for word tokens, and tokenizers.bpe
-for subword tokens. A **tibble** is a table that prints its size and column
-types.
+The first chunk loads readr for files and dplyr, tidyr, and tibble for tables.
+It also loads purrr for successive operations, tokenizers for word tokens,
+and tokenizers.bpe for subword tokens. A **tibble** is a table that prints its
+size and column types.
 
 ```{r}
 library(readr)
@@ -130,16 +130,17 @@ counts use the default `tokenizers::tokenize_words()` rule: lowercase text, drop
 punctuation, and split hyphenated material. Across the 28 rows, that rule
 creates 153 tokens and 96 types. Of those types, 72 appear exactly once.
 
-The most frequent word types are ordinary function words and repeated terms
-from the notices: `is` appears 13 times, `a` and `required` appear 7 times each,
-`the` and `training` appear 5 times each, `are` and `experience` appear 4 times
-each, and `of` appears 3 times.
+The most frequent types are function words and common notice terms.
+The word `is` appears 13 times. Both `a` and `required` appear 7 times each.
+Both `the` and `training` appear 5 times each.
+Both `are` and `experience` appear 4 times each.
+The word `of` appears 3 times.
 
-## Split the data before testing a vocabulary
+## Split the data before vocabulary evaluation
 
-An honest check cannot build a vocabulary and test it on the same rows. The Lab
-uses the 22 job-detail rows to build the word list and the 6 flyer rows to test
-what the list has not seen.
+Evaluation on new text requires rows separate from vocabulary construction.
+The Lab builds its word list from the 22 job-detail rows.
+It uses the 6 flyer rows to find unseen tokens.
 
 ```{r}
 job_rows <- sentences |>
@@ -195,9 +196,9 @@ stopifnot(
 )
 ```
 
-The job-detail rows contain 133 tokens and 86 types. The flyer rows contain 20
-tokens. The split is small, but it keeps the test from grading a vocabulary on
-the same text that created it.
+The job-detail rows contain 133 tokens and 86 types.
+The flyer rows contain 20 tokens. The small split keeps evaluation separate
+from the text that created the vocabulary.
 
 ## Keep words by minimum frequency
 
@@ -273,12 +274,12 @@ job-detail tokens lose their own word type under each cutoff.
 
 ## Measure out-of-vocabulary words
 
-An **out-of-vocabulary** token is a token that the vocabulary does not contain.
-Here the vocabulary comes from the 22 job-detail rows. The test asks which
-flyer tokens fall outside that job-built list.
+An **out-of-vocabulary** token is absent from the vocabulary.
+Here the vocabulary comes from the 22 job-detail rows.
+The comparison finds flyer tokens absent from that list.
 
 A retrieval system can keep a different kind of vocabulary. A search index
-stores whole terms and counts for retrieval, while a tokenizer or subword model
+stores whole terms and counts for retrieval. A tokenizer or subword model
 stores the pieces it will use to encode new text.
 
 ```{r}
@@ -351,23 +352,24 @@ For those 10 token occurrences, the job-built word list has no entry.
 
 ## Try the same split with subwords
 
-**Byte pair encoding (BPE)** starts from single characters and repeatedly glues
-together the pair that occurs most often. The Lab trains a BPE model on the
-job-detail rows only, then encodes the flyer rows. This gives the subword
-vocabulary the same held-out test as the word vocabulary.
+**Byte pair encoding (BPE)** starts from single characters.
+At each step, it merges the most frequent pair.
+The Lab trains a BPE model on job-detail rows only.
+It then encodes the flyer rows for the same held-out evaluation as the word
+vocabulary.
 
-The word tokenizer lowercases both sources, so the BPE comparison does the same.
-Holding case constant matters: otherwise the comparison would change both the
-tokenization method and the case policy. The `vocab_size = 200L` argument is a
-modeling choice that controls how many pieces the trainer can keep. The
-`coverage = 1` argument tells the trainer to keep every character it sees in the
-lowercased job-detail text. The special marker `<UNK>` is the model's way of
-saying it has no piece for this, short for "unknown".
+The word tokenizer lowercases both sources, so the BPE comparison does the
+same. This keeps the case policy constant while comparing tokenization
+methods. The `vocab_size = 200L` argument controls how many pieces the trainer
+can keep. The `coverage = 1` argument retains every character in the lowercased
+job-detail text. The marker `<UNK>`, short for "unknown", records an input
+without a vocabulary piece.
 
 When two pairs occur equally often, the trainer can merge them in different
-orders, even with `threads = 1L`. The pieces and their counts can therefore
-differ between fits. We compute counts from the fitted model and check that
-its pieces and IDs agree and decode back to the held-out text.
+orders, even with `threads = 1L`. Pieces and counts can therefore differ
+between fits. The code computes counts from the fitted model.
+It requires agreement between pieces and IDs and exact decoding of the held-out
+text.
 
 ::: {.callout-note}
 The explicit `model_path` sends the model to a temporary file during rendering.
@@ -500,7 +502,7 @@ stopifnot(
 )
 ```
 
-The like-for-like comparison is now at the word-token level. The whole-word
+Both models now have results at the word-token level. The whole-word
 vocabulary has no entry for `r nrow(unknown_flyer_rows)` of
 `r nrow(flyer_token_rows)` flyer tokens. With both sources lowercased,
 none of the `r nrow(flyer_word_bpe)` word tokens contains a BPE unknown id,
@@ -508,8 +510,8 @@ and none of the `r length(flat_flyer_ids)` BPE pieces is unknown. The subword
 model can assemble unseen words from characters and pieces learned in the job
 rows.
 
-That result belongs to this `r nrow(job_bpe_model$vocabulary)`-piece model and
-this case policy. It is not a general promise that BPE removes
+That result applies to this `r nrow(job_bpe_model$vocabulary)`-piece model and
+this case policy. It does not establish that BPE always removes
 out-of-vocabulary material. Case-sensitive input, a different writing system,
 a smaller character coverage, or another tokenizer can produce unknown ids.
 Comparing `r nrow(unknown_flyer_rows)` word tokens with
@@ -518,15 +520,15 @@ uses the `r nrow(flyer_word_bpe)` word-token outcomes.
 
 ## What to remember
 
-- Tokens are occurrences; types are distinct token values.
+- Tokens are occurrences. Types are distinct token values.
 - The 28 Riverton rows produce 153 word tokens and 96 word types.
 - Most word types in this small file appear exactly once.
-- Frequency cutoffs shrink a vocabulary and reduce token coverage.
+- Frequency cutoffs reduce vocabulary size and token coverage.
 - Held-out text exposes out-of-vocabulary words.
 - With the same lowercase policy, this BPE model encodes all 20 held-out word
-  tokens; that result is setting-specific, not a general guarantee.
+  tokens. That result applies to these settings, not every BPE model.
 
-These percentages belong only to this 28-sentence teaching corpus. They show
+These percentages apply only to this 28-unit teaching corpus. They show
 how vocabulary choices behave on the Riverton example, not how often these
 patterns occur in workforce text more generally.
 

@@ -1,6 +1,6 @@
 ---
-title: "Moving a notice from English to French"
-subtitle: "Run one fixed translation direction and inspect what survived"
+title: "Translating a notice from English to French"
+subtitle: "Generate English-to-French translations. Examine the preserved details."
 description: "Learn how a local machine-translation checkpoint changes language while preserving the source message."
 categories: [natural language generation, machine translation, evaluation]
 ---
@@ -9,20 +9,21 @@ An archive sends short notices to English- and French-speaking visitors. A
 translation must change the language while preserving the people, quantities,
 dates, permissions, and limits in the source.
 
-The model in this lesson has one direction: English to French. That direction
-belongs to the checkpoint. It is not a language choice discovered from each
-input, and it is not changed by adding a target-language label to the output.
+The model in this lesson has one direction: English to French. The checkpoint,
+or saved model, fixes that direction. The model does not choose a language from
+each input. Adding a target-language label to the output does not change the
+translation direction.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- load a revision-pinned English-to-French model and tokenizer locally;
-- keep constructed source records and generated translations tied to IDs;
-- count source tokens against the checkpoint's 512-token input limit;
-- compare translation with a source-copy baseline;
-- inspect names, numbers, and negation without calling them adequacy scores; and
+- load a fixed revision of the English-to-French model and tokenizer locally
+- keep constructed source records and generated translations linked to IDs
+- count source tokens against the checkpoint's 512-token input limit
+- compare translation with a source-copy baseline
+- examine names, numbers, and negation without treating these checks as adequacy scores
 - reserve meaning and register judgments for a bilingual reviewer.
 :::
 
@@ -68,7 +69,7 @@ model_record <- translation_model$metadata |>
 
 knitr::kable(
   model_record,
-  col.names = c("Model", "Revision", "License", "Use in this course"),
+  col.names = c("Model", "Revision", "License", "Course task"),
   caption = "Pinned local checkpoint for English-to-French translation",
   row.names = FALSE
 )
@@ -95,8 +96,8 @@ stopifnot(
 ```
 
 The package also exports `hf_translate()`, which calls a remote inference
-service. This lesson does not use it. Generation runs through the local model
-object returned by the pinned pipeline.
+service. This lesson does not use that service. Generation uses the local model
+object from the fixed pipeline.
 
 ## Read direction from the checkpoint
 
@@ -163,7 +164,7 @@ stopifnot(
 
 ## Prepare constructed notices
 
-These four English notices were written for the lesson. They are demonstrations,
+The author wrote these four English notices for the lesson. They are demonstrations,
 not human reference translations, a held-out test set, or a population quality
 benchmark.
 
@@ -217,9 +218,9 @@ stopifnot(
 
 ## Count tokens before calling the model
 
-Marian tokenizes words into subword units. Its configured input ceiling is 512
-tokens. Truncation is not enabled here because dropping the end of a notice can
-drop its meaning.
+Marian tokenizes words into subword units, which can represent parts of words.
+Its configured input limit is 512 tokens. This lesson disables truncation
+because removing the end of a notice can remove essential meaning.
 
 ```{r}
 translation_budget <- translation_inputs |>
@@ -245,7 +246,7 @@ knitr::kable(
     "Input limit",
     "Fits without truncation"
   ),
-  caption = "Input budgets are checked before translation",
+  caption = "The workflow compares input counts with the limit before translation",
   row.names = FALSE
 )
 ```
@@ -260,22 +261,24 @@ stopifnot(
 )
 ```
 
-For a longer source, setting `truncation = TRUE` would discard source tokens and
-become a lossy data decision. A production workflow would section the document
-or stop for review.
+For a longer source, setting `truncation = TRUE` would discard source tokens.
+This setting would cause data loss. A production workflow would divide the
+document into sections or stop for human checks.
 
 ## Generate French candidates
 
-The source text goes directly to the encoder. The checkpoint ships with a
-four-beam generation default. The course helper overrides it with
-`num_beams = 1` and `do_sample = FALSE`, a deterministic greedy choice used to
-keep this teaching workflow consistent. It is not a claim that the checkpoint's
-four-beam setting is nondeterministic or inferior.
+The source text goes directly to the encoder. The checkpoint uses four-beam
+generation by default, which compares four candidate sequences. The course
+helper instead uses `num_beams = 1` and `do_sample = FALSE`. This deterministic
+greedy choice selects the highest-scoring next token and keeps the teaching
+workflow consistent. It does not imply that the four-beam setting is
+nondeterministic or inferior.
 
-The output limit is 80 newly generated tokens. The returned record separately
-identifies whether the decoder emitted its end-of-sequence token and whether it
-used the full output budget. Both can be true when the checkpoint forces EOS at
-the cap. Neither field proves that the translation is complete for a reader.
+The output limit is 80 newly generated tokens. The returned record shows
+whether the decoder emitted its end-of-sequence token, or EOS. A separate field
+records whether generation used the full output allowance. Both fields can be
+true when the checkpoint forces EOS at the limit. Neither field proves that the
+translation is complete for a reader.
 
 ```{r}
 translation_results <- translation_budget |>
@@ -334,16 +337,16 @@ stopifnot(
 ```
 
 The copy baseline preserves the English source exactly and performs no
-translation. It prevents a changed-looking string from being treated as
-automatic evidence that the task succeeded.
+translation. A changed string alone does not establish a successful translation.
 
-## Inspect visible details
+## Examine visible details
 
-The next checks compare exact Arabic numerals, look for the protected person
-name, and look for a common French negation marker when the English source
-contains `did not`. These checks can find some clear failures. They cannot
-decide whether the sentence is grammatical, whether `must` and `may` have the
-right force, or whether the register fits the audience.
+The next checks compare exact Arabic numerals and search for the protected
+person name. They also search for common French negation markers when the
+English source contains `did not`. These checks can find some clear
+failures. They cannot establish correct grammar or preservation of the meanings
+of `must` and `may`. Nor can they establish an appropriate register, or level of
+formality, for the audience.
 
 ```{r}
 extract_numbers <- function(text) {
@@ -441,14 +444,14 @@ stopifnot(
 )
 ```
 
-No BLEU or chrF number is reported. Those metrics require a documented
+The lesson reports no BLEU or chrF number. These translation-overlap metrics require a documented
 reference corpus, preprocessing signature, and corpus-level interpretation.
 Even then, one reference cannot represent every acceptable French rendering,
 and automatic overlap does not replace bilingual judgment.
 
 `Not flagged by screen` means only that this finite string check found no
-problem. It does not verify translation adequacy. `Not applicable` means the
-source contained no protected name or negation condition to test.
+problem. It does not establish translation adequacy. `Not applicable` means the
+source contained no protected name or negation condition to examine.
 
 ## Leave approval to a bilingual reader
 
@@ -475,7 +478,7 @@ translation_review <- tibble(
     "source within the 512-token input limit",
     "decoder stopped at EOS or the output cap",
     "surface preservation checks",
-    "bilingual meaning and register review"
+    "bilingual meaning and register checks"
   ),
   status = c(
     sprintf(
@@ -510,7 +513,7 @@ translation_review <- tibble(
 
 knitr::kable(
   translation_review,
-  col.names = c("Review gate", "Status"),
+  col.names = c("Check stage", "Status"),
   caption = "Automatic checks do not grant bilingual approval",
   row.names = FALSE
 )
@@ -533,11 +536,12 @@ each pair for meaning, tone, register, and natural French.
 
 - Translation changes language while trying to preserve the source message.
 - This checkpoint's English-to-French direction is fixed in its model files.
-- Count model tokens before generation and treat truncation as data loss.
+- Count model tokens before generation.
+- Treat truncation as data loss.
 - Keep an untranslated copy baseline beside generated candidates.
 - Names, numbers, and negation checks can reveal errors but cannot prove
   adequacy.
-- Human bilingual review remains necessary before publication.
+- Human bilingual checks remain necessary before publication.
 
 ## Sources
 

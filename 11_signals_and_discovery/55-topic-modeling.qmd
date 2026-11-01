@@ -1,25 +1,25 @@
 ---
 title: "Reading topic-model output carefully"
-subtitle: "Choose k, fit LDA, and test random starts"
+subtitle: "Topic counts, LDA fitting, and random starts"
 description: "Learn how LDA groups co-occurring words, how diagnostics inform the topic count, and why no single metric chooses k for you."
 categories: [signals and discovery, topic modeling, inaugural addresses]
 ---
 
-Priya receives a table with five numbered topics and a request to name them before lunch. The table looks tidy enough: each row has a few common words and a number.
+Priya receives five numbered topics and a request to name them before lunch. Each table row contains a few common words and a number.
 
-The risk is that the neat table invites a stronger story than the model earned. A topic model will always produce topics when asked, so the analyst has to check whether the same answer appears under different random starts.
+The table can encourage interpretations that exceed the evidence. A topic model produces topics even when those topics vary across fits. The analyst must compare results from different random starts.
 
 ::: {.callout-tip}
 ## What you will learn
 
 This lesson shows how to:
 
-- define Latent Dirichlet Allocation in everyday language;
-- build a paragraph-level document-feature matrix;
-- compare candidate topic counts with three diagnostics;
-- distinguish an LDA model from the algorithm used to fit it;
-- fit a five-topic LDA model with explicit seeds;
-- match topics across runs by their top terms; and
+- explain Latent Dirichlet Allocation in everyday language.
+- build a paragraph-level document-feature matrix.
+- compare candidate topic counts with three diagnostics.
+- distinguish an LDA model from the algorithm used to fit it.
+- fit a five-topic LDA model with explicit seeds.
+- match topics across runs by their top terms.
 - compare observed agreement with a random-label null.
 :::
 
@@ -93,32 +93,29 @@ stopifnot(
 Trimming keeps words that appear at least five times in the paragraph corpus.
 The matrix has 1,377 paragraph documents and 2,587 word features.
 
-Using paragraphs rather than whole speeches gives the model 1,377 documents
-instead of 60. The tradeoff is that each document contains fewer words, so its
-topic mixture is based on less evidence. Document size is part of the model
-design, not a housekeeping choice. This is also a modest corpus for LDA, so the
-results describe these speeches and should not be treated as a general map of
-political language.
+Paragraphs give the model 1,377 documents instead of 60 whole speeches. Each
+document contains fewer words, so the model calculates an estimate of its topic mixture from
+less evidence. Document size is therefore part of model design. This modest
+corpus describes these speeches rather than political language generally.
 
 ## Compare candidate topic counts
 
-There is no single correct value of `k`. Fewer topics make broad groups; more
-topics divide the same vocabulary into finer pieces. A useful value depends on
-what the topics will be used for.
+There is no single correct value of `k`. Fewer topics create broad groups.
+More topics divide the same vocabulary into smaller groups. The appropriate
+value depends on the planned analysis.
 
 The committed diagnostic study fits `k = 3` through `k = 8` under three random
 starts. It builds the vocabulary from training speeches and evaluates
 perplexity on held-out speeches. Three measures ask different questions:
 
-- **Held-out perplexity** asks how surprised the model is by word counts in
-  speeches it did not fit. Lower is better.
+- **Held-out perplexity** measures how poorly the fitted model predicts word
+  counts in held-out speeches. Lower is better.
 - **Semantic coherence** asks whether a topic's most probable words appear
   together in the training paragraphs. Higher values, which are less negative
   here, are better.
-- **Adjusted top-word exclusivity** asks whether those words concentrate in one
-  topic rather than being spread across all topics. Higher is better. The
-  adjustment removes the \(1/k\) share expected if a word were distributed
-  equally.
+- **Adjusted top-word exclusivity** measures whether those words concentrate in
+  one topic rather than occur across all topics. Higher is better. The
+  adjustment removes the \(1/k\) share expected under equal distribution.
 
 ```{r}
 topic_diagnostics <- read_csv(
@@ -187,7 +184,7 @@ knitr::kable(
     "Perplexity rank",
     "Used below"
   ),
-  caption = "Three diagnostics disagree about the number of topics",
+  caption = "Three diagnostics give different preferred topic counts",
   row.names = FALSE
 )
 ```
@@ -235,32 +232,32 @@ between five and three.
 
 The coherence lead over three topics is only
 `r round(coherence_lead, 3)`, while the three five-topic starts span
-`r round(selected_coherence_spread, 3)`. Rank 1 is not a decisive win here.
+`r round(selected_coherence_spread, 3)`. Rank 1 does not establish a clear advantage here.
 These ranges come from three starts on one speech-grouped split, not confidence
 intervals or a validated optimum for another corpus.
 
-Do not fit several values of `k`, read every word table, and choose the one that
-is easiest to name. That lets the interpretation choose the model after seeing
-its output. Set the diagnostics and their priority first, then read the topics.
-Human review still matters because predictive fit and automated coherence do
-not guarantee that a topic is useful or even understandable.
+Do not choose `k` because its word table is easiest to name. That choice uses
+the output to select the model retrospectively. Set the diagnostics and their
+priority before reading topic tables. Then read the topics. People must examine
+the results because predictive fit and automated coherence do not
+guarantee useful or understandable topics.
 
 ::: {.callout-note}
 ## The model and fitting method are separate choices
 
 The topicmodels package can fit LDA in two ways. **Variational expectation
 maximization**, or **VEM**, approximates the model's probability distributions.
-It is the method used in this lesson. **Gibbs sampling** draws repeated samples
-from those distributions and needs choices about iterations, warm-up, and how
-many samples to keep. Both methods fit LDA, but they can return different
-answers.
+This lesson uses VEM. **Gibbs sampling** draws samples from those distributions
+across successive iterations. The analyst chooses the iteration count,
+warm-up, and number of retained samples. Both methods fit LDA but can return
+different answers.
 
-Other topic models change the assumptions. A correlated topic model allows
-topics to appear together rather than treating their proportions as
-independent. A structural topic model can use document information such as year
-when estimating topic prevalence or content. Seeded and supervised topic models
-add analyst guidance or an outcome. Those are different questions, not upgrades
-that every analysis needs.
+Other topic models use different assumptions. A correlated topic model lets
+topics appear together instead of assuming independent topic proportions.
+A structural topic model can use document information such as year to calculate
+estimates of topic prevalence or content. Seeded and supervised topic models add analyst
+guidance or an outcome. These models answer different questions and are not
+necessary for every analysis.
 :::
 
 ## Fit five topics three times
@@ -271,8 +268,8 @@ random starting values used by the LDA fitting algorithm. It does not choose
 solution.
 
 The committed diagnostic study used training and held-out speeches to inform
-that choice. The three objects below are new full-corpus fits used to inspect
-the selected resolution; they are not the diagnostic models.
+that choice. The three objects below are new full-corpus fits for inspection
+at the selected resolution. They are not the diagnostic models.
 
 ```{r}
 top_terms <- function(model, n = 10L) {
@@ -347,13 +344,13 @@ stopifnot(
 )
 ```
 
-The table is the most tempting output in topic modeling. It is also easy to overread. The row names are just topic numbers, and the words are high-probability terms under this fitted model.
+The row names identify topics by number. The words are high-probability terms under this fitted model, not validated descriptions of a subject.
 
 ## Match topics across random starts
 
 Topic numbers are arbitrary. Topic 1 in one run does not have to be topic 1 in another run. The comparison below matches topics by the largest total overlap in their top-10 term sets.
 
-A **permutation null** reruns the comparison after breaking the term labels. The **p-value** reports how often those shuffled runs match or beat the observed overlap.
+A **permutation null** computes the comparison again after shuffling topic assignments across top-term rows. The **p-value** reports how often those shuffled runs match or exceed the observed overlap.
 
 ```{r}
 permutations <- function(x) {
@@ -493,17 +490,17 @@ share 5.6, 5.4, and 5.0 of their top 10 terms on average across the three
 pairwise comparisons. Distinct topics within the seed-42 fit already share
 `r round(within_fit_mean, 1)` terms on average.
 
-The null keeps the same 50 top-term rows, including repeated high-frequency
-terms, but randomly reallocates them across five equal-sized topics. Its mean is
+The null keeps the same 50 top-term rows, which contain repeated high-frequency
+terms. It randomly allocates those rows across five equal-sized topics. Its mean is
 `r round(seed_null$null_mean, 3)`, compared with observed overlap
 `r round(seed_null$observed, 1)` and p =
-`r round(seed_null$p_value, 3)`. That is limited evidence of repeatability for
-these three `k = 5` fits, not evidence that five is more stable than another
-topic count.
+`r round(seed_null$p_value, 3)`. This is limited evidence of repeatability for
+these three `k = 5` fits. It does not establish that five topics are more
+stable than another topic count.
 
 ## Changing k changes the question
 
-A four-topic fit is useful as a sensitivity check, but it is not the same object as a five-topic fit. Once `k` changes, topics are not identified across models.
+A four-topic fit provides a sensitivity check rather than the same model as a five-topic fit. After `k` changes, topic numbers no longer identify corresponding topics across models.
 
 ```{r}
 set.seed(42)
@@ -557,23 +554,23 @@ stopifnot(
 )
 ```
 
-The first terms for the four-topic model are `must`, `people`, `government`, and `public`. Two of those are also first terms in the five-topic seed-42 fit. That number is a warning about interpretation, not a stability estimate, because changing `k` changes the model's target.
+The first terms for the four-topic model are `must`, `people`, `government`, and `public`. Two are also first terms in the five-topic seed-42 fit. This count does not give an estimate of stability because a different `k` specifies a different modeling target.
 
 ## What to remember
 
 - LDA groups words that co-occur across paragraph documents.
 - This lesson used 1,377 paragraph documents and 2,587 features.
-- No diagnostic supplies a single correct `k`; the choice depends on the
-  intended resolution and use.
+- No diagnostic supplies a single correct `k`. The choice depends on the
+  intended resolution and purpose.
 - Perplexity, coherence, and exclusivity can favor different topic counts.
-- Three full-corpus `k = 5` fits showed modest repeatability; that check did not
+- Three full-corpus `k = 5` fits showed modest repeatability. That check did not
   compare topic counts.
-- VEM and Gibbs sampling are different ways to fit LDA; other topic-model
+- VEM and Gibbs sampling fit LDA through different algorithms. Other topic-model
   families answer different questions.
-- Changing `k` changes the question, so topic labels start over.
+- A different `k` requires new topic labels.
 - A topic name is a reading aid, not a finding produced by the model.
 
-Keep the topic numbers attached to their model settings. If the setting changes, the interpretation starts over.
+Keep the topic numbers with their model settings. Reassess the interpretation after model settings change.
 
 ## Sources
 

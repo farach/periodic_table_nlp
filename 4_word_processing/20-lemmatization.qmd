@@ -5,22 +5,22 @@ description: "Learn how lemmas differ from stems and why lemmatizers built in di
 categories: [word processing, lemmatization, workforce research]
 ---
 
-Stemmed forms shorten the vocabulary, but strings such as `requir` and `provid`
-give the team pause. Those strings help a computer compare
-forms, yet they look broken on a public report.
+Stemming shortens the vocabulary but can produce strings such as `requir` and
+`provid`. These strings help computers compare forms.
+They are unsuitable as word labels in a public report.
 
-The team wants a cleaner label for words such as `is`, `provided`, and
-`classes`. It needs to know when a model's dictionary form is better than a
-rule-chopped stem, and when a model can still guess badly.
+The team wants readable labels for `is`, `provided`, and `classes`.
+It compares model-selected dictionary forms with rule-based stems.
+Model-selected forms can also be incorrect.
 
-A **lemma** is the dictionary form of a word, the form a reader might look up.
-**Lemmatization** chooses that form in context. This lesson compares a tiny
+A **lemma** is a word's dictionary form.
+**Lemmatization** chooses that form in context. This lesson compares a small
 UDPipe teaching model with a released spaCy English pipeline.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. Both models run locally; the lesson does not
-download anything while it runs.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching. Both models run locally.
+The lesson downloads nothing during execution.
 :::
 
 ::: {.callout-tip}
@@ -28,10 +28,10 @@ download anything while it runs.
 
 By the end of this lesson, you will be able to:
 
-- define a lemma in plain language;
-- compare a lemma with a Snowball stem;
-- see how tokenization changes the comparison set;
-- name what a dictionary proxy can and cannot measure; and
+- describe a lemma in plain language.
+- compare a lemma with a Snowball stem.
+- explain how tokenization changes the comparison set.
+- describe the limits of a dictionary proxy.
 - separate raw dictionary flags from broken-string counts.
 :::
 
@@ -44,12 +44,12 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Load both lemmatizers
 
-Two local lemmatizers need the same sentence file and a shared set of table
-tools. The code loads the CSV reader, tokenizers, the UDPipe teaching model, the
-spaCy bridge, SnowballC stems, and hunspell dictionary checks. UDPipe receives
-one token per line and returns lemmas from its trained tagger, which combines a
-model with dictionary and guesser components. spaCy receives the raw sentences
-through the project helper `use_project_spacy()`.
+Both local lemmatizers use the same text file and table tools.
+The code loads CSV and tokenization tools, the UDPipe model, and the spaCy
+interface. It also loads SnowballC stemming and hunspell dictionary functions.
+UDPipe receives one token per line. Its trained tagger returns lemmas through
+model, dictionary, and guesser components.
+spaCy receives raw text through the helper `use_project_spacy()`.
 
 ```{r}
 library(readr)
@@ -151,12 +151,12 @@ stopifnot(
 )
 ```
 
-The spaCy table records the exact local pipeline: `core_web_sm` version 3.8.0
-under the MIT license, running with spaCy 3.8.7. The two tools return slightly
-different token counts for the same 28 sentences: 178 from UDPipe and 179 from
-spaCy. The extra comparison problem is `driver's`, which spaCy splits into
-`driver` and `'s` while the vertical tokenizer keeps it whole. That word type has
-no spaCy lemma to compare, and the tables below drop it.
+The local pipeline is `core_web_sm` version 3.8.0 under the MIT license, with
+spaCy 3.8.7. UDPipe returns 178 tokens for the 28 text units.
+spaCy returns 179 tokens. It splits `driver's` into `driver` and `'s`, while
+the vertical tokenizer retains the whole word.
+The comparison tables exclude `driver's` because spaCy has no matching
+whole-word lemma.
 
 ## Compare lemmas with stems
 
@@ -255,10 +255,9 @@ while both parsers choose `be`. The sharper contrast is `provided`: the UDPipe
 teaching model returns `provid`, while spaCy returns `provide`. For `classes`,
 UDPipe returns `classe`, while spaCy returns `class`.
 
-The table is deliberately simple, but it hides context. A word type can receive
-different lemmas in different sentences, which is why lemmatization is contextual
-in the first place. The next check shows the type rows where at least one tool
-gave more than one lemma.
+The simplified table omits context. A word type can receive different lemmas
+in different sentences. The next check finds word types with multiple
+lemmas from at least one tool.
 
 ```{r}
 lemma_variation <- bind_rows(
@@ -301,23 +300,25 @@ stopifnot(
 )
 ```
 
-This is not an equal contest. The UDPipe model was trained in this project on a
-500-sentence excerpt for teaching. The spaCy pipeline is a released English
-pipeline packaged for general use. The methods differ too: UDPipe lemmatizes
-through its trained tagger together with dictionary and guesser machinery, while
-spaCy's English lemmatizer uses lookup tables and part-of-speech rules. The
-tools, tokenization, and training setup differ, so this lesson cannot turn this
-contrast into a causal story about training size alone.
+The systems differ in several ways.
+The project trained the UDPipe teaching model on a 500-sentence excerpt.
+spaCy provides a released English pipeline for general applications.
+UDPipe combines its trained tagger with dictionary and guesser components.
+spaCy's English lemmatizer uses lookup tables and part-of-speech rules.
 
-## Count dictionary failures
+The tools, tokenization, and training setup all differ.
+This comparison therefore cannot isolate the effect of training size.
 
-A cheap screen asks whether each lemma appears in hunspell's dictionary. It
-answers one specific question: did the model return a string that is not an
-English word? It cannot tell a correct lemma that the dictionary happens not to hold,
-such as `riverton`, from a genuine error. It is also blind to a wrong lemma that
-is a real word. If a model returned `leave` as the lemma of `left` in the phrase
-`the left column`, this check would pass it. The counts below measure broken
-strings, not correctness.
+## Count dictionary flags
+
+A simple check finds lemmas absent from hunspell's dictionary.
+Dictionary absence does not prove that a string is not an English word.
+The check cannot distinguish a valid missing entry, such as `riverton`, from
+an error. It also misses incorrect lemmas that are dictionary words.
+For example, it accepts `leave` for `left` in `the left column`.
+
+The following analysis separates dictionary-coverage and case effects from
+malformed strings. It does not measure overall lemma correctness.
 
 ```{r}
 compared_word_lemmas <- same_word_lemmas |>
@@ -416,24 +417,28 @@ stopifnot(
 )
 ```
 
-On the 95 word types both parsers return a lemma for, hunspell flags 8 UDPipe
-lemmas and 2 spaCy lemmas. Two flags are the same on both sides and are not model
-errors: `riverton` is a made-up place name, and `october` is flagged because this
-lesson lowercases lemmas before checking. spaCy returned `October`, which
-hunspell knows. Setting those aside, UDPipe produced six broken strings:
-`classe`, `diploman`, `includ`, `ne`, `provid`, and `requi`. spaCy produced none.
-Six word types is a small count from 28 sentences of one kind of text.
+Both parsers provide lemmas for 95 word types.
+Hunspell flags 8 UDPipe lemmas and 2 spaCy lemmas.
+Both systems have flags for `riverton` and `october`, which are not model
+errors. The first is a fictional place name.
+The second results from lowercasing before dictionary lookup.
+spaCy originally returned `October`, which hunspell recognizes.
+
+Excluding those cases, UDPipe produced six malformed strings:
+`classe`, `diploman`, `includ`, `ne`, `provid`, and `requi`.
+spaCy produced none. Six word types are a small count from 28 text units of
+one type.
 
 ## Decide when the cost is justified
 
-For a public table, a checked lemma is usually safer than a Snowball stem.
+For a public table, an examined lemma is usually safer than a Snowball stem.
 `is` and `are` can group under `be`, and `provided` can become `provide` rather
 than `provid`.
 
-Stemming is cheaper and often enough for rough private matching. It is a poor
-choice for display because strings such as `requir` and `schedul` are not reader
-words. Lemmatization is cleaner when it works, but the UDPipe `provid` example
-shows that a lemma column still needs checks.
+Stemming requires less computation and often suffices for approximate internal
+matching. Strings such as `requir` and `schedul` are unsuitable for display
+as words. Correct lemmas provide readable labels.
+The UDPipe `provid` example shows that lemma columns still need checks.
 
 ```{r}
 final_check <- tibble(
@@ -471,16 +476,16 @@ stopifnot(
 ## What to remember
 
 - A lemma is a dictionary form chosen for a word in context.
-- A stem is a rule-chopped comparison string.
+- A stem is a rule-based comparison string.
 - Tokenizers changed the comparison: `driver's` has no spaCy word-type match.
 - The dictionary screen flags unknown strings, not lemma correctness.
 - Raw hunspell flags are 8 for UDPipe and 2 for spaCy on 95 word types.
-- After coverage and case artifacts are set aside, the broken-string count is 6
-  for UDPipe and 0 for spaCy.
+- Excluding coverage and case artifacts, the broken-string count is 6 for UDPipe
+  and 0 for spaCy.
 
-Use lemmas for reader-facing grouping only after checking the rows that look
-broken or surprising. The important comparison here is six small-model lemma
-guesses to inspect, not a causal story about training size.
+Examine malformed or unexpected lemmas before using them to group public
+labels. This comparison finds six small-model outputs for further checks.
+It does not establish a causal effect of training size.
 
 ## Sources
 

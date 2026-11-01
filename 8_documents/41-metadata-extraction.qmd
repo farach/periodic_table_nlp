@@ -1,22 +1,21 @@
 ---
 title: "Extracting document metadata"
-subtitle: "Describe a source before analyzing its text"
+subtitle: "Describe a source before text analysis"
 description: "Learn how to extract HTML metadata and compute provenance fields for a Riverton source file."
 categories: [documents, metadata, workforce research]
 ---
 
-A saved job-board page can answer questions the sentence table cannot. The
-coordinator can read the sentence text, but a later reviewer will ask a different
-question: where did this document come from?
+A sentence table does not contain every detail about its source. The
+coordinator also needs the document's origin and recorded properties.
 
 The answer depends on **metadata**, the description of a document rather than the
-main content. Metadata lets a collection be filtered, cited, checked, and
-audited.
+main content. People use metadata to filter collections, cite documents, and
+examine their records.
 
-Lesson 6 pulled sentences out of this page and recorded a fingerprint for the
-file. This lesson looks at what the page says about itself: its title, declared
-character set, headings, and absent links. Then it separates those claims from
-facts computed from the copy on disk.
+Lesson 6 extracted sentences from this page and recorded a file fingerprint.
+This lesson examines the page's title, declared character set, headings, and
+absent links. It separates recorded claims from facts calculated from the
+stored copy.
 
 ::: {.callout-note}
 The job board page is a fictional fixture written for metadata practice.
@@ -25,11 +24,11 @@ The job board page is a fictional fixture written for metadata practice.
 ::: {.callout-tip}
 ## What you will learn
 
-Work through the examples so you can:
+This lesson shows how to:
 
-- explain what document metadata records;
-- extract a title, meta elements, headings, and link counts from HTML;
-- assemble one row per document; and
+- explain what document metadata records.
+- extract a title, meta elements, headings, and link counts from HTML.
+- assemble one row per document.
 - separate author claims from computed provenance facts.
 :::
 
@@ -42,10 +41,10 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Read the document description
 
-The metadata pass reads source lines and recorded fields, builds document
-records, repeats attribute work, checks strings, computes fingerprints, and
-extracts HTML fields. A **provenance** field records where a document came from
-and how this copy can be checked.
+The code reads source lines and recorded fields. It builds document records,
+compares strings, calculates fingerprints, and extracts HTML fields. A
+**provenance** field records a document's origin and information needed to
+examine the stored copy.
 
 ```{r}
 library(readr)
@@ -106,10 +105,10 @@ metadata, but they come from the document itself.
 
 ## Extract headings and links
 
-Headings summarize the structure around the job text. Link targets show where a
-page points. This fixture points nowhere: it was written without `<a>` elements,
-so the link count below is zero. A real job board would usually carry apply
-links; a zero count should prompt a check of the file.
+Headings summarize the structure around the job text. Link targets record
+destination addresses. The author included no `<a>` elements in this fixture,
+so its link count is zero. Real job boards usually contain application links.
+A zero count therefore requires a file check.
 
 ```{r}
 h1_text <- job_page |>
@@ -171,8 +170,8 @@ outbound targets to preserve.
 
 ## Make one row per document
 
-A collection table needs one record per document. Long lists can be collapsed for
-review while the detailed extraction stays available in code.
+A collection table needs one record per document. The display can shorten long
+lists while the code retains the complete extraction.
 
 ```{r}
 document_metadata <- tibble(
@@ -222,7 +221,7 @@ stopifnot(
 )
 ```
 
-The row gives the coordinator a document-level handle for filtering and audit. It
+The row gives the coordinator a document-level record for filtering and audit. It
 keeps the zero-link result visible rather than hiding an empty vector in code.
 
 ## Add provenance fields
@@ -314,11 +313,13 @@ stopifnot(
 )
 ```
 
-The title, charset, creation date, and retrieval status are assertions someone
-wrote down. Only the size and SHA-256 fingerprint were computed from the copy on
-disk. The SHA-256 hash follows the course rule: read the text lines, join them
-with `\n`, and hash that string. `tools::md5sum()` hashes raw file bytes, so line
-endings would be part of the answer.
+Someone recorded the title, charset, creation date, and retrieval status as
+assertions. The code calculates only the size and SHA-256 fingerprint from the
+stored copy. It follows the course's hashing rule. It reads text lines, joins
+them with `\n`, and hashes the resulting string.
+
+`tools::md5sum()` instead hashes raw file bytes, so line endings affect that
+result.
 
 ## What to remember
 
@@ -330,7 +331,7 @@ endings would be part of the answer.
 
 For this page, the title and creation date are claims. The byte count, zero
 links, and SHA-256 are checks on the saved fixture. Those checks help audit the
-file; they do not make the fixture complete or externally sourced.
+file. They do not establish completeness or an external source.
 
 ## Sources
 

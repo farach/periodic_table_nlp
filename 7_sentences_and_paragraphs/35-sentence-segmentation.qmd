@@ -5,14 +5,14 @@ description: "Learn why sentence segmentation can fail on abbreviations, decimal
 categories: [sentences and paragraphs, sentence segmentation, workforce research]
 ---
 
-One copied page mixes a flyer line, a pay line, and a job-board note before the
-coordinator tries to count its sentences. The count has to line up with the 28
-labelled Riverton rows.
+The coordinator counts sentences on a constructed page with flyer, pay, and
+job-board text. The lesson then compares sentence boundaries in the separate
+28-row Riverton file.
 
-The count looks simple until the page reaches `Dr.`, `a.m.`, `$18.50`, and a
-heading with no period. A sentence boundary is the place where one sentence ends
-and the next begins. The team has to choose a rule before it can trust the
-count.
+The page contains `Dr.`, `a.m.`, `$18.50`, and a heading without a period.
+Those forms complicate sentence counts. A **sentence boundary** marks where
+one sentence ends and the next begins. The team must state its boundary rule
+before interpreting the count.
 
 ::: {.callout-note}
 The Riverton page and CSV rows are fictional teaching data.
@@ -23,10 +23,10 @@ The Riverton page and CSV rows are fictional teaching data.
 
 By the end of this lesson, you will be able to:
 
-- explain why sentence segmentation is harder than splitting on periods;
-- compare an author-marked sentence count with three splitters;
-- inspect the fragments each splitter creates;
-- use spaCy sentence identifiers from `spacy_parse()`; and
+- explain why sentence segmentation is harder than splitting on periods.
+- compare an author-marked sentence count with three splitters.
+- examine the fragments each splitter creates.
+- use spaCy sentence identifiers from `spacy_parse()`.
 - explain why the Riverton CSV already contains an upstream boundary choice.
 :::
 
@@ -37,12 +37,12 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Build a passage with traps
+## Build a passage with difficult boundaries
 
-Here, readr brings in the Riverton CSV, dplyr and tibble build tables, purrr and
-stringr run the small splitters, tokenizers supplies a package splitter, and
+readr reads the Riverton CSV, while dplyr and tibble build tables. purrr and
+stringr execute the small splitters. tokenizers supplies a package splitter, and
 spacyr calls a trained parser. A **splitter** is a rule or model that marks
-boundaries in text.
+text boundaries.
 
 ```{r}
 library(readr)
@@ -125,7 +125,7 @@ next three contain a title, an abbreviation, a decimal, and an initial.
 ## Compare three splitters
 
 The naive rule below splits wherever it sees a full stop. `tokenizers` uses a
-sentence-splitting rule from an R package. spaCy uses a trained English pipeline;
+sentence-splitting rule from an R package. spaCy uses a trained English pipeline.
 `spacy_parse()` returns one row per token, and its `sentence_id` column records
 the boundary spaCy chose.
 
@@ -243,26 +243,25 @@ stopifnot(
 ```
 
 The naive rule finds seven pieces and none is one of the five expected
-sentences. It cuts `Dr.`, `a.m.`, `$18.50`, and `J.` apart. The package splitter
-gets the count right, but only one piece exactly matches an expected sentence. It
-attaches `Dr.` to the heading and splits `J.` away from the name.
+sentences. It splits `Dr.`, `a.m.`, `$18.50`, and `J.`. The package splitter
+returns the expected count, but only one piece exactly matches an expected sentence. It
+attaches `Dr.` to the heading and separates `J.` from the name.
 
-spaCy returns two pieces. It keeps `Dr. Vale` and `a.m.` together, then runs the
-heading, pay line, and two closing lines into fewer sentences than the layout
-implies. The pipeline segments from syntax and does not treat a line break as a
-boundary, which is what the flyer format relies on.
+spaCy returns two pieces. It preserves `Dr. Vale` and `a.m.` but combines
+lines into fewer sentences than the layout implies. The pipeline uses syntax
+instead of the line-break boundaries that the flyer requires.
 
-The spaCy pieces are rebuilt from tokens, so spaces and line breaks do not
-survive. Read the exact-match column for spaCy as a comparison against a
-reconstruction, not against the copied page. Comparing piece counts is also a
-weak test. Boundary positions matter, because a splitter can return the right
-number of pieces and put the boundaries in the wrong places.
+The code reconstructs spaCy pieces from tokens and does not preserve the
+original spaces or line breaks. The exact-match column therefore compares
+reconstructed text rather than the copied page. Equal piece counts alone do
+not establish correct segmentation. A splitter can return the expected number
+of pieces with incorrect boundary positions.
 
-## Check the Riverton rows
+## Examine the Riverton rows
 
-The 28 Riverton rows are already one sentence each by construction. That is an
-upstream boundary choice: someone made a CSV row out of each sentence or flyer
-line before this lesson reads the file.
+The file creator assigned one sentence or flyer line to each of the 28
+Riverton rows. This **upstream boundary choice** occurs before the lesson reads
+the file.
 
 ```{r}
 sentence_piece_counts <- tokenize_sentences(sentences$text) |>
@@ -310,7 +309,7 @@ stopifnot(
 
 For these stored rows, the package splitter returns one sentence piece for every
 row. That agreement does not prove the rows are the only possible boundaries. It
-only shows that this file and this splitter line up on this small teaching set.
+only shows agreement between this file and this splitter on the teaching set.
 
 ## What to remember
 
@@ -318,7 +317,7 @@ only shows that this file and this splitter line up on this small teaching set.
 - A full stop can appear inside titles, initials, abbreviations, and decimals.
 - In the test passage, the three splitters return 7, 5, and 2 pieces.
 - A correct count can still hide wrong boundaries.
-- Rebuilding model output from tokens can change the text being scored.
+- Rebuilding model output from tokens can change the text that the code scores.
 - The 28 Riverton rows already contain one upstream boundary choice.
 
 For the copied page, five expected sentences are a human layout choice. For the

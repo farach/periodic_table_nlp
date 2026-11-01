@@ -1,22 +1,23 @@
 ---
 title: "Creating additional training examples"
-subtitle: "Augment text without assuming the label survived"
-description: "Learn how to create workforce text variants and test whether they still support the intended label."
+subtitle: "Make sure augmented text still meets its label definition"
+description: "Learn how to create workforce text variants and examine whether they still meet the intended label definition."
 categories: [training data, augmentation, workforce research]
 ---
 
-The reviewer comparison left two boundary cases visible rather than treating a
-majority as truth. A different risk appears when the Riverton Workforce Lab
-creates synthetic examples: the row count can grow without adding observed
-evidence. The team can write additional sentences that follow known patterns.
-More rows may help a model learn, but a changed sentence can lose the meaning
-that justified its label. For this exercise, the team writes five fictional
-variants about training and schedules. They cannot tell a worker that a real
-course meets at a given time or provides paid training.
+The reviewer comparison preserved two disputed cases rather than treating a
+majority as truth. Synthetic examples present a different risk.
+The Riverton Workforce Lab can increase row counts without adding observed
+evidence. Additional sentences may help a model learn.
+However, a changed sentence can lose the meaning that justified its label.
 
-**Textual data augmentation** creates new training examples by transforming or
-generating text from existing examples. Augmentation changes a dataset; it does
-not collect new evidence about the labor market.
+For this exercise, the team writes five fictional variants about training and
+schedules. These variants cannot establish a real course's schedule or paid
+training offer.
+
+**Textual data augmentation** creates new training examples through changes
+or additions to existing text. Augmentation changes a dataset.
+It does not collect new evidence about the labor market.
 
 ::: {.callout-note}
 All sentences and organizations in this lesson are fictional. Augmented rows
@@ -28,12 +29,12 @@ are synthetic and remain marked as such.
 
 By the end of this lesson, you will be able to:
 
-- distinguish a new text variant from a new observation;
-- create controlled template variants;
-- use cmapr job titles without importing unsupported claims;
-- prepare a classification-check payload with huggingfaceR;
-- reject candidates whose label no longer holds; and
-- test duplication, label balance, and whether augmentation changed anything.
+- distinguish a new text variant from a new observation.
+- create controlled template variants.
+- use cmapr job titles without adding unsupported claims.
+- prepare a classification-check payload with huggingfaceR.
+- reject candidates that no longer meet their label definitions.
+- examine duplication, label balance, and effects of augmentation.
 :::
 
 ```{r}
@@ -45,11 +46,11 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Start with one purpose
 
-The team wants more examples of explicit training offers. It will not claim
-that the examples describe real employers or estimate how often training is
-offered. The next chunk loads package helpers for files, tables, strings, CMap
-examples, and model-check payloads, then reads the file with declared column
-types into a tibble.
+The team wants more examples of explicit training offers.
+The examples will not describe real employers or estimate training-offer
+frequency. The next chunk loads helpers for files, tables, strings, CMap
+examples, and model-check payloads. It then reads the file into a tibble with
+declared column types.
 
 ```{r}
 library(readr)
@@ -103,14 +104,14 @@ stopifnot(
 )
 ```
 
-The source labels were assigned under the manual annotation codebook. The
-augmentation step must preserve that label definition.
+Reviewers assigned the source labels under the manual annotation codebook.
+The augmentation step must preserve those label definitions.
 
 ## Use job titles as template values
 
-cmapr includes a ten-row teaching fixture with job-title transitions. We use
-three titles as vocabulary only. We do not carry over transition weights or
-interpret a title change as a promotion.
+cmapr includes a ten-row teaching fixture with job-title transitions.
+This example uses three titles as vocabulary only.
+It does not use transition weights or interpret title changes as promotions.
 
 ```{r}
 cmap_titles <- read_csv(
@@ -145,10 +146,10 @@ stopifnot(
 )
 ```
 
-The titles come from the cmapr package's teaching fixture. That file does not
-contain upstream record identifiers, so this lesson does not claim that the
-three strings are authenticated extracts from the full CMap dataset. The
-sentences created next are fictional.
+The titles come from the cmapr package's teaching fixture.
+That file lacks upstream record identifiers. This lesson therefore cannot
+authenticate the three strings as extracts from the full CMap dataset.
+The following sentences are fictional.
 
 ## Create controlled variants
 
@@ -272,18 +273,18 @@ stopifnot(
 )
 ```
 
-The rows carry their source family, template, second vocabulary source,
-package commit when applicable, codebook, synthetic status, intended split,
-and pending review status. Any evaluation example derived from `s001` or `s003`
-must stay outside the evaluation set with its whole family. The five rows
-remain candidates until a person checks that each is natural, useful, and
-consistent with the codebook.
+The rows retain source family, template, vocabulary source, and applicable
+package commit. They also retain codebook, synthetic status, intended split,
+and pending review status. All examples derived from `s001` or `s003` must
+remain outside the evaluation set with their source families.
+The five rows remain candidates until a person examines their wording,
+usefulness, and consistency with the codebook.
 
-## Review the candidates and reject some
+## Examine the candidates and reject some
 
-A generator that produces only usable output is a generator nobody checked. The
-Lab added two more candidates that a template would happily produce, then sent
-all seven to a reviewer.
+Examine unsuitable candidates, not just usable output.
+The Lab added two unsuitable candidates that a template could produce.
+It sent all seven candidates to a reviewer.
 
 ```{r}
 risky_variants <- tibble(
@@ -394,32 +395,31 @@ stopifnot(
 )
 ```
 
-Both rejections are the kind a template cannot catch on its own.
+Neither rejection follows from the template alone.
 
-The hedged sentence is grammatical, plausible, and wrong for the label it
-carries. Under the codebook, `training` requires an explicit offer, and "may
-include" states a possibility. Training a model on it teaches that hedged
-language marks a training offer, which is close to the opposite of the rule the
-annotators applied.
+The hedged sentence is grammatical and plausible but does not meet its
+label definition. The codebook's `training` label requires an explicit offer.
+The phrase "may include" states a possibility.
+Using that example for training would teach the model to treat uncertain
+language as an offer, contrary to the annotation rule.
 
-The repeated sentence is worse in a quieter way. It matches a reviewed row word
-for word, so it adds no information, and if its copy landed in training while
-the original sat in evaluation, the evaluation would measure recall of a string
-the model had already seen.
+The repeated sentence exactly matches a reviewed row and adds no information.
+If training used the copy and evaluation used the original, evaluation would
+measure recall of a training string.
 
-Two rejections out of seven is a rejection rate, not a defect. A generator with
-no rejections usually means the review was skipped.
+Two rejections out of seven describe the rejection rate, not a defect in the checks.
+Record the checks for every candidate and the reasons for each rejection.
 
 ## Ask whether the accepted rows changed anything
 
-The five accepted rows are safe. Safe is not the same as useful, and the way to
-find out is to run the downstream task twice.
+The five accepted rows pass the stated criteria.
+To measure their usefulness, run the downstream task with and without those rows.
 
-The task below is deliberately crude: decide whether a sentence is a training
-offer, using terms that appear in training examples and never in the others. It
-learns from the five complete postings `J001` through `J005`, and it is measured
-on the ten units from `J006` and the flyer, which no augmented row was derived
-from.
+The following simple classifier detects training offers.
+It uses terms present in training examples and absent from other categories.
+It learns from the five complete postings `J001` through `J005`.
+Evaluation uses the ten units from `J006` and the flyer.
+No augmented row derives from those evaluation sources.
 
 ```{r}
 labeled_pool <- workforce_sentences |>
@@ -538,21 +538,18 @@ stopifnot(
 )
 ```
 
-The augmented rows added five terms to the vocabulary and changed nothing. Every
-held-out decision is identical under both conditions, and both get all ten
-right.
+The augmented rows added five vocabulary terms without changing any held-out
+decision. Both conditions produce all ten correct decisions.
 
-The five new terms explain why. Four of them are job titles and one is the word
-`pathway`, all of which arrived from the template rather than from any new
-observation about how employers describe training. The word doing the work,
-`training`, was already there.
+Four new terms come from job titles, and the fifth is `pathway`.
+All five come from the template, not new observations of employer wording.
+The classifier already had the useful term `training`.
 
-The honest reading of this comparison is modest in both directions. It does not
-show that augmentation is useless; ten items with two positive cases could not
-detect a small improvement, and a stronger model with more data might use the
-extra rows differently. It does show that these five rows earned nothing here,
-which is exactly the finding a report should carry when a training pool grows by
-more than a quarter and the result does not move.
+This comparison does not establish that augmentation is useless.
+Ten items with two positive cases cannot detect a small improvement.
+A stronger model with more data might use the additional rows differently.
+Here, five additional rows increased the training pool by more than a quarter
+without changing the result. Report that absence of improvement.
 
 ## Prepare a model check without claiming a result
 
@@ -604,11 +601,12 @@ stopifnot(
 )
 ```
 
-A future model call could flag surprising candidates for review. A model label
-would not prove that the augmentation is valid. The same codebook and human
-review still apply. An actual request would also require a named model and
-provider and would transmit the text under that provider's terms. No model or
-provider is selected and no network request occurs here.
+A future model call could select candidates for further checks.
+A model label would not prove valid augmentation.
+The same codebook and human checks still apply.
+An actual request would require a named model and provider.
+It would transmit the text under the provider's terms.
+This code selects neither and makes no network request.
 
 ## A small edit can reverse the claim
 
@@ -674,38 +672,38 @@ stopifnot(
 
 Both sentences satisfy the keyword-only check. The small negation rule
 separates this pair, but it is not a general language-understanding method.
-Label preservation still requires review at the meaning level.
+Label preservation still requires a check of meaning.
 
 ## Augmentation can amplify a mistake
 
-Check:
+Examine:
 
-1. whether the label and important details remain true;
-2. whether the wording is grammatical in the intended language;
-3. whether duplicates cross into the evaluation set;
-4. whether templates make one class unnaturally easy to recognize;
-5. whether generated text adds stereotypes or private information;
-6. whether one language or job family receives most synthetic rows; and
+1. whether the label and important details remain true.
+2. whether the wording is grammatical in the intended language.
+3. whether duplicates occur in both training and evaluation sets.
+4. whether templates make one class unnaturally easy to recognize.
+5. whether generated text adds stereotypes or private information.
+6. whether one language or job family receives most synthetic rows.
 7. how conclusions change when synthetic examples are removed.
 
-Large language models can generate many variants, but scale does not settle
-these questions. Repeated training on generated text can also make a model's
-representation of the underlying distribution less varied.
+Large language models can generate many variants, but quantity does not resolve
+these questions. Repeated training on generated text can reduce variation in
+a model's representation of the underlying distribution.
 
 ## What to remember
 
 - Augmented text is synthetic data, not a newly observed case.
 - Record the source, method, label, and synthetic status.
 - A familiar word does not guarantee that meaning stayed the same.
-- Review every candidate and keep the rejected ones with their reasons.
+- Examine every candidate. Keep rejected candidates with their rejection reasons.
 - Keep augmented rows out of evaluation data derived from their source.
-- Compare results with and without synthetic examples, and report a flat result
-  as readily as a favorable one.
+- Compare results with and without synthetic examples.
+- Report unchanged results as readily as improvements.
 
-The Lab ends this stage with five accepted rows, two rejected ones, and a
-comparison that found no downstream difference. Their synthetic status and
-method remain attached. Keyword rules are the final shortcut. They face both the
-designed data and cases with negation or misleading word matches.
+The Lab ends with five accepted rows, two rejected rows, and no observed
+downstream difference. The rows retain their synthetic status and generation
+method. The next lesson examines keyword rules on the designed data.
+It also examines cases with negation or misleading word matches.
 
 ## Sources
 

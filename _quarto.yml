@@ -33,6 +33,11 @@ website:
   search: true
   page-navigation: true
   navbar:
+    left:
+      - text: "Map"
+        href: index.qmd
+      - text: "Beyond the periodic table"
+        href: advanced/index.qmd
     right:
       - text: "GitHub"
         href: "https://github.com/farach/periodic_table_nlp"
@@ -40,177 +45,189 @@ website:
     style: docked
     contents:
       - href: index.qmd
-        text: Home
+        text: Map
       - href: using-language-models.qmd
-        text: Using a language model reproducibly
+        text: Using a language model in a reproducible analysis
       - section: "Beyond the periodic table"
         contents:
           - href: advanced/index.qmd
-            text: Systems and tools
+            text: Beyond the periodic table
           - href: advanced/evaluating-systems.qmd
-            text: Compare two system versions
-      - href: 1_source_data_loading/01-bits-to-character-encoding.qmd
-        text: How computers store text
-      - href: 1_source_data_loading/02-manual-typewriting.qmd
-        text: Finding patterns in text
-      - href: 1_source_data_loading/03-loading-structured-datafile.qmd
-        text: Loading a structured data file
-      - href: 1_source_data_loading/04-generating-a-corpus.qmd
-        text: Building a text corpus
-      - href: 1_source_data_loading/05-loading-from-api.qmd
-        text: Loading data from an API
-      - href: 1_source_data_loading/06-text-and-file-scraping.qmd
-        text: Collecting text from a web page
-      - href: 1_source_data_loading/07-text-extraction-and-ocr.qmd
-        text: Extracting text from an image
-      - href: 2_training_data_generation/08-manual-annotation.qmd
-        text: Turning reading decisions into labels
-      - href: 2_training_data_generation/09-annotation-with-active-learning.qmd
-        text: Choosing which examples to label next
-      - href: 2_training_data_generation/10-training-data-providers.qmd
-        text: Inspecting provider schemas and provenance
-      - href: 2_training_data_generation/11-crowdsourcing-annotation.qmd
-        text: Working with several annotators
-      - href: 2_training_data_generation/12-textual-data-augmentation.qmd
-        text: Creating additional training examples
-      - href: 2_training_data_generation/13-rule-based-training-data.qmd
-        text: Labeling text with written rules
-      - href: 3_word_parsing/14-tokenization.qmd
-        text: Deciding what counts as a word
-      - href: 3_word_parsing/15-vocabulary-building.qmd
-        text: Building a vocabulary from tokens
-      - href: 3_word_parsing/16-morphological-tagging.qmd
-        text: Looking inside words
-      - href: 3_word_parsing/17-part-of-speech-tagging.qmd
-        text: Tagging words by their job
-      - href: 3_word_parsing/18-dependency-parsing.qmd
-        text: Drawing grammar links between words
-      - href: 4_word_processing/19-stemming.qmd
-        text: Chopping word endings
-      - href: 4_word_processing/20-lemmatization.qmd
-        text: Choosing dictionary forms
-      - href: 4_word_processing/21-normalization.qmd
-        text: Making text comparable
-      - href: 4_word_processing/22-spell-checking.qmd
-        text: Checking dictionary unknowns
-      - href: 4_word_processing/23-negation-recognition.qmd
-        text: Finding what a sentence denies
-      - href: 5_phrases_and_entities/24-n-grams.qmd
-        text: Counting nearby words with n-grams
-      - href: 5_phrases_and_entities/25-rule-based-phrase-matching.qmd
-        text: Finding phrases with readable rules
-      - href: 5_phrases_and_entities/26-dependency-noun-chunks.qmd
-        text: Finding noun chunks from grammar links
-      - href: 5_phrases_and_entities/27-named-entity-recognition.qmd
-        text: Checking named entities against domain text
-      - href: 5_phrases_and_entities/28-abbreviation-finding.qmd
-        text: Finding abbreviations without trusting capitals
-      - href: 6_entity_enrichment/29-price-parsing.qmd
-        text: Parsing prices from text
-      - href: 6_entity_enrichment/30-geocoding.qmd
-        text: Geocoding place names
-      - href: 6_entity_enrichment/31-temporal-parsing.qmd
-        text: Parsing time expressions
-      - href: 6_entity_enrichment/32-named-entity-linking.qmd
-        text: Linking named entities
-      - href: 6_entity_enrichment/33-coreference-resolution.qmd
-        text: Resolving coreference
-      - href: 6_entity_enrichment/34-text-de-identification.qmd
-        text: De-identifying text
-      - href: 7_sentences_and_paragraphs/35-sentence-segmentation.qmd
-        text: Finding sentence boundaries
-      - href: 7_sentences_and_paragraphs/36-paragraph-segmentation.qmd
-        text: Finding paragraph boundaries
-      - href: 7_sentences_and_paragraphs/37-grammar-checking.qmd
-        text: Checking small grammar rules
-      - href: 7_sentences_and_paragraphs/38-readability-scoring.qmd
-        text: Scoring readability formulas
-      - href: 8_documents/39-deduplication.qmd
-        text: Deduplicating documents
-      - href: 8_documents/40-raw-text-cleaning.qmd
-        text: Cleaning raw text
-      - href: 8_documents/41-metadata-extraction.qmd
-        text: Extracting document metadata
-      - href: 8_documents/42-language-identification.qmd
-        text: Identifying document language
-      - href: 9_model_development/43-training-models.qmd
-        text: Training models
-      - href: 9_model_development/44-evaluating-models.qmd
-        text: Evaluating models
-      - href: 9_model_development/45-explaining-models.qmd
-        text: Explaining models
-      - href: 9_model_development/46-deploying-models.qmd
-        text: Deploying models
-      - href: 9_model_development/47-monitoring-models.qmd
-        text: Monitoring models
-      - href: 10_classification/48-spam-detection.qmd
-        text: Catching scam messages
-      - href: 10_classification/49-sentiment-and-emotion-analysis.qmd
-        text: Scoring customer feeling
-      - href: 10_classification/50-intent-classification.qmd
-        text: Sorting messages by purpose
-      - href: 10_classification/51-text-classification.qmd
-        text: Turning documents into categories
-      - href: 10_classification/52-multi-label-and-multi-class-classification.qmd
-        text: One label or several labels
-      - href: 11_signals_and_discovery/53-keyword-extraction.qmd
-        text: Finding distinctive words and phrases
-      - href: 11_signals_and_discovery/54-extractive-summarization.qmd
-        text: Selecting sentences as a summary
-      - href: 11_signals_and_discovery/55-topic-modeling.qmd
-        text: Reading topic-model output carefully
-      - href: 11_signals_and_discovery/56-trend-detection.qmd
-        text: Checking word trends over time
-      - href: 11_signals_and_discovery/57-outlier-detection.qmd
-        text: Finding speeches unlike the rest
-      - href: 12_similarity/58-wordnet-synsets.qmd
-        text: Reading WordNet synsets
-      - href: 12_similarity/59-distance-measures.qmd
-        text: Measuring distance between texts
-      - href: 12_similarity/60-document-similarity.qmd
-        text: Finding similar documents
-      - href: 12_similarity/61-distributed-word-representations.qmd
-        text: Training word vectors
-      - href: 12_similarity/62-contextualized-word-representations.qmd
-        text: Reading words in context
-      - href: 13_natural_language_generation/63-next-token-prediction.qmd
-        text: Predicting the next token
-      - href: 13_natural_language_generation/64-report-writing.qmd
-        text: Writing a report from checked claims
-      - href: 13_natural_language_generation/65-machine-translation.qmd
-        text: Translating a notice to French
-      - href: 13_natural_language_generation/66-abstractive-summarization.qmd
-        text: Writing a shorter account
-      - href: 13_natural_language_generation/67-paraphrasing.qmd
-        text: Rewriting without changing meaning
-      - href: 13_natural_language_generation/68-long-text-generation.qmd
-        text: Building a document in sections
-      - href: 14_systems/69-relation-extraction.qmd
-        text: Finding relations between named things
-      - href: 14_systems/70-question-answering.qmd
-        text: Answering questions from retrieved passages
-      - href: 14_systems/71-chatbot-dialogue.qmd
-        text: Keeping dialogue state outside the model
-      - href: 14_systems/72-semantic-search-indexing.qmd
-        text: Building a semantic search index
-      - href: 14_systems/73-knowledge-base-population.qmd
-        text: Adding facts to a knowledge base
-      - href: 14_systems/74-e-discovery-and-media-monitoring.qmd
-        text: Reviewing documents for discovery and alerts
-      - href: 15_information_visualization/75-interactive-app-creation.qmd
-        text: Creating a small text app
-      - href: 15_information_visualization/76-annotated-text-visualization.qmd
-        text: Drawing labels on text spans
-      - href: 15_information_visualization/77-word-clouds.qmd
-        text: Reading a word cloud carefully
-      - href: 15_information_visualization/78-word-embedding-visualization.qmd
-        text: Projecting word vectors into two dimensions
-      - href: 15_information_visualization/79-events-on-a-timeline.qmd
-        text: Putting events on a timeline
-      - href: 15_information_visualization/80-locations-on-a-map.qmd
-        text: Mapping place mentions
-      - href: 15_information_visualization/81-knowledge-graph-visualization.qmd
-        text: Drawing a knowledge graph
+            text: Compare two system versions in R
+      - section: "1. Source and training data"
+        contents:
+          - href: 1_source_data_loading/01-bits-to-character-encoding.qmd
+            text: "1. How computers store text"
+          - href: 1_source_data_loading/02-manual-typewriting.qmd
+            text: "2. Manual examples and pattern matching"
+          - href: 1_source_data_loading/03-loading-structured-datafile.qmd
+            text: "3. Loading a structured data file"
+          - href: 1_source_data_loading/04-generating-a-corpus.qmd
+            text: "4. Building a text corpus"
+          - href: 1_source_data_loading/05-loading-from-api.qmd
+            text: "5. Loading data from an API"
+          - href: 1_source_data_loading/06-text-and-file-scraping.qmd
+            text: "6. Collecting text from a web page"
+          - href: 1_source_data_loading/07-text-extraction-and-ocr.qmd
+            text: "7. Extracting text from an image"
+          - href: 2_training_data_generation/08-manual-annotation.qmd
+            text: "8. Turning reading decisions into labels"
+          - href: 2_training_data_generation/09-annotation-with-active-learning.qmd
+            text: "9. Choosing which examples to label next"
+          - href: 2_training_data_generation/10-training-data-providers.qmd
+            text: "10. Examining provider schemas and provenance"
+          - href: 2_training_data_generation/11-crowdsourcing-annotation.qmd
+            text: "11. Working with several annotators"
+          - href: 2_training_data_generation/12-textual-data-augmentation.qmd
+            text: "12. Creating additional training examples"
+          - href: 2_training_data_generation/13-rule-based-training-data.qmd
+            text: "13. Labeling text with written rules"
+      - section: "2. Language structure"
+        contents:
+          - href: 3_word_parsing/14-tokenization.qmd
+            text: "14. Deciding what counts as a word"
+          - href: 3_word_parsing/15-vocabulary-building.qmd
+            text: "15. Building a vocabulary from tokens"
+          - href: 3_word_parsing/16-morphological-tagging.qmd
+            text: "16. Examining word parts with a dictionary"
+          - href: 3_word_parsing/17-part-of-speech-tagging.qmd
+            text: "17. Tagging words by grammatical function"
+          - href: 3_word_parsing/18-dependency-parsing.qmd
+            text: "18. Drawing grammar links between words"
+          - href: 4_word_processing/19-stemming.qmd
+            text: "19. Removing word endings with stemming rules"
+          - href: 4_word_processing/20-lemmatization.qmd
+            text: "20. Choosing dictionary forms"
+          - href: 4_word_processing/21-normalization.qmd
+            text: "21. Making text comparable"
+          - href: 4_word_processing/22-spell-checking.qmd
+            text: "22. Examining dictionary unknowns"
+          - href: 4_word_processing/23-negation-recognition.qmd
+            text: "23. Finding what a sentence denies"
+          - href: 5_phrases_and_entities/24-n-grams.qmd
+            text: "24. Counting nearby words with n-grams"
+          - href: 5_phrases_and_entities/25-rule-based-phrase-matching.qmd
+            text: "25. Finding phrases with readable rules"
+          - href: 5_phrases_and_entities/26-dependency-noun-chunks.qmd
+            text: "26. Finding noun chunks from grammar links"
+          - href: 5_phrases_and_entities/27-named-entity-recognition.qmd
+            text: "27. Examining named entities against domain text"
+          - href: 5_phrases_and_entities/28-abbreviation-finding.qmd
+            text: "28. Finding abbreviations without trusting capitals"
+          - href: 6_entity_enrichment/29-price-parsing.qmd
+            text: "29. Parsing prices from text"
+          - href: 6_entity_enrichment/30-geocoding.qmd
+            text: "30. Geocoding place names"
+          - href: 6_entity_enrichment/31-temporal-parsing.qmd
+            text: "31. Parsing time expressions"
+          - href: 6_entity_enrichment/32-named-entity-linking.qmd
+            text: "32. Linking named entities"
+          - href: 6_entity_enrichment/33-coreference-resolution.qmd
+            text: "33. Resolving coreference"
+          - href: 6_entity_enrichment/34-text-de-identification.qmd
+            text: "34. De-identifying text"
+          - href: 7_sentences_and_paragraphs/35-sentence-segmentation.qmd
+            text: "35. Finding sentence boundaries"
+          - href: 7_sentences_and_paragraphs/36-paragraph-segmentation.qmd
+            text: "36. Finding paragraph boundaries"
+          - href: 7_sentences_and_paragraphs/37-grammar-checking.qmd
+            text: "37. Checking small grammar rules"
+          - href: 7_sentences_and_paragraphs/38-readability-scoring.qmd
+            text: "38. Scoring readability formulas"
+          - href: 8_documents/39-deduplication.qmd
+            text: "39. Deduplicating documents"
+          - href: 8_documents/40-raw-text-cleaning.qmd
+            text: "40. Cleaning raw text"
+          - href: 8_documents/41-metadata-extraction.qmd
+            text: "41. Extracting document metadata"
+          - href: 8_documents/42-language-identification.qmd
+            text: "42. Identifying document language"
+      - section: "3. Models and analysis"
+        contents:
+          - href: 9_model_development/43-training-models.qmd
+            text: "43. Training models"
+          - href: 9_model_development/44-evaluating-models.qmd
+            text: "44. Evaluating models"
+          - href: 9_model_development/45-explaining-models.qmd
+            text: "45. Explaining models"
+          - href: 9_model_development/46-deploying-models.qmd
+            text: "46. Deploying models"
+          - href: 9_model_development/47-monitoring-models.qmd
+            text: "47. Monitoring models"
+          - href: 10_classification/48-spam-detection.qmd
+            text: "48. Detecting scam messages"
+          - href: 10_classification/49-sentiment-and-emotion-analysis.qmd
+            text: "49. Scoring sentiment in customer comments"
+          - href: 10_classification/50-intent-classification.qmd
+            text: "50. Sorting messages by purpose"
+          - href: 10_classification/51-text-classification.qmd
+            text: "51. Classifying documents"
+          - href: 10_classification/52-multi-label-and-multi-class-classification.qmd
+            text: "52. One label or several labels"
+          - href: 11_signals_and_discovery/53-keyword-extraction.qmd
+            text: "53. Finding distinctive words and phrases"
+          - href: 11_signals_and_discovery/54-extractive-summarization.qmd
+            text: "54. Selecting sentences as a summary"
+          - href: 11_signals_and_discovery/55-topic-modeling.qmd
+            text: "55. Reading topic-model output carefully"
+          - href: 11_signals_and_discovery/56-trend-detection.qmd
+            text: "56. Checking word trends over time"
+          - href: 11_signals_and_discovery/57-outlier-detection.qmd
+            text: "57. Finding speeches unlike the rest"
+          - href: 12_similarity/58-wordnet-synsets.qmd
+            text: "58. Reading WordNet synsets"
+          - href: 12_similarity/59-distance-measures.qmd
+            text: "59. Measuring distance between texts"
+          - href: 12_similarity/60-document-similarity.qmd
+            text: "60. Finding similar documents"
+          - href: 12_similarity/61-distributed-word-representations.qmd
+            text: "61. Training word vectors"
+          - href: 12_similarity/62-contextualized-word-representations.qmd
+            text: "62. Reading words in context"
+      - section: "4. Language generation"
+        contents:
+          - href: 13_natural_language_generation/63-next-token-prediction.qmd
+            text: "63. Predicting the next token"
+          - href: 13_natural_language_generation/64-report-writing.qmd
+            text: "64. Writing a report from evidence"
+          - href: 13_natural_language_generation/65-machine-translation.qmd
+            text: "65. Moving a notice from English to French"
+          - href: 13_natural_language_generation/66-abstractive-summarization.qmd
+            text: "66. Writing a shorter account"
+          - href: 13_natural_language_generation/67-paraphrasing.qmd
+            text: "67. Changing the wording without changing the instruction"
+          - href: 13_natural_language_generation/68-long-text-generation.qmd
+            text: "68. Building a document one section at a time"
+      - section: "5. Language systems"
+        contents:
+          - href: 14_systems/69-relation-extraction.qmd
+            text: "69. Finding relations between named things"
+          - href: 14_systems/70-question-answering.qmd
+            text: "70. Answering questions from retrieved passages"
+          - href: 14_systems/71-chatbot-dialogue.qmd
+            text: "71. Keeping dialogue state outside the model"
+          - href: 14_systems/72-semantic-search-indexing.qmd
+            text: "72. Building a semantic search index"
+          - href: 14_systems/73-knowledge-base-population.qmd
+            text: "73. Adding facts to a knowledge base"
+          - href: 14_systems/74-e-discovery-and-media-monitoring.qmd
+            text: "74. Reviewing documents for discovery and alerts"
+      - section: "6. Visualization"
+        contents:
+          - href: 15_information_visualization/75-interactive-app-creation.qmd
+            text: "75. Creating a small text app"
+          - href: 15_information_visualization/76-annotated-text-visualization.qmd
+            text: "76. Drawing labels on text spans"
+          - href: 15_information_visualization/77-word-clouds.qmd
+            text: "77. Reading a word cloud carefully"
+          - href: 15_information_visualization/78-word-embedding-visualization.qmd
+            text: "78. Projecting word vectors into two dimensions"
+          - href: 15_information_visualization/79-events-on-a-timeline.qmd
+            text: "79. Putting events on a timeline"
+          - href: 15_information_visualization/80-locations-on-a-map.qmd
+            text: "80. Mapping place mentions"
+          - href: 15_information_visualization/81-knowledge-graph-visualization.qmd
+            text: "81. Drawing a knowledge graph"
       - href: accessibility.qmd
         text: Accessibility
   page-footer:

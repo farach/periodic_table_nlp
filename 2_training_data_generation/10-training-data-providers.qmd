@@ -1,35 +1,33 @@
 ---
-title: "Inspecting provider schemas and provenance"
-subtitle: "Check schema, units, provenance, and rights before combining records"
-description: "Use onet2r, cmapr, and huggingfaceR fixtures to inspect what an outside source records and what it cannot establish."
+title: "Examining provider schemas and provenance"
+subtitle: "Examine schema, units, provenance, and rights before combining records"
+description: "Use onet2r, cmapr, and huggingfaceR fixtures to examine what an outside source records and what it cannot establish."
 categories: [training data, data providers, workforce research]
 ---
 
-Choosing two uncertain sentences for review did not broaden the Riverton
+Selecting two uncertain sentences for labeling did not expand the Riverton
 Workforce Lab's source material. It still has 28 fictional local text units.
-That is enough to practice, not enough to describe a labor market. The
-sentences cannot tell workers what options exist beyond those notices. The team
-therefore inspects three outside resources: occupation tasks from the O*NET
-database, career transitions from CMap, and a catalog of machine-learning
-dataset tasks from the Hugging Face Hub.
+Those units provide practice material, not descriptions of a labor market.
+They cannot tell workers about options beyond those notices.
 
-A **training data provider** supplies data or access to data. Provider does not
-mean neutral authority. Before combining records, the team must understand who
-created them, why, from whom, under which license, and what one row represents.
+The team examines occupation tasks from the O*NET database and career
+transitions from CMap. It also examines a catalog of machine-learning dataset
+tasks from the Hugging Face Hub.
 
-This lesson is an inspection, and the distinction matters more than it might
-sound. Everything examined below is a small example file shipped inside an R
-package for demonstration, written by the author of these lessons. Reading such
-a file can show what fields a source records, what one row means, and which
-rights questions it raises. It cannot support any statement about how good,
-complete, or accurate O*NET, CMap, or Hugging Face datasets are, and no such
-statement is made or implied here.
+A **training data provider** supplies data or access to data.
+Providers are not necessarily neutral authorities.
+Before combining records, find their creator, purpose, source population,
+license, and row meaning.
+
+This lesson examines small example files that the lesson author wrote for R
+packages. The files illustrate fields, row meanings, and rights questions.
+They cannot establish the quality, completeness, or accuracy of O*NET, CMap,
+or Hugging Face datasets. This lesson makes no such claims.
 
 ::: {.callout-note}
 Riverton Workforce Lab is fictional. The package fixtures are executable
-examples, but this lesson does not assume that every row is an authenticated
-extract from the provider named by its schema. Each fixture's status is stated
-below.
+examples, not necessarily authenticated extracts from the providers named in
+their schemas. The lesson states each fixture's status below.
 :::
 
 ::: {.callout-tip}
@@ -37,11 +35,11 @@ below.
 
 By the end of this lesson, you will be able to:
 
-- distinguish a package from the data source it helps access;
-- inspect versioned O*NET task records with onet2r;
-- load CMap example transitions with cmapr;
-- inspect Hugging Face task names with huggingfaceR;
-- test whether two sources share a unit and a join key; and
+- distinguish a package from the data source it helps access.
+- examine versioned O*NET task records with onet2r.
+- load CMap example transitions with cmapr.
+- examine Hugging Face task names with huggingfaceR.
+- examine whether two sources share a unit and a join key.
 - say what an unauthenticated example file cannot establish.
 :::
 
@@ -54,10 +52,11 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Record the software versions
 
-The R packages are tools written by the same author as this teaching site. The
-underlying data comes from separate providers with separate documentation and
-licenses. The next chunk loads table, file, JSON, repetition, and text helpers,
-then records package versions; provider calls stay qualified by package name.
+The teaching site's author also wrote the R packages.
+The underlying data comes from separate providers with separate documentation
+and licenses. The next chunk loads table, file, JSON, repetition, and text
+helpers. It then records package versions. Provider calls include their
+package names.
 
 ```{r}
 library(readr)
@@ -136,12 +135,13 @@ stopifnot(
 The project lockfile also records the Git commit for packages installed from
 GitHub. A version number alone is not enough when development code can change.
 
-## Inspect O*NET task statements
+## Examine O*NET task statements
 
-The onet2r package includes a miniature archive for examples. We ask the parser
-to treat it as release 30.3 and supply a release date. Those arguments describe
-the fixture to the function; they do not independently authenticate its bytes
-as an official O*NET database extract.
+The onet2r package includes a miniature archive for examples.
+The parser receives release 30.3 and a release date as arguments.
+Those arguments describe the fixture to the function.
+They do not independently authenticate the bytes as an official O*NET database
+extract.
 
 ```{r}
 onet_archive <- system.file(
@@ -201,20 +201,22 @@ stopifnot(
 )
 ```
 
-One row describes one occupation task. The occupation code, supplied release
-label, and source date travel with the text. The release date supplied to the
-function is not the same as the source dates displayed in individual rows.
-The three-row fixture demonstrates the onet2r schema; this lesson does not use
-it for claims about occupations or the full O*NET database.
-Task statements could inform a study of work or skills. They do not establish
-whether a particular Riverton notice offers training or evening classes.
+One row describes one occupation task. Each row retains the occupation code,
+supplied release label, and source date. The supplied release date differs
+from the source dates in individual rows.
+The three-row fixture demonstrates the onet2r schema.
+It cannot establish facts about occupations or the full O*NET database.
 
-## Inspect CMap career transitions
+Task statements could inform a study of work or skills.
+They do not establish whether a particular Riverton notice offers training or
+evening classes.
+
+## Examine CMap career transitions
 
 The cmapr package includes ten example transitions. Each row links one job
-title to a later title within a sector and region. The file is a package
-teaching fixture; it does not contain upstream record identifiers that would
-allow this lesson to authenticate it as an exact CMap subset.
+title to a later title within a sector and region.
+The teaching fixture lacks upstream record identifiers.
+This lesson therefore cannot authenticate it as an exact CMap subset.
 
 ```{r}
 cmap_path <- cmapr::cmap_example_data()
@@ -276,14 +278,14 @@ stopifnot(
 These rows demonstrate title-transition columns, not occupation task
 statements. A title change does not prove a promotion, wage gain, or
 improvement in job quality. The full CMap documentation distinguishes
-validated and model-inferred transitions; the fixture lacks that status and
-does not support population estimates.
+validated and model-inferred transitions.
+The fixture lacks that status and cannot provide population estimates.
 
-## Inspect the Hugging Face task vocabulary
+## Examine the Hugging Face task vocabulary
 
 Hugging Face hosts many independently contributed datasets. huggingfaceR
 contains a local list of task names for Hub searches. Filtering that list
-does not download a dataset or verify any dataset card.
+does not download a dataset or establish whether a dataset card is accurate.
 
 ```{r}
 classification_tasks <- huggingfaceR::hf_list_tasks(
@@ -312,7 +314,7 @@ stopifnot(
 
 The list shows the vocabulary bundled with this version of huggingfaceR, not a
 live statement about the Hub. A researcher still needs to
-inspect each candidate dataset's card, license, languages, collection method,
+examine each candidate dataset's card, license, languages, collection method,
 labels, and known limits. Being searchable on a platform is not evidence that a
 dataset is suitable.
 
@@ -393,7 +395,7 @@ knitr::kable(
   col.names = c(
     "Resource",
     "What one item means",
-    "Items inspected"
+    "Items examined"
   ),
   caption = "The three resources do not share one unit of analysis",
   row.names = FALSE
@@ -412,17 +414,17 @@ stopifnot(
 )
 ```
 
-A shared topic is not a shared unit of analysis. A title-transition row cannot
-answer whether a posting offers evening classes, and a task statement cannot be
-merged with a local sentence without a documented relationship. The team first
-needs a research question and a documented crosswalk between occupation codes,
-titles, or tasks.
+A shared topic is not a shared unit of analysis.
+A title-transition row cannot establish whether a posting offers evening
+classes. Combining a task statement with a local sentence requires a
+documented relationship. The team first needs a research question and a
+documented crosswalk between occupation codes, titles, or tasks.
+A crosswalk records relationships between different classifications.
 
-### Test the join instead of assuming it
+### Examine the join before using it
 
-The claim that these tables do not join is checkable, and checking it is more
-convincing than asserting it. Two tests are enough: do the tables share a column
-name, and do their labels for people's work ever line up?
+The code reports whether the tables have shared column names, matching titles,
+or common occupation codes. These checks find possible join keys.
 
 ```{r}
 onet_titles <- unique(onet_display$title)
@@ -496,49 +498,50 @@ stopifnot(
 )
 ```
 
-No column name is shared and no title matches exactly. One pair survives a
-loosened comparison: the O*NET fixture's `Registered Nurses` and the CMap
-fixture's `Registered Nurse`.
+The tables share no column names or exact title matches.
+One pair matches after lowercasing and removal of a final `s`.
+That pair is O*NET's `Registered Nurses` and CMap's `Registered Nurse`.
 
-That single match is the trap, not the solution. On the O*NET side each row is
-an occupation-task statement: `29-1141.00` identifies the occupation and the
-task field identifies one activity associated with it. On the CMap side each
-row is a transition between job titles, and the table carries no occupation
-code. Making the strings equal does not make the units equal, and a join on the
-loosened string would attach task statements to title transitions on the
-strength of a dropped letter.
+That string match does not establish a valid join.
+Each O*NET row describes an occupation task. The code `29-1141.00` identifies
+the occupation, and the task field identifies one activity.
+Each CMap row describes a transition between job titles without an occupation
+code.
 
-A real link needs a crosswalk: a documented mapping from titles to occupation
-codes, with rules for the many-to-many cases, published by whoever is
-responsible for the classification. Building one from string similarity and
-calling the result a crosswalk is how a plausible table acquires an
-unsupportable claim.
+Equal strings do not establish equal units.
+Joining the modified strings would link task statements to title transitions
+solely because removal of a letter produced a match.
+
+A valid link needs a documented crosswalk from titles to occupation codes.
+The classification authority must publish the crosswalk with rules for
+many-to-many cases. String similarity alone does not establish those
+relationships.
 
 ## Questions for any provider
 
 The team records what it can establish and leaves unsupported fields as
 unknown.
 
-| Resource inspected | What supplied it | Unit shown | Coverage represented here | License and rights note | Status of teaching fixture |
+| Resource examined | What supplied it | Unit shown | Coverage represented here | License and rights note | Status of teaching fixture |
 |---|---|---|---|---|---|
-| onet2r miniature archive | Installed onet2r package | Occupation task statement | 3 rows with U.S. occupation codes | O*NET database material requires CC BY 4.0 attribution; this lesson does not verify the fixture against an official archive | Schema demonstration; exact upstream extraction is not authenticated here |
-| cmapr example transitions | Installed cmapr package | Job-title transition | 10 stylized rows across sectors and regions | Full CMap record is CC BY 4.0; license alone does not answer consent questions about underlying source records | Package example; exact relationship to the full dataset is unknown here |
-| huggingfaceR task vocabulary | Installed huggingfaceR package | Platform task name | 5 locally bundled classification names | Package code is MIT; each Hub dataset has its own contributor-declared terms and underlying rights still need review | Local software vocabulary; no dataset was downloaded |
+| onet2r miniature archive | Installed onet2r package | Occupation task statement | 3 rows with U.S. occupation codes | O*NET database material requires CC BY 4.0 attribution. This lesson does not compare the fixture with an official archive. | Schema demonstration. This lesson does not authenticate the exact upstream extraction. |
+| cmapr example transitions | Installed cmapr package | Job-title transition | 10 stylized rows across sectors and regions | Full CMap record is CC BY 4.0. The license does not resolve consent questions about underlying source records. | Package example. Its exact relationship to the full dataset is unknown here. |
+| huggingfaceR task vocabulary | Installed huggingfaceR package | Platform task name | 5 locally bundled classification names | Package code is MIT. Each Hub dataset has contributor-declared terms. Underlying rights still need checks. | Local software vocabulary. The code downloads no dataset. |
 
-: What this lesson can establish about the three inspected resources
+: What this lesson can establish about the three examined resources
 
 1. Who collected or generated the data?
 2. What population, language, place, and time does it cover?
 3. What does one row represent?
-4. Which records were excluded or suppressed?
-5. Which labels were human-reviewed or model-inferred?
-6. Which version and taxonomy were used?
-7. What license, attribution, and use restrictions apply?
+4. Which records did the provider exclude or suppress?
+5. Which labels come from human decisions, and which come from model inference?
+6. Which version and taxonomy did the provider use?
+7. What license and attribution requirements apply? What activities does the license prohibit?
 8. Can the provider change or remove records later?
 9. Does the dataset contain personal or sensitive information?
 
 An open license does not establish that the people represented in source data
-consented to every later use. A contributor-declared license also does not by
+consented to every later application. A contributor-declared license also does not by
 itself prove that the contributor held every necessary right.
 
 This page includes information from the
@@ -546,29 +549,29 @@ This page includes information from the
 Labor, Employment and Training Administration (USDOL/ETA). Used under the
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. O*NET® is a
 trademark of USDOL/ETA. The onet2r teaching fixture and this lesson may modify
-or add information; USDOL/ETA has not approved, endorsed, or tested those
+or add information. USDOL/ETA did not approve, endorse, or test those
 modifications.
 
 ## What to remember
 
-- A package is a tool; it is not the authority that created the data.
+- A package is a tool, not the authority that created the data.
 - Preserve provider, version, date, license, and row meaning.
 - Small teaching fixtures demonstrate structure, not population results.
-- An example file cannot support a judgment about the source it imitates.
+- An example file cannot establish the quality of the source it imitates.
 - Platform availability does not establish quality or permission.
-- Test a join before believing it, and treat a string match as a question.
-- Combine sources only after their units and taxonomies are reconciled.
+- Examine a join before using it. Investigate whether string matches reflect the
+  intended relationship.
+- Reconcile units and taxonomies before combining sources.
 
-Three inspections produced three schemas, three units, three rights notes, and
-no combined table. That is the finding. Nothing here ranks these sources, and
-nothing here could: the files read above are demonstration data, and a
-comparison of what O*NET, CMap, or a Hub dataset actually delivers would need
-authenticated extracts, a stated research question, and evaluation against
-something other than itself.
+The inspections produced three schemas, three units, three rights notes, and
+no combined table. Demonstration files cannot establish a ranking of these
+sources. A comparison of actual provider data would require authenticated
+extracts and a stated research question. It would also require an independent
+evaluation criterion.
 
-Back in the local label table, another comparability problem remains. Three
-reviewers may read the same requirement differently, so their answers stay
-separate for the agreement analysis that follows.
+The local label table presents another comparability problem.
+Three reviewers may interpret the same requirement differently.
+Their answers remain separate for the following agreement analysis.
 
 ## Sources
 

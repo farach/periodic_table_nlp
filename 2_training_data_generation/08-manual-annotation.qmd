@@ -1,28 +1,26 @@
 ---
-title: "Turning reading decisions into labels"
+title: "Recording reading decisions as labels"
 subtitle: "Create a manual annotation codebook for workforce text"
 description: "Learn how people label workforce text units without pretending that judgment is automatic or neutral."
 categories: [training data, annotation, workforce research]
 ---
 
-The archived job page and checked flyer transcript leave the fictional
-Riverton Workforce Lab with 28 text units. To make them usable, the team must
-separate training offers, application requirements, schedules, named skills,
-and text that fits none of those categories. These distinctions affect which
-information a worker would find while comparing notices, but the notices do
-not label themselves.
+The fictional Riverton Workforce Lab has 28 text units from the archived job
+page and reference flyer transcript. The team must classify training offers,
+application requirements, schedules, named skills, and other text.
+These distinctions affect the information that workers find when comparing
+notices. The team must state each label's meaning before assigning labels.
 
-A computer cannot learn these categories until people define them. **Manual
-annotation** is the work of reading an item and assigning a label according to
-written instructions. The hard part is not typing the label. It is deciding
-what the label means and applying that meaning consistently. The task records
-what a text unit explicitly says; it does not decide whether a worker qualifies
-or whether a program is a good option.
+A computer cannot learn these categories until people state their meanings.
+**Manual annotation** assigns labels to items according to written instructions.
+Annotators must decide what each label means and apply that meaning consistently.
+The task records what a text unit explicitly says.
+It does not establish worker eligibility or program suitability.
 
 ::: {.callout-note}
-The workforce text, labels, and research team are fictional. The examples were
-created to expose ordinary annotation choices without using worker or applicant
-records.
+The workforce text, labels, and research team are fictional.
+The author created the examples to illustrate annotation choices without
+worker or applicant records.
 :::
 
 ::: {.callout-tip}
@@ -30,11 +28,11 @@ records.
 
 By the end of this lesson, you will be able to:
 
-- define an annotation unit and label set;
-- write rules for what each label includes and excludes;
-- create a versioned codebook with foundryR;
-- run a pilot and let disagreement change the rules;
-- inspect ambiguous cases rather than hiding them; and
+- describe an annotation unit and label set.
+- write rules for what each label includes and excludes.
+- create a versioned codebook with foundryR.
+- use pilot disagreements to revise rules.
+- examine ambiguous cases rather than hiding them.
 - explain why a human label is a documented judgment, not automatic truth.
 :::
 
@@ -47,21 +45,18 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Decide what one label describes
 
-The annotation unit is one line of source text: a single job-detail list item
-from a posting, or a single line from the flyer. That keeps each decision small
-enough to check, while the `document_id` preserves the job posting or flyer that
-supplied the text.
+The annotation unit is one source-text line. It can be a job-detail list item
+or a flyer line. Each decision therefore concerns a short text that a reviewer
+can examine. The `document_id` identifies the source posting or flyer.
 
-Calling those lines sentences would be convenient and wrong. Two of them are
-headings in capital letters, three are noun phrases with no verb, and one is an
-imperative clause without terminal punctuation. The
-distinction matters because a rule written for sentences, such as "label the
-main claim of the text unit," has to say what it does with a heading that makes
-no claim at all.
+Not all source lines are sentences. Two are capitalized headings, three are
+noun phrases without verbs, and one is an imperative clause without terminal
+punctuation. A rule for sentences must also explain how reviewers should label
+a heading that makes no claim.
 
-The next chunk loads readr for files, dplyr and tibble for tables,
-purrr for repeated checks, and stringr for text checks, then reads the CSV into
-a tibble.
+The next chunk loads readr for files and dplyr and tibble for tables.
+It also loads purrr for repeated checks and stringr for text checks.
+It then reads the CSV into a tibble.
 
 ```{r}
 library(readr)
@@ -141,15 +136,15 @@ stopifnot(
 ```
 
 The file calls the reviewed result a **reference label**, not a ground-truth
-label. The label records how this codebook was applied. Another defensible
-codebook could divide the concepts differently.
+label. The label records the reviewer's application of this codebook.
+Another defensible codebook could divide the concepts differently.
 
 ### Count what the units actually are
 
-The claim that these are not all sentences is checkable, but punctuation alone
-cannot classify grammar. `Apply by October 15` is an imperative clause even
-without a full stop. The six flyer lines are therefore classified explicitly
-rather than inferred from their last character.
+Punctuation alone cannot establish whether a text unit is a sentence.
+`Apply by October 15` is an imperative clause despite its missing full stop.
+The code therefore assigns explicit grammatical categories to the six flyer
+lines instead of inferring them from final characters.
 
 ```{r}
 unit_shapes <- workforce_sentences |>
@@ -203,16 +198,16 @@ stopifnot(
 ```
 
 Five of the 28 units are not sentences. A sixth, `Apply by October 15`, is an
-imperative clause whose flyer typography omits terminal punctuation. All six
-come from a notice laid out for a reader walking past a noticeboard. `Paid
-training stipend` has no verb; `RIVERTON SKILLS OPEN HOUSE` announces an event.
+imperative clause without terminal punctuation. All six come from a notice
+designed for passing readers. `Paid training stipend` has no verb.
+`RIVERTON SKILLS OPEN HOUSE` announces an event.
 
 Both still receive a label, and the codebook has to say how. That is the reason
 the rules below talk about the unit's main explicit claim rather than the
 sentence's subject.
 
-The six flyer rows match its six-line checked transcript. No wording has been
-expanded or interpreted in the annotation file.
+The six flyer rows match the six-line reference transcript.
+The annotation file neither expands nor interprets the source wording.
 
 ```{r}
 flyer_rows <- workforce_sentences |>
@@ -255,19 +250,19 @@ stopifnot(
 )
 ```
 
-## Write the codebook before scaling up
+## Write the codebook before expanding annotation
 
 A **codebook** records the label definitions, instructions, examples, and
 version. The complete instrument lives in `R/workforce-codebook.R`. Its rules
 are:
 
 - `training`: the text unit offers or describes learning, mentoring,
-  certification training, or an apprenticeship;
+  certification training, or an apprenticeship.
 - `requirement`: the text unit states or prefers experience, education,
-  credentials, a license, a portfolio, or a physical condition;
-- `schedule`: the text unit describes when work or classes occur;
-- `skill`: the text unit names an ability used in the work; and
-- `other`: none of the four definitions applies; headings, deadlines,
+  credentials, a license, a portfolio, or a physical condition.
+- `schedule`: the text unit describes when work or classes occur.
+- `skill`: the text unit names an ability used in the work.
+- `other`: none of the four definitions applies. Headings, deadlines,
   location, work setting, and travel belong here unless the text unit
   explicitly states another category.
 
@@ -332,11 +327,12 @@ stopifnot(
 ```
 
 The printed hash changes when the instructions, schema, examples, or version
-changes. Version 1.1.0 corrects the unit name. The archived labels keep their
-original 1.0.0 fingerprint because changing an instrument does not retroactively
-change which instrument produced earlier records. A new annotation run should
-use 1.1.0. The code above does not call an AI service; foundryR defines and
-fingerprints the measurement instrument.
+changes. Version 1.1.0 corrects the unit name. The archived labels retain their
+original 1.0.0 fingerprint because that version produced those records.
+A new annotation run should use 1.1.0.
+
+The code does not call an AI service. foundryR creates the measurement
+instrument and calculates its fingerprint.
 
 ## Count labels without interpreting the count
 
@@ -381,8 +377,8 @@ stopifnot(
 )
 ```
 
-The counts describe this designed example only. They were not sampled from all
-jobs in Riverton or from any real population.
+The counts describe this designed example only. The author did not sample jobs
+in Riverton or any real population.
 
 ## Keep ambiguity visible
 
@@ -431,16 +427,17 @@ stopifnot(
 )
 ```
 
-A reviewer who chose `training` may have followed a defensible reading rather
-than worked carelessly. The team should record the disagreement, discuss the
-rule, and issue a new codebook version if the definition changes. Overwriting
-the label would erase the evidence needed to improve the instrument.
+A reviewer who chooses `training` may have a defensible interpretation.
+The difference does not necessarily indicate carelessness.
+Record the disagreement. Discuss the rule.
+Issue a new codebook version if the definition changes.
+Overwriting the label would remove evidence needed to improve the instrument.
 
 ## Run a pilot before labeling everything
 
-The rules above did not arrive fully formed. They came from a pilot: two
-reviewers labeled six units independently, without discussion, and the pairs
-that disagreed decided what the codebook still had to say.
+The rules came from a pilot. Two reviewers independently labeled six units
+without discussion. Their disagreements showed which instructions the
+codebook needed to clarify.
 
 ```{r}
 pilot_round <- tibble(
@@ -506,13 +503,14 @@ stopifnot(
 ```
 
 Two of six matched in this designed pilot. Six items cannot establish a typical
-first-pass agreement rate. Here, the four disagreements identify wording that
+first-pass agreement rate. Here, the four disagreements show wording that
 the initial instructions did not settle.
 
-### Turn each disagreement into a rule
+### Write one rule for each disagreement
 
-The Lab wrote one rule per disagreement, then adjudicated the four units under
-those rules. The adjudicator was a third reader who had not labeled the pilot.
+The Lab wrote one rule per disagreement and adjudicated the four units under
+those rules. A third reader conducted adjudication without participating in
+the pilot labeling.
 
 ```{r}
 adjudication_log <- tibble(
@@ -589,70 +587,69 @@ stopifnot(
 )
 ```
 
-Every rule in that table is present in the current instructions, and the check
-above reads them back out of the instrument rather than trusting the
-description. Every adjudicated decision matches the archived label. Version
-1.0.0 remains on those rows; version 1.1.0 records the corrected unit wording
-for future work.
+The current instructions contain every rule in the table.
+The check reads those rules directly from the instrument.
+Every adjudicated decision matches the archived label.
+Those rows retain version 1.0.0. Version 1.1.0 records the corrected unit
+wording for future work.
 
-Two details stay visible. Three of the four disputed units retain
-`needs_review`; `s010` is marked `certain`, so the file does not pretend every
-disagreement remained unresolved. Version 1.1.0 of the codebook now names one
-source-text line as the annotation unit. The historical `sentence_id` column
-remains a stable identifier, not a claim that every row is a grammatical
-sentence.
+Three of the four disputed units retain `needs_review`.
+The file marks `s010` as `certain`, so not every disagreement remains unresolved.
+Version 1.1.0 specifies one source-text line as the annotation unit.
+The historical `sentence_id` column remains a stable identifier.
+Its name does not mean that every row is a grammatical sentence.
 
-This pilot shows how disagreement can produce explicit rules. Its designed six
-items do not estimate how much a pilot would change a larger annotation job or
-how long that work would take.
+This pilot shows how disagreement can produce explicit rules.
+Its six designed items cannot estimate the effect of a pilot on a larger
+annotation task. They also cannot estimate the time that task would require.
 
 ## Protect the people doing the work
 
 Manual annotation can involve sensitive, repetitive, or distressing material.
 Before assigning work:
 
-1. explain the purpose and allowed use of the data;
-2. remove personal information that reviewers do not need;
-3. pay fairly for reading, training, and disagreement review;
-4. give reviewers a way to skip harmful material;
-5. separate quality feedback from surveillance; and
+1. explain the data's purpose and permitted applications.
+2. remove personal information that reviewers do not need.
+3. pay fairly for reading, training, and resolution of disagreements.
+4. give reviewers a way to skip harmful material.
+5. separate quality feedback from surveillance.
 6. record which languages and lived experience the task requires.
 
 Expertise depends on the question. A worker, career counselor, employer, and
-labor researcher may interpret the same text unit differently. Those
-perspectives should be designed into the study rather than treated as noise.
+labor researcher may interpret the same text unit differently.
+Include those perspectives in the study design rather than dismissing the
+differences.
 
 ## When a language model reads the codebook too
 
-A language model can act as one more annotator: it reads the codebook and
-proposes a label for each unit. The evidence is mixed. On some tasks models
-match or beat crowd workers; careful replications find them inconsistent from
-one dataset to the next. Models also follow a full codebook, with its
-definitions and edge cases, more reliably than a bare category name, which is
-one more reason to write the codebook first.
+A language model can read the codebook and propose a label for each unit.
+The evidence is mixed. Models match or exceed crowd-worker performance on some
+tasks. Careful replications find inconsistent performance between datasets.
+Models also follow complete codebooks more consistently than category names
+alone. A complete codebook contains definitions and difficult examples.
 
-Treat a model's labels the way this lesson treats any annotator's. Record the
-codebook version, the prompt, and the model revision, compare a random sample
-with human decisions, and report where they disagree. The guide
+Apply the same requirements to model-label checks and human-label checks.
+Record the codebook version, prompt, and model revision.
+Compare a random sample with human decisions. Report the disagreements.
+The guide
 [Using a language model in a reproducible analysis](../using-language-models.qmd)
-works through one example, including how to correct a count for the model's
+presents one example and a correction for the model's
 errors.
 
 ## What to remember
 
 - Annotation labels are measurements created from written rules.
-- Name the unit precisely; a heading and a phrase are not sentences.
+- Name the unit precisely. Headings and phrases are not sentences.
 - One unit per row keeps the decision small and traceable.
 - A codebook needs a version, examples, and a change record.
-- Run a pilot and let its disagreements write the rules.
-- Ambiguity should lead to review, not an unrecorded correction.
+- Run a pilot. Use disagreements to revise the rules.
+- Examine ambiguity instead of making an unrecorded correction.
 - Human labels require ethical working conditions and relevant expertise.
 - A language model used as an annotator needs the same codebook and checks.
 
-The Lab has defined the categories and preserved its reading decisions. To test
-selection without exposing known answers, the active-learning exercise starts
-with five complete job postings and hides two other documents from a small
-model.
+The Lab stated the category meanings and preserved its reading decisions.
+The active-learning exercise starts with five complete job postings.
+It withholds two other documents' labels from a small model during selection.
 
 ## Sources
 

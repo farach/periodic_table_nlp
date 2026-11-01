@@ -1,20 +1,21 @@
 ---
 title: "Counting nearby words with n-grams"
-subtitle: "See why phrase counts get sparse fast"
-description: "Learn how bigrams and trigrams count adjacent tokens in the Riverton sentences, why most of them appear only once, and why a PMI score without a count floor ranks unique pairs first."
+subtitle: "Measure sparsity in phrase counts"
+description: "Count adjacent tokens with bigrams and trigrams. Examine rare phrases and the effect of minimum counts on PMI rankings."
 categories: [phrases and entities, n-grams, workforce research]
 ---
 
-Repeated words such as `training` stand out in the Riverton Workforce Lab's
-short job-board lines and flyer headings. The harder question is whether
-neighbouring word pairs tell a clearer story.
+Words such as `training` occur several times in the Riverton Workforce Lab's
+job-board lines and flyer headings. The team asks whether adjacent word pairs
+provide clearer descriptions.
 
-The coordinator tries a simple phrase count before trusting it. If most phrases
-appear once, the list may describe these 28 sentences closely while helping less
-with new documents.
+The coordinator examines simple phrase counts.
+If most phrases appear once, the list may describe these 28 text units but
+provide little information about new documents.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching.
 :::
 
 ::: {.callout-tip}
@@ -22,11 +23,11 @@ The Riverton Workforce Lab, its job board, and its training flyer are fictional 
 
 This lesson shows how to:
 
-- define an n-gram as a run of adjacent tokens;
-- build bigrams and trigrams with tidytext;
-- count repeated n-grams in the Riverton sentences;
-- measure how many n-grams appear once;
-- score repeated bigrams with pointwise mutual information; and
+- describe an n-gram as a sequence of adjacent tokens.
+- build bigrams and trigrams with tidytext.
+- count n-gram occurrences in the Riverton text.
+- measure how many n-grams appear once.
+- score recurring bigrams with pointwise mutual information.
 - explain why phrase vocabularies can generalise badly from small data.
 :::
 
@@ -82,7 +83,7 @@ source_counts <- sentences |>
 knitr::kable(
   source_counts,
   col.names = c("Source", "Rows"),
-  caption = "The 28 Riverton sentences by source",
+  caption = "The 28 Riverton text units by source",
   row.names = FALSE
 )
 ```
@@ -104,16 +105,16 @@ stopifnot(
 )
 ```
 
-The file is small enough to inspect by eye. That convenience is also the reason
-its phrase counts should be treated as local examples.
+The small file permits direct inspection.
+Its phrase counts describe this local example, not a larger population.
 
 ## Build adjacent-word phrases
 
-An **n-gram** is a run of `n` adjacent tokens. A unigram has one token, a bigram
-has two, and a trigram has three. These counts use the same token rule as Lesson
-15: lowercase the text and drop punctuation. Because each row here is one
-sentence, no n-gram spans two sentences; a file with whole documents in rows
-would need a different check.
+An **n-gram** is a sequence of `n` adjacent tokens.
+A unigram has one token, a bigram has two, and a trigram has three.
+As in Lesson 15, tokenization lowercases text and removes punctuation.
+Each row contains one source-text unit, and n-grams do not cross rows.
+Files with whole documents per row need a separate sentence-boundary check.
 
 ```{r}
 make_ngrams <- function(n) {
@@ -156,7 +157,7 @@ top_phrases <- bind_rows(
 knitr::kable(
   top_phrases,
   col.names = c("N-gram type", "N-gram", "Frequency"),
-  caption = "The most frequent bigrams and trigrams in the 28 sentences",
+  caption = "The most frequent bigrams and trigrams in the 28 text units",
   row.names = FALSE
 )
 ```
@@ -176,18 +177,18 @@ stopifnot(
 )
 ```
 
-The sentence `Evening classes` has only two tokens, so it has no trigram. The
-code drops that empty result before counting. The most frequent bigram is `is
-required`, with 4 appearances, and the most frequent trigram is `training is
-provided`, with 2.
+The phrase `Evening classes` has only two tokens and no trigram.
+The code removes that empty result before counting.
+The most frequent bigram is `is required`, with 4 occurrences.
+The most frequent trigram is `training is provided`, with 2.
 
 ## Measure the sparsity
 
-**Sparsity** means that many possible items have no examples or only one example.
-The general reason is arithmetic, not this particular table. Each new word adds
-at most one new word type, but it can also add a new pair and a new triple; the
-set of pairs a vocabulary could form grows faster than the vocabulary itself.
-The Riverton counts below illustrate that argument rather than prove it.
+**Sparsity** means that many possible items have no examples or only one.
+Each new word adds at most one word type.
+It can also add a new pair and a new triple.
+The number of possible pairs increases faster than vocabulary size.
+The Riverton counts illustrate this arithmetic argument rather than prove it.
 
 ```{r}
 unigrams <- make_ngrams(1L) |>
@@ -214,7 +215,7 @@ ngram_summary <- tibble(
 knitr::kable(
   ngram_summary,
   col.names = c("n", "Unit", "Distinct units", "Seen once", "Seen-once fraction"),
-  caption = "Distinct n-grams and one-time n-grams in the Riverton sentences",
+  caption = "Distinct n-grams and one-time n-grams in the Riverton text units",
   row.names = FALSE
 )
 ```
@@ -229,15 +230,15 @@ stopifnot(
 )
 ```
 
-The 28 sentences contain 96 distinct unigrams, 112 distinct bigrams, and 96
+The 28 text units contain 96 distinct unigrams, 112 distinct bigrams, and 96
 distinct trigrams. The seen-once fractions are 72/96 for unigrams, 102/112 for
 bigrams, and 95/96 for trigrams. These numbers describe only this teaching
 corpus.
 
 ```{r}
 #| label: fig-ngram-sparsity
-#| fig-cap: "Share of distinct n-grams seen once in the 28 Riverton sentences."
-#| fig-alt: "Horizontal bar chart with three bars. 72 of 96 distinct unigrams (75 percent), 102 of 112 distinct bigrams (91 percent), and 95 of 96 distinct trigrams (99 percent) are seen only once."
+#| fig-cap: "Share of distinct n-grams that appear once in the 28 Riverton text units."
+#| fig-alt: "Horizontal bar chart with three bars. 72 of 96 distinct unigrams (75 percent) appear once. 102 of 112 distinct bigrams (91 percent) appear once. 95 of 96 distinct trigrams (99 percent) appear once."
 #| fig-height: 3
 #| code-fold: true
 #| code-summary: "Show the plotting code"
@@ -287,21 +288,21 @@ stopifnot(
 )
 ```
 
-The chart focuses on the quantity the table asks the reader to compare: how much
-of each list appears only once.
+The chart compares the fraction of each list that appears only once.
 
 ## Score pairs against chance
 
-Raw frequency likes common words. **Pointwise mutual information**, or **PMI**,
-asks whether two adjacent words appear more often than they would if each word
-were chosen independently. For a pair `(w1, w2)`:
+Raw frequency ranks common words highly.
+**Pointwise mutual information**, or **PMI**, compares an adjacent pair's
+frequency with the frequency expected under independent word selection.
+For a pair `(w1, w2)`:
 
 `PMI = log2( P(w1, w2) / (P(w1) * P(w2)) )`
 
-The probabilities here are token shares in these 28 sentences: 153 unigram
-tokens and 125 bigram tokens. A pair of words that each appear once, and that
-appear together once, gets a high score because the denominator is tiny. That
-is a property of the formula, not evidence that the pair is a stable phrase.
+The probabilities use shares of 153 unigram tokens and 125 bigram tokens from
+these 28 text units. If both words appear only once, together, the pair has a
+small denominator and high score. This follows from the formula.
+It does not establish that the pair is a stable phrase.
 
 ```{r}
 unigram_tokens <- make_ngrams(1L)
@@ -384,10 +385,10 @@ stopifnot(
 )
 ```
 
-Thirty-seven of the 102 one-time bigrams are pairs of words that each appear once.
-They all receive PMI 7.55. The most frequent bigram, `is required` (4 times),
-scores 3.04 because `is` appears 13 times and `required` appears 7 times. A
-floor of two pair counts leaves ten bigrams.
+Thirty-seven of the 102 one-time bigrams contain words that each appear once.
+They all receive PMI 7.55. The most frequent bigram, `is required`, appears
+4 times and scores 3.04. Its words appear 13 times and 7 times, respectively.
+A minimum pair count of two retains ten bigrams.
 
 ```{r}
 repeated_pmi_table <- repeated_pmi |>
@@ -424,21 +425,23 @@ stopifnot(
 )
 ```
 
-With that floor, `no prior` leads and `is required` falls to ninth. Both lists
-still describe 28 teaching sentences. PMI does not repair sparsity; it changes
-which sparse pairs look interesting. For matches in running text, Lesson 25 uses
-a concordance instead of a score.
+With that minimum count, `no prior` ranks first and `is required` ranks ninth.
+Both lists describe 28 teaching text units.
+PMI changes the ranking of sparse pairs without removing sparsity.
+Lesson 25 uses a concordance to examine matches in context instead of ranking
+them by score.
 
 ## What to remember
 
 - An n-gram counts adjacent tokens after a chosen token rule.
 - The Riverton rows contain 112 distinct bigrams and 96 distinct trigrams.
-- A two-token sentence contributes no trigram.
-- PMI without a count floor ranks unique word pairs first.
-- Counts from 28 sentences illustrate sparsity; they do not estimate phrase use in workforce writing.
+- A two-token text unit contributes no trigram.
+- Without a minimum count, PMI ranks unique word pairs first in this example.
+- Counts from 28 text units illustrate sparsity.
+  They do not estimate phrase occurrence in workforce writing.
 
-Report the repeated phrases as local clues, then stop. The useful result here is
-a small list of repeats paired with a warning about sparse phrase counts.
+Report recurring phrases as observations from this example only.
+The result is a short phrase list with explicit limits from sparse counts.
 
 ## Sources
 

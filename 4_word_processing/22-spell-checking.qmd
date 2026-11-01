@@ -1,25 +1,25 @@
 ---
-title: "Checking dictionary unknowns"
-subtitle: "Measure what a spell checker catches and what it cannot see"
-description: "Learn how hunspell flags unknown workforce words and how to test constructed spelling errors."
+title: "Examining dictionary unknowns"
+subtitle: "Measure dictionary flags and errors that remain unflagged"
+description: "Learn how hunspell flags unknown workforce words and how to examine constructed spelling errors."
 categories: [word processing, spell checking, workforce research]
 ---
 
-A vocabulary list is almost ready for review. The team wants to know whether a
-spell checker can clean obvious typing errors before a
-person reads the list.
+A vocabulary list is almost ready for checks.
+The team asks whether a spell checker can find obvious typing errors
+before human checks.
 
-That sounds simple until the team runs into proper names and real-word typos. A
-dictionary can say which strings it does not know. It cannot know what the writer
-meant.
+Proper names and real-word typing errors complicate the task.
+A dictionary finds strings absent from its entries.
+It cannot establish the writer's intended meaning.
 
 **Spell checking** here means asking hunspell for words that are absent from its
 dictionary. The result is a list of unknown words, not a list of all errors.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional
-and were created for teaching. The deliberately misspelled words below are
-constructed examples made from Riverton words.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching. The deliberate misspellings are constructed
+examples from Riverton words.
 :::
 
 ::: {.callout-tip}
@@ -27,11 +27,11 @@ constructed examples made from Riverton words.
 
 By the end of this lesson, you will be able to:
 
-- run `hunspell()` on the Riverton vocabulary;
-- count word types the dictionary flags;
-- build a small constructed spelling test;
-- see why a test built from known non-words cannot fail; and
-- explain why real-word errors escape a dictionary.
+- run `hunspell()` on the Riverton vocabulary.
+- count word types the dictionary flags.
+- build a small constructed spelling test.
+- explain why known dictionary misses do not measure general error detection.
+- explain why a dictionary does not flag real-word errors.
 :::
 
 ```{r}
@@ -41,12 +41,13 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Check the real vocabulary
+## Examine the real vocabulary
 
-For the vocabulary check, readr brings in the sentences, dplyr and tibble shape
-the word list, purrr repeats the dictionary call, tidytext creates tokens, and
-hunspell supplies dictionary flags. It builds the same lowercased 96-word
-Riverton vocabulary as the stemming lesson, using the same tokenization rule.
+The readr package imports text, and dplyr and tibble create the word list.
+The purrr package applies dictionary calls to each item.
+The tidytext package creates tokens, and hunspell supplies dictionary flags.
+The code uses the stemming lesson's tokenization rule to build the same
+lowercased 96-word vocabulary.
 
 ```{r}
 library(readr)
@@ -112,10 +113,9 @@ stopifnot(
 )
 ```
 
-Hunspell flags 2 of the 96 real word types: `october` and `riverton`. In this
-small vocabulary, the dictionary flags a month word under the lowercased form
-and a fictional place name. Those are unknown to this dictionary setting, not
-proved spelling mistakes.
+Hunspell flags 2 of the 96 source word types, `october` and `riverton`.
+These are a lowercased month name and a fictional place name.
+The flags indicate dictionary unknowns, not proven spelling errors.
 
 ## Build a constructed error test
 
@@ -169,11 +169,11 @@ knitr::kable(
 knitr::kable(
   spell_summary,
   col.names = c(
-    "Errors caught",
+    "Errors flagged",
     "Constructed errors",
     "Correct words wrongly flagged",
-    "Correct words checked",
-    "Caught fraction",
+    "Correct words examined",
+    "Flagged fraction",
     "False flag fraction"
   ),
   caption = "Counts from the constructed spelling test",
@@ -195,13 +195,12 @@ stopifnot(
 )
 ```
 
-Hunspell flags 8 of 8. That number was settled before the test ran: all eight
-constructed misspellings are strings that are not English words, and flagging
-non-words is the dictionary's job. It falsely flags 0 of the 8 source words,
-which was also settled in advance because those words came from a vocabulary
-already shown to hold only two dictionary unknowns. This is a wiring check, not a
-measurement of spelling quality. The next section shows the case the eight left
-out.
+Hunspell flags all 8 constructed misspellings.
+Each is a non-word absent from this dictionary.
+It incorrectly flags 0 of the 8 source words.
+Those source words exclude the two known dictionary unknowns.
+The selected examples show expected dictionary behavior, not general spelling
+quality. The next example addresses an excluded error type.
 
 ## Show the real-word limit
 
@@ -223,7 +222,7 @@ real_word_error <- tibble(
 knitr::kable(
   real_word_error,
   col.names = c("Intended word", "Typed word", "Intended word flagged", "Typed word flagged"),
-  caption = "A real-word typo that dictionary lookup cannot catch",
+  caption = "A real-word typo absent from the dictionary flags",
   row.names = FALSE
 )
 ```
@@ -240,20 +239,20 @@ stopifnot(
 ```
 
 If a writer meant `from` and typed `form`, this dictionary reports no problem.
-Both strings are familiar to it, so context has to do the work.
+Both strings are dictionary entries. Detecting the error requires context.
 
 ## What to remember
 
 - `hunspell()` returns dictionary unknowns.
 - Unknown does not always mean misspelled.
-- Checking each of the 96 word types on its own flags `october` and `riverton`.
+- Individual checks of the 96 word types flag `october` and `riverton`.
 - The constructed 8/8 check is a demonstration because it contains only non-word
   errors.
 - Real-word errors need context as well as a dictionary.
 
-Use hunspell to make a review queue, then read the queue. A dictionary can sort
-strings into familiar and unfamiliar; people still decide whether the sentence is
-right.
+Use hunspell to create a queue for checks. Read the flagged words in context.
+A dictionary separates known and unknown strings.
+People must still decide whether the sentence is correct.
 
 ## Sources
 

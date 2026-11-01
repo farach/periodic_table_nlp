@@ -5,13 +5,12 @@ description: "Learn how HTML remnants, whitespace, invisible characters, and moj
 categories: [documents, text cleaning, workforce research]
 ---
 
-Saved job-board text, flyer lines, and one accented customer-service comment make
-up this cleaning set. The comment comes from an unrelated project, kept here
-because it contains an accented word.
+The cleaning set contains saved job-board text, flyer lines, and one accented
+customer-service comment. The lesson retains the unrelated comment because it
+contains an accented word.
 
-Text from the wild carries damage. Tags remain after a copy, spacing carries page
-layout, invisible characters hide inside words, and accented letters can be read
-with the wrong encoding.
+Copied text can contain HTML tags, layout spacing, and invisible characters
+inside words. The wrong character encoding can also corrupt accented letters.
 
 **Cleaning** means changing raw text so a later step can compare, count, or read
 it more consistently. Each repair needs a record of what it changed and what it
@@ -27,9 +26,9 @@ separate teaching fixture.
 
 This lesson prepares you to:
 
-- remove HTML while preserving readable text;
-- explain what whitespace squishing keeps and discards;
-- detect zero-width and control characters; and
+- remove HTML while preserving readable text.
+- explain what whitespace squishing keeps and discards.
+- detect zero-width and control characters.
 - describe why mojibake repair can fail.
 :::
 
@@ -97,15 +96,16 @@ stopifnot(
 )
 ```
 
-`html_text2()` turns HTML into readable text and decodes entities such as `&amp;`
-and `&nbsp;`. A regular expression can remove visible tags, but it leaves those
-entities behind. Keep the raw HTML when element boundaries still matter.
+`html_text2()` converts HTML into readable text and decodes entities such as `&amp;`
+and `&nbsp;`. A regular expression can remove visible tags, but it does not
+decode those entities. Keep the raw HTML when element boundaries still matter.
 
-## Squish whitespace
+## Normalize whitespace
 
 Whitespace includes spaces, tabs, and line breaks. Lesson 21 covers the
-comparison side of `str_squish()`. Here the point is layout loss: the function
-collapses runs of whitespace to one ordinary space and trims the ends.
+comparison behavior of `str_squish()`. Here the function replaces consecutive
+whitespace with one ordinary space and removes whitespace at both ends. This
+operation removes layout information.
 
 ```{r}
 workforce_sentences <- read_csv(
@@ -170,10 +170,10 @@ class time, requirement, and deadline become one long line.
 
 ## Remove invisible characters
 
-Unicode sorts characters into categories. `Cf` is the format category, including
-zero-width spaces that can sit inside a string without appearing on screen. `Cc`
-is the control category. In a stringr pattern, `\\p{Cf}` and `\\p{Cc}` name those
-categories.
+Unicode groups characters into categories. The format category, `Cf`, contains
+zero-width spaces that can occur inside a string without visible marks. `Cc`
+is the control category. In a stringr pattern, `\\p{Cf}` and `\\p{Cc}` name
+those categories.
 
 ```{r}
 zero_width_space <- intToUtf8(0x200B)
@@ -238,7 +238,7 @@ stopifnot(
 
 The two labels look alike to a hurried reader, but R does not treat them as
 identical. Whitespace squishing does not remove the control character in the
-second example; the category repair does. Keep an audit field if hidden
+second example. The category repair removes it. Keep an audit field if hidden
 characters help explain source damage.
 
 ## Repair mojibake carefully
@@ -306,30 +306,37 @@ stopifnot(
 )
 ```
 
-Reading UTF-8 bytes as Windows-1252 turns `café` into `cafÃ©`. Both bytes survive,
-so reversing the mistake restores the word. A different failure is lossy: when a
-read leaves `�`, the string contains U+FFFD rather than the source character. The
-repair cannot infer which letter belonged there. Mojibake and U+FFFD are separate
-problems.
+Reading UTF-8 bytes as Windows-1252 converts `café` into `cafÃ©`. Both bytes
+remain available, so the reverse conversion restores the word. A lossy read
+instead replaces the source character with `�`, U+FFFD. The repair cannot
+infer the original letter from that replacement. Mojibake and U+FFFD are
+separate problems.
 
 ## Cleaning is a recorded choice
 
 Cleaning makes later comparison easier. It can also remove source structure,
-spacing, hidden characters, and evidence of encoding damage. A collection should
-record each cleaning step, keep the raw source, and make the cleaned version a
-separate field.
+spacing, hidden characters, and evidence of encoding damage. Record each
+cleaning step. Keep the raw source. Store the cleaned version in a separate
+field.
 
-Production pipelines track per-step changed and removed counts. Analysts perform a removed-side sample audit to ensure they aren't accidentally erasing meaningful data. This is crucial because aggressive text cleaning can have a disparate impact, disproportionately destroying names or phrases from specific languages or dialects that use characters a naive rule did not expect.
+Production pipelines count changed and removed items at each step. Analysts
+examine a sample of removed content for accidental loss of meaningful data.
+Aggressive cleaning can disproportionately remove names or phrases from
+specific languages or dialects. Those languages may use characters that the
+rule does not expect.
 
-When mojibake repair is in scope, production NLP typically relies on robust ecosystem tools (like the Python package `ftfy` — "fixes text for you") rather than manual `iconv()` conversions.
+Production NLP typically uses established mojibake-repair tools, such as
+Python's `ftfy` ("fixes text for you"), rather than manual `iconv()`
+conversions.
 
 ## What to remember
 
-- HTML parsers decode entities that tag-stripping leaves behind.
+- HTML parsers decode entities that tag removal does not decode.
 - Whitespace squishing fixes accidental spacing and erases layout.
 - Invisible characters and encoding damage can make matching strings unequal.
 - Mojibake can be reversible, while U+FFFD means information was lost.
-- Keep the raw source and record every cleaning step.
+- Keep the raw source.
+- Record every cleaning step.
 
 Cleaned fields belong beside raw fields. Comparisons can use the cleaned copy,
 while the raw text keeps the evidence needed to explain the repair.

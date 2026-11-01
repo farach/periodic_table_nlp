@@ -5,16 +5,17 @@ description: "Learn how noun chunks group nouns with attached words, using spaCy
 categories: [phrases and entities, noun chunks, workforce research]
 ---
 
-After counting adjacent phrases, the Riverton Workforce Lab has a practical
-choice to make: should `basic spreadsheet skills` become one review item or
-three separate words?
+After counting adjacent phrases, the Riverton Workforce Lab must choose its
+units for checks. It considers `basic spreadsheet skills` as one phrase or three
+separate words.
 
 A grammar-aware method offers one convention for making that choice. It can
-group candidate phrases for review, but it does not create a single correct
+group candidate phrases for checks, but it does not create a single correct
 inventory of English phrases.
 
 ::: {.callout-note}
-The Riverton Workforce Lab, its job board, and its training flyer are fictional and were created for teaching.
+The author created the fictional Riverton Workforce Lab, its job board, and
+its training flyer for teaching.
 :::
 
 ::: {.callout-tip}
@@ -22,11 +23,11 @@ The Riverton Workforce Lab, its job board, and its training flyer are fictional 
 
 Use this lesson to practice how to:
 
-- define a noun chunk in plain language;
-- extract noun chunks with a trained spaCy pipeline;
-- build simple chunks from a UDPipe dependency parse;
-- explain why chunk definitions differ across tools;
-- separate agreement from accuracy; and
+- describe a noun chunk in plain language.
+- extract noun chunks with a trained spaCy pipeline.
+- build simple chunks from a UDPipe dependency parse.
+- explain why chunk definitions differ across tools.
+- separate agreement from accuracy.
 - explain why parser errors affect chunk rules.
 :::
 
@@ -39,13 +40,15 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Ask a trained pipeline for noun chunks
 
-This setup chunk reads the sentence file, runs spaCy, and later supports a small
-UDPipe-based rule. A **noun chunk** is a short, flat phrase built around one
-noun: the noun plus the determiners, numbers, compounds, and describing words
-directly in front of it. Chunks do not nest and do not reach past the noun, so
-`evening classes in October` becomes `evening classes` and `October`, not one
-long phrase. Where a chunk stops is a convention, and tools draw the line in
-different places.
+The setup reads the text file and runs spaCy.
+It also prepares inputs for a small UDPipe-based rule.
+A **noun chunk** is a short, nonnested phrase around one noun.
+It contains the noun and directly preceding determiners, numbers, compounds,
+and describing words.
+
+Under this convention, chunks neither nest nor extend past the noun.
+Thus `evening classes in October` produces `evening classes` and `October`,
+not one longer phrase. Tools can apply different boundary conventions.
 
 ```{r}
 library(readr)
@@ -126,7 +129,7 @@ knitr::kable(
   spacy_phrases |>
     slice_head(n = 12),
   col.names = c("Sentence ID", "spaCy noun chunk"),
-  caption = "First spaCy noun chunks from the Riverton sentences",
+  caption = "First spaCy noun chunks from the Riverton text units",
   row.names = FALSE
 )
 ```
@@ -156,26 +159,30 @@ stopifnot(
 )
 ```
 
-The released spaCy pipeline returns 40 noun chunks for the 28 sentences. For the
+The released spaCy pipeline returns 40 noun chunks for the 28 text units. For the
 check sentence, it returns three flat chunks: `Riverton Skills Centre`, `evening
 classes`, and `October`.
 
 ## Build chunks from dependency links
 
-The UDPipe model used here was trained for this site on 500 sentences. On 13
-held-out political weblog posts from 2003 to 2006, its unlabelled attachment
-score was 0.7235 and its labelled attachment score was 0.6561. spaCy's pipeline
-is a released production model trained on far more text. This comparison is a
-teaching device, not a contest between equals.
+The site's UDPipe model uses 500 training sentences.
+Evaluation used 13 held-out political weblog posts from 2003 to 2006.
+Unlabelled attachment was 0.7235, and labelled attachment was 0.6561.
+spaCy's released production model uses far more training text.
+This comparison illustrates different methods, not equivalent training
+conditions.
 
 The local UDPipe model has no tokenizer, so the lesson gives it one token per
 line. In the code, `\(tokens)` is R shorthand for a small function that handles
 one sentence's tokens at a time.
 
-This classroom rule starts from each token tagged as `NOUN` or `PROPN`. It then
-collects direct dependents whose relation is `det`, `amod`, `compound`, or
-`nummod`: a determiner such as `a` or `the`, a describing word, a noun working
-with another noun, or a number modifying a noun.
+The classroom rule starts from each `NOUN` or `PROPN` token.
+It collects direct dependents with these relations:
+
+- `det` identifies determiners such as `a` or `the`.
+- `amod` identifies describing words.
+- `compound` links nouns within a compound.
+- `nummod` identifies numbers that modify nouns.
 
 ```{r}
 parser <- udpipe_load_model("data/treebank/en_ewt-500-parser.udpipe")
@@ -262,20 +269,21 @@ stopifnot(
 )
 ```
 
-The two systems report different row counts because they split words
-differently. spaCy separates `driver's` in `s017` into `driver` and `'s`; the
-tokenizer feeding UDPipe keeps it as one token, which accounts for the 179 versus
-178 row counts. The printed spaCy chunk strings still keep `Paid 12-week
-training` and `A valid driver's license`; the gap is in token rows, not those
-displayed chunk strings.
+Different tokenization produces different row counts.
+In `s017`, spaCy separates `driver's` into `driver` and `'s`.
+UDPipe's tokenizer retains one token, which explains the 179 versus 178 rows.
+spaCy's displayed chunks still contain `Paid 12-week training` and
+`A valid driver's license`. The difference concerns token rows, not those
+chunk strings.
 
-This rule emits one chunk for every noun-like tag, so chunks can overlap. `Paid`,
-`Paid week`, and `week training` all come from the same four words in `s001`.
-The rule also pastes a head to its dependents without checking that the words sit
-next to each other, so `Paid week` skips over `12-` and is not a string in the
-sentence. `Paid` appears because the small tagger labelled it `PROPN`, which is
-wrong here: it describes the training. A chunk rule inherits tagging mistakes
-before it makes its own.
+The rule emits one chunk for every noun-like tag, so chunks can overlap.
+The chunks `Paid`, `Paid week`, and `week training` come from the same four
+words in `s001`. The rule joins heads and dependents without an adjacency check.
+Thus `Paid week` omits `12-` and does not occur in the source.
+
+The chunk `Paid` results from an incorrect `PROPN` tag.
+Here, `Paid` describes training. Chunk rules can propagate tagging errors and
+introduce additional errors.
 
 ## Compare the two lists
 
@@ -358,26 +366,28 @@ stopifnot(
 )
 ```
 
-The two lists have 25 exact string matches. That is agreement, not accuracy, and
-the counts 40 and 56 are not two measurements of the same thing. For the opening
-question, spaCy groups `basic spreadsheet skills`, while the UDPipe-built rule
-also emits `spreadsheet` and overreaches to `need basic spreadsheet skills`. A
-bigram takes neighbouring words even across phrase boundaries; a chunk groups
-words the parser links together. Whether that helps depends on whether the
-parser is right.
+The lists have 25 exact string matches, which measure agreement, not accuracy.
+The counts 40 and 56 describe different chunk definitions.
+spaCy groups `basic spreadsheet skills`.
+The UDPipe rule also emits `spreadsheet` and incorrectly includes `need` in
+`need basic spreadsheet skills`.
+
+A bigram groups adjacent words even across phrase boundaries.
+A dependency chunk groups words according to parser links.
+Its usefulness depends on correct parsing.
 
 ## What to remember
 
 - Noun chunks are flat, non-overlapping spans under a tool-specific convention.
-- spaCy returns 40 noun chunks for these 28 sentences.
+- spaCy returns 40 noun chunks for these 28 text units.
 - The UDPipe-built rule returns 56 overlapping chunks from a deliberately weak teaching model.
 - The 25 exact matches are agreement, not accuracy.
 - `Paid week` shows how a rule can manufacture text by pasting non-adjacent tokens.
 - Tokenization alone explains the 179 versus 178 row-count gap.
 
-Review chunk lists as prompts for human inspection. When the two tools disagree,
-check the sentence, the tokenization, and the parse before drawing any conclusion
-about the phrase.
+Use chunk lists to select text for human checks.
+When tools disagree, examine the source, tokenization, and parse before
+interpreting the phrase.
 
 ## Sources
 

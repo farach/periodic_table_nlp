@@ -1,24 +1,26 @@
 ---
 title: "Using a language model in a reproducible analysis"
-subtitle: "Treat the model as an instrument: record it, check it against people, and correct for its errors"
-description: "Learn how to use a local language model to label text inside a research workflow, keep the run reproducible, check it on a random sample reviewed by people, and correct a downstream estimate for the model's mistakes."
+subtitle: "Model records, human labels, and estimates corrected for model errors"
+description: "Use a local language model to give text labels. Compare its labels with a person's labels on a random sample. Correct an estimate for model errors."
 categories: [guide, language models, reproducibility, evaluation]
 ---
 
 Ruth has the 240 records from the Calder Yard review in lesson 74 and a report
-to write. A small language model could read every record in an afternoon. Her
-report does not need the model to be impressive. It needs one number she can
-defend: what share of the collection is responsive, and how sure she can be.
+to write. A small language model could read every record in an afternoon.
+Ruth needs the share of **responsive** records: records relevant to the review
+request. She also needs to describe the uncertainty in that estimate.
 
-This page treats the model the way a careful researcher treats any measuring
-instrument. The instrument is written down before it is used, its readings are
-saved, a random sample is checked by people, and the final estimate is
-corrected for the errors that sample reveals. Nothing here is specific to one
-model. The same steps apply to a hosted model, a local one, or a trained
-classifier.
+This page uses a language model as a **measurement instrument**, a tool that
+gives labels for an analysis. The researcher records the instrument before
+the first execution and saves its outputs. Reviewers examine a random sample.
+The final estimate includes a correction for the errors found in that sample.
+These steps apply to hosted models, local models, and trained classifiers.
 
 ::: {.callout-note}
-The records are the constructed review collection from lesson 74. They are fictional teaching records, and their reference labels were written by the page author when the collection was built. Here those labels play the part of a careful human review.
+The records are the constructed review collection from lesson 74.
+The page author wrote these fictional teaching records and their reference
+labels together. Here the reference labels represent the labels that a person
+would give after careful checks.
 :::
 
 ::: {.callout-tip}
@@ -26,12 +28,13 @@ The records are the constructed review collection from lesson 74. They are ficti
 
 This page shows how to:
 
-- decide when a language model is a reasonable instrument for a text task;
-- record a model run so another person can repeat it;
-- treat saved outputs as the record and reruns as a check;
-- compare model labels with a random sample reviewed by people;
-- correct an estimate for the model's errors with that sample; and
-- find R tools that support this way of working.
+- Decide when to use a language model for a text task.
+- Record a model run so another person can execute it again.
+- Use saved outputs as the record.
+- Use reruns for a reproducibility check.
+- Compare model labels with a person's labels on a random sample.
+- Correct an estimate for model errors with that sample.
+- Find R tools for this method.
 :::
 
 ```{r}
@@ -43,33 +46,41 @@ stopifnot(identical(getOption("warn"), 2L))
 
 ## Decide whether a language model is the right instrument
 
-Language models can now annotate, classify, extract, and summarize text well
-enough to be useful in research. On some annotation tasks they match or beat
-crowd workers at a small fraction of the cost. Careful replications also find
-them inconsistent: the same model can do well on one dataset and poorly on the
-next, and small changes to a prompt's wording or format can move accuracy by
-many points.
+Language models can annotate, classify, extract, and summarize text well enough
+for some research tasks. **Annotation** gives labels to text.
+On some annotation tasks, models match or exceed crowd-worker performance at
+a small fraction of the cost.
+Replications also find inconsistent performance. The same model can perform
+well on one dataset and poorly on another. Small changes to a prompt's
+wording or format can change accuracy by many points.
 
-Three findings shape the advice on this page. First, a model follows a
-written codebook, with definitions and edge cases, more reliably than a bare
-category name, and the codebook matters more than clever phrasing. Second, with
-a few hundred labelled examples for a stable task, a fine-tuned small model
-often matches or beats prompting a large one, at lower cost and with more
-stable output. Third, labels are inputs to an analysis rather than findings.
-Even labels that agree with people most of the time can bias a downstream
-estimate, because their errors are rarely random.
+Three findings inform this advice. First, models follow a written codebook
+more consistently than a category name alone. A **codebook** gives category definitions
+and explains difficult cases. The codebook matters more than clever prompt
+wording.
+
+Second, a small model fine-tuned on a few hundred labelled examples often
+matches or exceeds a prompted large model on a stable task.
+The small model can cost less and produce more stable output.
+Third, labels are inputs to an analysis, not findings.
+Even labels that usually agree with reviewers can introduce **bias**, a
+systematic error in an estimate. Their errors are rarely random.
 
 The earlier lessons still apply. A model does not replace corpus design
 (lesson 4), a defined unit of analysis, or held-out evaluation (lesson 44). It
-replaces one coder, and it needs checking like one.
+replaces one coder, a person who gives labels. Its labels also need checks.
 
-## Record the instrument before using it
+## Record the instrument before you use it
 
-An **instrument record** lists everything that decides what the model says.
-Here that means the model and its exact revision, the prompt, and the decoding
-settings. The prompt lives in a file, so it has a fingerprint like any other
-data file. It was written from the review request alone, before the model saw
-any record, and was not revised after reading the model's answers.
+An **instrument record** lists the settings that control the model's output.
+Here it contains the model, its exact revision, the prompt, and the decoding
+settings. **Decoding** is the procedure that selects output tokens.
+The prompt is in a file with a **fingerprint**, a value calculated from the
+file's contents to detect changes.
+
+The author wrote the prompt from the review request alone, before the model
+processed any record. The author read the model's answers but did not revise
+the prompt.
 
 ```{r}
 library(dplyr)
@@ -118,7 +129,7 @@ cat(prompt$system, "", prompt$user_template, sep = "\n")
 tibble(
   item = c(
     "model", "revision", "license", "prompt ID", "prompt SHA-256",
-    "decoding", "tokens allowed per answer"
+    "decoding", "token limit per answer"
   ),
   value = c(
     model_record$model_id,
@@ -151,24 +162,24 @@ stopifnot(
 )
 ```
 
-The model is an open-weight model pinned to one revision, and every runtime file
-listed in the project's model manifest is checked against a recorded SHA-256
-before it loads. A hosted model can change behind the same name or be retired on
-the provider's schedule, so a hosted run needs the dated model version and a
-saved copy of every answer.
+The model has public weights and uses a fixed revision.
+The runtime compares each listed model file with its recorded SHA-256
+fingerprint before it loads the model. A **manifest** lists the expected model files.
+A hosted provider can change a model but keep its name.
+It can also remove the model. A hosted run therefore needs the dated model version and a saved
+copy of every answer.
 
-## Label every record once and keep the outputs
+## Save labels and raw outputs
 
-The builder script `data-raw/build-llm-review-labels.R` sent this prompt, once
-per record, to the pinned model and saved every raw answer with the run's
-metadata. Rendering this page reads that saved run; it does not relabel the
-collection. The saved file is the record of what the model said. A rerun later
-is a check on that record, not a replacement for it.
+The builder script `data-raw/build-llm-review-labels.R` sent this prompt once
+per record to the model at its fixed revision. It saved every raw answer
+with the run's metadata. Rendering this page reads that saved run.
+It does not give the collection new labels. The saved file records what the
+model said. A rerun provides a check on that record, not a replacement for it.
 
-Before the saved labels are used, the page checks that they still belong to
-this instrument. If someone edits the prompt, swaps the model, changes the
-decoding settings, or changes the collection, the check fails and the page stops
-instead of reporting labels from a different run.
+Before the page uses saved labels, it makes sure that they match the instrument
+record. A change to the prompt, model, decoding settings, or collection fails
+the check. The page then stops. It does not report labels from a different run.
 
 ```{r}
 labels_path <- "data/riverton/riverton-llm-review-labels.csv"
@@ -209,7 +220,7 @@ cache_checks <- tibble(
   check = c(
     "labels file matches its recorded fingerprint",
     "prompt file and prompt ID match the run",
-    "review collection matches the one the run labelled",
+    "review collection matches the one that received these labels",
     "model ID and revision match the pinned manifest",
     "decoding settings match this page",
     "every saved label matches its raw answer"
@@ -232,8 +243,8 @@ cache_checks <- tibble(
 
 knitr::kable(
   cache_checks,
-  col.names = c("Check before using the saved labels", "Passed"),
-  caption = "The saved run is checked against the instrument record",
+  col.names = c("Checks on saved labels", "Passed"),
+  caption = "Comparison of the saved run with the instrument record",
   row.names = FALSE
 )
 
@@ -242,7 +253,7 @@ run_record |>
   pivot_longer(everything(), names_to = "field", values_to = "value") |>
   knitr::kable(
     col.names = c("Run detail", "Value"),
-    caption = "Details recorded by the builder when it labelled the collection",
+    caption = "Details recorded by the builder when it gave the collection labels",
     row.names = FALSE
   )
 ```
@@ -265,25 +276,28 @@ count_for <- function(label) {
 }
 
 unparsed_sentence <- if (count_for("unparsed") == 0L) {
-  "Every answer began with one of the two allowed words."
+  "Every answer began with one of the two specified words."
 } else {
   paste(count_for("unparsed"), "answers began with neither word.")
 }
 ```
 
 The model answered `yes` for `r count_for("responsive")` records and `no` for
-`r count_for("not responsive")`. `r unparsed_sentence` The page decided in
-advance how to treat any other answer: it counts as not responsive, because the
-model did not say the record was responsive.
+`r count_for("not responsive")`. `r unparsed_sentence` The page uses a rule
+chosen in advance for all other answers. Each counts as not responsive because
+the model did not say the record was responsive.
 
-## Rerun a few records to test the record
+## Process a few records again for a reproducibility check
 
-Greedy decoding picks the single most likely token at every step, so the same
-software on the same machine usually repeats itself. Across machines, library
-versions, or server batch sizes, small numerical differences can change a
-choice, and "temperature 0" on a hosted service is not a guarantee. The check
-below reruns eight records chosen with seed 925, the date the prompt was
-written, and compares the new answers with the saved ones.
+**Greedy decoding** selects the single most likely token at each step.
+The same software on the same machine usually produces the same answers.
+Small numerical differences between machines, library versions, or server
+batch sizes can change a selection. On a hosted service, "temperature 0"
+does not guarantee identical answers.
+
+The check below processes eight records again. It selects records with seed
+925, the date the author wrote the prompt. It compares the new answers with
+the saved answers.
 
 ```{r}
 fill_prompt <- function(request, record) {
@@ -339,17 +353,17 @@ stopifnot(
 ```
 
 In this render, `r sum(rerun$identical_answer)` of 8 rerun answers match the
-saved answers exactly. The page does not require all eight to match, because a
-render on a different computer may differ. It reports what happened, and the
-estimates below use the saved answers either way.
+saved answers exactly. The page does not require all eight to match.
+Answers can differ on a different computer. The page reports the result.
+The estimates below use the saved answers whether the new answers match or not.
 
-## Check the labels against people on a random sample
+## Compare the model's labels with a person's labels on a random sample
 
-A person now reviews a **simple random sample** of 40 records, drawn so that
-every record has the same chance of selection. The seed, 2509, was fixed before
-the first draw, and the sample is drawn once. Random selection is what lets the
-sample speak for the whole collection; a sample of hand-picked or easy records
-would not.
+A person now examines a **simple random sample** of 40 records.
+Every record has the same chance of selection. The author fixed the seed,
+2509, before the first selection. The code selects the sample once.
+Random selection permits conclusions about the whole collection.
+A sample of hand-picked or easy records would not permit those conclusions.
 
 ```{r}
 sample_size <- 40L
@@ -384,7 +398,7 @@ agreement |>
     col.names = c(
       "Person's reading", "Model says not responsive", "Model says responsive"
     ),
-    caption = "Model labels compared with the person's review on the random sample",
+    caption = "Model labels compared with the person's labels in the random sample",
     row.names = FALSE
   )
 ```
@@ -401,9 +415,9 @@ false_flags <- count_cell("not responsive", "responsive")
 
 error_sentence <- if (false_flags == 0L && missed > 0L) {
   paste0(
-    "Here every disagreement runs the same way: the model missed ", missed,
-    " responsive records and flagged no record the person called not responsive, ",
-    "so a count of its labels will run low."
+    "Here the model missed ", missed,
+    " responsive records. It flagged no record the person called not responsive. ",
+    "A count of the model's responsive labels is therefore too low."
   )
 } else {
   paste0(
@@ -423,31 +437,33 @@ stopifnot(
 ```
 
 The model and the person agree on `r sample_agreements` of the
-`r sample_size` sampled records. Agreement alone hides which way the errors
-run. `r error_sentence`
+`r sample_size` records in the sample. Agreement alone does not show the
+direction of the errors. `r error_sentence`
 
-## Estimate the responsive share without trusting the model blindly
+## Calculate the responsive share with a correction for model errors
 
 Three estimates of the responsive share are possible:
 
 - **Model only:** the share of all 240 records the model called responsive.
-  It uses every record but inherits every error the model makes.
-- **Sample only:** the share of the 40 sampled records the person called
-  responsive. It is unbiased but uncertain, because 40 records is a small
-  sample.
-- **Model plus correction:** the model-only share, plus the average
-  difference between the person's reading and the model's label on the
-  sample. The sample estimates the model's average error, and the correction
-  subtracts that estimate.
+  This estimate uses every record but includes every model error.
+- **Sample only:** the share of the 40 records in the sample that the person
+  called responsive. This estimate is unbiased but uncertain because 40
+  records is a small sample.
+- **Model plus correction:** the model-only share plus an error correction.
+  The correction is the average difference between the person's reading and
+  the model's label in the sample. This difference gives an estimate of the
+  model's average error. The correction removes that estimated error.
 
-The third estimate is the **difference estimator** from survey sampling. In
-machine learning the same idea is called **prediction-powered inference**. Over
-repeated random samples it is unbiased, and its precision depends on how much
-the difference between the person's reading and the model's label varies from
-record to record. When the model agrees with people on most records, the
-interval is narrower than the sample alone would give. Each interval below is the estimate plus or minus 1.96
-standard errors, with the finite-population correction for sampling 40 of 240
-records.
+The third estimate is the **difference estimator** from survey sampling.
+In machine learning, **prediction-powered inference** uses the same idea.
+The estimator is unbiased over repeated random samples.
+Its precision depends on variation in the difference between human and model
+labels across records. When the model agrees with reviewers on most records,
+the interval is narrower than an interval from the sample alone.
+
+Each interval below is the estimate plus or minus 1.96 standard errors.
+The calculation includes the finite-population correction for a sample of 40
+from 240 records.
 
 ```{r}
 all_records <- nrow(records)
@@ -498,8 +514,8 @@ estimates |>
     ),
     uses = c(
       "model labels for all 240 records",
-      "the person's review of 40 records",
-      "model labels for all 240 records and the review of 40"
+      "the person's labels for 40 records",
+      "model labels for all 240 records and the person's labels for 40"
     )
   ) |>
   select(method, estimate, interval, uses) |>
@@ -542,7 +558,7 @@ estimate_alt_text <- paste0(
   "A dashed line marks the true share of ", percent_text(true_share), "."
 )
 
-estimate_title <- "The model alone undercounts; a checked sample of 40 corrects it"
+estimate_title <- "The model alone undercounts. Human labels for 40 records correct it"
 
 stopifnot(
   model_only < true_share - 0.05,
@@ -551,9 +567,9 @@ stopifnot(
 )
 ```
 
-Because this collection is constructed, the true share is known:
+The constructed collection has a known true share:
 `r scales::percent(true_share, accuracy = 0.1)`. A real project would not have
-this number. It is shown only so the three methods can be judged.
+this number. The page shows the true share only to compare the three methods.
 
 ```{r}
 #| label: fig-llm-estimates
@@ -595,7 +611,7 @@ ggplot(estimate_plot, aes(x = estimate, y = method)) +
   ) +
   labs(
     title = estimate_title,
-    subtitle = "Responsive share of 240 records; lines are 95% intervals",
+    subtitle = "Responsive share of 240 records. Lines are 95% intervals",
     x = NULL,
     y = NULL
   ) +
@@ -611,12 +627,13 @@ stopifnot(
 )
 ```
 
-## Repeat the sample to see why the correction works
+## Select more samples to examine the correction
 
-One sample could be lucky. Drawing the 40-record sample 2,000 more times, with
-no new model calls, shows how each method behaves in the long run. For each
-draw, the code repeats the two sample-based estimates and asks whether each
-interval contains the true share.
+One sample can give an unusually good estimate.
+The code selects 2,000 more samples of 40 records, with no new model calls.
+These samples show each method's behavior over repeated selections.
+For each sample, the code calculates both sample-based estimates again.
+It then shows whether each interval contains the true share.
 
 ```{r}
 set.seed(2510)
@@ -660,7 +677,7 @@ long_run |>
   knitr::kable(
     col.names = c(
       "Method", "Average estimate", "Average interval width",
-      "Intervals containing the true share"
+      "Intervals that contain the true share"
     ),
     caption = "Two sample-based estimators over 2,000 repeated samples of 40 records",
     row.names = FALSE
@@ -684,18 +701,18 @@ zero_width_draws <- sum(
 )
 
 long_run_sentence <- paste0(
-  "Both methods average close to the true share. The corrected intervals are ",
-  "narrower, ", points_text(corrected_width), " wide on average against ",
-  points_text(sample_width), " for the sample alone, because the model's labels ",
-  "settle most records and the person only has to measure its misses. They ",
-  "contain the true share in ", percent_text(corrected_coverage), " of samples, ",
-  "a little short of the nominal 95%, against ",
-  percent_text(sample_coverage), " for the sample alone. The shortfall comes ",
-  "from the simple normal-approximation interval, which is rough when the ",
-  "model's misses are rare in a sample of 40. In ", zero_width_draws,
-  " of the 2,000 samples none of the misses were drawn, so the corrected ",
-  "interval had no width at all. A larger sample, or an interval built for ",
-  "rare events, would close the gap."
+  "Both methods average close to the true share. Corrected intervals have ",
+  "an average width of ", points_text(corrected_width), ". Sample-only intervals average ",
+  points_text(sample_width), ". The model's labels agree with the person's labels on most records. ",
+  "The person's labels therefore show the model's errors.\n\nCorrected intervals ",
+  "contain the true share in ", percent_text(corrected_coverage), " of samples. ",
+  "This is slightly below the nominal 95%. Sample-only intervals contain it in ",
+  percent_text(sample_coverage), " of samples. The simple normal-approximation ",
+  "interval causes this shortfall. This approximation is imprecise when the ",
+  "model's misses are rare in a sample of 40.\n\nIn ", zero_width_draws,
+  " of the 2,000 samples, the sample contained no missed records. The corrected ",
+  "interval therefore had zero width. A larger sample, or an interval designed for ",
+  "rare events, would correct this shortfall."
 )
 
 stopifnot(
@@ -714,62 +731,61 @@ stopifnot(
 
 ## A checklist for model-assisted analysis
 
-- Choose the instrument on purpose. Prefer a rule, a dictionary, or a small
-  trained model when it does the job, and use a language model when the task
-  needs reading that those cannot do.
-- Write the codebook and prompt before the first run, store them as a file,
-  and record the file's fingerprint.
-- Pin the model. Record the model name, exact revision or dated version,
-  decoding settings, and software versions. Open weights that you can run
-  yourself make this easier, though they do not remove every source of
+- Choose the instrument for the task. Prefer a rule, a dictionary, or a small
+  trained model when it meets the need. Use a language model when the task
+  needs text interpretation that these tools cannot provide.
+- Write the codebook and prompt before the first run. Store them in a file.
+  Record the file's fingerprint.
+- Use a fixed model revision. Record the model name, exact revision or dated
+  version, decoding settings, and software versions. Public weights that you
+  can execute locally make this easier. They do not remove every source of
   variation.
 - Save every raw output with the ID of the input that produced it.
-- Rerun a sample and report how many answers repeat.
-- Check the labels against people on a random sample, and report both kinds
+- Process a sample again. Report how many answers are identical.
+- Compare model labels with a person's labels on a random sample. Report both kinds
   of error.
-- Correct any estimate that uses model labels, with the difference estimator
-  or a related method such as prediction-powered inference or design-based
+- Correct estimates that use model labels. Use the difference estimator or a
+  related method, such as prediction-powered inference or design-based
   supervised learning.
-- Test a model used as a judge the same way before trusting its scores.
-- Check structured output for content as well as format. A reply that matches
-  a schema can still hold wrong values.
-- Read and rerun code that an assistant wrote, keep a reference calculation
-  for key numbers, and pin the environment.
-- Disclose the model's role using a reporting checklist such as GUIDE-LLM or
+- Examine a judge model in the same way before you trust its scores.
+- Examine structured output for content as well as format. A reply that matches
+  a schema can still contain wrong values.
+- Read code that an assistant wrote. Execute the code again.
+  Keep a reference calculation for important numbers. Use fixed software versions.
+- Disclose the model's role with a reporting checklist such as GUIDE-LLM or
   TRIPOD-LLM.
 
 ## R tools for this way of working
 
-The packages below were checked on 25 September 2026. Versions change often,
-so check again before relying on one.
+The project examined these packages on 25 September 2026.
+Versions change often. Examine the current documentation before you use a package.
 
 | Package | What it does | Runs with local models |
 |---|---|---|
 | ellmer 0.5.0 | Chat with model providers, call tools, and extract structured data | Yes, through Ollama |
 | mall 0.2.0 | Classify, extract, or score a data frame column row by row | Yes, designed for Ollama |
-| ragnar 0.3.1 | Chunk documents, store embeddings, and retrieve passages | Partly; document conversion uses Python |
-| vitals 0.4.0 | Evaluate model-based tools, including model-graded scoring | Yes, with any ellmer chat |
+| ragnar 0.3.1 | Chunk documents, store embeddings, and retrieve passages | Partly. Document conversion uses Python |
+| vitals 0.4.0 | Evaluate model-based tools with model-graded scoring | Yes, with any ellmer chat |
 | tidyllm 0.6.0 | One tidy interface to several providers | Yes, through Ollama |
-| ipd 0.4.1 | Inference on predicted data, including prediction-powered inference | Not needed; it uses saved labels |
+| ipd 0.4.1 | Inference on predicted data, with prediction-powered inference | Not needed. It uses saved labels |
 | huggingfaceR 2.1.0 | Hugging Face models through Python, used on this site | Yes, fully offline once models are saved |
 
-: R packages for model-assisted text analysis, checked 25 September 2026 {.striped}
+: R packages for model-assisted text analysis, examined 25 September 2026 {.striped}
 
 The reference implementation of design-based supervised learning is the `dsl`
 package on GitHub, which is not on CRAN.
 
 ## What to remember
 
-- A language model is an instrument; write down the model, revision, prompt,
-  and settings before using it.
-- The saved outputs are the reproducible record; a rerun tests that record.
-- A random sample reviewed by people shows how the model errs.
-- Correct estimates with that sample; model-only numbers carry the model's bias.
-- The earlier lessons' rules still apply: provenance, stable IDs, baselines,
-  and held-out evaluation.
+- Record the model, revision, prompt, and settings before you use the model.
+- The saved outputs are the reproducible record. A rerun provides a check on that record.
+- A random sample examined by people shows model errors.
+- Correct estimates with that sample. Model-only numbers retain the model's bias.
+- The earlier lessons' rules still apply. Keep provenance, stable IDs,
+  baselines, and held-out evaluation.
 
-Ruth's report gives the corrected share with its interval, the sample it rests
-on, and the instrument record, so a reader can check each step.
+Ruth's report gives the corrected share, its interval, the sample, and the
+instrument record. Readers can examine each step.
 
 ## Sources
 

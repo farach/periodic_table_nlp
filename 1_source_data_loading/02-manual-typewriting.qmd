@@ -1,6 +1,6 @@
 ---
 title: "Manual examples and pattern matching"
-subtitle: "Type a handful of messages by hand, then build a pattern you can test"
+subtitle: "Type a small set of messages by hand. Examine a text pattern."
 description: "Type small examples by hand and use them to find dates, email addresses, and order numbers in R."
 categories: [source data loading, regular expressions, testing]
 ---
@@ -8,24 +8,24 @@ categories: [source data loading, regular expressions, testing]
 Near the end of a support shift, a worker needs to connect incoming messages
 with the right orders. One message may contain two order numbers, another may
 contain an email address, and most contain neither. Reading a small inbox is
-easy. Repeating the job across hundreds of messages makes missed and mistaken
+easy. Processing hundreds of messages makes missed and mistaken
 matches more likely.
 
-The worker starts by typing five messages by hand rather than exporting the
-full inbox. Typing them is the point: every expected answer fits on the screen,
-including the examples that should fail, and nothing arrives from a system that
-might have reformatted it. This small rehearsal set will help us build a text
-pattern, test its limits, and hide an address before the messages are shared.
+The worker types five messages by hand rather than exporting the full inbox.
+Every expected answer fits on the screen. Some examples should fail.
+Manual entry also avoids changes that another system might make to the text.
+We will use these examples to create a pattern and examine its limits.
+Then we will hide an address before sharing the messages.
 
 ::: {.callout-tip}
 ## What you will learn
 
 By the end of this lesson, you will be able to:
 
-- search for an exact word or phrase;
-- describe a family of values such as order numbers or dates;
-- extract and replace matching text; and
-- turn hand-written examples into checks that catch mistakes.
+- search for an exact word or phrase.
+- describe a set of values such as order numbers or dates.
+- extract and replace matching text.
+- create checks for mistakes from hand-written examples.
 :::
 
 ```{r}
@@ -35,10 +35,10 @@ options(warn = 2)
 stopifnot(identical(getOption("warn"), 2L))
 ```
 
-## Make a small rehearsal set
+## Make a small example set
 
-The five messages below are varied enough to pose real questions and short
-enough to check by eye. In R, `c()` combines values into a collection called a
+The five messages contain different cases and are short enough for visual
+inspection. In R, `c()` combines values into a collection called a
 **vector**. The arrow `<-` saves that vector under the name `messages`.
 
 ```{r}
@@ -70,19 +70,20 @@ stopifnot(
 R prints all five messages. The number in square brackets at the left marks the
 position where that line of output begins.
 
-The messages are English, tagged `en` in the BCP 47 language tags used by web
-and publishing tools. That matters for two rules written later. The order ID
+The messages are English. Web and publishing tools identify English with the
+BCP 47 language tag `en`. The language matters for two later rules. The order ID
 rule assumes ASCII digits, and the `^ERROR:` rule assumes a Latin-script label
-in capital letters. Neither assumption survives a move to Arabic-Indic digits
-or a script without case. The email and date rules are about shape and travel
-further, though the date rule still assumes a Gregorian calendar written
-largest unit first.
+in capital letters. These assumptions do not apply to Arabic-Indic digits or a
+script without case.
+
+The email and date patterns can apply more broadly because they describe text
+structure. The date rule still assumes a Gregorian calendar with the largest
+unit first.
 
 ## Search for exact text
 
-The simplest search is the one that solves the problem with the fewest moving
-parts. Here we ask for the exact text `"café"` before introducing any flexible
-pattern.
+Use an exact search when the required text is known. Here we search for
+`"café"` before introducing a flexible pattern.
 
 ```{r}
 cafe_message <- str_subset(messages, fixed("café"))
@@ -98,12 +99,12 @@ stopifnot(
 )
 ```
 
-`str_subset()` from stringr keeps the messages that match a pattern. `messages`
-says where to look, and `fixed("café")` says to treat `"café"` as ordinary text
-rather than as a regular expression.
+`str_subset()` from stringr keeps messages that match a pattern. The `messages`
+argument supplies the text. The `fixed("café")` argument treats `"café"` as
+ordinary text rather than a regular expression.
 
 `fixed()` is a good choice when the exact word, phrase, label, or punctuation
-is already known. It prevents punctuation from taking on a special
+is already known. It prevents punctuation from acquiring a special
 pattern-matching meaning.
 
 ### Ask a yes-or-no question
@@ -139,17 +140,16 @@ stopifnot(
 )
 ```
 
-Only the third message contains `"R-"`. We have found the likely message, but
-the rule is still too loose. It would also accept `"R-"` with no digits after
-it.
+Only the third message contains `"R-"`. The search found the likely message,
+but the rule does not require a complete order ID. It also accepts `"R-"`
+without subsequent digits.
 
-## Describe a family of matches
+## Describe a set of matches
 
-The two visible order numbers share a shape that we can state one piece at a
-time:
+The two visible order numbers have the same structure:
 
-- the letter `R`;
-- a hyphen; and
+- the letter `R`.
+- a hyphen.
 - exactly four digits.
 
 A **regular expression**, often shortened to **regex**, is a compact
@@ -176,11 +176,11 @@ stopifnot(
 )
 ```
 
-The output stays grouped by message. An empty entry means that no order number
-was found there. The third entry contains exactly the two IDs the worker could
-see in the rehearsal set.
+The output groups results by message. An empty entry means that the pattern
+found no order number in that message. The third entry contains the two IDs
+visible in the example set.
 
-This pattern can be read from left to right:
+Read this pattern from left to right:
 
 | Part | Meaning |
 |---|---|
@@ -193,7 +193,7 @@ This pattern can be read from left to right:
 : Parts of the order ID pattern
 
 R's raw string notation, written here as `r"(...)"`, keeps the backslashes
-readable. Without it, the same pattern would be written as
+readable. Without raw notation, R requires
 `"\\bR-[0-9]{4}\\b"`.
 
 The order system defines its IDs with ASCII digits. In the ICU engine used by
@@ -202,9 +202,8 @@ stringr, `\d` also matches decimal digits from other writing systems. Using
 
 ## Find several kinds of information
 
-Order IDs are only one kind of information mixed into the messages. The same
-rehearsal set also contains a date and an email address, so each gets a
-separate pattern.
+The messages also contain a date and an email address. Each information type
+uses a separate pattern.
 
 ```{r}
 date_pattern <- r"(\b[0-9]{4}-[0-9]{2}-[0-9]{2}\b)"
@@ -299,7 +298,7 @@ stopifnot(
 
 The table keeps every match beside the message that supplied it. The underlying
 `order_ids` column is a **list-column** because each message can produce zero,
-one, or several IDs. The display copy turns each small character vector into
+one, or several IDs. The display copy converts each small character vector to
 readable text and prints `No match` where the extractor found nothing.
 
 `str_extract()` returns only the first match, which is why the other two columns
@@ -309,8 +308,8 @@ are named `first_date` and `first_email`.
 the vector would change it. Records from a real system should keep the source's
 message ID from the moment they are read.
 
-The email pattern is intentionally modest. It recognizes the address in this
-example, but it does not validate every email address allowed by internet
+The email pattern has limited coverage. It recognizes the address in this
+example, but it does not validate every email address that is valid under internet
 standards. Finding text that resembles an email and proving that an address is
 valid are different tasks.
 
@@ -341,10 +340,10 @@ stopifnot(
 )
 ```
 
-The pattern requires the complete label `ERROR:` at the start. It leaves out
+The pattern requires the complete label `ERROR:` at the start. It excludes
 `ERRORISH`, whose opening text and punctuation do not meet that rule.
 
-Using both anchors checks a complete value from beginning to end. The next
+Using both anchors requires a complete match from beginning to end. The next
 pattern also uses parentheses to capture the year, month, and day separately.
 
 ```{r}
@@ -373,7 +372,7 @@ knitr::kable(
     day = date_parts[, 4]
   ),
   col.names = c("Input", "Complete match", "Year", "Month", "Day"),
-  caption = "Checking complete dates",
+  caption = "Complete-date checks",
   row.names = FALSE
 )
 ```
@@ -393,14 +392,14 @@ stopifnot(
 `NA` means "missing" in R. The last two inputs do not have the required
 four-digit year, two-digit month, and two-digit day as a complete value.
 
-This pattern checks the arrangement of digits. It does not check the calendar.
+This pattern requires the stated arrangement of digits. It applies no calendar check.
 For example, `2026-99-99` has the expected shape but is not a real date.
 
 ## Replace matching text
 
-The worker may need to share an example message while keeping the sender's
-address private. A pattern can replace matching text before the example is
-shared. The following code substitutes `[email]` for the address.
+The worker may need to share an example without the sender's address.
+The following code substitutes `[email]` for the matching address before
+sharing.
 
 ```{r}
 redaction_report <- message_table |>
@@ -426,7 +425,7 @@ changed_messages <- sum(redaction_report$changed)
 knitr::kable(
   redaction_report |>
     select(message_number, changed, shared_version),
-  col.names = c("Message", "Changed", "Version that leaves the building"),
+  col.names = c("Message", "Changed", "Version to share"),
   caption = "Which messages the redaction step altered",
   row.names = FALSE
 )
@@ -450,8 +449,7 @@ stopifnot(
 )
 ```
 
-The report also kept what the pattern removed, so the removal itself can be
-read:
+The report also keeps the removed text for inspection:
 
 ```{r}
 removed_addresses <- redaction_report$removed_addresses |>
@@ -472,21 +470,22 @@ stopifnot(
 )
 ```
 
-One message changed and one address was removed. Both numbers are printed, and
-so is the removed text itself. A redaction step that reports only its output
-cannot be audited: a pattern that matched half a message without warning would
-look exactly as successful. Read the removed material, count it, and compare
-that count with the number of matches the pattern found.
+The code changed one message and removed one address. The output shows both
+counts and the removed text. An output-only report cannot show whether a
+redaction pattern removed too much text.
+
+Read the removed material. Count the removed matches. Compare that count with
+the number of matches the pattern found.
 
 The address is gone, while the rest of each sentence stays unchanged. One
 successful example is not enough to establish that a redaction method protects
-private information. Test varied cases carefully, inspect the result, and
-follow the privacy rules that apply to the real records.
+private information. Run checks on varied cases. Examine the result.
+Follow the privacy rules that apply to the real records.
 
-## Turn examples into safety checks
+## Create safety checks from examples
 
-Before searching the full inbox, the worker adds close failures beside the
-clear matches. The order ID must contain one `R`, one hyphen, and exactly four
+Before searching the full inbox, the worker adds similar invalid inputs beside
+the valid matches. The order ID must contain one `R`, one hyphen, and exactly four
 digits. `mutate()` from dplyr adds the actual test result as a new column.
 
 ```{r}
@@ -524,13 +523,13 @@ stopifnot(
 )
 ```
 
-The expected and actual columns agree. A near miss such as `R-12345` remains
-visible during testing rather than becoming a mistaken match later.
+The expected and actual columns agree. Invalid inputs such as `R-12345` remain
+visible during checks rather than becoming mistaken matches later.
 
-## Reuse a tested pattern
+## Reuse a pattern after these checks
 
-The checked extraction will be used more than once, so we place it in a
-**function**. A function is a named set of steps that accepts an input and
+After these checks, we place the extraction in a **function** that we can call again.
+A function is a named set of steps that accepts an input and
 returns a result.
 
 ```{r}
@@ -569,16 +568,16 @@ The first function preserves one result per message. The second function
 deliberately combines those results into a corpus-wide list and removes
 duplicates. Its name makes the loss of message boundaries explicit.
 
-The distinction matters whenever a later question asks where a match came from.
-Keep the row-level result, then derive a flattened inventory from it when the
-inventory is the actual goal.
+The distinction matters when a later question concerns a match's source.
+Keep the row-level result. Create a combined inventory only when the task
+requires one.
 
 ## State which text the pattern accepts
 
 Support messages may use accented letters or writing systems beyond English.
-In ICU, `\p{L}` means a code point classified as a letter and `\p{M}` means a
-combining mark. The second category matters because a visible accented letter
-can be stored as a base letter followed by a separate mark.
+In ICU, `\p{L}` identifies code points classified as letters. The `\p{M}`
+pattern identifies combining marks. A visible accented letter can consist of
+a base letter followed by a separate mark.
 
 ```{r}
 words <- c(
@@ -606,7 +605,7 @@ knitr::kable(
     accepted_by_pattern = letters_and_marks
   ),
   col.names = c("Text", "Accepted by this pattern"),
-  caption = "Checking the stated letter-and-mark rule",
+  caption = "Checks of the stated letter-and-mark rule",
   row.names = FALSE
 )
 ```
@@ -624,54 +623,52 @@ stopifnot(
 
 The first five examples follow the stated rule. The fifth displays as `é` but
 uses `e` plus a combining accent. `hello-world` does not match because a hyphen
-is punctuation. This check answers a specific text question; it is not a rule
+is punctuation. This check answers a specific text question. It is not a rule
 for deciding whether a person's name or a word is valid.
 
 ::: {.callout-note}
 ## Technical detail: R has more than one pattern engine
 
-The software that interprets a regular expression is called a **pattern
-engine**. Different engines do not agree on every feature.
+A **pattern engine** is software that interprets a regular expression.
+Different engines do not support identical features.
 
 Base R uses POSIX extended regular expressions by default and PCRE2 when
 `perl = TRUE`. The stringr package uses the ICU engine through stringi. These
 engines share common syntax, but some Unicode rules and advanced features
 differ.
 
-The examples in this lesson use stringr for regular expressions. Test a pattern
+The examples in this lesson use stringr for regular expressions. Run checks on a pattern
 again if you move it to a different engine. Avoid `useBytes = TRUE` for normal
 text because byte-level matching can split one UTF-8 character into several
 pieces.
 :::
 
-## Carry the tested pattern into real work
+## Apply the pattern after these checks
 
-The support worker now has a repeatable process rather than a pattern copied
-straight into the full inbox:
+The support worker can use this process before searching the full inbox:
 
 1. Write a few short examples that should match.
 2. Add similar examples that must not match.
 3. Use `fixed()` when you only need exact text.
 4. Build a regular expression one piece at a time.
-5. Inspect the text you extract before replacing anything.
+5. Examine the text you extract before replacing anything.
 6. Record the expected answers in the lesson's hidden checks.
-7. Add a new example whenever the pattern surprises you.
+7. Add an example whenever the pattern produces an unexpected result.
 
 ## What to remember
 
-- Exact searches are simpler than regular expressions and should be used when
-  they solve the problem.
-- A regular expression describes a family of possible matches.
+- Use exact searches instead of regular expressions when they solve the problem.
+- A regular expression describes a set of possible matches.
 - Small hand-written examples make a pattern easier to understand.
 - Expected failures are as useful as expected matches.
-- Name the language and script a pattern assumes; digits and letter case do not
-  behave the same everywhere.
-- Count and read what a replacement removed, not only what it left behind.
+- Name the language and script that a pattern assumes. Digit and case rules
+  differ between writing systems.
+- Count the removed matches. Read the removed text as well as the retained text.
 - A published example should stop the build when its result changes.
 
-The five typed messages end with both order IDs found, one address removed, and
-that removal counted. Keep the same two small piles beside any new pattern:
-examples it must accept and examples it must refuse.
+The pattern found both order IDs and removed one address. The report records
+that removal. For each new pattern, keep examples that must match and examples
+that must not match.
 
 ## Sources
 
