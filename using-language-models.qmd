@@ -416,13 +416,13 @@ false_flags <- count_cell("not responsive", "responsive")
 error_sentence <- if (false_flags == 0L && missed > 0L) {
   paste0(
     "Here the model missed ", missed,
-    " responsive records. It flagged no record the person called not responsive. ",
+    " responsive records. No record that the person called not responsive had a responsive model label. ",
     "A count of the model's responsive labels is therefore too low."
   )
 } else {
   paste0(
-    "Here the model missed ", missed, " responsive records and flagged ",
-    false_flags, " records the person called not responsive."
+    "Here the model missed ", missed, " responsive records. For ",
+    false_flags, " other records, the model's label was responsive and the person's label was not responsive."
   )
 }
 
@@ -555,7 +555,7 @@ estimate_alt_text <- paste0(
   "Model plus correction: ", percent_text(corrected), ", interval ",
   percent_text(estimate_for("model plus correction", "low")), " to ",
   percent_text(estimate_for("model plus correction", "high")), ". ",
-  "A dashed line marks the true share of ", percent_text(true_share), "."
+  "A dashed line shows the true share of ", percent_text(true_share), "."
 )
 
 estimate_title <- "The model alone undercounts. Human labels for 40 records correct it"

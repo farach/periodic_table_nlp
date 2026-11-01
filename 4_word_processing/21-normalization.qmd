@@ -145,7 +145,7 @@ knitr::kable(
   col.names = c("Example", "Raw text", "Lowercased", "Spacing normalized"),
   caption = "Lowercasing and spacing changes",
   format = "html",
-  table.attr = 'style="white-space: pre-wrap;"',
+  table.attr = 'class="caption-top table table-sm table-striped small" style="white-space: pre-wrap;"',
   row.names = FALSE
 )
 ```

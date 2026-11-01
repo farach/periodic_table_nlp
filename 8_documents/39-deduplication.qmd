@@ -132,7 +132,7 @@ knitr::kable(
   col.names = c("Document", "Source", "Text"),
   caption = "Six documents prepared for duplicate comparison",
   format = "html",
-  table.attr = 'style="white-space: pre-wrap;"',
+  table.attr = 'class="caption-top table table-sm table-striped small" style="white-space: pre-wrap;"',
   row.names = FALSE
 )
 ```
@@ -195,7 +195,7 @@ knitr::kable(
   col.names = c("Document", "Text", "SHA-256 start"),
   caption = "Exact hashes before normalization",
   format = "html",
-  table.attr = 'style="white-space: pre-wrap;"',
+  table.attr = 'class="caption-top table table-sm table-striped small" style="white-space: pre-wrap;"',
   row.names = FALSE
 )
 ```

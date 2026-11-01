@@ -79,7 +79,8 @@ knitr::kable(
   ),
   col.names = c("Method", "Result"),
   caption = "Entity handling after two HTML-cleaning approaches",
-  row.names = FALSE
+  row.names = FALSE,
+  format = "html"
 )
 ```
 
@@ -147,7 +148,7 @@ knitr::kable(
   col.names = c("Version", "Text"),
   caption = "Whitespace squishing removes the flyer line layout",
   format = "html",
-  table.attr = 'style="white-space: pre-line;"',
+  table.attr = 'class="caption-top table table-sm table-striped small" style="white-space: pre-line;"',
   row.names = FALSE
 )
 ```

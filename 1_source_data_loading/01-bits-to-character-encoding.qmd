@@ -340,18 +340,6 @@ marked_result <- iconv(
 ```
 
 ```{r}
-#| include: false
-
-stopifnot(
-  identical(validUTF8(damaged_text), FALSE),
-  identical(validUTF8("Hi \u00E9"), TRUE),
-  identical(first_broken_byte, 4L),
-  is.na(strict_result),
-  identical(marked_result, "Hi \uFFFD(")
-)
-```
-
-```{r}
 #| echo: false
 
 knitr::kable(
@@ -372,6 +360,18 @@ knitr::kable(
   col.names = c("Step", "Result"),
   caption = "One malformed byte sequence read three ways",
   row.names = FALSE
+)
+```
+
+```{r}
+#| include: false
+
+stopifnot(
+  identical(validUTF8(damaged_text), FALSE),
+  identical(validUTF8("Hi \u00E9"), TRUE),
+  identical(first_broken_byte, 4L),
+  is.na(strict_result),
+  identical(marked_result, "Hi \uFFFD(")
 )
 ```
 

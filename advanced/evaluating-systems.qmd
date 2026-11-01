@@ -465,7 +465,7 @@ that it followed the rule?
 ## Answer
 
 No. You have no evidence of its behavior.
-Keep all 16 planned B slots and mark them missing.
+Keep all 16 planned B slots. Use missing as their status.
 The decision remains inconclusive.
 :::
 

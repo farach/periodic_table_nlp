@@ -224,7 +224,7 @@ knitr::kable(
   col.names = c("Splitter", "Piece", "Piece number", "Exact expected sentence"),
   caption = "Where each splitter puts the boundaries",
   format = "html",
-  table.attr = 'style="white-space: pre-line;"',
+  table.attr = 'class="caption-top table table-sm table-striped small" style="white-space: pre-line;"',
   row.names = FALSE
 )
 ```

@@ -141,6 +141,36 @@ const captionedTable = (page, caption) =>
 
 const columnCells = (table, column) => table.locator(`tbody tr td:nth-child(${column})`);
 
+test("HTML-cleaning comparison keeps undecoded entity text", async ({ page }) => {
+  await page.goto("/8_documents/40-raw-text-cleaning.html");
+  const table = captionedTable(page, "Entity handling after two HTML-cleaning approaches");
+  await expect(columnCells(table, 2)).toHaveText([
+    "Training &amp; tools&nbsp;provided.",
+    "Training & tools provided."
+  ]);
+});
+
+test("whitespace-sensitive tables retain padding and top captions", async ({ page }) => {
+  const tables = [
+    ["/4_word_processing/21-normalization.html", "Lowercasing and spacing changes"],
+    ["/7_sentences_and_paragraphs/35-sentence-segmentation.html", "Where each splitter puts the boundaries"],
+    ["/8_documents/39-deduplication.html", "Six documents prepared for duplicate comparison"],
+    ["/8_documents/39-deduplication.html", "Exact hashes before normalization"],
+    ["/8_documents/40-raw-text-cleaning.html", "Whitespace squishing removes the flyer line layout"]
+  ];
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [path, caption] of tables) {
+      await page.goto(path);
+      const table = captionedTable(page, caption);
+      await expect(table.locator("caption")).toHaveCSS("caption-side", "top");
+      const padding = await table.locator("tbody td").first().evaluate((cell) =>
+        parseFloat(getComputedStyle(cell).paddingInlineStart));
+      expect(padding, `${path}: cells need space between columns`).toBeGreaterThanOrEqual(4);
+    }
+  }
+});
+
 test("tokenizer tables show special tokens and decoded unknown text", async ({ page }) => {
   await page.goto("/3_word_parsing/14-tokenization.html");
   const vocabulary = captionedTable(page, "The first rows of the BPE vocabulary");
@@ -179,7 +209,7 @@ test("sentence boundary table keeps one row for each piece", async ({ page }) =>
   expect(pieceCount).toBeGreaterThan(0);
   const boundaries = captionedTable(page, "Where each splitter puts the boundaries");
   await expect(boundaries.locator("tbody tr")).toHaveCount(pieceCount);
-  await expect(columnCells(boundaries, 4)).toHaveText(Array(pieceCount).fill(/^(yes|no)$/));
+  await expect(columnCells(boundaries, 4)).toHaveText(Array(pieceCount).fill(/^\s*(yes|no)\s*$/));
   const pieces = await columnCells(boundaries, 2).allTextContents();
   expect(pieces.some((piece) => piece.includes("\n"))).toBe(true);
   await expect(columnCells(boundaries, 2).first()).toHaveCSS("white-space", "pre-line");

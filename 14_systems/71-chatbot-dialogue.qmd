@@ -1421,9 +1421,9 @@ generated turns with the label `held for human review`. Fixed-text refusal,
 hand-off, and abstention turns have `not applicable` automatic-check status.
 
 Automatic generated-reply
-checks sent `r screen_hold_summary$numerals` rows to human review for numerals,
-`r screen_hold_summary$program_names` for program names,
-`r screen_hold_summary$action_slots` for action slots,
+checks sent `r screen_hold_summary$numerals` rows to human review for numerals
+and `r screen_hold_summary$program_names` for program names.
+They also sent `r screen_hold_summary$action_slots` rows for action slots,
 `r screen_hold_summary$personal_details` for personal details, and
 `r screen_hold_summary$promise_words` for promise words.
 
